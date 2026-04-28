@@ -54,6 +54,104 @@ def _save_upload(upload: UploadFile, dest: Path) -> Path:
     return dest
 
 
+def _resolve_input(
+    upload: Optional[UploadFile],
+    input_uri: Optional[str],
+    dest: Path,
+) -> Path:
+    """Resolve an input file from either a direct upload or a URI.
+
+    Supported URI schemes:
+      job://<job_id>/<filename>   — copy from a previous job's output directory
+      file://<path> or /<path>    — use a local file path on the server
+      oss://<bucket>/<key>        — download from Alibaba Cloud OSS (via SDK)
+      http(s)://...               — download from any URL (e.g. OSS public/presigned URL)
+    """
+    if input_uri:
+        return _resolve_uri(input_uri, dest)
+    if upload:
+        return _save_upload(upload, dest)
+    raise HTTPException(status_code=422, detail="Either file upload or input_uri is required")
+
+
+def _resolve_uri(uri: str, dest: Path) -> Path:
+    import shutil
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    if uri.startswith("job://"):
+        parts = uri[len("job://"):].split("/", 1)
+        if len(parts) != 2:
+            raise HTTPException(status_code=422, detail=f"Invalid job URI, expected job://<job_id>/<filename>: {uri}")
+        job_id, filename = parts
+        src = tasks._get_job_dir(job_id) / "output" / filename
+        if not src.exists():
+            raise HTTPException(status_code=404, detail=f"File not found: {src}")
+        shutil.copy2(src, dest)
+        return dest
+
+    if uri.startswith("file://"):
+        uri = uri[len("file://"):]
+    if uri.startswith("/"):
+        src = Path(uri)
+        if not src.exists():
+            raise HTTPException(status_code=404, detail=f"File not found: {src}")
+        shutil.copy2(src, dest)
+        return dest
+
+    if uri.startswith("oss://"):
+        return _download_from_oss(uri, dest)
+
+    if uri.startswith("http://") or uri.startswith("https://"):
+        return _download_from_url(uri, dest)
+
+    raise HTTPException(status_code=422, detail=f"Unsupported URI scheme: {uri}")
+
+
+def _download_from_url(url: str, dest: Path) -> Path:
+    """Download a file from an HTTP(S) URL."""
+    import httpx
+
+    try:
+        with httpx.stream("GET", url, follow_redirects=True, timeout=600) as resp:
+            resp.raise_for_status()
+            with open(dest, "wb") as f:
+                for chunk in resp.iter_bytes():
+                    f.write(chunk)
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=502, detail=f"Failed to download {url}: HTTP {e.response.status_code}")
+    except (httpx.ConnectError, httpx.TimeoutException) as e:
+        raise HTTPException(status_code=502, detail=f"Failed to download {url}: {e}")
+    return dest
+
+
+def _download_from_oss(uri: str, dest: Path) -> Path:
+    """Download a file from Alibaba Cloud OSS using alibabacloud-oss-v2."""
+    try:
+        import alibabacloud_oss_v2 as oss
+    except ImportError:
+        raise HTTPException(status_code=501, detail="alibabacloud-oss-v2 package not installed, OSS URIs not supported")
+
+    parts = uri[len("oss://"):].split("/", 1)
+    if len(parts) != 2:
+        raise HTTPException(status_code=422, detail=f"Invalid OSS URI, expected oss://<bucket>/<key>: {uri}")
+    bucket_name, key = parts
+
+    region = os.getenv("OSS_REGION", "cn-hangzhou")
+    credentials_provider = oss.credentials.EnvironmentVariableCredentialsProvider()
+    cfg = oss.config.load_default()
+    cfg.credentials_provider = credentials_provider
+    cfg.region = region
+
+    client = oss.Client(cfg)
+    request = oss.models.GetObjectRequest(bucket=bucket_name, key=key)
+    response = client.get_object(request)
+    with open(dest, "wb") as f:
+        for chunk in response.body.iter_bytes():
+            f.write(chunk)
+    return dest
+
+
 def _check_disk_usage():
     """Auto-cleanup completed/failed jobs when disk usage is high."""
     jobs_dir = tasks.JOBS_BASE_DIR
@@ -142,7 +240,8 @@ def run_rfdiffusion_endpoint(
 
 @app.post("/api/proteinmpnn", response_model=JobInfo)
 def run_proteinmpnn_endpoint(
-    input_quiver: UploadFile = File(..., description="Input Quiver file from RFdiffusion"),
+    input_quiver: Optional[UploadFile] = File(None, description="Input Quiver file from RFdiffusion"),
+    input_uri: Optional[str] = Form(None, description="URI to input file (alternative to upload, e.g. job://<id>/<file>)"),
     loops: str = Form("H1,H2,H3"),
     seqs_per_struct: int = Form(4),
     temperature: float = Form(0.2),
@@ -154,7 +253,7 @@ def run_proteinmpnn_endpoint(
     job_id = tasks.create_job()
     job_dir = tasks._get_job_dir(job_id)
 
-    qv_path = _save_upload(input_quiver, job_dir / "input" / "input.qv")
+    qv_path = _resolve_input(input_quiver, input_uri, job_dir / "input" / "input.qv")
 
     def _run():
         tasks.update_job(job_id, status=JobStatus.RUNNING, step=StepName.PROTEINMPNN)
@@ -177,7 +276,8 @@ def run_proteinmpnn_endpoint(
 
 @app.post("/api/rf2", response_model=JobInfo)
 def run_rf2_endpoint(
-    input_quiver: UploadFile = File(..., description="Input Quiver file from ProteinMPNN"),
+    input_quiver: Optional[UploadFile] = File(None, description="Input Quiver file from ProteinMPNN"),
+    input_uri: Optional[str] = Form(None, description="URI to input file (alternative to upload, e.g. job://<id>/<file>)"),
     num_recycles: int = Form(10),
     hotspot_show_prop: float = Form(0.1),
     seed: Optional[int] = Form(None),
@@ -187,7 +287,7 @@ def run_rf2_endpoint(
     job_id = tasks.create_job()
     job_dir = tasks._get_job_dir(job_id)
 
-    qv_path = _save_upload(input_quiver, job_dir / "input" / "input.qv")
+    qv_path = _resolve_input(input_quiver, input_uri, job_dir / "input" / "input.qv")
 
     def _run():
         tasks.update_job(job_id, status=JobStatus.RUNNING, step=StepName.RF2)

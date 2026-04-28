@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+#
 # Build from bioagent project root:
 #   docker build --platform linux/amd64 -t rfantibody-server -f services/rfantibody-server/Dockerfile .
 #
@@ -7,6 +9,7 @@ FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV UV_INDEX_URL=https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.10 python3-pip python3.10-venv wget curl ca-certificates \
@@ -19,14 +22,17 @@ WORKDIR /opt/rfantibody
 
 # Dependencies first (cache-friendly layer order)
 COPY opensource/RFantibody/pyproject.toml opensource/RFantibody/uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-install-project
 
 # Full RFantibody source + weights
 COPY opensource/RFantibody/ .
-RUN uv sync --frozen --no-dev
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
 
 # Server dependencies (into the same venv)
-RUN uv pip install fastapi uvicorn python-multipart
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install fastapi uvicorn python-multipart httpx alibabacloud-oss-v2
 
 # --- Copy server code as "server" package ---
 COPY services/rfantibody-server/ /opt/rfantibody/server/
