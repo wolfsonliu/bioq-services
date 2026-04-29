@@ -18,15 +18,15 @@ _PROJECT_ROOT = Path(os.getenv("RFANTIBODY_ROOT", "/opt/rfantibody"))
 _WEIGHTS_DIR = Path(os.getenv("RFANTIBODY_WEIGHTS", _PROJECT_ROOT / "weights"))
 _SCRIPTS_DIR = Path(os.getenv("RFANTIBODY_SCRIPTS", _PROJECT_ROOT / "scripts"))
 
-_WEIGHT_SUBDIRS = {
-    "rfdiffusion": _WEIGHTS_DIR / "rfdiffusion",
-    "proteinmpnn": _WEIGHTS_DIR / "proteinmpnn",
-    "rf2": _WEIGHTS_DIR / "rf2",
+_WEIGHT_FILES = {
+    "rfdiffusion": _WEIGHTS_DIR / "RFdiffusion_Ab.pt",
+    "proteinmpnn": _WEIGHTS_DIR / "ProteinMPNN_v48_noise_0.2.pt",
+    "rf2": _WEIGHTS_DIR / "RF2_ab.pt",
 }
 
 
 def _get_weight_path(tool: str) -> Path:
-    return _WEIGHT_SUBDIRS.get(tool, _WEIGHTS_DIR / tool)
+    return _WEIGHT_FILES.get(tool, _WEIGHTS_DIR / tool)
 
 logger = logging.getLogger(__name__)
 
@@ -108,9 +108,12 @@ def _run_subprocess(cmd: list[str], step_name: str, job_id: str) -> int:
         text=True,
     )
     if result.returncode != 0:
-        logger.error("[%s] %s failed (rc=%d):\n%s", job_id, step_name, result.returncode, result.stderr[-2000:])
+        logger.error("[%s] %s failed (rc=%d):\nSTDERR: %s\nSTDOUT: %s",
+                     job_id, step_name, result.returncode, result.stderr[-2000:], result.stdout[-2000:])
     else:
-        logger.info("[%s] %s completed successfully", job_id, step_name)
+        logger.info("[%s] %s completed (rc=0). stdout[-500]: %s", job_id, step_name, result.stdout[-500:])
+        if result.stderr:
+            logger.info("[%s] %s stderr[-500]: %s", job_id, step_name, result.stderr[-500:])
     return result.returncode
 
 
@@ -218,7 +221,7 @@ def run_rf2(
 
     weights = _get_weight_path("rf2")
     if weights.exists():
-        cmd.append(f"model.model_weights='{weights}'")
+        cmd.append(f"model.model_weights={weights}")
 
     if seed is not None:
         cmd.append(f"+inference.seed={seed}")

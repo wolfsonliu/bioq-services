@@ -217,6 +217,8 @@ def run_rfdiffusion_endpoint(
     target_path = _save_upload(target, job_dir / "input" / "target.pdb")
     framework_path = _save_upload(framework, job_dir / "input" / "framework.pdb")
 
+    expected_output = job_dir / "output" / "1_rfdiffusion.qv"
+
     def _run():
         tasks.update_job(job_id, status=JobStatus.RUNNING, step=StepName.RFDIFFUSION)
         rc = tasks.run_rfdiffusion(
@@ -229,10 +231,13 @@ def run_rfdiffusion_endpoint(
             deterministic=deterministic,
             no_trajectory=no_trajectory,
         )
-        if rc == 0:
-            tasks.update_job(job_id, status=JobStatus.COMPLETED, message="RFdiffusion completed")
-        else:
+        if rc != 0:
             tasks.update_job(job_id, status=JobStatus.FAILED, message=f"RFdiffusion failed (rc={rc})")
+        elif not expected_output.exists() or expected_output.stat().st_size == 0:
+            tasks.update_job(job_id, status=JobStatus.FAILED,
+                             message="RFdiffusion process exited 0 but output file missing")
+        else:
+            tasks.update_job(job_id, status=JobStatus.COMPLETED, message="RFdiffusion completed")
 
     executor.submit(_run)
     return tasks.get_job(job_id)
@@ -255,6 +260,8 @@ def run_proteinmpnn_endpoint(
 
     qv_path = _resolve_input(input_quiver, input_uri, job_dir / "input" / "input.qv")
 
+    expected_output = job_dir / "output" / "2_proteinmpnn.qv"
+
     def _run():
         tasks.update_job(job_id, status=JobStatus.RUNNING, step=StepName.PROTEINMPNN)
         rc = tasks.run_proteinmpnn(
@@ -265,10 +272,13 @@ def run_proteinmpnn_endpoint(
             omit_aas=omit_aas,
             deterministic=deterministic,
         )
-        if rc == 0:
-            tasks.update_job(job_id, status=JobStatus.COMPLETED, message="ProteinMPNN completed")
-        else:
+        if rc != 0:
             tasks.update_job(job_id, status=JobStatus.FAILED, message=f"ProteinMPNN failed (rc={rc})")
+        elif not expected_output.exists() or expected_output.stat().st_size == 0:
+            tasks.update_job(job_id, status=JobStatus.FAILED,
+                             message="ProteinMPNN process exited 0 but output file missing")
+        else:
+            tasks.update_job(job_id, status=JobStatus.COMPLETED, message="ProteinMPNN completed")
 
     executor.submit(_run)
     return tasks.get_job(job_id)
@@ -289,6 +299,8 @@ def run_rf2_endpoint(
 
     qv_path = _resolve_input(input_quiver, input_uri, job_dir / "input" / "input.qv")
 
+    expected_output = job_dir / "output" / "3_rf2.qv"
+
     def _run():
         tasks.update_job(job_id, status=JobStatus.RUNNING, step=StepName.RF2)
         rc = tasks.run_rf2(
@@ -297,10 +309,13 @@ def run_rf2_endpoint(
             hotspot_show_prop=hotspot_show_prop,
             seed=seed,
         )
-        if rc == 0:
-            tasks.update_job(job_id, status=JobStatus.COMPLETED, message="RF2 completed")
-        else:
+        if rc != 0:
             tasks.update_job(job_id, status=JobStatus.FAILED, message=f"RF2 failed (rc={rc})")
+        elif not expected_output.exists() or expected_output.stat().st_size == 0:
+            tasks.update_job(job_id, status=JobStatus.FAILED,
+                             message="RF2 process exited 0 but output file missing")
+        else:
+            tasks.update_job(job_id, status=JobStatus.COMPLETED, message="RF2 completed")
 
     executor.submit(_run)
     return tasks.get_job(job_id)

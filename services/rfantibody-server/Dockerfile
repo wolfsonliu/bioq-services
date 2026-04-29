@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-#
 # Build from bioagent project root:
 #   docker build --platform linux/amd64 -t rfantibody-server -f services/rfantibody-server/Dockerfile .
 #
