@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from . import tasks
 from .models import (
@@ -428,10 +428,10 @@ def download_single_file(job_id: str, filename: str):
     if not filepath.exists() or not filepath.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
-    return StreamingResponse(
-        open(filepath, "rb"),
+    return FileResponse(
+        path=filepath,
         media_type="application/octet-stream",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        filename=filename,
     )
 
 

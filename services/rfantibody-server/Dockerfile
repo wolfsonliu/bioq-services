@@ -46,7 +46,7 @@ ENV RFANTIBODY_SCRIPTS=/opt/rfantibody/scripts
 ENV PORT=9000
 EXPOSE 9000
 
-CMD ["uv", "run", "uvicorn", "server.app:app", \
+CMD [".venv/bin/python", "-m", "uvicorn", "server.app:app", \
      "--host", "0.0.0.0", \
      "--port", "9000", \
      "--timeout-keep-alive", "900"]
