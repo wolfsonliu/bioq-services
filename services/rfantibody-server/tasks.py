@@ -174,9 +174,9 @@ def cleanup_job(job_id: str):
 # -- Step runners --
 
 _STEP_TIMEOUTS = {
-    "rfdiffusion": 2 * 3600,
-    "proteinmpnn": 2 * 3600,
-    "rf2": 6 * 3600,
+    "rfdiffusion": 86400,
+    "proteinmpnn": 86400,
+    "rf2": 86400,
 }
 
 
