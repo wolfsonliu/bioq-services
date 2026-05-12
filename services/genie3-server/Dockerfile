@@ -55,15 +55,21 @@ RUN cd /opt/genie3 && for p in /tmp/genie3-patches/*.patch; do \
 # Editable install of genie3 (registers the `genie3` console entry point)
 RUN python -m pip install --no-build-isolation -e .
 
-# --- Server dependencies ---
-RUN python -m pip install fastapi "uvicorn[standard]" python-multipart httpx alibabacloud-oss-v2
+# --- Shared bioagent service framework + remote-fetch deps ---
+# Installing the framework as a separate layer keeps cache hits high when only
+# the framework's source changes. See services/_framework/ for the package.
+COPY services/_framework /tmp/service-framework
+RUN python -m pip install /tmp/service-framework \
+    && python -m pip install httpx alibabacloud-oss-v2
 
 # --- Server code ---
 COPY services/genie3-server/ /opt/genie3/server/
 
+# Env-driven settings — see services/genie3-server/settings.py (Genie3Settings).
+# The GENIE3_ prefix is read by pydantic-settings; defaults match the image layout.
 ENV GENIE3_ROOT=/opt/genie3
 ENV GENIE3_BIN=genie3
-ENV GENIE3_JOBS_DIR=/data/genie3_jobs
+ENV GENIE3_JOBS_BASE_DIR=/data/genie3_jobs
 RUN mkdir -p /data/genie3_jobs
 
 # --- Alibaba Cloud FC configuration ---

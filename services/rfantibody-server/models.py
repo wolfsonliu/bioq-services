@@ -1,30 +1,32 @@
-"""Pydantic models for API request/response schemas."""
+"""Per-endpoint pydantic request models.
+
+These describe the *parameter* payloads — the actual PDB / Quiver files come in
+as `UploadFile` or are resolved from URIs (see `uris.py`). The framework's
+`JobInfo` / `JobStatus` / `FailureKind` are imported directly from
+`bioagent_service` and re-exported here for backward compatibility with
+existing clients.
+"""
 
 from __future__ import annotations
 
-from enum import Enum
 from typing import Optional
 
+from bioagent_service import FailureKind, JobInfo, JobStatus  # re-exports
 from pydantic import BaseModel, Field
 
-
-class JobStatus(str, Enum):
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-
-class StepName(str, Enum):
-    RFDIFFUSION = "rfdiffusion"
-    PROTEINMPNN = "proteinmpnn"
-    RF2 = "rf2"
-
-
-# --- RFdiffusion ---
+__all__ = [
+    "FailureKind",
+    "JobInfo",
+    "JobStatus",
+    "ProteinMPNNRequest",
+    "RF2Request",
+    "RFdiffusionRequest",
+]
 
 
 class RFdiffusionRequest(BaseModel):
+    """Params for `POST /api/rfdiffusion`. Files (`target`, `framework`) are uploaded separately."""
+
     num_designs: int = Field(default=10, ge=1, le=10000)
     design_loops: str = Field(default="H1:,H2:,H3:")
     hotspots: Optional[str] = Field(default=None, examples=["B146,B170,B177"])
@@ -34,10 +36,9 @@ class RFdiffusionRequest(BaseModel):
     no_trajectory: bool = True
 
 
-# --- ProteinMPNN ---
-
-
 class ProteinMPNNRequest(BaseModel):
+    """Params for `POST /api/proteinmpnn`. Input Quiver comes in as upload or URI."""
+
     loops: str = Field(default="H1,H2,H3")
     seqs_per_struct: int = Field(default=4, ge=1, le=100)
     temperature: float = Field(default=0.2, ge=0.01, le=2.0)
@@ -45,37 +46,9 @@ class ProteinMPNNRequest(BaseModel):
     deterministic: bool = False
 
 
-# --- RF2 ---
-
-
 class RF2Request(BaseModel):
+    """Params for `POST /api/rf2`. Input Quiver comes in as upload or URI."""
+
     num_recycles: int = Field(default=10, ge=1, le=50)
     hotspot_show_prop: float = Field(default=0.1, ge=0.0, le=1.0)
     seed: Optional[int] = None
-
-
-# --- Full pipeline ---
-
-
-class PipelineRequest(BaseModel):
-    rfdiffusion: RFdiffusionRequest = Field(default_factory=RFdiffusionRequest)
-    proteinmpnn: ProteinMPNNRequest = Field(default_factory=ProteinMPNNRequest)
-    rf2: RF2Request = Field(default_factory=RF2Request)
-
-
-# --- Job ---
-
-
-class JobInfo(BaseModel):
-    job_id: str
-    status: JobStatus
-    step: Optional[StepName] = None
-    message: Optional[str] = None
-    progress: Optional[str] = None
-
-
-class JobResult(BaseModel):
-    job_id: str
-    status: JobStatus
-    message: Optional[str] = None
-    output_files: list[str] = Field(default_factory=list)

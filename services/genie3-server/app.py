@@ -1,355 +1,195 @@
-"""FastAPI web server for `genie3 generate`.
+"""FastAPI app for genie3-server.
 
-Exposes a thin HTTP wrapper around the `genie3 generate` CLI. Designed for deployment on
-Alibaba Cloud Function Compute (FC) GPU instances, mirroring the pattern of
-`services/rfantibody-server`.
+Exposes four POST endpoints:
 
-The server supports three task kinds:
-  - unconditional protein generation (no dataset)
-  - motif scaffolding (requires a problem-set zip with motifs/ + problems/)
-  - binder design (requires a problem-set zip with targets/ + problems/)
+  * `/api/generate/unconditional` — no dataset, configurable length range
+  * `/api/generate/motif`         — motif scaffolding (zip with `motifs/`)
+  * `/api/generate/binder`        — binder design (zip with `targets/`)
+  * `/api/generate`               — freeform YAML for advanced configs (iterative,
+                                    custom `cond_strategy`, etc.)
 
-A generic `/api/generate` endpoint is also available for fully custom configs.
+Lifecycle (status / log / download / single-file / delete / manifest / OpenAPI)
+is contributed by `bioagent_service.create_app`.
 
-FC deployment requirements:
-  - HTTP server listens on 0.0.0.0:CAPort (default 9000)
-  - Server must respond to /health within 120s
-  - Keep-alive timeout >= 15 minutes
+FC deployment:
+  - 0.0.0.0:CAPort (default 9000)
+  - /health must respond within 120 s of start
+  - keep-alive >= 15 min so long-running generations don't get cut off
 """
 
 from __future__ import annotations
 
-import io
 import logging
-import os
 import zipfile
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Any, Optional
 
 import yaml
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from bioagent_service import JobInfo, create_app
+from fastapi import File, Form, HTTPException, UploadFile
 
-from . import tasks
-from .models import JobInfo, JobStatus, TaskKind
+from .adapter import Genie3Adapter
+from .configs import (
+    build_binder_config,
+    build_motif_config,
+    build_unconditional_config,
+    rewrite_custom_paths,
+)
+from .datasets import extract_dataset
+from .models import BinderRequest, MotifRequest, UnconditionalRequest
+from .settings import Genie3Settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-app = FastAPI(
+settings = Genie3Settings()
+adapter = Genie3Adapter(settings=settings)
+
+app = create_app(
+    adapter,
+    settings,
     title="Genie3 Server",
-    description="HTTP API for genie3 generate (unconditional / motif / binder protein design)",
-    version="0.1.0",
+    version="0.2.0",
 )
 
-executor = ThreadPoolExecutor(max_workers=1)
 
-DISK_LIMIT_MB = int(os.getenv("GENIE3_DISK_LIMIT_MB", "8000"))
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _save_upload(upload: UploadFile, dest: Path) -> Path:
+    """Stream UploadFile to disk in chunks (multi-GB datasets allowed)."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     with open(dest, "wb") as f:
-        f.write(upload.file.read())
+        while True:
+            chunk = upload.file.read(1024 * 1024)
+            if not chunk:
+                break
+            f.write(chunk)
     return dest
 
 
-def _check_disk_usage():
-    jobs_dir = tasks.JOBS_BASE_DIR
-    if not jobs_dir.exists():
-        return
-    total = sum(f.stat().st_size for f in jobs_dir.rglob("*") if f.is_file())
-    if total > DISK_LIMIT_MB * 1024 * 1024:
-        logger.warning("Disk usage %.1f MB exceeds limit %d MB, cleaning up old jobs",
-                       total / 1024 / 1024, DISK_LIMIT_MB)
-        for job_id, job in list(tasks._jobs.items()):
-            if job.status in (JobStatus.COMPLETED, JobStatus.FAILED):
-                tasks.cleanup_job(job_id)
+def _write_yaml(config: dict[str, Any], job_dir: Path) -> Path:
+    """Persist the experiment config so it's reproducible from the job dir alone."""
+    path = job_dir / "input" / "experiment.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+    return path
 
 
-def _finalize(job_id: str, rc: int, label: str):
-    if rc != 0:
-        tasks.update_job(job_id, status=JobStatus.FAILED, message=f"{label} failed (rc={rc})")
-    elif not tasks.has_outputs(job_id):
-        tasks.update_job(job_id, status=JobStatus.FAILED,
-                         message=f"{label} exited 0 but no PDB outputs were produced")
-    else:
-        tasks.update_job(job_id, status=JobStatus.COMPLETED, message=f"{label} completed")
+def _genie3_argv(config_path: Path, num_devices: Optional[int]) -> list[str]:
+    """`genie3 generate -c <yaml> [--num-devices N]`."""
+    cmd = [settings.bin, "generate", "-c", str(config_path)]
+    if num_devices is not None:
+        cmd.extend(["--num-devices", str(num_devices)])
+    return cmd
 
 
 # ---------------------------------------------------------------------------
-# Health
-# ---------------------------------------------------------------------------
-
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
-
-@app.get("/health/detail")
-def health_detail():
-    return {
-        "status": "ok",
-        "paths": {
-            "project_root": str(tasks._PROJECT_ROOT),
-            "project_root_exists": tasks._PROJECT_ROOT.exists(),
-            "jobs_dir": str(tasks.JOBS_BASE_DIR),
-            "jobs_dir_exists": tasks.JOBS_BASE_DIR.exists(),
-        },
-    }
-
-
-# ---------------------------------------------------------------------------
-# Task-specific generation endpoints
+# Structured endpoints
 # ---------------------------------------------------------------------------
 
 
 @app.post("/api/generate/unconditional", response_model=JobInfo)
 def generate_unconditional(
-    min_length: int = Form(100),
-    max_length: int = Form(100),
-    length_step: int = Form(50),
-    n_sample: int = Form(4),
-    direction_scale: float = Form(0.8),
-    batch_size: int = Form(1),
-    num_devices: Optional[int] = Form(None),
-):
-    """Run unconditional backbone generation."""
-    _check_disk_usage()
-    job_id = tasks.create_job(TaskKind.UNCONDITIONAL)
-    job_dir = tasks._get_job_dir(job_id)
+    params: Annotated[UnconditionalRequest, Form()] = UnconditionalRequest(),
+) -> JobInfo:
+    """Unconditional protein backbone generation (no input structure)."""
 
-    config = tasks.build_unconditional_config(
-        rootdir=job_dir / "output",
-        min_length=min_length,
-        max_length=max_length,
-        length_step=length_step,
-        n_sample=n_sample,
-        direction_scale=direction_scale,
-        batch_size=batch_size,
-    )
+    def _build(_job_id: str, job_dir: Path) -> list[str]:
+        config = build_unconditional_config(rootdir=job_dir / "output", req=params)
+        config_path = _write_yaml(config, job_dir)
+        return _genie3_argv(config_path, params.num_devices)
 
-    def _run():
-        tasks.update_job(job_id, status=JobStatus.RUNNING)
-        rc = tasks.run_generate(job_id, config, num_devices=num_devices)
-        _finalize(job_id, rc, "unconditional generate")
-
-    executor.submit(_run)
-    return tasks.get_job(job_id)
+    return app.state.runner.submit(build_argv=_build, label="unconditional")
 
 
 @app.post("/api/generate/motif", response_model=JobInfo)
 def generate_motif(
-    dataset: UploadFile = File(..., description="Zip of the motif scaffolding problem set (problems/ + motifs/)"),
-    selections: Optional[str] = Form(None),
-    n_sample: int = Form(4),
-    direction_scale: float = Form(0.1),
-    batch_size: int = Form(1),
-    num_devices: Optional[int] = Form(None),
-):
-    """Run motif scaffolding generation. Upload a dataset zip with `problems/` and `motifs/`."""
-    _check_disk_usage()
-    job_id = tasks.create_job(TaskKind.MOTIF)
-    job_dir = tasks._get_job_dir(job_id)
+    dataset: UploadFile = File(..., description="Zip with problems/ + motifs/."),
+    params: Annotated[MotifRequest, Form()] = MotifRequest(),
+) -> JobInfo:
+    """Motif scaffolding generation. Dataset zip must contain `problems/` + `motifs/`."""
 
-    zip_path = _save_upload(dataset, job_dir / "input" / "dataset.zip")
-    try:
-        dataset_root = tasks.extract_dataset(zip_path, job_dir / "input" / "dataset")
-    except (zipfile.BadZipFile, ValueError) as e:
-        tasks.cleanup_job(job_id)
-        raise HTTPException(status_code=422, detail=f"Invalid dataset zip: {e}")
+    def _build(_job_id: str, job_dir: Path) -> list[str]:
+        zip_path = _save_upload(dataset, job_dir / "input" / "dataset.zip")
+        try:
+            dataset_root = extract_dataset(zip_path, job_dir / "input" / "dataset")
+        except (zipfile.BadZipFile, ValueError) as e:
+            raise HTTPException(status_code=422, detail=f"Invalid dataset zip: {e}") from e
+        config = build_motif_config(
+            rootdir=job_dir / "output", dataset_root=dataset_root, req=params,
+        )
+        config_path = _write_yaml(config, job_dir)
+        return _genie3_argv(config_path, params.num_devices)
 
-    config = tasks.build_motif_config(
-        rootdir=job_dir / "output",
-        dataset_root=dataset_root,
-        selections=selections,
-        n_sample=n_sample,
-        direction_scale=direction_scale,
-        batch_size=batch_size,
-    )
-
-    def _run():
-        tasks.update_job(job_id, status=JobStatus.RUNNING)
-        rc = tasks.run_generate(job_id, config, num_devices=num_devices)
-        _finalize(job_id, rc, "motif generate")
-
-    executor.submit(_run)
-    return tasks.get_job(job_id)
+    return app.state.runner.submit(build_argv=_build, label="motif")
 
 
 @app.post("/api/generate/binder", response_model=JobInfo)
 def generate_binder(
-    dataset: UploadFile = File(..., description="Zip of the binder design problem set (problems/ + targets/)"),
-    selections: Optional[str] = Form(None),
-    n_sample: int = Form(4),
-    direction_scale: float = Form(0.0),
-    batch_size: int = Form(1),
-    num_devices: Optional[int] = Form(None),
-):
-    """Run binder design generation. Upload a dataset zip with `problems/` and `targets/`."""
-    _check_disk_usage()
-    job_id = tasks.create_job(TaskKind.BINDER)
-    job_dir = tasks._get_job_dir(job_id)
+    dataset: UploadFile = File(..., description="Zip with problems/ + targets/."),
+    params: Annotated[BinderRequest, Form()] = BinderRequest(),
+) -> JobInfo:
+    """Binder design generation. Dataset zip must contain `problems/` + `targets/`."""
 
-    zip_path = _save_upload(dataset, job_dir / "input" / "dataset.zip")
-    try:
-        dataset_root = tasks.extract_dataset(zip_path, job_dir / "input" / "dataset")
-    except (zipfile.BadZipFile, ValueError) as e:
-        tasks.cleanup_job(job_id)
-        raise HTTPException(status_code=422, detail=f"Invalid dataset zip: {e}")
+    def _build(_job_id: str, job_dir: Path) -> list[str]:
+        zip_path = _save_upload(dataset, job_dir / "input" / "dataset.zip")
+        try:
+            dataset_root = extract_dataset(zip_path, job_dir / "input" / "dataset")
+        except (zipfile.BadZipFile, ValueError) as e:
+            raise HTTPException(status_code=422, detail=f"Invalid dataset zip: {e}") from e
+        config = build_binder_config(
+            rootdir=job_dir / "output", dataset_root=dataset_root, req=params,
+        )
+        config_path = _write_yaml(config, job_dir)
+        return _genie3_argv(config_path, params.num_devices)
 
-    config = tasks.build_binder_config(
-        rootdir=job_dir / "output",
-        dataset_root=dataset_root,
-        selections=selections,
-        n_sample=n_sample,
-        direction_scale=direction_scale,
-        batch_size=batch_size,
-    )
-
-    def _run():
-        tasks.update_job(job_id, status=JobStatus.RUNNING)
-        rc = tasks.run_generate(job_id, config, num_devices=num_devices)
-        _finalize(job_id, rc, "binder generate")
-
-    executor.submit(_run)
-    return tasks.get_job(job_id)
+    return app.state.runner.submit(build_argv=_build, label="binder")
 
 
 # ---------------------------------------------------------------------------
-# Generic generation endpoint (custom config)
+# Freeform YAML
 # ---------------------------------------------------------------------------
 
 
 @app.post("/api/generate", response_model=JobInfo)
 def generate_custom(
-    config_yaml: str = Form(..., description="Full experiment YAML as a string"),
-    dataset: Optional[UploadFile] = File(None, description="Optional dataset zip; extracted to <job>/input/dataset/"),
-    num_devices: Optional[int] = Form(None),
-):
+    config_yaml: str = Form(..., description="Full experiment YAML as a string."),
+    dataset: Optional[UploadFile] = File(
+        None, description="Optional dataset zip; extracted to <job>/input/dataset/.",
+    ),
+    num_devices: Optional[int] = Form(None, description="Override GPU auto-detect."),
+) -> JobInfo:
     """Run `genie3 generate` with a fully custom YAML config.
 
-    `paths.rootdir` and (if a dataset is provided) `paths.dataset` are rewritten to
-    point at the job-local directory so the config is portable.
+    `paths.rootdir` and (if a dataset zip is provided) `paths.dataset` are
+    rewritten so the YAML you supply doesn't need to know its job_dir.
     """
-    _check_disk_usage()
-    try:
-        config = yaml.safe_load(config_yaml)
-    except yaml.YAMLError as e:
-        raise HTTPException(status_code=422, detail=f"Invalid YAML: {e}")
-    if not isinstance(config, dict):
-        raise HTTPException(status_code=422, detail="config_yaml must be a mapping at the top level")
 
-    job_id = tasks.create_job(TaskKind.CUSTOM)
-    job_dir = tasks._get_job_dir(job_id)
-
-    paths = config.setdefault("paths", {})
-    paths["rootdir"] = str((job_dir / "output").resolve())
-
-    if dataset is not None:
-        zip_path = _save_upload(dataset, job_dir / "input" / "dataset.zip")
+    def _build(_job_id: str, job_dir: Path) -> list[str]:
         try:
-            dataset_root = tasks.extract_dataset(zip_path, job_dir / "input" / "dataset")
-        except (zipfile.BadZipFile, ValueError) as e:
-            tasks.cleanup_job(job_id)
-            raise HTTPException(status_code=422, detail=f"Invalid dataset zip: {e}")
-        paths["dataset"] = str(dataset_root.resolve())
+            user_config = yaml.safe_load(config_yaml)
+        except yaml.YAMLError as e:
+            raise HTTPException(status_code=422, detail=f"Invalid YAML: {e}") from e
+        if not isinstance(user_config, dict):
+            raise HTTPException(
+                status_code=422, detail="config_yaml must be a mapping at the top level",
+            )
 
-    def _run():
-        tasks.update_job(job_id, status=JobStatus.RUNNING)
-        rc = tasks.run_generate(job_id, config, num_devices=num_devices)
-        _finalize(job_id, rc, "custom generate")
+        dataset_root: Optional[Path] = None
+        if dataset is not None:
+            zip_path = _save_upload(dataset, job_dir / "input" / "dataset.zip")
+            try:
+                dataset_root = extract_dataset(zip_path, job_dir / "input" / "dataset")
+            except (zipfile.BadZipFile, ValueError) as e:
+                raise HTTPException(status_code=422, detail=f"Invalid dataset zip: {e}") from e
 
-    executor.submit(_run)
-    return tasks.get_job(job_id)
+        config = rewrite_custom_paths(
+            user_config, rootdir=job_dir / "output", dataset_root=dataset_root,
+        )
+        config_path = _write_yaml(config, job_dir)
+        return _genie3_argv(config_path, num_devices)
 
-
-# ---------------------------------------------------------------------------
-# Job management
-# ---------------------------------------------------------------------------
-
-
-@app.get("/api/jobs/{job_id}", response_model=JobInfo)
-def get_job_status(job_id: str):
-    job = tasks.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return job
-
-
-@app.get("/api/jobs/{job_id}/files")
-def list_job_files(job_id: str):
-    job = tasks.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return {"job_id": job_id, "files": tasks.list_output_files(job_id)}
-
-
-@app.get("/api/jobs/{job_id}/log")
-def get_job_log(job_id: str):
-    job = tasks.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    log_path = tasks._get_job_dir(job_id) / "logs" / "generate.log"
-    if not log_path.exists():
-        return {"job_id": job_id, "log": ""}
-    return {"job_id": job_id, "log": log_path.read_text(encoding="utf-8", errors="replace")}
-
-
-@app.get("/api/jobs/{job_id}/download")
-def download_job_results(job_id: str):
-    job = tasks.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    if job.status != JobStatus.COMPLETED:
-        raise HTTPException(status_code=400, detail=f"Job is {job.status.value}, not completed")
-
-    output_dir = tasks._get_job_dir(job_id) / "output"
-    files = [f for f in output_dir.rglob("*") if f.is_file()]
-    if not files:
-        raise HTTPException(status_code=404, detail="No output files")
-
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for f in files:
-            zf.write(f, f.relative_to(output_dir))
-    buf.seek(0)
-
-    return StreamingResponse(
-        buf,
-        media_type="application/zip",
-        headers={"Content-Disposition": f"attachment; filename=genie3_{job_id}.zip"},
-    )
-
-
-@app.get("/api/jobs/{job_id}/file/{file_path:path}")
-def download_single_file(job_id: str, file_path: str):
-    job = tasks.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-
-    output_dir = tasks._get_job_dir(job_id) / "output"
-    requested = (output_dir / file_path).resolve()
-    try:
-        requested.relative_to(output_dir.resolve())
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Path traversal not allowed")
-    if not requested.exists() or not requested.is_file():
-        raise HTTPException(status_code=404, detail="File not found")
-
-    return FileResponse(
-        path=requested,
-        media_type="application/octet-stream",
-        filename=requested.name,
-    )
-
-
-@app.delete("/api/jobs/{job_id}")
-def delete_job(job_id: str):
-    job = tasks.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    tasks.cleanup_job(job_id)
-    return {"status": "deleted", "job_id": job_id}
+    return app.state.runner.submit(build_argv=_build, label="custom")

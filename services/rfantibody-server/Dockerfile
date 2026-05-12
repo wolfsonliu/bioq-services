@@ -28,16 +28,23 @@ COPY opensource/RFantibody/ .
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
-# Server dependencies (into the same venv)
+# Shared bioagent service framework (HTTP/job/error layer, pydantic models, NAS-aware
+# read-through cache). Installing it as a separate layer keeps cache hit rates high
+# when only the framework's source changes.
+COPY services/_framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install fastapi uvicorn python-multipart httpx alibabacloud-oss-v2
+    uv pip install /tmp/service-framework \
+    && uv pip install httpx alibabacloud-oss-v2
 
 # --- Copy server code as "server" package ---
 COPY services/rfantibody-server/ /opt/rfantibody/server/
 
+# Env-driven settings — see services/rfantibody-server/settings.py (RFantibodySettings).
+# The RFANTIBODY_ prefix is read by pydantic-settings; defaults match the image layout.
 ENV RFANTIBODY_ROOT=/opt/rfantibody
-ENV RFANTIBODY_WEIGHTS=/opt/rfantibody/weights
-ENV RFANTIBODY_SCRIPTS=/opt/rfantibody/scripts
+ENV RFANTIBODY_WEIGHTS_DIR=/opt/rfantibody/weights
+ENV RFANTIBODY_SCRIPTS_DIR=/opt/rfantibody/scripts
+ENV RFANTIBODY_JOBS_BASE_DIR=/data/rfantibody_jobs
 
 # --- Alibaba Cloud FC configuration ---
 # CAPort: FC default listening port is 9000

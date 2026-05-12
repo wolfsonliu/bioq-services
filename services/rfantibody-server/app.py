@@ -1,445 +1,105 @@
-"""FastAPI web server for RFantibody pipeline.
+"""FastAPI app for rfantibody-server.
 
-Designed for deployment on Alibaba Cloud Function Compute (FC) with GPU instances.
-Provides HTTP endpoints for running the 3-step antibody design pipeline
-(RFdiffusion → ProteinMPNN → RF2) either individually or as a full pipeline.
+Exposes three single-tool endpoints (`/api/rfdiffusion`, `/api/proteinmpnn`,
+`/api/rf2`). Pipeline-style orchestration belongs to clients — shared NAS makes
+`job://<id>/<file>` cheap enough that chaining outputs is no worse than a local
+script.
 
-FC deployment requirements (https://help.aliyun.com/zh/functioncompute/fc/):
-  - HTTP server must listen on 0.0.0.0:CAPort (default 9000, NOT 127.0.0.1)
-  - Server must start and respond within 120 seconds
-  - Keep-alive timeout must be >= 15 minutes (900s)
-  - Writable disk is limited (512MB default, up to 10GB with config)
-  - Image must be AMD64 and hosted in ACR (same region/account)
-  - GPU images up to 15GB uncompressed
+The framework handles `/health`, `/api/jobs/{id}`, `/files`, `/log`, `/download`,
+`/file/{path}`, and `DELETE /api/jobs/{id}`. We only register the
+service-specific POST routes here.
+
+FC deployment notes:
+  - Listen on 0.0.0.0:CAPort (default 9000)
+  - Respond to /health within 120 s of start
+  - Keep-alive must be >= 15 min for long-running RF2 jobs
 """
 
-import io
+from __future__ import annotations
+
 import logging
-import os
-import zipfile
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from bioagent_service import JobInfo, create_app
+from fastapi import File, Form, UploadFile
 
-from . import tasks
-from .models import (
-    JobInfo,
-    JobStatus,
-    PipelineRequest,
-    StepName,
-)
+from .adapter import RFantibodyAdapter
+from .models import ProteinMPNNRequest, RF2Request, RFdiffusionRequest
+from .settings import RFantibodySettings
+from .tools import proteinmpnn_argv, rf2_argv, rfdiffusion_argv
+from .uris import resolve_input, save_upload
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-app = FastAPI(
+settings = RFantibodySettings()
+adapter = RFantibodyAdapter(settings=settings)
+
+app = create_app(
+    adapter,
+    settings,
     title="RFantibody Server",
-    description="HTTP API for RFantibody antibody design pipeline (RFdiffusion → ProteinMPNN → RF2)",
-    version="0.1.0",
+    version="0.2.0",
 )
 
-executor = ThreadPoolExecutor(max_workers=1)
-
-# FC writable disk limit — auto-cleanup when usage exceeds threshold
-DISK_LIMIT_MB = int(os.getenv("RFANTIBODY_DISK_LIMIT_MB", "8000"))
-
-
-def _save_upload(upload: UploadFile, dest: Path) -> Path:
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    with open(dest, "wb") as f:
-        f.write(upload.file.read())
-    return dest
-
-
-def _resolve_input(
-    upload: Optional[UploadFile],
-    input_uri: Optional[str],
-    dest: Path,
-) -> Path:
-    """Resolve an input file from either a direct upload or a URI.
-
-    Supported URI schemes:
-      job://<job_id>/<filename>   — copy from a previous job's output directory
-      file://<path> or /<path>    — use a local file path on the server
-      oss://<bucket>/<key>        — download from Alibaba Cloud OSS (via SDK)
-      http(s)://...               — download from any URL (e.g. OSS public/presigned URL)
-    """
-    if input_uri:
-        return _resolve_uri(input_uri, dest)
-    if upload:
-        return _save_upload(upload, dest)
-    raise HTTPException(status_code=422, detail="Either file upload or input_uri is required")
-
-
-def _resolve_uri(uri: str, dest: Path) -> Path:
-    import shutil
-
-    dest.parent.mkdir(parents=True, exist_ok=True)
-
-    if uri.startswith("job://"):
-        parts = uri[len("job://"):].split("/", 1)
-        if len(parts) != 2:
-            raise HTTPException(status_code=422, detail=f"Invalid job URI, expected job://<job_id>/<filename>: {uri}")
-        job_id, filename = parts
-        src = tasks._get_job_dir(job_id) / "output" / filename
-        if not src.exists():
-            raise HTTPException(status_code=404, detail=f"File not found: {src}")
-        shutil.copy2(src, dest)
-        return dest
-
-    if uri.startswith("file://"):
-        uri = uri[len("file://"):]
-    if uri.startswith("/"):
-        src = Path(uri)
-        if not src.exists():
-            raise HTTPException(status_code=404, detail=f"File not found: {src}")
-        shutil.copy2(src, dest)
-        return dest
-
-    if uri.startswith("oss://"):
-        return _download_from_oss(uri, dest)
-
-    if uri.startswith("http://") or uri.startswith("https://"):
-        return _download_from_url(uri, dest)
-
-    raise HTTPException(status_code=422, detail=f"Unsupported URI scheme: {uri}")
-
-
-def _download_from_url(url: str, dest: Path) -> Path:
-    """Download a file from an HTTP(S) URL."""
-    import httpx
-
-    try:
-        with httpx.stream("GET", url, follow_redirects=True, timeout=600) as resp:
-            resp.raise_for_status()
-            with open(dest, "wb") as f:
-                for chunk in resp.iter_bytes():
-                    f.write(chunk)
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=502, detail=f"Failed to download {url}: HTTP {e.response.status_code}")
-    except (httpx.ConnectError, httpx.TimeoutException) as e:
-        raise HTTPException(status_code=502, detail=f"Failed to download {url}: {e}")
-    return dest
-
-
-def _download_from_oss(uri: str, dest: Path) -> Path:
-    """Download a file from Alibaba Cloud OSS using alibabacloud-oss-v2."""
-    try:
-        import alibabacloud_oss_v2 as oss
-    except ImportError:
-        raise HTTPException(status_code=501, detail="alibabacloud-oss-v2 package not installed, OSS URIs not supported")
-
-    parts = uri[len("oss://"):].split("/", 1)
-    if len(parts) != 2:
-        raise HTTPException(status_code=422, detail=f"Invalid OSS URI, expected oss://<bucket>/<key>: {uri}")
-    bucket_name, key = parts
-
-    region = os.getenv("OSS_REGION", "cn-hangzhou")
-    credentials_provider = oss.credentials.EnvironmentVariableCredentialsProvider()
-    cfg = oss.config.load_default()
-    cfg.credentials_provider = credentials_provider
-    cfg.region = region
-
-    client = oss.Client(cfg)
-    request = oss.models.GetObjectRequest(bucket=bucket_name, key=key)
-    response = client.get_object(request)
-    with open(dest, "wb") as f:
-        for chunk in response.body.iter_bytes():
-            f.write(chunk)
-    return dest
-
-
-def _check_disk_usage():
-    """Auto-cleanup completed/failed jobs when disk usage is high."""
-    jobs_dir = tasks.JOBS_BASE_DIR
-    if not jobs_dir.exists():
-        return
-    total = sum(f.stat().st_size for f in jobs_dir.rglob("*") if f.is_file())
-    if total > DISK_LIMIT_MB * 1024 * 1024:
-        logger.warning("Disk usage %.1f MB exceeds limit %d MB, cleaning up old jobs", total / 1024 / 1024, DISK_LIMIT_MB)
-        for job_id, job in list(tasks._jobs.items()):
-            if job.status in (JobStatus.COMPLETED, JobStatus.FAILED):
-                tasks.cleanup_job(job_id)
-
 
 # ---------------------------------------------------------------------------
-# Health & initialization
-# ---------------------------------------------------------------------------
-
-
-@app.get("/health")
-def health():
-    """Lightweight health check for FC startup probe. Must respond quickly (<120s)."""
-    return {"status": "ok"}
-
-
-@app.get("/health/detail")
-def health_detail():
-    """Detailed health check including path validation."""
-    path_status = {
-        "project_root": str(tasks._PROJECT_ROOT),
-        "project_root_exists": tasks._PROJECT_ROOT.exists(),
-        "weights_dir": str(tasks._WEIGHTS_DIR),
-        "weights_dir_exists": tasks._WEIGHTS_DIR.exists(),
-        "scripts_dir": str(tasks._SCRIPTS_DIR),
-        "scripts_dir_exists": tasks._SCRIPTS_DIR.exists(),
-        "jobs_dir": str(tasks.JOBS_BASE_DIR),
-        "jobs_dir_exists": tasks.JOBS_BASE_DIR.exists(),
-    }
-    return {"status": "ok", "paths": path_status}
-
-
-# ---------------------------------------------------------------------------
-# Single-step endpoints
+# Service-specific endpoints
 # ---------------------------------------------------------------------------
 
 
 @app.post("/api/rfdiffusion", response_model=JobInfo)
-def run_rfdiffusion_endpoint(
+def run_rfdiffusion(
     target: UploadFile = File(..., description="Target antigen PDB file"),
     framework: UploadFile = File(..., description="Antibody framework PDB file"),
-    num_designs: int = Form(10),
-    design_loops: str = Form("H1:,H2:,H3:"),
-    hotspots: Optional[str] = Form(None),
-    diffuser_t: int = Form(50),
-    final_step: int = Form(1),
-    deterministic: bool = Form(False),
-    no_trajectory: bool = Form(True),
-):
-    """Run RFdiffusion backbone design (Step 1)."""
-    _check_disk_usage()
-    job_id = tasks.create_job()
-    job_dir = tasks._get_job_dir(job_id)
+    params: Annotated[RFdiffusionRequest, Form()] = RFdiffusionRequest(),
+) -> JobInfo:
+    """RFdiffusion antibody-framework backbone design."""
 
-    target_path = _save_upload(target, job_dir / "input" / "target.pdb")
-    framework_path = _save_upload(framework, job_dir / "input" / "framework.pdb")
+    def _build(job_id: str, job_dir: Path) -> list[str]:
+        target_path = save_upload(target, job_dir / "input" / "target.pdb")
+        framework_path = save_upload(framework, job_dir / "input" / "framework.pdb")
+        return rfdiffusion_argv(params, target_path, framework_path, job_dir, settings)
 
-    expected_output = job_dir / "output" / "1_rfdiffusion.qv"
-
-    def _run():
-        tasks.update_job(job_id, status=JobStatus.RUNNING, step=StepName.RFDIFFUSION)
-        rc = tasks.run_rfdiffusion(
-            job_id, target_path, framework_path,
-            num_designs=num_designs,
-            design_loops=design_loops,
-            hotspots=hotspots,
-            diffuser_t=diffuser_t,
-            final_step=final_step,
-            deterministic=deterministic,
-            no_trajectory=no_trajectory,
-        )
-        if rc != 0:
-            tasks.update_job(job_id, status=JobStatus.FAILED, message=f"RFdiffusion failed (rc={rc})")
-        elif not expected_output.exists() or expected_output.stat().st_size == 0:
-            tasks.update_job(job_id, status=JobStatus.FAILED,
-                             message="RFdiffusion process exited 0 but output file missing")
-        else:
-            tasks.update_job(job_id, status=JobStatus.COMPLETED, message="RFdiffusion completed")
-
-    executor.submit(_run)
-    return tasks.get_job(job_id)
+    return app.state.runner.submit(build_argv=_build, label="rfdiffusion")
 
 
 @app.post("/api/proteinmpnn", response_model=JobInfo)
-def run_proteinmpnn_endpoint(
-    input_quiver: Optional[UploadFile] = File(None, description="Input Quiver file from RFdiffusion"),
-    input_uri: Optional[str] = Form(None, description="URI to input file (alternative to upload, e.g. job://<id>/<file>)"),
-    loops: str = Form("H1,H2,H3"),
-    seqs_per_struct: int = Form(4),
-    temperature: float = Form(0.2),
-    omit_aas: str = Form("CX"),
-    deterministic: bool = Form(False),
-):
-    """Run ProteinMPNN sequence design (Step 2)."""
-    _check_disk_usage()
-    job_id = tasks.create_job()
-    job_dir = tasks._get_job_dir(job_id)
+def run_proteinmpnn(
+    input_quiver: Optional[UploadFile] = File(
+        None, description="Input Quiver (from RFdiffusion). Mutually exclusive with `input_uri`."
+    ),
+    input_uri: Optional[str] = Form(
+        None,
+        description=(
+            "URI to fetch the input Quiver instead of uploading. Schemes: "
+            "job://<id>/<file>, file:///path, oss://<bucket>/<key>, http(s)://..."
+        ),
+    ),
+    params: Annotated[ProteinMPNNRequest, Form()] = ProteinMPNNRequest(),
+) -> JobInfo:
+    """ProteinMPNN CDR sequence design over an RFdiffusion-generated backbone set."""
 
-    qv_path = _resolve_input(input_quiver, input_uri, job_dir / "input" / "input.qv")
+    def _build(job_id: str, job_dir: Path) -> list[str]:
+        qv_path = resolve_input(input_quiver, input_uri, job_dir / "input" / "input.qv", settings)
+        return proteinmpnn_argv(params, qv_path, job_dir, settings)
 
-    expected_output = job_dir / "output" / "2_proteinmpnn.qv"
-
-    def _run():
-        tasks.update_job(job_id, status=JobStatus.RUNNING, step=StepName.PROTEINMPNN)
-        rc = tasks.run_proteinmpnn(
-            job_id, qv_path,
-            loops=loops,
-            seqs_per_struct=seqs_per_struct,
-            temperature=temperature,
-            omit_aas=omit_aas,
-            deterministic=deterministic,
-        )
-        if rc != 0:
-            tasks.update_job(job_id, status=JobStatus.FAILED, message=f"ProteinMPNN failed (rc={rc})")
-        elif not expected_output.exists() or expected_output.stat().st_size == 0:
-            tasks.update_job(job_id, status=JobStatus.FAILED,
-                             message="ProteinMPNN process exited 0 but output file missing")
-        else:
-            tasks.update_job(job_id, status=JobStatus.COMPLETED, message="ProteinMPNN completed")
-
-    executor.submit(_run)
-    return tasks.get_job(job_id)
+    return app.state.runner.submit(build_argv=_build, label="proteinmpnn")
 
 
 @app.post("/api/rf2", response_model=JobInfo)
-def run_rf2_endpoint(
-    input_quiver: Optional[UploadFile] = File(None, description="Input Quiver file from ProteinMPNN"),
-    input_uri: Optional[str] = Form(None, description="URI to input file (alternative to upload, e.g. job://<id>/<file>)"),
-    num_recycles: int = Form(10),
-    hotspot_show_prop: float = Form(0.1),
-    seed: Optional[int] = Form(None),
-):
-    """Run RF2 structure prediction (Step 3)."""
-    _check_disk_usage()
-    job_id = tasks.create_job()
-    job_dir = tasks._get_job_dir(job_id)
+def run_rf2(
+    input_quiver: Optional[UploadFile] = File(
+        None, description="Input Quiver (from ProteinMPNN). Mutually exclusive with `input_uri`."
+    ),
+    input_uri: Optional[str] = Form(None, description="URI to fetch input Quiver from (see /proteinmpnn)."),
+    params: Annotated[RF2Request, Form()] = RF2Request(),
+) -> JobInfo:
+    """RF2 structure prediction + filtering over MPNN-designed sequences."""
 
-    qv_path = _resolve_input(input_quiver, input_uri, job_dir / "input" / "input.qv")
+    def _build(job_id: str, job_dir: Path) -> list[str]:
+        qv_path = resolve_input(input_quiver, input_uri, job_dir / "input" / "input.qv", settings)
+        return rf2_argv(params, qv_path, job_dir, settings)
 
-    expected_output = job_dir / "output" / "3_rf2.qv"
-
-    def _run():
-        tasks.update_job(job_id, status=JobStatus.RUNNING, step=StepName.RF2)
-        rc = tasks.run_rf2(
-            job_id, qv_path,
-            num_recycles=num_recycles,
-            hotspot_show_prop=hotspot_show_prop,
-            seed=seed,
-        )
-        if rc != 0:
-            tasks.update_job(job_id, status=JobStatus.FAILED, message=f"RF2 failed (rc={rc})")
-        elif not expected_output.exists() or expected_output.stat().st_size == 0:
-            tasks.update_job(job_id, status=JobStatus.FAILED,
-                             message="RF2 process exited 0 but output file missing")
-        else:
-            tasks.update_job(job_id, status=JobStatus.COMPLETED, message="RF2 completed")
-
-    executor.submit(_run)
-    return tasks.get_job(job_id)
-
-
-# ---------------------------------------------------------------------------
-# Full pipeline endpoint
-# ---------------------------------------------------------------------------
-
-
-@app.post("/api/pipeline", response_model=JobInfo)
-def run_pipeline_endpoint(
-    target: UploadFile = File(..., description="Target antigen PDB file"),
-    framework: UploadFile = File(..., description="Antibody framework PDB file"),
-    config: str = Form("{}"),
-):
-    """Run the full 3-step pipeline (RFdiffusion → ProteinMPNN → RF2).
-
-    The `config` field accepts a JSON string matching PipelineRequest schema.
-    If omitted, default parameters are used.
-    """
-    import json
-    try:
-        cfg = PipelineRequest.model_validate(json.loads(config))
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=f"Invalid config: {e}")
-
-    _check_disk_usage()
-    job_id = tasks.create_job()
-    job_dir = tasks._get_job_dir(job_id)
-
-    target_path = _save_upload(target, job_dir / "input" / "target.pdb")
-    framework_path = _save_upload(framework, job_dir / "input" / "framework.pdb")
-
-    def _run():
-        tasks.run_pipeline(
-            job_id,
-            target_path,
-            framework_path,
-            rfdiffusion_kwargs=cfg.rfdiffusion.model_dump(),
-            proteinmpnn_kwargs=cfg.proteinmpnn.model_dump(),
-            rf2_kwargs=cfg.rf2.model_dump(),
-        )
-
-    tasks.update_job(job_id, status=JobStatus.PENDING, message="Pipeline queued")
-    executor.submit(_run)
-    return tasks.get_job(job_id)
-
-
-# ---------------------------------------------------------------------------
-# Job management
-# ---------------------------------------------------------------------------
-
-
-@app.get("/api/jobs/{job_id}", response_model=JobInfo)
-def get_job_status(job_id: str):
-    """Get the status of a job."""
-    job = tasks.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return job
-
-
-@app.get("/api/jobs/{job_id}/files")
-def list_job_files(job_id: str):
-    """List output files for a completed job."""
-    job = tasks.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    files = tasks.list_output_files(job_id)
-    return {"job_id": job_id, "files": files}
-
-
-@app.get("/api/jobs/{job_id}/download")
-def download_job_results(job_id: str):
-    """Download all output files as a zip archive."""
-    job = tasks.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    if job.status != JobStatus.COMPLETED:
-        raise HTTPException(status_code=400, detail=f"Job is {job.status.value}, not completed")
-
-    output_dir = tasks._get_job_dir(job_id) / "output"
-    files = list(output_dir.iterdir())
-    if not files:
-        raise HTTPException(status_code=404, detail="No output files")
-
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for f in files:
-            if f.is_file():
-                zf.write(f, f.name)
-    buf.seek(0)
-
-    return StreamingResponse(
-        buf,
-        media_type="application/zip",
-        headers={"Content-Disposition": f"attachment; filename=rfantibody_{job_id}.zip"},
-    )
-
-
-@app.get("/api/jobs/{job_id}/file/{filename}")
-def download_single_file(job_id: str, filename: str):
-    """Download a single output file."""
-    job = tasks.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-
-    filepath = tasks._get_job_dir(job_id) / "output" / filename
-    if not filepath.exists() or not filepath.is_file():
-        raise HTTPException(status_code=404, detail="File not found")
-
-    return FileResponse(
-        path=filepath,
-        media_type="application/octet-stream",
-        filename=filename,
-    )
-
-
-@app.delete("/api/jobs/{job_id}")
-def delete_job(job_id: str):
-    """Delete a job and its files."""
-    job = tasks.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    tasks.cleanup_job(job_id)
-    return {"status": "deleted", "job_id": job_id}
+    return app.state.runner.submit(build_argv=_build, label="rf2")

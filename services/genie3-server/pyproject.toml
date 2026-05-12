@@ -1,0 +1,21 @@
+[project]
+name = "genie3-server"
+version = "0.2.0"
+description = "HTTP service wrapping `genie3 generate` (unconditional / motif / binder / custom) for FC GPU deployment"
+requires-python = ">=3.10"
+dependencies = [
+    "bioagent-service-framework",
+    "pyyaml>=6.0",
+    "httpx>=0.27",
+    "alibabacloud-oss-v2>=0.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
