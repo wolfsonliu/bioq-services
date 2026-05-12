@@ -46,6 +46,12 @@ COPY opensource/genie3/setup.py /opt/genie3/setup.py
 COPY opensource/genie3/src /opt/genie3/src
 COPY opensource/genie3/pretrained/v1 /opt/genie3/pretrained/v1
 
+# Apply local patches to upstream genie3. See services/genie3-server/patches/README.md.
+COPY services/genie3-server/patches /tmp/genie3-patches
+RUN cd /opt/genie3 && for p in /tmp/genie3-patches/*.patch; do \
+        echo "Applying $p"; patch -p1 < "$p"; \
+    done
+
 # Editable install of genie3 (registers the `genie3` console entry point)
 RUN python -m pip install --no-build-isolation -e .
 

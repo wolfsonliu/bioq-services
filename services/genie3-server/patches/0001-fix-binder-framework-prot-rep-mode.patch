@@ -1,0 +1,13 @@
+diff --git a/src/genie3/generation/utils/feat_utils.py b/src/genie3/generation/utils/feat_utils.py
+index 2b99005..53c12c5 100644
+--- a/src/genie3/generation/utils/feat_utils.py
++++ b/src/genie3/generation/utils/feat_utils.py
+@@ -477,7 +477,7 @@ def create_np_features_from_target_config(
+         binder_np_features = create_np_features_from_length(binder_length)
+     elif "binder_framework" in info:  # Sample with framework
+         binder_np_features = create_np_features_from_motif_config(
+-            info["binder_framework"]
++            info["binder_framework"], prot_rep_mode
+         )
+     else:
+         logging.error("Invalid binder specification")
