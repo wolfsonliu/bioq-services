@@ -136,6 +136,10 @@ _PATH_KEYS_SCALAR = (
     "target_pdb_filepath",
     "target_fasta_filepath",
     "target_msa_filepath",
+    # binder_framework points to a nested motif-config JSON (see
+    # genie3.generation.utils.feat_utils.create_np_features_from_target_config);
+    # we rewrite both this scalar and the motif_filepaths inside the file it points to.
+    "binder_framework",
 )
 _PATH_KEYS_LIST = (
     "target_pdb_filepath_by_chain",
@@ -211,6 +215,48 @@ def _rewrite_problem_paths(problems_dir: Path, dataset_root: Path):
                     changed = True
         if changed:
             json_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+        # If binder_framework points to a motif-config JSON, rewrite motif_filepaths in it.
+        bfw = data.get("binder_framework")
+        if isinstance(bfw, str):
+            _rewrite_motif_config_paths(Path(bfw), dataset_root)
+
+
+def _rewrite_motif_config_paths(config_path: Path, dataset_root: Path):
+    """Rewrite motif_filepaths inside a nested motif-config JSON to absolute paths."""
+    if not config_path.exists():
+        logger.warning("Motif config not found, skipping path rewrite: %s", config_path)
+        return
+    try:
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.warning("Skipping unparseable motif config %s: %s", config_path, e)
+        return
+    if not isinstance(data.get("motif_filepaths"), list):
+        return
+
+    def _resolve(value: str) -> str:
+        p = Path(value)
+        if p.is_absolute() and p.exists():
+            return str(p)
+        candidate = dataset_root / value
+        if candidate.exists():
+            return str(candidate.resolve())
+        idx = value.find("motifs/")
+        if idx != -1:
+            candidate = dataset_root / value[idx:]
+            if candidate.exists():
+                return str(candidate.resolve())
+        candidate = dataset_root / "motifs" / p.name
+        if candidate.exists():
+            return str(candidate.resolve())
+        logger.warning("Could not resolve motif path %r under %s", value, dataset_root)
+        return value
+
+    new_list = [_resolve(v) if isinstance(v, str) else v for v in data["motif_filepaths"]]
+    if new_list != data["motif_filepaths"]:
+        data["motif_filepaths"] = new_list
+        config_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
 def extract_dataset(zip_path: Path, dest_dir: Path) -> Path:
