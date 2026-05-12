@@ -268,6 +268,66 @@ def test_get_serves_stale_cache_when_sidecar_corrupted(tmp_path: Path) -> None:
     assert served.job_id == "flaky"
 
 
+def test_get_skips_cache_for_non_terminal_even_when_mtime_unchanged(tmp_path: Path) -> None:
+    """Reproduces the 2026-05-12 genie3 incident: NFS attribute cache returns
+    stale mtime so the read-through path looks like a hit, but the on-disk
+    content has actually advanced. For non-terminal (pending/running) cached
+    states the framework MUST always re-read the sidecar.
+    """
+    import os
+
+    store = JobStore(persist_dir=tmp_path)
+    store.create("evolving")  # in cache as PENDING
+
+    # Capture the mtime the cache thinks is current.
+    sidecar = tmp_path / "evolving" / SIDECAR_NAME
+    pinned_mtime = sidecar.stat().st_mtime
+
+    # Simulate the owning instance writing a new state, then **pin mtime back**
+    # to what the cache saw — mimicking an NFS attribute cache returning stale
+    # `disk_mtime` even though the file content has changed underneath.
+    sidecar.write_text(JobInfo(
+        job_id="evolving",
+        status=JobStatus.COMPLETED,
+        message="finished by peer",
+    ).model_dump_json())
+    os.utime(sidecar, (pinned_mtime, pinned_mtime))
+
+    fresh = store.get("evolving")
+    assert fresh is not None
+    # Before the fix this would return the stale cached "pending"; with the fix
+    # the framework re-reads because cached status was non-terminal.
+    assert fresh.status == JobStatus.COMPLETED
+    assert fresh.message == "finished by peer"
+
+
+def test_get_uses_cache_for_terminal_when_mtime_unchanged(tmp_path: Path) -> None:
+    """Terminal cached states are immutable; serving from cache on stat-equal
+    is the optimization we want to keep. Verifies the fix didn't regress this."""
+    import os
+
+    store = JobStore(persist_dir=tmp_path)
+    store.create("done")
+    store.update("done", status=JobStatus.COMPLETED, message="real")
+
+    sidecar = tmp_path / "done" / SIDECAR_NAME
+    pinned_mtime = sidecar.stat().st_mtime
+    # Tamper with the sidecar to a "wrong" state but keep mtime: a real
+    # client should never see this because the cached terminal status takes
+    # precedence as long as disk mtime hasn't advanced.
+    sidecar.write_text(JobInfo(
+        job_id="done",
+        status=JobStatus.RUNNING,
+        message="ghost",
+    ).model_dump_json())
+    os.utime(sidecar, (pinned_mtime, pinned_mtime))
+
+    served = store.get("done")
+    assert served is not None
+    assert served.status == JobStatus.COMPLETED
+    assert served.message == "real"
+
+
 def test_get_in_memory_only_mode_ignores_disk(tmp_path: Path) -> None:
     """persist_dir=None disables both writes and read-through. Unchanged classic behavior."""
     persisting = JobStore(persist_dir=tmp_path)

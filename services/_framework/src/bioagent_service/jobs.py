@@ -38,6 +38,14 @@ logger = logging.getLogger(__name__)
 # Matches the legacy rfantibody-server layout so existing job dirs migrate cleanly.
 SIDECAR_NAME = "job.json"
 
+# Job states that are immutable once observed — safe to serve from cache without
+# re-reading the sidecar. Anything else (pending / running) is by definition
+# expected to change, so a cache hit could mask a state transition another
+# instance just wrote. Cf. the multi-instance FC + NAS staleness incident on
+# 2026-05-12 (genie3 scaling job appearing pending for 70 min on the polling
+# instance while the owning instance had long since completed).
+_TERMINAL_STATUSES = frozenset({JobStatus.COMPLETED, JobStatus.FAILED})
+
 
 def new_job_id() -> str:
     """Short collision-resistant id used as the path segment and store key."""
@@ -133,9 +141,22 @@ class JobStore:
     def get(self, job_id: str) -> JobInfo | None:
         """Return the freshest known JobInfo for `job_id`, or None.
 
-        With a persist_dir set, stats the sidecar to detect external writes by
-        other instances; refreshes the in-memory cache transparently. Without
-        a persist_dir, this is a pure in-memory lookup.
+        With a persist_dir set, this is a *read-through* lookup against the
+        sidecar with one important nuance:
+
+          * **Terminal cached statuses** (`completed` / `failed`) are
+            immutable and served from the in-memory cache when the disk mtime
+            hasn't advanced. This is the common case for completed jobs being
+            re-queried.
+          * **Non-terminal cached statuses** (`pending` / `running`) *always*
+            trigger a fresh sidecar read. Reason: NFS attribute caches across
+            FC instances mounting the same NAS can stay warm long enough that
+            stat()'s `disk_mtime` looks unchanged even though the owning
+            instance has written a new state. Bypassing the cache for these
+            states bounds staleness to the NFS attribute cache window (~30 s
+            with default `acregmax`) instead of being effectively unbounded.
+
+        Without a persist_dir, this is a pure in-memory lookup.
         """
         # Fast path: no persistence configured.
         if self._persist_dir is None:
@@ -163,14 +184,17 @@ class JobStore:
         with self._lock:
             cached = self._jobs.get(job_id)
             cached_mtime = self._mtimes.get(job_id)
-            if (
+            cache_eligible = (
                 cached is not None
                 and cached_mtime is not None
                 and cached_mtime >= disk_mtime
-            ):
+                and cached.status in _TERMINAL_STATUSES
+            )
+            if cache_eligible:
                 return cached
 
-        # Cache miss or stale — re-read sidecar without the lock (I/O off the hot path).
+        # Cache miss / non-terminal cached / disk mtime advanced —
+        # re-read sidecar without the lock (I/O off the hot path).
         loaded, mtime = self._load_sidecar(job_id)
         if loaded is None:
             # Read failure: prefer the stale cache over None to avoid flapping.
