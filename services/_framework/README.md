@@ -6,6 +6,11 @@ A new service is ~50 lines: one `JobAdapter` subclass (how to build the subproce
 plus one `ServiceSettings` subclass (env-driven config). The framework supplies the
 FastAPI app, job store, error extraction, upload/download endpoints, and OpenAPI schema.
 
+## New service?
+
+**Start here:** [engineering/guides/adding-a-new-service.md](../../engineering/guides/adding-a-new-service.md)
+— canonical cookbook with the 10-file checklist, copy-pasteable skeleton, and verification steps.
+
 ## Design
 
 See [engineering/decisions/2026-05-12-service-framework-design.md](../../engineering/decisions/2026-05-12-service-framework-design.md).
