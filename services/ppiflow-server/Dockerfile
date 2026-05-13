@@ -5,17 +5,47 @@
 # This image only supports structure generation (sample_*.py). Sequence design,
 # scoring, packing, and Rosetta steps are NOT included — they belong in
 # separate bioagent services.
-FROM mambaorg/micromamba:1.5.10-cuda12.1.1-cudnn8-devel-ubuntu22.04
+#
+# Base: same as genie3-server so the CI image-layer cache is shared across the
+# two GPU services. CUDA 12.4 runtime is forward-compatible with the 12.1 PyTorch
+# wheels PPIFlow's environment.yml pulls in (same CUDA major). The conda env is
+# materialized via micromamba — PPIFlow's upstream env.yml ships a bunch of
+# bioconda / ostrokach packages with no pip equivalents, so pure pip isn't viable.
+FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Switch to root for system installs; micromamba is the default conda manager.
-USER root
+# ---------------------------------------------------------------------------
+# Install micromamba on top of the nvidia/cuda base. We pin via the public
+# tarball URL rather than apt to avoid pulling in conda's whole channel cache.
+# ---------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git wget ca-certificates build-essential \
-    && rm -rf /var/lib/apt/lists/*
+    bzip2 curl git wget ca-certificates build-essential \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest \
+       | tar -xj -C /usr/local/bin --strip-components=1 bin/micromamba \
+    && /usr/local/bin/micromamba --version
+
+ENV MAMBA_ROOT_PREFIX=/opt/conda
+ENV PATH=/opt/conda/envs/ppiflow/bin:$PATH
+
+# ---------------------------------------------------------------------------
+# Configure pip to use the Huawei Cloud mirror **before** micromamba runs
+# `env create` (which itself invokes pip for the pip: section of env.yml).
+# Without this, CN build hosts hit flaky pypi.org and get "(from versions: none)"
+# errors on random packages — we observed this on aiohappyeyeballs==2.5.0 even
+# though absl-py from the same install batch succeeded.
+#
+# Huawei Cloud is the project-wide pip mirror (matches genie3-server and
+# rfantibody-server). The pytorch wheel index (download.pytorch.org) stays as
+# the explicit --extra-index-url inside env.yml's pip: section — we don't
+# override that.
+# ---------------------------------------------------------------------------
+RUN mkdir -p /root/.config/pip && \
+    printf '[global]\nindex-url = https://repo.huaweicloud.com/repository/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
+    > /root/.config/pip/pip.conf
 
 # ---------------------------------------------------------------------------
 # Create the `ppiflow` conda env from upstream's environment.yml.
@@ -27,9 +57,6 @@ COPY opensource/PPIFlow/tool/PPIFlow/environment.yml /tmp/ppiflow-env.yml
 RUN micromamba env create -y -n ppiflow -f /tmp/ppiflow-env.yml \
     && micromamba clean --all --yes \
     && rm /tmp/ppiflow-env.yml
-
-ENV MAMBA_ROOT_PREFIX=/opt/conda
-ENV PATH=/opt/conda/envs/ppiflow/bin:$PATH
 
 # ---------------------------------------------------------------------------
 # Copy the PPIFlow tool source + pretrained checkpoints.

@@ -7,7 +7,7 @@ FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV UV_INDEX_URL=https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.10 python3-pip python3.10-venv wget curl ca-certificates \

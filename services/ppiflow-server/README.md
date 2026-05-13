@@ -167,7 +167,10 @@ OSS 凭证按阿里云 SDK 约定走 `OSS_ACCESS_KEY_ID` + `OSS_ACCESS_KEY_SECRE
 
 ## 本地开发
 
-PPIFlow 依赖 conda（pytorch + CUDA 12.1 + 一堆 bio 包）。最简单是用 micromamba：
+PPIFlow 依赖 conda（pytorch + CUDA + 一堆 bioconda 包，纯 pip 装不齐）。Dockerfile 用
+`nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04` 作 base（与 genie3-server 一致，共享 CI 缓存
+层），在其上手动安装 micromamba 来跑 PPIFlow 的 environment.yml；PyTorch wheels 用 CUDA
+12.1 编译，在 12.4 runtime 上向前兼容。本地开发同样用 micromamba：
 
 ```bash
 # 1. 创建 PPIFlow 的 conda 环境
