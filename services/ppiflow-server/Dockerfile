@@ -6,12 +6,16 @@
 # scoring, packing, and Rosetta steps are NOT included — they belong in
 # separate bioagent services.
 #
-# Base: same as genie3-server so the CI image-layer cache is shared across the
-# two GPU services. CUDA 12.4 runtime is forward-compatible with the 12.1 PyTorch
-# wheels PPIFlow's environment.yml pulls in (same CUDA major). The conda env is
-# materialized via micromamba — PPIFlow's upstream env.yml ships a bunch of
-# bioconda / ostrokach packages with no pip equivalents, so pure pip isn't viable.
-FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
+# Base: cudnn-runtime variant of nvidia/cuda 12.4.1. Downgraded from `-devel` on
+# 2026-05-14 to shave ~3.6 GB off the image (devel = 6.7 GB vs runtime = 3.1 GB).
+# The conda env install path doesn't compile any CUDA kernel from source — every
+# pip wheel (torch, pyg-lib, torch-{cluster,scatter,sparse}, deepspeed, etc.) is
+# pre-built; bioconda/ostrokach conda packages are also pre-built. nvcc + CUDA
+# headers (the only meaningful extras in `-devel`) are therefore unused in the
+# install chain, and PPIFlow's inference path doesn't trigger JIT CUDA compilation.
+# If a future dep does need nvcc at install time, revert to `-devel` or split
+# into a multi-stage build (see git history for the previous Dockerfile).
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1

@@ -12,7 +12,7 @@
 
 **不在此服务范围内**（PPIFlow 完整 pipeline 的其他步骤将作为单独的 bioagent service 开发）：
 
-- 序列设计（ProteinMPNN / AbMPNN）→ 另起 `mpnn-server`
+- 序列设计（ProteinMPNN / AbMPNN）→ 另起 `proteinmpnn-server`
 - 侧链 packing（Flowpacker）→ 另起 `flowpacker-server`
 - 评分（AF3Score）→ 另起 `af3score-server`
 - Rosetta refinement / DockQ → 另起 `rosetta-server`
@@ -233,7 +233,7 @@ make push-ppiflow-server    # 自动用 services/ppiflow-server/VERSION 里的 t
   Rosetta）有各自的 bioagent service。
 - **5 个独立端点**：每个 endpoint 对应一种生成模式 + 一份权重，agent 不必猜该用哪个 ckpt。
 - **共享 NAS 链式调用**：生成 PDB 写到 `/data/ppiflow_jobs/<id>/output/<name>/`，下游
-  `mpnn-server` / `af3score-server` 等可直接 `Path(...).read_bytes()` 读，无 HTTP 上下行。
+  `proteinmpnn-server` / `af3score-server` 等可直接 `Path(...).read_bytes()` 读，无 HTTP 上下行。
 - **错误信息丰富**：失败 job 的 `JobInfo` 自带 `error_summary` + `error_tail` + `failure_kind`，
   快速判断是 ckpt 缺失还是 input PDB 格式问题。
 - **快速启动**：`/health` 端点无模型加载，FC 120 s 启动探测通过；权重烘焙到镜像避免冷启动下载。
