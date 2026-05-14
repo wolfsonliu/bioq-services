@@ -2,7 +2,10 @@
 #   docker build --platform linux/amd64 -t rfantibody-server -f services/rfantibody-server/Dockerfile .
 #
 # RFantibody source must be at opensource/RFantibody/ (weights baked into image).
-FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
+# Base: cudnn-runtime (not -devel). RFantibody installs entirely from prebuilt
+# wheels via `uv sync`, no nvcc / CUDA headers needed at build or runtime.
+# Save ~5 GB vs the -devel variant on this CUDA 11.8 line.
+FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1

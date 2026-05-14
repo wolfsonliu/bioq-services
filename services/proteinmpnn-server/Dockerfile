@@ -7,7 +7,9 @@
 #
 # Base: same nvidia/cuda 12.4.1 image as ppiflow-server / genie3-server to share CI
 # layer cache. CUDA 12.x runtime is forward-compatible with the torch wheels we install.
-FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
+# `-runtime` (not `-devel`) — ProteinMPNN install path is wheel-only (torch + numpy +
+# framework), no nvcc / CUDA headers required. Save ~3.6 GB vs `-devel`.
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1

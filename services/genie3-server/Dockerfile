@@ -4,7 +4,11 @@
 # Genie3 source must be at opensource/genie3/ (pretrained v1 weights baked into image).
 # This image only supports `genie3 generate` — evaluation deps (ColabFold/ESMFold/FoldSeek/
 # ProteinMPNN/TMscore/DSSP/IPSAE) are intentionally excluded to keep the image small.
-FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
+# Base: cudnn-runtime (not -devel). genie3 installs from prebuilt torch wheels +
+# pip wheels for its other deps; build-essential below is for numpy/Cython
+# wheel compilation, not CUDA — that works fine on -runtime too.
+# Save ~3.6 GB vs the -devel variant.
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
