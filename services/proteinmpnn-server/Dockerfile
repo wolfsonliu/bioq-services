@@ -49,6 +49,12 @@ ENV PROTEINMPNN_WEIGHTS_DIR=/opt/proteinmpnn
 ENV PROTEINMPNN_JOBS_BASE_DIR=/data/proteinmpnn_jobs
 RUN mkdir -p /data/proteinmpnn_jobs
 
+# uvicorn imports `server.app:app` by name, so the package must be on sys.path.
+# WORKDIR puts `/opt/proteinmpnn` first in Python's search path (CPython prepends
+# CWD), making the `server/` subdir importable. Mirrors rfantibody-server /
+# ppiflow-server layout.
+WORKDIR /opt/proteinmpnn
+
 ENV PORT=9000
 EXPOSE 9000
 CMD ["python", "-m", "uvicorn", "server.app:app", \
