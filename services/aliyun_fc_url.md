@@ -1,0 +1,3 @@
+genie3-server: https://fc-genie-icjpnieeiz.cn-hangzhou.fcapp.run
+rfantibody-server: https://fc-rfantibody-guekbpucdo.cn-hangzhou.fcapp.run
+ppiflow-server: https://fc-ppiflow-lufflhmlaw.cn-hangzhou.fcapp.run
