@@ -21,7 +21,7 @@ import logging
 from pathlib import Path
 from typing import Annotated, Optional
 
-from bioagent_service import JobInfo, create_app
+from bioagent_service import JobInfo, attach_mcp, create_app
 from fastapi import File, Form, UploadFile
 
 from .adapter import RFantibodyAdapter
@@ -103,3 +103,8 @@ def run_rf2(
         return rf2_argv(params, qv_path, job_dir, settings)
 
     return app.state.runner.submit(build_argv=_build, label="rf2")
+
+
+# Mount MCP server — must be AFTER all POST routes are registered so the
+# auto-discovery walk sees the full surface.
+attach_mcp(app)

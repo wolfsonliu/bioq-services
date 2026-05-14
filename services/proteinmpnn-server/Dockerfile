@@ -37,7 +37,7 @@ COPY opensource/ProteinMPNN /opt/proteinmpnn
 
 # Shared bioagent service framework + remote-fetch deps (late layer).
 COPY services/_framework /tmp/service-framework
-RUN python -m pip install /tmp/service-framework \
+RUN python -m pip install "/tmp/service-framework[mcp]" \
     && python -m pip install httpx alibabacloud-oss-v2
 
 # Server code as `server` package — uvicorn imports `server.app:app`. Mounted

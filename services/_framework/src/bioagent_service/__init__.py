@@ -43,7 +43,7 @@ Minimal example:
 from __future__ import annotations
 
 from bioagent_service.adapter import JobAdapter
-from bioagent_service.app import create_app
+from bioagent_service.app import attach_mcp, create_app
 from bioagent_service.errors import FailureKind, extract_error_summary, finalize_job
 from bioagent_service.manifest import EndpointExample, ServiceManifest
 from bioagent_service.models import JobInfo, JobStatus
@@ -57,6 +57,7 @@ __all__ = [
     "FailureKind",
     "ServiceManifest",
     "ServiceSettings",
+    "attach_mcp",
     "create_app",
     "extract_error_summary",
     "finalize_job",

@@ -36,7 +36,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # when only the framework's source changes.
 COPY services/_framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install /tmp/service-framework \
+    uv pip install "/tmp/service-framework[mcp]" \
     && uv pip install httpx alibabacloud-oss-v2
 
 # --- Copy server code as "server" package ---

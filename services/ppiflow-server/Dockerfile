@@ -76,7 +76,7 @@ COPY opensource/PPIFlow/checkpoint /opt/ppiflow/checkpoint
 # the (slow) conda env build cache.
 # ---------------------------------------------------------------------------
 COPY services/_framework /tmp/service-framework
-RUN /opt/conda/envs/ppiflow/bin/pip install /tmp/service-framework \
+RUN /opt/conda/envs/ppiflow/bin/pip install "/tmp/service-framework[mcp]" \
     && /opt/conda/envs/ppiflow/bin/pip install httpx alibabacloud-oss-v2
 
 # Server code as `server` package — uvicorn imports `server.app:app`. Mounted

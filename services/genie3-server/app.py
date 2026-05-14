@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Annotated, Any, Optional
 
 import yaml
-from bioagent_service import JobInfo, create_app
+from bioagent_service import JobInfo, attach_mcp, create_app
 from fastapi import File, Form, HTTPException, UploadFile
 
 from .adapter import Genie3Adapter
@@ -193,3 +193,8 @@ def generate_custom(
         return _genie3_argv(config_path, num_devices)
 
     return app.state.runner.submit(build_argv=_build, label="custom")
+
+
+# Mount MCP server — must be AFTER all POST routes are registered so the
+# auto-discovery walk sees the full surface.
+attach_mcp(app)

@@ -63,7 +63,7 @@ RUN python -m pip install --no-build-isolation -e .
 # Installing the framework as a separate layer keeps cache hits high when only
 # the framework's source changes. See services/_framework/ for the package.
 COPY services/_framework /tmp/service-framework
-RUN python -m pip install /tmp/service-framework \
+RUN python -m pip install "/tmp/service-framework[mcp]" \
     && python -m pip install httpx alibabacloud-oss-v2
 
 # --- Server code ---

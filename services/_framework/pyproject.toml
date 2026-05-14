@@ -12,12 +12,20 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+mcp = [
+    "mcp>=1.0",
+    "httpx>=0.27",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "httpx>=0.27",
     "ruff>=0.4",
+    "mcp>=1.0",
 ]
+
+[project.scripts]
+bioagent-service-mcp-stdio = "bioagent_service.mcp_stdio:main"
 
 [build-system]
 requires = ["hatchling"]
