@@ -14,31 +14,36 @@ FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+# Huawei Cloud pip mirror via uv (project-wide convention, ~10× faster from
+# China than download.pytorch.org which has no China CDN).
+ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.10 python3-pip python3.10-venv git ca-certificates curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && ln -sf /usr/bin/python3.10 /usr/local/bin/python \
-    && ln -sf /usr/bin/python3.10 /usr/local/bin/python3
+    python3.10 python3.10-venv ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Huawei Cloud pip mirror (matches project-wide convention)
-RUN mkdir -p /root/.config/pip && \
-    printf '[global]\nindex-url = https://repo.huaweicloud.com/repository/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
-    > /root/.config/pip/pip.conf
+# uv binary (matches rfantibody-server's version pin).
+COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
 
-# Torch first (heavy layer, rarely changes). CUDA 12.1 wheel works on 12.4 runtime.
-RUN python -m pip install --upgrade pip \
-    && python -m pip install --index-url https://download.pytorch.org/whl/cu121 \
-       torch==2.4.1 \
-    && python -m pip install numpy
+# Create isolated venv up front (mirrors rfantibody-server's .venv layout —
+# CMD references `.venv/bin/python`). ProteinMPNN has no pyproject.toml of
+# its own, so we drive installs with `uv pip install` instead of `uv sync`.
+WORKDIR /opt/proteinmpnn
+RUN uv venv .venv --python python3.10
 
-# ProteinMPNN source + all four weight folders.
+# Torch first (heavy ~2 GB layer, rarely changes). PyPI's default linux torch
+# wheel is `+cu121` (CUDA 12.1 bundled), which works on the 12.4 base runtime.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python .venv/bin/python torch==2.4.1 numpy
+
+# ProteinMPNN source + all four weight folders. COPY overlays files but
+# preserves the existing .venv dir.
 COPY opensource/ProteinMPNN /opt/proteinmpnn
 
 # Shared bioagent service framework + remote-fetch deps (late layer).
 COPY services/_framework /tmp/service-framework
-RUN python -m pip install "/tmp/service-framework[mcp]" \
-    && python -m pip install httpx alibabacloud-oss-v2
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python .venv/bin/python "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
 # Server code as `server` package — uvicorn imports `server.app:app`. Mounted
 # alongside ProteinMPNN's repo so subprocess_cwd resolves correctly.
@@ -49,15 +54,12 @@ ENV PROTEINMPNN_WEIGHTS_DIR=/opt/proteinmpnn
 ENV PROTEINMPNN_JOBS_BASE_DIR=/data/proteinmpnn_jobs
 RUN mkdir -p /data/proteinmpnn_jobs
 
-# uvicorn imports `server.app:app` by name, so the package must be on sys.path.
-# WORKDIR puts `/opt/proteinmpnn` first in Python's search path (CPython prepends
-# CWD), making the `server/` subdir importable. Mirrors rfantibody-server /
-# ppiflow-server layout.
-WORKDIR /opt/proteinmpnn
-
 ENV PORT=9000
 EXPOSE 9000
-CMD ["python", "-m", "uvicorn", "server.app:app", \
+# WORKDIR is /opt/proteinmpnn (set above) — CPython prepends CWD to sys.path,
+# making the `server/` subdir importable as `server.app`. Mirrors rfantibody-
+# server / ppiflow-server layout.
+CMD [".venv/bin/python", "-m", "uvicorn", "server.app:app", \
      "--host", "0.0.0.0", \
      "--port", "9000", \
      "--timeout-keep-alive", "900"]

@@ -13,29 +13,37 @@ FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV PIP_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
-ENV PIP_NO_CACHE_DIR=1
+# Huawei Cloud pip mirror via uv (project-wide convention, ~10× faster from
+# China than download.pytorch.org which has no China CDN).
+ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.10 python3.10-venv python3.10-dev python3-pip \
+    python3.10 python3.10-venv python3.10-dev \
     git wget curl ca-certificates build-essential \
-    && rm -rf /var/lib/apt/lists/* \
-    && ln -sf /usr/bin/python3.10 /usr/local/bin/python \
-    && ln -sf /usr/bin/python3.10 /usr/local/bin/python3
+    && rm -rf /var/lib/apt/lists/*
+
+# uv binary (matches rfantibody-server's version pin).
+COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
 
 # --- Install Genie3 (generation deps only) ---
+# Create isolated venv up front (mirrors rfantibody-server / proteinmpnn-server).
+# Genie3 has its own setup.py but no uv.lock, so we drive installs with
+# `uv pip install` rather than `uv sync`.
 WORKDIR /opt/genie3
+RUN uv venv .venv --python python3.10
 
 # Bootstrap build deps before installing the package (some deps need numpy/Cython at build time)
-RUN python -m pip install --upgrade pip setuptools wheel \
-    && python -m pip install "numpy>=2.0.2,<3" Cython
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python .venv/bin/python \
+        "numpy>=2.0.2,<3" Cython setuptools wheel
 
 # Genie3 generation runtime deps. Keep this list in sync with opensource/genie3/setup.py.
 # Notes:
 #   - torch==2.7.1 ships with CUDA 12.6 wheels (compatible with the 12.4 base CUDA driver runtime).
 #   - PyYAML is required by genie3/cli.py for iterative configs.
 #   - We omit wandb/tensorboard server features but keep the python packages so imports work.
-RUN python -m pip install \
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python .venv/bin/python \
         torch==2.7.1 \
         tqdm scipy pandas \
         lightning \
@@ -56,23 +64,26 @@ RUN cd /opt/genie3 && for p in /tmp/genie3-patches/*.patch; do \
         echo "Applying $p"; patch -p1 < "$p"; \
     done
 
-# Editable install of genie3 (registers the `genie3` console entry point)
-RUN python -m pip install --no-build-isolation -e .
+# Editable install of genie3 (registers the `genie3` console entry point inside the venv)
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python .venv/bin/python --no-build-isolation -e .
 
 # --- Shared bioagent service framework + remote-fetch deps ---
 # Installing the framework as a separate layer keeps cache hits high when only
 # the framework's source changes. See services/_framework/ for the package.
 COPY services/_framework /tmp/service-framework
-RUN python -m pip install "/tmp/service-framework[mcp]" \
-    && python -m pip install httpx alibabacloud-oss-v2
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python .venv/bin/python \
+        "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
 # --- Server code ---
 COPY services/genie3-server/ /opt/genie3/server/
 
 # Env-driven settings — see services/genie3-server/settings.py (Genie3Settings).
 # The GENIE3_ prefix is read by pydantic-settings; defaults match the image layout.
+# GENIE3_BIN points at the venv's console entry, since `.venv/bin` isn't on PATH.
 ENV GENIE3_ROOT=/opt/genie3
-ENV GENIE3_BIN=genie3
+ENV GENIE3_BIN=/opt/genie3/.venv/bin/genie3
 ENV GENIE3_JOBS_BASE_DIR=/data/genie3_jobs
 RUN mkdir -p /data/genie3_jobs
 
@@ -83,7 +94,7 @@ RUN mkdir -p /data/genie3_jobs
 ENV PORT=9000
 EXPOSE 9000
 
-CMD ["python", "-m", "uvicorn", "server.app:app", \
+CMD [".venv/bin/python", "-m", "uvicorn", "server.app:app", \
      "--host", "0.0.0.0", \
      "--port", "9000", \
      "--timeout-keep-alive", "900"]

@@ -20,10 +20,19 @@ FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+# Huawei Cloud pip mirror (project-wide convention). UV_INDEX_URL controls the
+# uv pip layer below; pip.conf (further down) controls the pip invocations
+# micromamba makes while resolving env.yml's pip: section.
+ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
 
 # ---------------------------------------------------------------------------
 # Install micromamba on top of the nvidia/cuda base. We pin via the public
 # tarball URL rather than apt to avoid pulling in conda's whole channel cache.
+#
+# uv is brought in for the final framework-install layer only (replaces a
+# slower pip-on-conda-env install). The conda env itself stays conda-managed
+# because PPIFlow's env.yml leans on bioconda-only packages (pymol-open-source,
+# pyqt5, cuda-nvcc) that uv/PyPI can't supply.
 # ---------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bzip2 curl git wget ca-certificates build-essential \
@@ -31,6 +40,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest \
        | tar -xj -C /usr/local/bin --strip-components=1 bin/micromamba \
     && /usr/local/bin/micromamba --version
+
+COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
 
 ENV MAMBA_ROOT_PREFIX=/opt/conda
 ENV PATH=/opt/conda/envs/ppiflow/bin:$PATH
@@ -73,11 +84,14 @@ COPY opensource/PPIFlow/checkpoint /opt/ppiflow/checkpoint
 # ---------------------------------------------------------------------------
 # Shared bioagent service framework + remote-fetch deps in the same env.
 # Keeping this as a late layer so the framework re-install doesn't invalidate
-# the (slow) conda env build cache.
+# the (slow) conda env build cache. uv pip resolves and installs into the
+# conda env's interpreter — faster than conda env's bundled pip and benefits
+# from Huawei mirror (UV_INDEX_URL set above).
 # ---------------------------------------------------------------------------
 COPY services/_framework /tmp/service-framework
-RUN /opt/conda/envs/ppiflow/bin/pip install "/tmp/service-framework[mcp]" \
-    && /opt/conda/envs/ppiflow/bin/pip install httpx alibabacloud-oss-v2
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python /opt/conda/envs/ppiflow/bin/python \
+        "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
 # Server code as `server` package — uvicorn imports `server.app:app`. Mounted
 # alongside PPIFlow's tool directory so subprocess_cwd resolves correctly.

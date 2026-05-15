@@ -37,11 +37,21 @@ FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04 AS base
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=UTC
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+# Huawei Cloud pip mirror via uv (project-wide convention). The torch install
+# in stage 2 pins --index-url to pytorch.org for the +cu118 wheels; everything
+# else benefits from Huawei mirror automatically.
+# UV_SYSTEM_PYTHON=1 lets `uv pip install` target system Python without
+# requiring `--system` on every line (this image has no venv — many editable
+# installs target a single shared interpreter).
+ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
+ENV UV_SYSTEM_PYTHON=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.10 \
     python3.10-venv \
-    python3-pip \
+    python3.10-dev \
     git \
     wget \
     curl \
@@ -50,7 +60,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && ln -sf /usr/bin/python3.10 /usr/bin/python \
     && ln -sf /usr/bin/python3.10 /usr/bin/python3
 
-RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel
+# uv binary (matches the pin used by sibling services rfantibody-server /
+# proteinmpnn-server / genie3-server).
+COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
+
+# setuptools/wheel still needed for the editable installs below.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --upgrade pip setuptools wheel
 
 # =============================================================================
 # Stage 2: Computational backends  (mirrors upstream stage 2)
@@ -59,35 +75,41 @@ FROM base AS tools
 
 WORKDIR /opt
 
-# PyTorch (CUDA 11.8 wheel — also runs on CPU).
-RUN pip install --no-cache-dir \
-    torch==2.0.1+cu118 \
-    torchvision==0.15.2+cu118 \
-    --index-url https://download.pytorch.org/whl/cu118
+# PyTorch CUDA 11.8 wheels. +cu118 local-version variants only exist on
+# download.pytorch.org — Huawei mirror's default linux torch wheels are cu121.
+# --index-url overrides UV_INDEX_URL for this command only.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --index-url https://download.pytorch.org/whl/cu118 \
+        torch==2.0.1+cu118 \
+        torchvision==0.15.2+cu118
 
 # --- RFdiffusion ---
 RUN git clone --depth 1 https://github.com/RosettaCommons/RFdiffusion.git \
     && mkdir -p RFdiffusion/models
 
-RUN cd RFdiffusion/env/SE3Transformer && pip install --no-cache-dir -e .
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install -e RFdiffusion/env/SE3Transformer
 
-RUN cd /opt/RFdiffusion && pip install --no-cache-dir -e .
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install -e RFdiffusion
 
 # Pin e3nn==0.5.1 (torch 2.0.x compat, before torch.compiler).
-# Install dgl==1.1.3 CUDA 11.8 build (PyPI's dgl is CPU-only).
-RUN pip install --no-cache-dir \
-    hydra-core omegaconf icecream pyrsistent \
-    "e3nn==0.5.1" "numpy<2" \
-    && pip install --no-cache-dir "dgl==1.1.3" \
-    -f https://data.dgl.ai/wheels/cu118/repo.html
+# Install dgl==1.1.3 CUDA 11.8 build (PyPI's dgl is CPU-only — pinned via --find-links).
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install \
+        hydra-core omegaconf icecream pyrsistent \
+        "e3nn==0.5.1" "numpy<2" \
+    && uv pip install --find-links https://data.dgl.ai/wheels/cu118/repo.html \
+        "dgl==1.1.3"
 
 # --- ProteinMPNN ---
 RUN git clone --depth 1 https://github.com/dauparas/ProteinMPNN.git \
     && mkdir -p ProteinMPNN/vanilla_model_weights
 
 # --- ColabFold / AlphaFold2 (API backend by default — no weights baked) ---
-RUN pip install --no-cache-dir \
-    "colabfold[alphafold] @ git+https://github.com/sokrypton/ColabFold.git" \
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install \
+        "colabfold[alphafold] @ git+https://github.com/sokrypton/ColabFold.git" \
     && mkdir -p /root/.cache/colabfold
 
 RUN ln -sf $(python -c "import colabfold; print(colabfold.__path__[0])")/batch.py \
@@ -96,10 +118,11 @@ RUN ln -sf $(python -c "import colabfold; print(colabfold.__path__[0])")/batch.p
 # --- OpenFold v1.0.1 (ESMFold dependency, PYTHONPATH only — no C++ build) ---
 RUN git clone --depth 1 --branch v1.0.1 \
     https://github.com/aqlaboratory/openfold.git /opt/openfold \
-    && pip install --no-cache-dir biopython dm-tree ml-collections modelcif einops 2>/dev/null || true
+    && uv pip install biopython dm-tree ml-collections modelcif einops 2>/dev/null || true
 
 # --- OpenMM (energy minimization, AMBER14 force fields) ---
-RUN pip install --no-cache-dir openmm
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install openmm
 
 # =============================================================================
 # Stage 3: protein-design-mcp source + HTTP wrapper
@@ -112,13 +135,15 @@ WORKDIR /app
 COPY opensource/protein-design-mcp/pyproject.toml ./
 COPY opensource/protein-design-mcp/src/ ./src/
 
-RUN pip install --no-cache-dir -e ".[dev]"
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install -e ".[dev]"
 
-RUN pip install --no-cache-dir \
-    fair-esm>=2.0.0 \
-    aiohttp \
-    tqdm \
-    && pip install --no-cache-dir "numpy<2"
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install \
+        "fair-esm>=2.0.0" \
+        aiohttp \
+        tqdm \
+    && uv pip install "numpy<2"
 
 # Upstream entrypoint + model downloader scripts.
 COPY opensource/protein-design-mcp/docker/ ./docker/
@@ -144,10 +169,11 @@ RUN mkdir -p /models /cache /data \
        python /app/docker/download_models.py
 
 # --- HTTP wrapper layer (this service) ---
-RUN pip install --no-cache-dir \
-    "starlette>=0.37,<1.0" \
-    "uvicorn[standard]>=0.30,<1.0" \
-    "anyio>=4.5,<5.0"
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install \
+        "starlette>=0.37,<1.0" \
+        "uvicorn[standard]>=0.30,<1.0" \
+        "anyio>=4.5,<5.0"
 
 COPY services/protein-design-mcp-http/http_server.py /app/http_server.py
 
@@ -167,7 +193,6 @@ ENV TORCH_HOME=/models/esm
 ENV COLABFOLD_WEIGHTS_DIR=/models/colabfold
 
 # Performance.
-ENV PYTHONUNBUFFERED=1
 ENV PYTORCH_JIT_USE_NNC_NOT_NVFUSER=1
 ENV DS_BUILD_OPS=0
 
