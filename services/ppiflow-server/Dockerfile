@@ -63,26 +63,47 @@ RUN mkdir -p /root/.config/pip && \
     > /root/.config/pip/pip.conf
 
 # ---------------------------------------------------------------------------
-# Rewrite the env.yml `channels:` block to use Huawei Cloud as primary mirror.
+# Redirect conda channels to TUNA (Tsinghua) mirror via `.condarc`.
+#
 # Upstream env.yml lists 8 境外 channels (defaults / conda-forge / nvidia /
 # pytorch / schrodinger / bioconda / ostrokach / anaconda) BEFORE the 3 TUNA
-# fallback URLs. micromamba probes channels in order, so most package fetches
-# hit the slow upstream channels first → 5–10 min of network round-trips
-# before getting to TUNA.
+# fallback URLs at the bottom. micromamba probes in order, so most metadata
+# requests hit the slow upstream channels first → 5–10 min of round-trips
+# before falling back to TUNA.
 #
-# We rewrite the whole `channels:` block (sed delete + insert) to a flat list
-# of Huawei mirrors (matches `UV_INDEX_URL` used elsewhere in the project).
-# Doing this on the build host (rather than via .mambarc) keeps a single
-# source of truth — what's in /tmp/ppiflow-env.yml is what micromamba sees.
+# `~/.condarc` with `custom_channels` remaps channel-name → mirror-URL on
+# every micromamba request. We use this instead of sed-rewriting env.yml
+# because (a) it works even when env.yml channels list updates upstream and
+# (b) it doesn't need to know which YAML lines to delete.
 #
-# schrodinger / ostrokach channels are dropped: nothing in env.yml's
-# `dependencies:` list actually originates there (legacy entries from when the
-# env was first constructed). If a future env.yml update reintroduces them,
-# `env create` will fail loudly with "package not found" and we can revisit.
+# Mirror coverage (verified 2026-05-15):
+#   - conda-forge / pytorch / bioconda / pkgs/main → TUNA ✅
+#   - nvidia → NOT mirrored by TUNA/USTC/Aliyun/Huawei (404). The `nvidia`
+#     channel only supplies `cuda-nvcc=12.1.66` (~50MB) in this env.yml, so
+#     we leave it to fall through to upstream `conda.anaconda.org/nvidia`
+#     by NOT listing it in custom_channels. Slow once, then cache mount
+#     catches it.
+#   - schrodinger / ostrokach / anaconda: also fall through to upstream;
+#     no packages in env.yml's `dependencies:` actually originate there.
+#
+# Previously tried Huawei mirror (commit before this one) — it kept failing
+# with "Could not load repodata.json for conda-forge". TUNA is more reliable
+# for cloud channels.
 # ---------------------------------------------------------------------------
+RUN cat > /root/.condarc <<'EOF'
+channels:
+  - defaults
+show_channel_urls: true
+default_channels:
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/msys2
+custom_channels:
+  conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+  pytorch: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+  bioconda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+EOF
 COPY opensource/PPIFlow/tool/PPIFlow/environment.yml /tmp/ppiflow-env.yml
-RUN sed -i '/^channels:$/,/^dependencies:$/{/^dependencies:$/!d}' /tmp/ppiflow-env.yml && \
-    sed -i 's|^dependencies:$|channels:\n  - https://mirrors.huaweicloud.com/anaconda/cloud/conda-forge\n  - https://mirrors.huaweicloud.com/anaconda/cloud/bioconda\n  - https://mirrors.huaweicloud.com/anaconda/cloud/pytorch\n  - https://mirrors.huaweicloud.com/anaconda/cloud/nvidia\n  - https://mirrors.huaweicloud.com/anaconda/pkgs/main\n\ndependencies:|' /tmp/ppiflow-env.yml
 
 # ---------------------------------------------------------------------------
 # Create the `ppiflow` conda env from upstream's environment.yml.
