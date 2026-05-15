@@ -52,7 +52,7 @@ def create_app(
 
     app = FastAPI(title=title, version=version)
 
-    # Ensure the jobs root exists before we try to scan it (and so /health/detail
+    # Ensure the jobs root exists before we try to scan it (and so /healthz/detail
     # is accurate on the first request).
     settings.jobs_base_dir.mkdir(parents=True, exist_ok=True)
 

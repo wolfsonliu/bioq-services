@@ -13,7 +13,7 @@ is contributed by `bioagent_service.create_app`.
 
 FC deployment:
   - 0.0.0.0:CAPort (default 9000)
-  - /health must respond within 120 s of start
+  - /healthz must respond within 120 s of start
   - keep-alive >= 15 min so long-running generations don't get cut off
 """
 
@@ -22,11 +22,11 @@ from __future__ import annotations
 import logging
 import zipfile
 from pathlib import Path
-from typing import Annotated, Any, Optional
+from typing import Any, Optional
 
 import yaml
-from bioagent_service import JobInfo, attach_mcp, create_app
-from fastapi import File, Form, HTTPException, UploadFile
+from bioagent_service import JobInfo, attach_mcp, create_app, model_form_depends
+from fastapi import Depends, File, Form, HTTPException, UploadFile
 
 from .adapter import Genie3Adapter
 from .configs import (
@@ -93,7 +93,7 @@ def _genie3_argv(config_path: Path, num_devices: Optional[int]) -> list[str]:
 
 @app.post("/api/generate/unconditional", response_model=JobInfo)
 def generate_unconditional(
-    params: Annotated[UnconditionalRequest, Form()] = UnconditionalRequest(),
+    params: UnconditionalRequest = Depends(model_form_depends(UnconditionalRequest)),
 ) -> JobInfo:
     """Unconditional protein backbone generation (no input structure)."""
 
@@ -108,7 +108,7 @@ def generate_unconditional(
 @app.post("/api/generate/motif", response_model=JobInfo)
 def generate_motif(
     dataset: UploadFile = File(..., description="Zip with problems/ + motifs/."),
-    params: Annotated[MotifRequest, Form()] = MotifRequest(),
+    params: MotifRequest = Depends(model_form_depends(MotifRequest)),
 ) -> JobInfo:
     """Motif scaffolding generation. Dataset zip must contain `problems/` + `motifs/`."""
 
@@ -130,7 +130,7 @@ def generate_motif(
 @app.post("/api/generate/binder", response_model=JobInfo)
 def generate_binder(
     dataset: UploadFile = File(..., description="Zip with problems/ + targets/."),
-    params: Annotated[BinderRequest, Form()] = BinderRequest(),
+    params: BinderRequest = Depends(model_form_depends(BinderRequest)),
 ) -> JobInfo:
     """Binder design generation. Dataset zip must contain `problems/` + `targets/`."""
 

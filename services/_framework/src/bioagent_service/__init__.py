@@ -45,6 +45,7 @@ from __future__ import annotations
 from bioagent_service.adapter import JobAdapter
 from bioagent_service.app import attach_mcp, create_app
 from bioagent_service.errors import FailureKind, extract_error_summary, finalize_job
+from bioagent_service.forms import model_form_depends
 from bioagent_service.manifest import EndpointExample, ServiceManifest
 from bioagent_service.models import JobInfo, JobStatus
 from bioagent_service.settings import ServiceSettings
@@ -61,4 +62,5 @@ __all__ = [
     "create_app",
     "extract_error_summary",
     "finalize_job",
+    "model_form_depends",
 ]

@@ -30,8 +30,8 @@ def client(tmp_path, monkeypatch):
 
 
 def test_health(client):
-    assert client.get("/health").json() == {"status": "ok"}
-    detail = client.get("/health/detail").json()
+    assert client.get("/healthz").json() == {"status": "ok"}
+    detail = client.get("/healthz/detail").json()
     assert detail["service"] == "proteinmpnn"
 
 

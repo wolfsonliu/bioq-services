@@ -76,7 +76,7 @@ def test_manifest_endpoints_excludes_framework_routes(default_client: TestClient
     # Service-specific only:
     assert "/api/ping" in paths
     # Framework routes must be filtered out — they're described under job_lifecycle.
-    for forbidden in ("/health", "/health/detail", "/api/jobs/{job_id}", "/api/manifest", "/openapi.json"):
+    for forbidden in ("/healthz", "/healthz/detail", "/api/jobs/{job_id}", "/api/manifest", "/openapi.json"):
         assert forbidden not in paths
 
 

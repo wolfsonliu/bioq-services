@@ -18,7 +18,7 @@
 ┌─────────────────────────────────────────────────────────┐
 │  FastAPI + bioagent-service-framework  (port 9000)      │
 │  POST /api/{design,score,probs}                         │
-│  GET  /api/manifest  /api/jobs/{id}/*  /health          │
+│  GET  /api/manifest  /api/jobs/{id}/*  /healthz         │
 └─────────────────────────────────────────────────────────┘
   ↓ subprocess (cwd=/opt/proteinmpnn, 单卡串行)
 helper_scripts/*.py  →  intermediates/*.jsonl

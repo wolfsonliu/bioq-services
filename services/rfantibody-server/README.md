@@ -20,7 +20,7 @@ HTTP 层 / job 生命周期 / 错误处理 / 持久化 / 多实例一致性 / Ag
 │  框架统一提供                                                  │
 │    GET  /api/manifest                 (Agent 协议描述)         │
 │    GET  /openapi.json                 (字段 schema)            │
-│    GET  /health, /health/detail                                │
+│    GET  /healthz, /healthz/detail                              │
 │    GET  /api/jobs/{id}                (JobInfo 含 error 详情)  │
 │    GET  /api/jobs/{id}/files / log / download / file/{path}    │
 │    DELETE /api/jobs/{id}                                       │
@@ -242,7 +242,7 @@ docker run --gpus all -p 9000:9000 --memory 16g rfantibody-server
 
 | 限制项 | 值 | 适配 |
 |---|---|---|
-| 启动超时 | 120 s | `/health` 不加载模型，立即响应 |
+| 启动超时 | 120 s | `/healthz` 不加载模型，立即响应 |
 | Keep-alive | ≥ 15 min | `RFANTIBODY_KEEP_ALIVE_SEC=900` |
 | 监听地址 | `0.0.0.0:CAPort` | uvicorn `--host 0.0.0.0 --port 9000` |
 | 可写磁盘 | 512 MB ~ 10 GB | 自动清理已完成 job + 推荐挂载 NAS |
@@ -257,7 +257,7 @@ docker run --gpus all -p 9000:9000 --memory 16g rfantibody-server
 - **错误信息丰富**：失败 job 的 `JobInfo` 自带 `error_summary` + `error_tail`，无需额外 `/log`
   调用即可判定原因（如 weight 缺失、CUDA OOM、参数错误）。
 - **多实例 FC 友好**：sidecar 持久化 + read-through cache，submit/poll 落到不同实例都 OK。
-- **快速启动**：`/health` 端点无模型加载，FC 120s 启动探测通过；权重烘焙到镜像避免冷启动下载。
+- **快速启动**：`/healthz` 端点无模型加载，FC 120s 启动探测通过；权重烘焙到镜像避免冷启动下载。
 
 ## 相关文档
 

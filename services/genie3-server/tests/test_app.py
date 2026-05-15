@@ -51,8 +51,8 @@ def client(tmp_path: Path) -> TestClient:
 
 
 def test_health(client: TestClient) -> None:
-    assert client.get("/health").json() == {"status": "ok"}
-    detail = client.get("/health/detail").json()
+    assert client.get("/healthz").json() == {"status": "ok"}
+    detail = client.get("/healthz/detail").json()
     assert detail["service"] == "genie3"
 
 

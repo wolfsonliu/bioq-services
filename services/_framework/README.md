@@ -64,8 +64,8 @@ def echo(request: EchoRequest):
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/health` | Liveness |
-| GET | `/health/detail` | jobs_dir presence + disk usage |
+| GET | `/healthz` | Liveness |
+| GET | `/healthz/detail` | jobs_dir presence + disk usage |
 | GET | `/api/manifest` | **Agent-friendly protocol description** (service identity, endpoint list, job lifecycle, NAS layout, service extras) |
 | GET | `/openapi.json` | Full JSON Schema (request/response models) |
 | GET | `/api/jobs/{job_id}` | Job status (JobInfo, includes error_summary/error_tail) |

@@ -14,10 +14,10 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Optional
 
-from bioagent_service import JobInfo, attach_mcp, create_app
-from fastapi import File, Form, UploadFile
+from bioagent_service import JobInfo, attach_mcp, create_app, model_form_depends
+from fastapi import Depends, File, Form, UploadFile
 
 from .adapter import PPIFlowAdapter
 from .models import (
@@ -56,7 +56,7 @@ app = create_app(
 
 @app.post("/api/sample/binder", response_model=JobInfo)
 def sample_binder(
-    params: Annotated[BinderRequest, Form()],
+    params: BinderRequest = Depends(model_form_depends(BinderRequest)),
     target: Optional[UploadFile] = File(
         None, description="Target PDB. Mutually exclusive with `target_uri`.",
     ),
@@ -76,7 +76,7 @@ def sample_binder(
 
 @app.post("/api/sample/antibody", response_model=JobInfo)
 def sample_antibody(
-    params: Annotated[AntibodyRequest, Form()],
+    params: AntibodyRequest = Depends(model_form_depends(AntibodyRequest)),
     antigen: Optional[UploadFile] = File(None),
     antigen_uri: Optional[str] = Form(None),
     framework: Optional[UploadFile] = File(None),
@@ -94,7 +94,7 @@ def sample_antibody(
 
 @app.post("/api/sample/nanobody", response_model=JobInfo)
 def sample_nanobody(
-    params: Annotated[NanobodyRequest, Form()],
+    params: NanobodyRequest = Depends(model_form_depends(NanobodyRequest)),
     antigen: Optional[UploadFile] = File(None),
     antigen_uri: Optional[str] = Form(None),
     framework: Optional[UploadFile] = File(None),
@@ -112,7 +112,7 @@ def sample_nanobody(
 
 @app.post("/api/sample/monomer", response_model=JobInfo)
 def sample_monomer(
-    params: Annotated[MonomerRequest, Form()],
+    params: MonomerRequest = Depends(model_form_depends(MonomerRequest)),
 ) -> JobInfo:
     """Unconditional monomer generation at the requested lengths."""
 
@@ -124,7 +124,7 @@ def sample_monomer(
 
 @app.post("/api/sample/scaffolding", response_model=JobInfo)
 def sample_scaffolding(
-    params: Annotated[ScaffoldingRequest, Form()],
+    params: ScaffoldingRequest = Depends(model_form_depends(ScaffoldingRequest)),
     motif_csv: Optional[UploadFile] = File(
         None, description="Motif metadata CSV (target,length,contig,motif_path).",
     ),

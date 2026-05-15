@@ -26,7 +26,7 @@ FoldSeek / ProteinMPNN / TMscore / DSSP / IPSAE 等评估工具 —— 比官方
 │  框架统一提供                                                  │
 │    GET  /api/manifest               (Agent 协议描述)           │
 │    GET  /openapi.json               (字段 schema)              │
-│    GET  /health, /health/detail                                │
+│    GET  /healthz, /healthz/detail                              │
 │    GET  /api/jobs/{id}              (JobInfo 含 error 详情)    │
 │    GET  /api/jobs/{id}/files / log / download / file/{path}    │
 │    DELETE /api/jobs/{id}                                       │
@@ -301,7 +301,7 @@ docker run --gpus all -p 9000:9000 --memory 16g genie3-server
 
 | 限制项 | 值 | 适配 |
 |---|---|---|
-| 启动超时 | 120 s | `/health` 不加载模型 |
+| 启动超时 | 120 s | `/healthz` 不加载模型 |
 | Keep-alive | ≥ 15 min | `GENIE3_KEEP_ALIVE_SEC=900` |
 | 监听地址 | `0.0.0.0:CAPort` | uvicorn 已配置 |
 | 可写磁盘 | 512 MB ~ 10 GB | 自动清理 + NAS 挂载 |
@@ -320,7 +320,7 @@ docker run --gpus all -p 9000:9000 --memory 16g genie3-server
   会被服务器覆写为 job 本地目录，客户端不需要预测 job_id。
 - **自定义 subprocess cwd**：`genie3 generate` 默认从 `pretrained/v1/checkpoints/step=600000.ckpt`
   这种相对路径加载权重，所以 subprocess cwd 设为 `/opt/genie3`（即 `GENIE3_ROOT`）。
-- **快速启动**：`/health` 端点无模型加载，FC 120s 启动探测通过；权重烘焙到镜像避免冷启动下载。
+- **快速启动**：`/healthz` 端点无模型加载，FC 120s 启动探测通过；权重烘焙到镜像避免冷启动下载。
 
 ## 相关文档
 

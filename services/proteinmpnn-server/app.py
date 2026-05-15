@@ -1,7 +1,7 @@
 """FastAPI app for proteinmpnn-server.
 
 Exposes /api/design, /api/score, /api/probs. Job lifecycle endpoints
-(/health, /api/jobs/*, /api/manifest, /openapi.json) come from
+(/healthz, /api/jobs/*, /api/manifest, /openapi.json) come from
 `bioagent_service.create_app`.
 """
 
@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Optional
 
-from bioagent_service import JobInfo, attach_mcp, create_app
-from fastapi import File, Form, UploadFile
+from bioagent_service import JobInfo, attach_mcp, create_app, model_form_depends
+from fastapi import Depends, File, Form, UploadFile
 
 from .adapter import ProteinMPNNAdapter
 from .models import DesignRequest, ProbsRequest, ScoreRequest
@@ -39,7 +39,7 @@ app = create_app(
 
 @app.post("/api/design", response_model=JobInfo)
 def post_design(
-    params: Annotated[DesignRequest, Form()],
+    params: DesignRequest = Depends(model_form_depends(DesignRequest)),
     pdb: Optional[UploadFile] = File(None),
     pdb_uri: Optional[str] = Form(None),
 ) -> JobInfo:
@@ -66,7 +66,7 @@ def post_design(
 
 @app.post("/api/score", response_model=JobInfo)
 def post_score(
-    params: Annotated[ScoreRequest, Form()],
+    params: ScoreRequest = Depends(model_form_depends(ScoreRequest)),
     pdb: Optional[UploadFile] = File(None),
     pdb_uri: Optional[str] = Form(None),
 ) -> JobInfo:
@@ -93,7 +93,7 @@ def post_score(
 
 @app.post("/api/probs", response_model=JobInfo)
 def post_probs(
-    params: Annotated[ProbsRequest, Form()],
+    params: ProbsRequest = Depends(model_form_depends(ProbsRequest)),
     pdb: Optional[UploadFile] = File(None),
     pdb_uri: Optional[str] = Form(None),
 ) -> JobInfo:

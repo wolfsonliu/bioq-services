@@ -46,6 +46,7 @@ from bioagent_service.settings import ServiceSettings
 
 try:
     from mcp.server.fastmcp import FastMCP
+    from mcp.server.transport_security import TransportSecuritySettings
 except ImportError as e:  # pragma: no cover - guarded by enable_mcp
     raise ImportError(
         "MCP support requested but `mcp` is not installed. "
@@ -57,7 +58,7 @@ logger = logging.getLogger(__name__)
 # Routes the framework itself owns — they get explicit lifecycle tools and must
 # not be auto-registered as `submit_*` tools.
 _FRAMEWORK_PATH_PREFIXES = (
-    "/health",
+    "/healthz",
     "/api/jobs",
     "/api/manifest",
     "/openapi.json",
@@ -409,7 +410,15 @@ def make_mcp_server(
         f"MCP transport does not stream binary bytes; use the HTTP `/api/...` "
         f"endpoints for byte uploads."
     )
-    mcp = FastMCP(server_name, instructions=instructions)
+    # FastMCP's StreamableHTTP transport enables DNS-rebinding protection by
+    # default, which rejects any Host header outside 127.0.0.1/localhost. That
+    # breaks production deployments behind Alibaba Cloud FC / k8s ingress / any
+    # public hostname (`Invalid Host header` → HTTP 421). DNS rebinding is a
+    # browser-side attack vector; bioagent MCP clients are server-side processes
+    # that already authenticate through FC's gateway, so the protection has no
+    # threat model here. Disable it globally.
+    transport_security = TransportSecuritySettings(enable_dns_rebinding_protection=False)
+    mcp = FastMCP(server_name, instructions=instructions, transport_security=transport_security)
 
     # Lifecycle tools first (always present even if no POST routes are
     # introspectable — agents still need them to recover existing jobs).

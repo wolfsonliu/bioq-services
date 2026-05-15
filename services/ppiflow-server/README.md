@@ -35,7 +35,7 @@
 │  框架统一提供                                                  │
 │    GET  /api/manifest      (Agent 协议描述 + 5 个端点示例)      │
 │    GET  /openapi.json                                          │
-│    GET  /health, /health/detail                                │
+│    GET  /healthz, /healthz/detail                              │
 │    GET  /api/jobs/{id} (+ /files /log /download /file/{path})  │
 │    DELETE /api/jobs/{id}                                       │
 └────────────────────────────────────────────────────────────────┘
@@ -236,7 +236,7 @@ make push-ppiflow-server    # 自动用 services/ppiflow-server/VERSION 里的 t
   `proteinmpnn-server` / `af3score-server` 等可直接 `Path(...).read_bytes()` 读，无 HTTP 上下行。
 - **错误信息丰富**：失败 job 的 `JobInfo` 自带 `error_summary` + `error_tail` + `failure_kind`，
   快速判断是 ckpt 缺失还是 input PDB 格式问题。
-- **快速启动**：`/health` 端点无模型加载，FC 120 s 启动探测通过；权重烘焙到镜像避免冷启动下载。
+- **快速启动**：`/healthz` 端点无模型加载，FC 120 s 启动探测通过；权重烘焙到镜像避免冷启动下载。
 
 ## 已知限制 / 后续
 

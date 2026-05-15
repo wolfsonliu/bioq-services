@@ -38,7 +38,7 @@ from bioagent_service.settings import ServiceSettings
 # (they're described in `job_lifecycle` instead) so the agent sees a clean list
 # of service-specific operations.
 _FRAMEWORK_PATH_PREFIXES = (
-    "/health",
+    "/healthz",
     "/api/jobs",
     "/api/manifest",
     "/openapi.json",

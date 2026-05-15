@@ -62,8 +62,8 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 
 def test_health_and_detail(client: TestClient) -> None:
-    assert client.get("/health").json() == {"status": "ok"}
-    detail = client.get("/health/detail").json()
+    assert client.get("/healthz").json() == {"status": "ok"}
+    detail = client.get("/healthz/detail").json()
     assert detail["service"] == "rfantibody"
 
 

@@ -84,8 +84,8 @@ def _wait_for_terminal(client: TestClient, job_id: str, timeout: float = 5.0) ->
 
 
 def test_health(client: TestClient) -> None:
-    assert client.get("/health").json() == {"status": "ok"}
-    detail = client.get("/health/detail").json()
+    assert client.get("/healthz").json() == {"status": "ok"}
+    detail = client.get("/healthz/detail").json()
     assert detail["service"] == "echo"
     assert "disk_usage_mb" in detail
 

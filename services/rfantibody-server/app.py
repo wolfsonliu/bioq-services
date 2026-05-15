@@ -5,13 +5,13 @@ Exposes three single-tool endpoints (`/api/rfdiffusion`, `/api/proteinmpnn`,
 `job://<id>/<file>` cheap enough that chaining outputs is no worse than a local
 script.
 
-The framework handles `/health`, `/api/jobs/{id}`, `/files`, `/log`, `/download`,
+The framework handles `/healthz`, `/api/jobs/{id}`, `/files`, `/log`, `/download`,
 `/file/{path}`, and `DELETE /api/jobs/{id}`. We only register the
 service-specific POST routes here.
 
 FC deployment notes:
   - Listen on 0.0.0.0:CAPort (default 9000)
-  - Respond to /health within 120 s of start
+  - Respond to /healthz within 120 s of start
   - Keep-alive must be >= 15 min for long-running RF2 jobs
 """
 
@@ -19,10 +19,10 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Optional
 
-from bioagent_service import JobInfo, attach_mcp, create_app
-from fastapi import File, Form, UploadFile
+from bioagent_service import JobInfo, attach_mcp, create_app, model_form_depends
+from fastapi import Depends, File, Form, UploadFile
 
 from .adapter import RFantibodyAdapter
 from .models import ProteinMPNNRequest, RF2Request, RFdiffusionRequest
@@ -53,7 +53,7 @@ app = create_app(
 def run_rfdiffusion(
     target: UploadFile = File(..., description="Target antigen PDB file"),
     framework: UploadFile = File(..., description="Antibody framework PDB file"),
-    params: Annotated[RFdiffusionRequest, Form()] = RFdiffusionRequest(),
+    params: RFdiffusionRequest = Depends(model_form_depends(RFdiffusionRequest)),
 ) -> JobInfo:
     """RFdiffusion antibody-framework backbone design."""
 
@@ -77,7 +77,7 @@ def run_proteinmpnn(
             "job://<id>/<file>, file:///path, oss://<bucket>/<key>, http(s)://..."
         ),
     ),
-    params: Annotated[ProteinMPNNRequest, Form()] = ProteinMPNNRequest(),
+    params: ProteinMPNNRequest = Depends(model_form_depends(ProteinMPNNRequest)),
 ) -> JobInfo:
     """ProteinMPNN CDR sequence design over an RFdiffusion-generated backbone set."""
 
@@ -94,7 +94,7 @@ def run_rf2(
         None, description="Input Quiver (from ProteinMPNN). Mutually exclusive with `input_uri`."
     ),
     input_uri: Optional[str] = Form(None, description="URI to fetch input Quiver from (see /proteinmpnn)."),
-    params: Annotated[RF2Request, Form()] = RF2Request(),
+    params: RF2Request = Depends(model_form_depends(RF2Request)),
 ) -> JobInfo:
     """RF2 structure prediction + filtering over MPNN-designed sequences."""
 

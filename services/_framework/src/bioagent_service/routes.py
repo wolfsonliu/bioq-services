@@ -41,11 +41,11 @@ def make_generic_router() -> APIRouter:
 
     # ---------- Health ----------
 
-    @router.get("/health")
+    @router.get("/healthz")
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    @router.get("/health/detail")
+    @router.get("/healthz/detail")
     def health_detail(request: Request) -> dict[str, object]:
         settings = _settings(request)
         return {
