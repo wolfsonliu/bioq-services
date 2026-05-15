@@ -63,14 +63,55 @@ RUN mkdir -p /root/.config/pip && \
     > /root/.config/pip/pip.conf
 
 # ---------------------------------------------------------------------------
+# Rewrite the env.yml `channels:` block to use Huawei Cloud as primary mirror.
+# Upstream env.yml lists 8 境外 channels (defaults / conda-forge / nvidia /
+# pytorch / schrodinger / bioconda / ostrokach / anaconda) BEFORE the 3 TUNA
+# fallback URLs. micromamba probes channels in order, so most package fetches
+# hit the slow upstream channels first → 5–10 min of network round-trips
+# before getting to TUNA.
+#
+# We rewrite the whole `channels:` block (sed delete + insert) to a flat list
+# of Huawei mirrors (matches `UV_INDEX_URL` used elsewhere in the project).
+# Doing this on the build host (rather than via .mambarc) keeps a single
+# source of truth — what's in /tmp/ppiflow-env.yml is what micromamba sees.
+#
+# schrodinger / ostrokach channels are dropped: nothing in env.yml's
+# `dependencies:` list actually originates there (legacy entries from when the
+# env was first constructed). If a future env.yml update reintroduces them,
+# `env create` will fail loudly with "package not found" and we can revisit.
+# ---------------------------------------------------------------------------
+COPY opensource/PPIFlow/tool/PPIFlow/environment.yml /tmp/ppiflow-env.yml
+RUN sed -i '/^channels:$/,/^dependencies:$/{/^dependencies:$/!d}' /tmp/ppiflow-env.yml && \
+    sed -i 's|^dependencies:$|channels:\n  - https://mirrors.huaweicloud.com/anaconda/cloud/conda-forge\n  - https://mirrors.huaweicloud.com/anaconda/cloud/bioconda\n  - https://mirrors.huaweicloud.com/anaconda/cloud/pytorch\n  - https://mirrors.huaweicloud.com/anaconda/cloud/nvidia\n  - https://mirrors.huaweicloud.com/anaconda/pkgs/main\n\ndependencies:|' /tmp/ppiflow-env.yml
+
+# ---------------------------------------------------------------------------
 # Create the `ppiflow` conda env from upstream's environment.yml.
-# Cache-friendly layer: env.yml rarely changes vs the PPIFlow source itself.
+#
+# BuildKit cache mounts (the big optimization):
+#   - /opt/conda/pkgs        — conda package cache (extracted tarballs).
+#                              Saves ~1–2 GB re-download on env.yml-changing
+#                              rebuilds.
+#   - /root/.cache/pip       — pip wheel cache for the env.yml `pip:` section.
+#                              The ~2 GB torch wheels from download.pytorch.org
+#                              (no China CDN — ~10 min download) get cached
+#                              across rebuilds. First build is unavoidably
+#                              slow; rebuilds drop from ~25 min to ~3 min.
+#
+# We DELIBERATELY DROP `micromamba clean --all`. The cache-mounted directories
+# are excluded from the image layer by BuildKit, so cleaning inside the RUN
+# would only purge the persistent cache — defeating the optimization. Image
+# size is unaffected: only `/opt/conda/envs/ppiflow/` (the realized env, ~10 GB)
+# ends up in the layer; `pkgs/` and `~/.cache/pip` do not.
+#
+# Cache-friendly layer ordering: env.yml change invalidates this layer, but
+# the cache mount still hits → most package downloads are re-used from cache,
+# only newly-added packages get fetched.
 # ---------------------------------------------------------------------------
 WORKDIR /opt/ppiflow
 
-COPY opensource/PPIFlow/tool/PPIFlow/environment.yml /tmp/ppiflow-env.yml
-RUN micromamba env create -y -n ppiflow -f /tmp/ppiflow-env.yml \
-    && micromamba clean --all --yes \
+RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
+    --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    micromamba env create -y -n ppiflow -f /tmp/ppiflow-env.yml \
     && rm /tmp/ppiflow-env.yml
 
 # ---------------------------------------------------------------------------

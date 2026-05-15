@@ -46,7 +46,7 @@ def post_design(
     """Sequence design (FASTA output) over the input PDB."""
 
     def _build(_job_id: str, job_dir: Path) -> list[str]:
-        resolve_input(pdb, pdb_uri, job_dir / "input" / "input.pdb", settings)
+        resolve_input(pdb, pdb_uri, job_dir / "input" / f"{params.name}.pdb", settings)
         paths = prepare_inputs(
             job_dir,
             settings=settings,
@@ -73,7 +73,7 @@ def post_score(
     """Score a (structure, sequence) pair via --score_only 1."""
 
     def _build(_job_id: str, job_dir: Path) -> list[str]:
-        resolve_input(pdb, pdb_uri, job_dir / "input" / "input.pdb", settings)
+        resolve_input(pdb, pdb_uri, job_dir / "input" / f"{params.name}.pdb", settings)
         paths = prepare_inputs(
             job_dir,
             settings=settings,
@@ -100,7 +100,7 @@ def post_probs(
     """Per-residue AA probability output (conditional / unconditional)."""
 
     def _build(_job_id: str, job_dir: Path) -> list[str]:
-        resolve_input(pdb, pdb_uri, job_dir / "input" / "input.pdb", settings)
+        resolve_input(pdb, pdb_uri, job_dir / "input" / f"{params.name}.pdb", settings)
         paths = prepare_inputs(
             job_dir,
             settings=settings,

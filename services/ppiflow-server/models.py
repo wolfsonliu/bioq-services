@@ -33,8 +33,14 @@ class _CommonRequest(BaseModel):
 
     name: str = Field(
         default="run",
-        description="Identifier used as a subfolder under the output directory.",
+        description=(
+            "Identifier used as a subfolder under the output directory "
+            "(`output/<name>/`). Restricted to [A-Za-z0-9_.-] (no slashes / spaces) "
+            "to prevent path injection — `name='..'` would write outside the job dir."
+        ),
         min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9_-][A-Za-z0-9_.-]*$",
     )
     samples_per_target: int = Field(
         default=5,

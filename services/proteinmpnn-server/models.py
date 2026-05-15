@@ -30,7 +30,17 @@ _ABMPNN_MODEL_NAMES = {"abmpnn"}
 class _ProteinMPNNCommon(BaseModel):
     """Fields shared across /api/design, /api/score, /api/probs."""
 
-    name: str = Field(default="run", min_length=1)
+    name: str = Field(
+        default="run",
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9_-][A-Za-z0-9_.-]*$",
+        description=(
+            "Output basename. Restricted to [A-Za-z0-9_.-] (no slashes/spaces) "
+            "because it becomes the input PDB filename and ProteinMPNN derives the "
+            "output FASTA name from the PDB stem, so `name=foo` → `seqs/foo.fa`."
+        ),
+    )
     model_variant: Literal["vanilla", "soluble", "ca_only", "abmpnn"] = "vanilla"
     model_name: str = Field(default="v_48_020")
     seed: int = Field(default=0, ge=0)
