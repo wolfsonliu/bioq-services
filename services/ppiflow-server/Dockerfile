@@ -6,16 +6,27 @@
 # scoring, packing, and Rosetta steps are NOT included — they belong in
 # separate bioagent services.
 #
-# Base: cudnn-runtime variant of nvidia/cuda 12.4.1. Downgraded from `-devel` on
-# 2026-05-14 to shave ~3.6 GB off the image (devel = 6.7 GB vs runtime = 3.1 GB).
-# The conda env install path doesn't compile any CUDA kernel from source — every
-# pip wheel (torch, pyg-lib, torch-{cluster,scatter,sparse}, deepspeed, etc.) is
-# pre-built; bioconda/ostrokach conda packages are also pre-built. nvcc + CUDA
-# headers (the only meaningful extras in `-devel`) are therefore unused in the
-# install chain, and PPIFlow's inference path doesn't trigger JIT CUDA compilation.
-# If a future dep does need nvcc at install time, revert to `-devel` or split
-# into a multi-stage build (see git history for the previous Dockerfile).
-FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+# Base: cudnn-DEVEL variant of nvidia/cuda 12.4.1. The 2026-05-14 attempt to use
+# `-runtime` failed at runtime with:
+#
+#     fatal error: cuda_runtime_api.h: No such file or directory
+#     ninja: build stopped: subcommand failed.
+#     RuntimeError: Error building extension 'fastfold_layer_norm_cuda'
+#
+# `PPIFlow/tool/PPIFlow/models/layer_norm/layer_norm.py` JIT-compiles a custom
+# CUDA layer-norm kernel via `torch.utils.cpp_extension.load` on first import
+# (triggered by every `sample_*.py` script when the model is constructed). The
+# JIT path requires `nvcc` + `cuda_runtime_api.h` from the CUDA Toolkit, which
+# only ship in `-devel`. The 2026-05-14 commit comment "PPIFlow's inference
+# path doesn't trigger JIT CUDA compilation" was based on inspecting the
+# env.yml install chain only and missed the at-import-time compile.
+#
+# We pre-compile the .so during image build (see the RUN below COPY of PPIFlow
+# source) so runtime cold starts skip the ~30s JIT step.
+#
+# Size cost: devel = 6.7 GB vs runtime = 3.1 GB (~3.6 GB extra). Total image
+# stays well under the FC 15 GB limit.
+FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -24,6 +35,27 @@ ENV PYTHONUNBUFFERED=1
 # uv pip layer below; pip.conf (further down) controls the pip invocations
 # micromamba makes while resolving env.yml's pip: section.
 ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
+
+# ---------------------------------------------------------------------------
+# Pin torch's CUDA discovery to the system toolkit, NOT conda's.
+#
+# PPIFlow's env.yml installs `cuda-nvcc=12.1.66` from the nvidia conda channel.
+# That puts nvcc at /opt/conda/envs/ppiflow/bin/nvcc, and since PATH prepends
+# the conda env (see ENV PATH below), torch's `_find_cuda_home()` does
+# `which nvcc` → finds conda's nvcc → sets CUDA_HOME=/opt/conda/envs/ppiflow.
+# But that prefix has nvcc only; the CUDA headers (cuda_runtime_api.h etc.)
+# live in /usr/local/cuda/include/ from the -devel base image.
+#
+# Result without this env: JIT compile crashes with
+#   fatal error: cuda_runtime_api.h: No such file or directory
+# even though we're on the -devel base.
+#
+# Torch checks CUDA_HOME / CUDA_PATH BEFORE walking PATH, so setting these to
+# /usr/local/cuda short-circuits the conda lookup and gives torch the matching
+# nvcc + headers from the same 12.4 toolkit.
+# ---------------------------------------------------------------------------
+ENV CUDA_HOME=/usr/local/cuda
+ENV CUDA_PATH=/usr/local/cuda
 
 # ---------------------------------------------------------------------------
 # Install micromamba on top of the nvidia/cuda base. We pin via the public
@@ -142,6 +174,35 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
 # ---------------------------------------------------------------------------
 COPY opensource/PPIFlow/tool/PPIFlow /opt/ppiflow
 COPY opensource/PPIFlow/checkpoint /opt/ppiflow/checkpoint
+
+# ---------------------------------------------------------------------------
+# Pre-compile the fastfold_layer_norm_cuda extension during image build.
+#
+# Upstream PPIFlow ships a stale `.so` in models/layer_norm/ that was built
+# against an older torch (undefined symbol _ZN3c104cuda29c10_cuda_check_...).
+# At runtime, `from models.layer_norm.layer_norm import FusedLayerNorm`:
+#   1. Tries `importlib.import_module("fastfold_layer_norm_cuda")` → ImportError
+#      (ABI mismatch with this env's torch 2.3.1+cu121)
+#   2. Falls back to `torch.utils.cpp_extension.load(...)` → invokes nvcc to
+#      rebuild the .so. This is the step that needs the devel base image.
+#
+# Doing this at build time has two benefits:
+#   - Validates the CUDA toolchain BEFORE the image ships (build-time fail-fast
+#     vs runtime job failure)
+#   - Cold-start no longer pays the ~30s JIT compile cost (the .so is in the
+#     image layer at /opt/ppiflow/models/layer_norm/)
+#
+# `TORCH_CUDA_ARCH_LIST` in torch_ext_compile.py limits arches to 7.0+8.0,
+# but the file also passes `-gencode arch=compute_86 + 90` to nvcc directly.
+# So the resulting .so covers V100 (7.0), A100 (8.0), L4/L40S (8.6), H100 (9.0).
+# We rm the stale .so first to make sure the fallback path runs cleanly.
+# ---------------------------------------------------------------------------
+RUN rm -f /opt/ppiflow/models/layer_norm/fastfold_layer_norm_cuda.so \
+          /opt/ppiflow/models/layer_norm/layer_norm_cuda.o \
+          /opt/ppiflow/models/layer_norm/layer_norm_cuda_kernel.cuda.o \
+          /opt/ppiflow/models/layer_norm/build.ninja && \
+    cd /opt/ppiflow && /opt/conda/envs/ppiflow/bin/python -c \
+        "from models.layer_norm.layer_norm import FusedLayerNorm; print('layer_norm pre-compile OK')"
 
 # ---------------------------------------------------------------------------
 # Shared bioagent service framework + remote-fetch deps in the same env.
