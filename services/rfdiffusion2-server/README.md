@@ -222,6 +222,36 @@ uv run --with bioagent-service-framework --with httpx --with pytest \
   --no-project python -m pytest tests/
 ```
 
+## Vendor 与权重
+
+RFdiffusion2 上游不是 pip-installable 包，官方安装方式是 conda env + 设 `PYTHONPATH` 指向源码（见 [installation doc](https://rosettacommons.github.io/RFdiffusion2/installation.html)）。本服务为了与 `opensource/` 解耦，把运行时所需源码 vendor 到 `upstream/`，权重放到 `weights/`，两者都 **gitignored**，由 `scripts/` 下的脚本从 `opensource/RFdiffusion2/` 派生：
+
+- `upstream/rf_diffusion/` — Python 源码 + Hydra configs + benchmark/input/
+- `upstream/envs/{cuda124_env.yml, requirements_cuda124.txt}` — conda env spec
+- `weights/` — `.pt` checkpoint（每个 fresh checkout 都要重新填）
+
+### 从 upstream 同步源码
+
+```bash
+./services/rfdiffusion2-server/scripts/vendor.sh
+```
+
+排除规则在脚本内：`test_data/` / `goldens/` / `dev/` / `exec/` / `*.pkl` / `*.pse` / `model_weights/` 等不进 vendor。Re-run 后 `git status` 看不到改动（gitignored），但 `du -sh upstream/` 可以确认大小。
+
+### 填充权重
+
+```bash
+# 1. 先按 upstream 文档下权重到 opensource/
+cd opensource/RFdiffusion2 && python setup.py && cd -
+
+# 2. 再 rsync 到本服务
+./services/rfdiffusion2-server/scripts/fetch_weights.sh
+```
+
+`docker build` 之前必须先跑这两个脚本，否则 Dockerfile 会因为 `upstream/` 或 `weights/` 不存在而 build 失败。
+
+设计背景见 [engineering/decisions/2026-05-19-rfdiffusion2-server-vendor.md](../../engineering/decisions/2026-05-19-rfdiffusion2-server-vendor.md)。
+
 ## 构建 Docker 镜像
 
 镜像从项目根目录构建：
