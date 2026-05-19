@@ -42,6 +42,8 @@ Minimal example:
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from bioagent_service.adapter import JobAdapter
 from bioagent_service.app import attach_mcp, create_app
 from bioagent_service.errors import FailureKind, extract_error_summary, finalize_job
@@ -49,6 +51,25 @@ from bioagent_service.forms import model_form_depends
 from bioagent_service.manifest import EndpointExample, ServiceManifest
 from bioagent_service.models import JobInfo, JobStatus
 from bioagent_service.settings import ServiceSettings
+
+
+def read_version_file(caller_file: str, default: str = "0.0.0") -> str:
+    """Read a service's `VERSION` file (sibling of the caller's app.py).
+
+    Each service's Docker image is tagged from `services/<svc>/VERSION` (see
+    Makefile). This helper lets `app.py` read the same source of truth so the
+    HTTP version (manifest + /healthz) cannot drift from the image tag.
+
+    Strips a single leading `v` (Makefile tags are `v0.0.3`; HTTP/semver expects
+    `0.0.3`). Returns `default` if the file is missing — e.g. in editable installs
+    or unit tests where the layout differs.
+    """
+    version_path = Path(caller_file).resolve().parent / "VERSION"
+    if not version_path.is_file():
+        return default
+    text = version_path.read_text(encoding="utf-8").strip()
+    return text[1:] if text.startswith("v") else text
+
 
 __all__ = [
     "EndpointExample",
@@ -63,4 +84,5 @@ __all__ = [
     "extract_error_summary",
     "finalize_job",
     "model_form_depends",
+    "read_version_file",
 ]

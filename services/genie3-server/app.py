@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import yaml
-from bioagent_service import JobInfo, attach_mcp, create_app, model_form_depends
+from bioagent_service import JobInfo, attach_mcp, create_app, model_form_depends, read_version_file
 from fastapi import Depends, File, Form, HTTPException, UploadFile
 
 from .adapter import Genie3Adapter
@@ -49,7 +49,7 @@ app = create_app(
     adapter,
     settings,
     title="Genie3 Server",
-    version="0.2.0",
+    version=read_version_file(__file__, default="0.2.0"),
 )
 
 

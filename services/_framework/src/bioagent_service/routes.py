@@ -42,8 +42,12 @@ def make_generic_router() -> APIRouter:
     # ---------- Health ----------
 
     @router.get("/healthz")
-    def health() -> dict[str, str]:
-        return {"status": "ok"}
+    def health(request: Request) -> dict[str, str]:
+        return {
+            "status": "ok",
+            "service": _adapter(request).name,
+            "version": request.app.version,
+        }
 
     @router.get("/healthz/detail")
     def health_detail(request: Request) -> dict[str, object]:
@@ -51,6 +55,7 @@ def make_generic_router() -> APIRouter:
         return {
             "status": "ok",
             "service": _adapter(request).name,
+            "version": request.app.version,
             "jobs_base_dir": str(settings.jobs_base_dir),
             "jobs_base_dir_exists": settings.jobs_base_dir.exists(),
             "disk_usage_mb": round(disk_usage_bytes(settings.jobs_base_dir) / 1024 / 1024, 2),

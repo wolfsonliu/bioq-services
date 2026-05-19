@@ -29,3 +29,20 @@ if "server" not in sys.modules:
         module = importlib.util.module_from_spec(spec)
         sys.modules["server"] = module
         spec.loader.exec_module(module)
+
+
+# ---------------------------------------------------------------------------
+# `fc` marker — opt-in tests that hit the deployed Function Compute URL.
+# ---------------------------------------------------------------------------
+from bioagent_service.fc_testing import (  # noqa: E402
+    register_fc_marker,
+    skip_fc_tests_unless_enabled,
+)
+
+
+def pytest_configure(config):
+    register_fc_marker(config)
+
+
+def pytest_collection_modifyitems(config, items):
+    skip_fc_tests_unless_enabled(config, items)

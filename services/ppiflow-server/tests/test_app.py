@@ -51,9 +51,13 @@ def client(tmp_path: Path) -> TestClient:
 
 
 def test_health(client: TestClient) -> None:
-    assert client.get("/healthz").json() == {"status": "ok"}
+    health = client.get("/healthz").json()
+    assert health["status"] == "ok"
+    assert health["service"] == "ppiflow"
+    assert "version" in health
     detail = client.get("/healthz/detail").json()
     assert detail["service"] == "ppiflow"
+    assert detail["version"] == health["version"]
 
 
 def test_manifest_lists_all_five_endpoints_in_extras(client: TestClient) -> None:

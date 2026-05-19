@@ -170,6 +170,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # for registry dedup (harbor stores it once across all FC pulls).
 COPY --from=builder /opt/rfdiffusion /opt/rfdiffusion
 
+# WORKDIR MUST be set in the runtime stage (it doesn't propagate from the
+# builder stage). Without it `cwd` defaults to `/`, and uvicorn's
+# `server.app:app` import looks for `server` under cwd + sys.path → fails with
+# `ModuleNotFoundError: No module named 'server'` at FC cold start.
+WORKDIR /opt/rfdiffusion
+
 # Server code is in its own layer so changes here don't drag the 8 GB COPY
 # above through a rebuild — uvicorn imports `server.app:app`.
 COPY services/rfdiffusion-server/ /opt/rfdiffusion/server/

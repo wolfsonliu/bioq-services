@@ -216,6 +216,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /opt/conda /opt/conda
 COPY --from=builder /opt/rfdiffusion2 /opt/rfdiffusion2
 
+# WORKDIR MUST be set in the runtime stage (it doesn't propagate from the
+# builder stage). Without it `cwd` defaults to `/`, and uvicorn's
+# `server.app:app` import looks for `server` under cwd + sys.path → fails with
+# `ModuleNotFoundError: No module named 'server'` at FC cold start.
+WORKDIR /opt/rfdiffusion2
+
 # Server code last so iterating on the FastAPI layer only rebuilds the tail.
 COPY services/rfdiffusion2-server/ /opt/rfdiffusion2/server/
 

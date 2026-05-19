@@ -62,9 +62,13 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 
 def test_health_and_detail(client: TestClient) -> None:
-    assert client.get("/healthz").json() == {"status": "ok"}
+    health = client.get("/healthz").json()
+    assert health["status"] == "ok"
+    assert health["service"] == "rfantibody"
+    assert "version" in health
     detail = client.get("/healthz/detail").json()
     assert detail["service"] == "rfantibody"
+    assert detail["version"] == health["version"]
 
 
 def test_stub_endpoint_runs_through_framework(client: TestClient) -> None:
