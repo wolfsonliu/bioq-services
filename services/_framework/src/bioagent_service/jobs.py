@@ -49,7 +49,7 @@ _TERMINAL_STATUSES = frozenset({JobStatus.COMPLETED, JobStatus.FAILED})
 
 def new_job_id() -> str:
     """Short collision-resistant id used as the path segment and store key."""
-    return uuid.uuid4().hex[:12]
+    return uuid.uuid4().hex[:20]
 
 
 def get_job_dir(jobs_base_dir: Path, job_id: str) -> Path:
