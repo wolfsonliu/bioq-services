@@ -103,17 +103,19 @@ ENV PATH=/opt/conda/envs/rfd2/bin:$PATH
 # Mirror configuration for pip + conda, one combined layer (both files are
 # < 1 KB; splitting them earlier just made the layer manifest noisier).
 #
-# pip: Huawei Cloud mirror. Configure BEFORE micromamba env-create — env.yml's
+# pip: Aliyun mirror. Configure BEFORE micromamba env-create — env.yml's
 # `pip:` section invokes pip during env create and would otherwise hit pypi.org.
 #
-# conda: TUNA (Tsinghua) for the standard channels. Two upstream channels we
-# leave alone (no TUNA mirror; fall through to conda.anaconda.org):
-#   - https://conda.rosettacommons.org   pyrosetta (proprietary, ~600 MB)
-#   - nvidia/label/cuda-12.4.0           cuda packages
-#   - dglteam/label/th24_cu124           dgl 2.4 + cu124
+# conda: TUNA (Tsinghua) for every channel env.yml touches, EXCEPT pyrosetta
+# (no Chinese mirror exists for conda.rosettacommons.org — that ~600 MB
+# download stays as the dominant single-package cost on a cold build).
+#
+# TUNA mirrors labelled sub-channels under the same path, so e.g. the env's
+# `nvidia/label/cuda-12.4.0` resolves to
+# `mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/nvidia/label/cuda-12.4.0`.
 # ---------------------------------------------------------------------------
 RUN mkdir -p /root/.config/pip \
-    && printf '[global]\nindex-url = https://repo.huaweicloud.com/repository/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
+    && printf '[global]\nindex-url = https://mirrors.aliyun.com/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
        > /root/.config/pip/pip.conf \
     && cat > /root/.condarc <<'EOF'
 channels:
@@ -126,6 +128,9 @@ default_channels:
 custom_channels:
   conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
   pytorch: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+  nvidia: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+  dglteam: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+  bioconda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
 EOF
 
 # ---------------------------------------------------------------------------
