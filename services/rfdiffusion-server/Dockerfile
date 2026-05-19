@@ -2,14 +2,32 @@
 #   docker build --platform linux/amd64 -t rfdiffusion-server -f services/rfdiffusion-server/Dockerfile .
 #
 # RFdiffusion source must be at opensource/RFdiffusion/ (weights baked into image,
-# ~4 GB of .pt files; ensure opensource/RFdiffusion/models/ is populated first).
+# ~3.9 GB of .pt files; ensure opensource/RFdiffusion/models/ is populated via
+# `bash opensource/RFdiffusion/scripts/download_models.sh ...` before building).
 #
-# Base: cudnn8-runtime on CUDA 11.8 (no nvcc/headers needed at runtime).
-# RFdiffusion + SE3-Transformer install entirely from prebuilt wheels (torch +
-# dgl + e3nn + hydra-core). Verified with grep across the source tree — no
-# `cpp_extension.load` / `CUDAExtension` paths run at inference time.
-# Save ~3-4 GB vs the -devel variant.
-FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
+# Multistage layout
+# -----------------
+#   builder = heavy: apt build-essential + python-dev + git/wget for wheel/git installs.
+#   runtime = lean : only python3.10 + ca-certificates; the finished .venv + source +
+#                    models are copied over.
+#
+# Why multistage: build-essential / python3.10-dev / git / wget pull in ~300 MB
+# of headers + gcc + libs the runtime never uses. In a single-stage Dockerfile
+# `apt-get remove` after install would leave the bytes in the original apt
+# install layer — the only way to actually shrink is to never copy them into
+# the final image.
+#
+# Base: cudnn8-RUNTIME variant of nvidia/cuda 11.8 in BOTH stages. RFdiffusion
+# + SE3-Transformer install entirely from prebuilt wheels (torch + dgl + e3nn
+# + hydra-core); the source tree has no `cpp_extension.load` / `CUDAExtension`
+# paths that run at inference time, so the runtime base saves ~3-4 GB vs `-devel`.
+ARG BASE_IMAGE=nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
+
+
+# ===========================================================================
+# Stage 1: builder — installs the venv, copies source + models in.
+# ===========================================================================
+FROM ${BASE_IMAGE} AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -17,9 +35,11 @@ ENV PYTHONUNBUFFERED=1
 # Huawei Cloud pip mirror (project-wide convention, ~10× faster than upstream
 # pypi.org from China build hosts). UV_INDEX_URL is consumed by `uv pip install`.
 ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
-# DGL chooses its backend at import; pytorch is the only one we ship.
-ENV DGLBACKEND=pytorch
 
+# Build-only apt deps. `python3.10-dev` + `build-essential` are required by
+# legacy setup.py packages (SE3Transformer, rfdiffusion root) that build sdist
+# wheels at install time. `git` is needed by the `dllogger @ git+...` install.
+# `wget`/`curl`/`ca-certificates` are used by uv's wheel cache fetches.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.10 python3.10-venv python3.10-dev \
     git wget curl ca-certificates build-essential \
@@ -29,21 +49,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
 
 # ---------------------------------------------------------------------------
-# Create the isolated venv RFdiffusion runs from. Mirrors rfantibody-server's
-# layout: /opt/<service>/.venv with `uv pip install` driving all installs.
+# Create the venv and seed it with setuptools + wheel.
+#
+# Why seed setuptools/wheel up-front: two later steps install legacy setup.py-
+# only packages (`env/SE3Transformer/`, the rfdiffusion source root) with
+# `--no-build-isolation`. Without isolation uv looks for the build backend in
+# THIS venv and crashes with `ModuleNotFoundError: setuptools`. Tiny layer
+# (~2 MB) — keeps the foundation independent of torch's slow cache.
 # ---------------------------------------------------------------------------
 WORKDIR /opt/rfdiffusion
-RUN uv venv .venv --python python3.10
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv venv .venv --python python3.10 \
+    && uv pip install --python .venv/bin/python setuptools wheel
 
 # ---------------------------------------------------------------------------
-# Core scientific stack first. Ordering matters for cache hit rates: this layer
-# is the largest (torch ~2 GB) and changes least often.
+# Core scientific stack — one wheel per layer so the slow downloads
+# (torch ~2 GB, dgl ~300 MB) cache independently.
 #
 # Wheel sources:
-#   * torch 2.0.1 + cu118 — from download.pytorch.org (only place these live).
-#     We use the standard 11.8 CUDA wheels for compatibility with the base image.
-#   * dgl 1.1.3+cu118 — from data.dgl.ai. Upstream RFdiffusion docker pins
-#     dgl 1.0.2+cu116; the +cu118 build is the closest match for our base.
+#   * torch 2.0.1 + cu118 — from download.pytorch.org. CUDA 11.8 wheels for
+#     compatibility with the base image.
+#   * dgl 1.1.3 + cu118 — from data.dgl.ai. Upstream RFdiffusion pins dgl
+#     1.0.2+cu116; +cu118 is the closest match for our base.
 #   * everything else from Huawei mirror via UV_INDEX_URL.
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -57,9 +84,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         dgl==1.1.3+cu118
 
 # ---------------------------------------------------------------------------
-# RFdiffusion's remaining python deps — pinned to the versions the upstream
-# Dockerfile uses (verified compatible with torch 2.0.1 and hydra 1.3.2).
-# pynvml/decorator/dllogger are required by the NVIDIA SE3-Transformer source.
+# Remaining RFdiffusion python deps in ONE layer — versions pinned to what
+# upstream Dockerfile uses (verified compatible with torch 2.0.1 + hydra 1.3.2).
+# pynvml / decorator / dllogger are pulled in by NVIDIA SE3-Transformer.
+#
+# Combined into a single uv call instead of 2 RUNs: 4× smaller manifest cost,
+# one resolver pass instead of two, and these pins all change in lockstep so
+# splitting them doesn't help cache hit rates in practice.
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
@@ -69,45 +100,78 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         decorator==5.1.0 \
         pynvml==11.0.0 \
         wandb==0.12.0 \
-        "numpy<2"
-
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --python .venv/bin/python \
+        "numpy<2" \
         "dllogger @ git+https://github.com/NVIDIA/dllogger@v1.0.0"
 
 # ---------------------------------------------------------------------------
-# Copy RFdiffusion source + pretrained weights. Heavy COPY late so the
-# previous wheel layers stay cached when only source/config changes.
+# Source + weights. Split into TWO COPYs to keep the 3.9 GB models layer
+# stable across source iterations:
+#   1. models/        — pretrained checkpoints, rarely change, big.
+#   2. code subdirs   — rfdiffusion package, env/, config/, scripts/.
 #
-# The models/ dir is ~4 GB (8 × 460 MB checkpoints + 1 × 230 MB RF2 weights).
-# Make sure `opensource/RFdiffusion/models/` is populated locally before
-# building — `bash opensource/RFdiffusion/scripts/download_models.sh
-# opensource/RFdiffusion/models` will fetch them.
+# We deliberately skip `img/` (7 MB of PNG screenshots), `docker/`,
+# `examples/`, `tests/` — none of them are referenced by run_inference.py.
+# This shaves ~10 MB and avoids unnecessary cache invalidation on every
+# upstream README/docs update.
 # ---------------------------------------------------------------------------
-COPY opensource/RFdiffusion /opt/rfdiffusion
-
-# NVIDIA SE3-Transformer is vendored under env/SE3Transformer; install it
-# (pure-python, no nvcc needed).
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --python .venv/bin/python --no-build-isolation \
-        /opt/rfdiffusion/env/SE3Transformer
-
-# Editable install of rfdiffusion itself so `from rfdiffusion ...` works inside
-# the inference script and any auxiliary code.
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --python .venv/bin/python --no-build-isolation --no-deps \
-        -e /opt/rfdiffusion
+COPY opensource/RFdiffusion/models /opt/rfdiffusion/models
+COPY opensource/RFdiffusion/rfdiffusion /opt/rfdiffusion/rfdiffusion
+COPY opensource/RFdiffusion/env /opt/rfdiffusion/env
+COPY opensource/RFdiffusion/config /opt/rfdiffusion/config
+COPY opensource/RFdiffusion/scripts /opt/rfdiffusion/scripts
+COPY opensource/RFdiffusion/helper_scripts /opt/rfdiffusion/helper_scripts
+COPY opensource/RFdiffusion/setup.py /opt/rfdiffusion/setup.py
 
 # ---------------------------------------------------------------------------
-# Shared bioagent service framework + remote-fetch deps. Late layer so framework
-# source changes don't invalidate the torch / dgl wheel layers above.
+# Three editable / wheel-from-source installs + shared framework, fused into
+# ONE layer with cleanup. None of these change in isolation in practice, and
+# combining them lets us strip `__pycache__` / build leftovers in the same
+# layer (deletion in a later RUN wouldn't reclaim bytes from earlier layers).
+#
+#   * SE3-Transformer (vendored under env/SE3Transformer; pure-python, no nvcc)
+#   * rfdiffusion editable install (--no-deps so we don't re-resolve the heavy
+#     stack we already installed; uses the source at /opt/rfdiffusion/rfdiffusion)
+#   * service framework + httpx + alibabacloud-oss-v2
 # ---------------------------------------------------------------------------
 COPY services/_framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --python .venv/bin/python \
-        "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
+    uv pip install --python .venv/bin/python --no-build-isolation \
+        /opt/rfdiffusion/env/SE3Transformer \
+    && uv pip install --python .venv/bin/python --no-build-isolation --no-deps \
+        -e /opt/rfdiffusion \
+    && uv pip install --python .venv/bin/python \
+        "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2 \
+    && rm -rf /tmp/service-framework \
+    && find /opt/rfdiffusion/.venv -depth -type d -name '__pycache__' -exec rm -rf {} + \
+    && find /opt/rfdiffusion/.venv -depth -type d -name 'tests' -exec rm -rf {} + \
+    && find /opt/rfdiffusion/.venv -name '*.pyc' -delete
 
-# Server code as `server` package — uvicorn imports `server.app:app`.
+
+# ===========================================================================
+# Stage 2: runtime — minimal apt surface + the finished venv from builder.
+# ===========================================================================
+FROM ${BASE_IMAGE}
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+# DGL chooses its backend at import; pytorch is the only one we ship.
+ENV DGLBACKEND=pytorch
+
+# Runtime-only apt: python3.10 (the venv's shebang `.venv/bin/python` symlinks
+# to /usr/bin/python3.10) + ca-certificates (httpx HTTPS for OSS / URL inputs).
+# No gcc, no headers, no git — that all stayed in the builder stage.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 python3.10-venv ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# The whole prepared tree comes over in one COPY: venv + source + models +
+# editable install metadata. ~7-8 GB in a single layer, which is what we want
+# for registry dedup (harbor stores it once across all FC pulls).
+COPY --from=builder /opt/rfdiffusion /opt/rfdiffusion
+
+# Server code is in its own layer so changes here don't drag the 8 GB COPY
+# above through a rebuild — uvicorn imports `server.app:app`.
 COPY services/rfdiffusion-server/ /opt/rfdiffusion/server/
 
 # Settings (env-driven; see services/rfdiffusion-server/settings.py).
@@ -118,7 +182,7 @@ ENV RFDIFFUSION_PYTHON=/opt/rfdiffusion/.venv/bin/python
 ENV RFDIFFUSION_JOBS_BASE_DIR=/data/rfdiffusion_jobs
 RUN mkdir -p /data/rfdiffusion_jobs
 
-# Alibaba Cloud FC: CAPort 9000, keep-alive ≥ 15 min, /healthz must be ready < 120 s.
+# Alibaba Cloud FC: port 9000, keep-alive ≥ 15 min, /healthz must be ready < 120 s.
 ENV PORT=9000
 EXPOSE 9000
 CMD ["/opt/rfdiffusion/.venv/bin/python", "-m", "uvicorn", "server.app:app", \
