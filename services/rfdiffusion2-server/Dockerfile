@@ -46,7 +46,17 @@ COPY opensource/RFdiffusion2 /src/
 #   rf_diffusion/test_data/                 ~118 MB — referenced only by tests
 #   rf_diffusion/goldens/                    ~97 MB — test fixtures
 #   rf_diffusion/benchmark/rotamer_library/ ~100 MB — used by pipeline.py only
-#   rf_diffusion/exec/*.sif                  ~35 MB — apptainer images (FC can't run them)
+#   rf_diffusion/exec/                       ~35 MB — apptainer images + spec
+#                                                     (FC can't run them; the
+#                                                     entire dir is build-time
+#                                                     packaging, not runtime)
+#   rf_diffusion/aa_dataset_256_subsampled_10.pkl    74 MB \  training/eval-only
+#   rf_diffusion/test_allatom_dataset_100.pkl        16 MB  ) datasets — only
+#   rf_diffusion/aa_dataset_256_subsampled_10_2.pkl  11 MB  | reachable from
+#   rf_diffusion/test_dataset_100.pkl               1.8 MB  | training configs,
+#   rf_diffusion/test_fake_allatom_dataset.pkl       860 KB /  not inference
+#   rf_diffusion/*.pse                              ~15 MB — pymol sessions
+#                                                            (visualization)
 #   rf_diffusion/dev/                      ~300 KB — dev scripts
 #   notebooks / images / doc / assets / pymol_config — top-level docs (~1.5 MB)
 #
@@ -59,13 +69,21 @@ RUN rm -rf \
         /src/rf_diffusion/test_data \
         /src/rf_diffusion/goldens \
         /src/rf_diffusion/benchmark/rotamer_library \
+        /src/rf_diffusion/exec \
         /src/rf_diffusion/dev \
         /src/notebooks \
         /src/images \
         /src/doc \
         /src/assets \
         /src/pymol_config \
-    && find /src/rf_diffusion/exec -name '*.sif' -delete
+    && rm -f \
+        /src/rf_diffusion/aa_dataset_256_subsampled_10.pkl \
+        /src/rf_diffusion/aa_dataset_256_subsampled_10_2.pkl \
+        /src/rf_diffusion/test_allatom_dataset_100.pkl \
+        /src/rf_diffusion/test_dataset_100.pkl \
+        /src/rf_diffusion/test_fake_allatom_dataset.pkl \
+        /src/rf_diffusion/diffuse_fullatom.pse \
+        /src/rf_diffusion/fwd_diffusion_example.pse
 
 
 # ===========================================================================
