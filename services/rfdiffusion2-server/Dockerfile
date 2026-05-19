@@ -124,13 +124,16 @@ ENV PATH=/opt/conda/envs/rfd2/bin:$PATH
 # pip: Aliyun mirror. Configure BEFORE micromamba env-create — env.yml's
 # `pip:` section invokes pip during env create and would otherwise hit pypi.org.
 #
-# conda: TUNA (Tsinghua) for every channel env.yml touches, EXCEPT pyrosetta
-# (no Chinese mirror exists for conda.rosettacommons.org — that ~600 MB
-# download stays as the dominant single-package cost on a cold build).
-#
-# TUNA mirrors labelled sub-channels under the same path, so e.g. the env's
-# `nvidia/label/cuda-12.4.0` resolves to
-# `mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/nvidia/label/cuda-12.4.0`.
+# conda: TUNA (Tsinghua) for the standard channels. Three upstream channels
+# we leave alone (fall through to conda.anaconda.org):
+#   - conda.rosettacommons.org    pyrosetta (proprietary, no Chinese mirror)
+#   - nvidia/label/cuda-12.4.0    TUNA mirrors `cloud/nvidia` (main channel)
+#                                 but NOT the `label/*` subpaths. Mapping
+#                                 nvidia → TUNA causes a 404 on
+#                                 .../cloud/nvidia/label/cuda-12.4.0/noarch/repodata.json
+#                                 which fails the whole env-create.
+#   - dglteam/label/th24_cu124    same limitation — TUNA has `cloud/dglteam`
+#                                 but no labelled sub-channels.
 # ---------------------------------------------------------------------------
 RUN mkdir -p /root/.config/pip \
     && printf '[global]\nindex-url = https://mirrors.aliyun.com/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
@@ -146,9 +149,6 @@ default_channels:
 custom_channels:
   conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
   pytorch: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
-  nvidia: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
-  dglteam: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
-  bioconda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
 EOF
 
 # ---------------------------------------------------------------------------
