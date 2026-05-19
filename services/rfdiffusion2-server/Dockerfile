@@ -1,34 +1,94 @@
 # Build from bioagent project root:
 #   docker build --platform linux/amd64 -t rfdiffusion2-server -f services/rfdiffusion2-server/Dockerfile .
 #
-# RFdiffusion2 source must be at opensource/RFdiffusion2/ (weights baked into image,
-# ~2.6 GB across RFD_140.pt + RFD_173.pt; the 2 LigandMPNN weights are copied too
-# even though run_inference.py doesn't use them — downstream pipelines need them).
-# Run `python setup.py` inside opensource/RFdiffusion2/ first to download the weights.
+# RFdiffusion2 source must be at opensource/RFdiffusion2/ (weights baked into image).
+# Run `cd opensource/RFdiffusion2 && python setup.py` first to download the weights.
 #
-# Base: CUDA 12.4 -devel. RFdiffusion2 mirrors the rf_diffusion_aa.spec apptainer
-# image (cuda 12.4 + pytorch 2.4 + cu124). The DEVEL variant is required because
-# rf2aa imports `cuequivariant`/`pyg_lib` which can JIT-compile CUDA kernels on
-# first model construction. Same lesson as ppiflow-server (see
-# engineering/guides/uv-dockerfile-patterns.md for the diagnosis).
-FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
+# Multistage layout
+# -----------------
+#   source-prep = trims the RFdiffusion2 source tree: drops `test_data/`,
+#                 `goldens/`, `benchmark/rotamer_library/`, `dev/`, top-level
+#                 docs/notebooks/images/assets, and the apptainer .sif files
+#                 we don't use. About 350 MB of dead weight.
+#   builder     = heavy: bzip2/curl/wget/git + micromamba + conda env create
+#                 (~10 GB env including pyrosetta, torch+cu124, dgl, openbabel).
+#                 Final RUN strips `__pycache__` / `*.pyc` from the env.
+#   runtime     = lean : only build-essential + ca-certificates. The finished
+#                 conda env + trimmed source + framework are copied over.
+#
+# Why two stages on top of source-prep: bzip2/curl/wget/git/micromamba aren't
+# needed once the env is built, but in a single Dockerfile `apt-get remove`
+# after install can't reclaim the bytes from the install layer. Multistage is
+# the only way to leave those packages behind. Same playbook as
+# rfdiffusion-server (see comments there).
+#
+# Base: CUDA 12.4 -devel (REQUIRED, do not switch to -runtime). rf2aa imports
+# ipd.dev.cuda.cudabuild which calls `torch.utils.cpp_extension.load(...)` —
+# JIT-compiles a CUDA kernel on first model construction. That path needs
+# nvcc + cuda_runtime_api.h, only present in -devel. We also keep
+# build-essential in the runtime stage so the JIT compile succeeds.
+# Same lesson as ppiflow-server (see engineering/guides/uv-dockerfile-patterns.md).
+ARG BASE_IMAGE=nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
+
+
+# ===========================================================================
+# Stage 1: source-prep — trim the RFdiffusion2 source tree.
+#
+# Use the same CUDA base so we avoid pulling an extra image. The contents of
+# this stage never reach the final image; only the trimmed /src/ at the end
+# does, via COPY --from below.
+# ===========================================================================
+FROM ${BASE_IMAGE} AS source-prep
+
+COPY opensource/RFdiffusion2 /src/
+
+# Drop runtime-irrelevant data:
+#   rf_diffusion/test_data/                 ~118 MB — referenced only by tests
+#   rf_diffusion/goldens/                    ~97 MB — test fixtures
+#   rf_diffusion/benchmark/rotamer_library/ ~100 MB — used by pipeline.py only
+#   rf_diffusion/exec/*.sif                  ~35 MB — apptainer images (FC can't run them)
+#   rf_diffusion/dev/                      ~300 KB — dev scripts
+#   notebooks / images / doc / assets / pymol_config — top-level docs (~1.5 MB)
+#
+# We KEEP rf_diffusion/benchmark/input/ (44 MB) — referenced as default
+# `inference.input_pdb` by several configs under config/inference/. Even
+# though our /api/generate always overrides this default, leaving it in
+# means custom-config-name requests without an explicit input_pdb still
+# work end-to-end instead of failing on a missing file.
+RUN rm -rf \
+        /src/rf_diffusion/test_data \
+        /src/rf_diffusion/goldens \
+        /src/rf_diffusion/benchmark/rotamer_library \
+        /src/rf_diffusion/dev \
+        /src/notebooks \
+        /src/images \
+        /src/doc \
+        /src/assets \
+        /src/pymol_config \
+    && find /src/rf_diffusion/exec -name '*.sif' -delete
+
+
+# ===========================================================================
+# Stage 2: builder — install the rfd2 conda env on top of the trimmed source.
+# ===========================================================================
+FROM ${BASE_IMAGE} AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Pin torch's CUDA discovery to the system toolkit (same lesson as ppiflow-server):
+# Pin torch's CUDA discovery to the system toolkit (same lesson as ppiflow):
 # torch._find_cuda_home() reads CUDA_HOME / CUDA_PATH before walking PATH, so
-# if a conda env puts an nvcc on PATH without the matching headers, set these.
+# if conda puts an nvcc on PATH without matching headers, set these.
 ENV CUDA_HOME=/usr/local/cuda
 ENV CUDA_PATH=/usr/local/cuda
 
-# ---------------------------------------------------------------------------
-# Base tooling: micromamba (conda env manager). The conda env's bundled pip
-# (`/opt/conda/envs/rfd2/bin/pip`) handles the wheel-only installs in later
-# layers — no uv. Keeps the toolchain to a single package manager so the env
-# manifest stays the source of truth for what's installed.
-# ---------------------------------------------------------------------------
+# Build-only apt deps + micromamba bootstrap.
+#   bzip2     — to extract the micromamba tarball
+#   curl/wget — used by micromamba env-create (download.pytorch.org, data.dgl.ai)
+#   git       — for the two `pip install git+...` deps below
+#   build-essential — required by the JIT compile path in ipd.dev.cuda.cudabuild
+#                     (kept in the runtime stage too — see below)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bzip2 curl git wget ca-certificates build-essential \
     && rm -rf /var/lib/apt/lists/* \
@@ -40,26 +100,22 @@ ENV MAMBA_ROOT_PREFIX=/opt/conda
 ENV PATH=/opt/conda/envs/rfd2/bin:$PATH
 
 # ---------------------------------------------------------------------------
-# Mirror configuration — pip + conda.
+# Mirror configuration for pip + conda, one combined layer (both files are
+# < 1 KB; splitting them earlier just made the layer manifest noisier).
 #
-# pip: Huawei Cloud is the project-wide mirror. Configure BEFORE micromamba
-# creates the env (env.yml has a `pip:` section that triggers pip resolution
-# during conda env create).
+# pip: Huawei Cloud mirror. Configure BEFORE micromamba env-create — env.yml's
+# `pip:` section invokes pip during env create and would otherwise hit pypi.org.
 #
-# conda: TUNA (Tsinghua) mirror for the standard channels (conda-forge,
-# pytorch, pkgs/main). The two upstream-only channels we keep as-is:
-#   - https://conda.rosettacommons.org   (pyrosetta; not mirrored anywhere)
-#   - nvidia/label/cuda-12.4.0           (cuda packages; nvidia channel
-#                                          isn't on TUNA, falls through to
-#                                          upstream conda.anaconda.org/nvidia)
-#   - dglteam/label/th24_cu124           (dgl 2.4 + cu124; falls through to
-#                                          conda.anaconda.org/dglteam)
+# conda: TUNA (Tsinghua) for the standard channels. Two upstream channels we
+# leave alone (no TUNA mirror; fall through to conda.anaconda.org):
+#   - https://conda.rosettacommons.org   pyrosetta (proprietary, ~600 MB)
+#   - nvidia/label/cuda-12.4.0           cuda packages
+#   - dglteam/label/th24_cu124           dgl 2.4 + cu124
 # ---------------------------------------------------------------------------
-RUN mkdir -p /root/.config/pip && \
-    printf '[global]\nindex-url = https://repo.huaweicloud.com/repository/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
-    > /root/.config/pip/pip.conf
-
-RUN cat > /root/.condarc <<'EOF'
+RUN mkdir -p /root/.config/pip \
+    && printf '[global]\nindex-url = https://repo.huaweicloud.com/repository/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
+       > /root/.config/pip/pip.conf \
+    && cat > /root/.condarc <<'EOF'
 channels:
   - defaults
 show_channel_urls: true
@@ -73,35 +129,37 @@ custom_channels:
 EOF
 
 # ---------------------------------------------------------------------------
-# Create the rfd2 conda env from upstream's envs/cuda124_env.yml.
+# Create the rfd2 conda env. The env yaml's `pip:` section references
+# `-r requirements_cuda124.txt`, so we must copy BOTH files to the same
+# temp dir before invoking `env create`.
 #
-# The env yaml `pip:` section references `-r requirements_cuda124.txt`, so we
-# must copy BOTH files to the same temp dir before invoking `env create`.
+# BuildKit cache mounts (the big optimization):
+#   /opt/conda/pkgs   conda package cache (~2 GB), saves re-download
+#   /root/.cache/pip  pip wheel cache (~1.5 GB; torch wheels from
+#                     download.pytorch.org, pyg-lib from data.pyg.org —
+#                     neither has a China CDN). First build ~25 min;
+#                     rebuilds drop to ~3 min.
 #
-# BuildKit cache mounts (same optimization rationale as ppiflow-server):
-#   - /opt/conda/pkgs : conda package cache (~2 GB), saves re-download.
-#   - /root/.cache/pip : torch wheels, pyg-lib wheels (~1.5 GB combined), no
-#                        China CDN for download.pytorch.org or data.pyg.org.
+# The cache-mounted dirs are excluded from the layer by BuildKit, so
+# *not* doing `micromamba clean --all` here doesn't bloat the image.
 # ---------------------------------------------------------------------------
-WORKDIR /opt/rfdiffusion2
-
 COPY opensource/RFdiffusion2/envs/cuda124_env.yml /tmp/rfd2-env/cuda124_env.yml
 COPY opensource/RFdiffusion2/envs/requirements_cuda124.txt /tmp/rfd2-env/requirements_cuda124.txt
 
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    cd /tmp/rfd2-env && \
-    micromamba env create -y -n rfd2 -f cuda124_env.yml && \
-    rm -rf /tmp/rfd2-env
+    cd /tmp/rfd2-env \
+    && micromamba env create -y -n rfd2 -f cuda124_env.yml \
+    && rm -rf /tmp/rfd2-env
 
 # ---------------------------------------------------------------------------
-# Two pip extras the spec file installs that aren't in requirements_cuda124.txt
-# but ARE in the apptainer .spec (see opensource/RFdiffusion2/rf_diffusion/exec/
-# rf_diffusion_aa.spec). Without these, `import rf2aa` fails at runtime because
-# rf2aa pulls in ipd.dev.
+# Two pip extras the upstream apptainer .spec installs that aren't in
+# requirements_cuda124.txt. Without these `import rf2aa` fails at runtime
+# (rf2aa imports `ipd.dev` and uses PyTimer).
 #
-#   - ipd: baker_laboratory's "IPD" dev utilities, github-only package.
-#   - PyTimer: timing helpers used by rf2aa.
+# Separate layer because these git-clone installs are slow (~30s each) and
+# rarely change — combining them with the framework install (next layer)
+# would re-clone on every framework change.
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     /opt/conda/envs/rfd2/bin/pip install \
@@ -109,28 +167,56 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
         git+https://github.com/baker-laboratory/ipd.git
 
 # ---------------------------------------------------------------------------
-# Copy RFdiffusion2 source + model weights. Heavy COPY late so wheel layers
-# above stay cached when only source changes.
+# Pull in the pre-trimmed source from source-prep, plus the framework, and
+# strip __pycache__/*.pyc from the env in the SAME layer. Cleanup in a later
+# RUN would leak the bytes through the previous layer.
 #
-# Weights are ~2.6 GB total (RFD_140.pt + RFD_173.pt; the two ligand_mpnn
-# weights at ~70 MB are also copied for downstream pipeline use even though
-# run_inference.py doesn't load them). Make sure
-# `cd opensource/RFdiffusion2 && python setup.py` ran locally before building.
+# Why the trimmed COPY: see source-prep stage above. About 350 MB saved.
+# Why __pycache__ cleanup: conda installs ship pre-compiled .pyc bytecode,
+# ~200 MB across the env. Python regenerates these on first import — minor
+# cold-start cost, big image-size win.
 # ---------------------------------------------------------------------------
-COPY opensource/RFdiffusion2 /opt/rfdiffusion2
-
-# ---------------------------------------------------------------------------
-# Shared bioagent service framework + remote-fetch deps. Late layer so a
-# framework re-install doesn't invalidate the slow conda-env build above.
-# Reuses the same pip cache mount as the env.yml step.
-# ---------------------------------------------------------------------------
+COPY --from=source-prep /src /opt/rfdiffusion2
 COPY services/_framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     /opt/conda/envs/rfd2/bin/pip install \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2 \
-    && rm -rf /tmp/service-framework
+    && rm -rf /tmp/service-framework \
+    && find /opt/conda/envs/rfd2 -depth -type d -name '__pycache__' -exec rm -rf {} + \
+    && find /opt/conda/envs/rfd2 -name '*.pyc' -delete
 
-# Server code as `server` package — uvicorn imports `server.app:app`.
+
+# ===========================================================================
+# Stage 3: runtime — keep the JIT-compile toolchain, drop the rest.
+# ===========================================================================
+FROM ${BASE_IMAGE}
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV CUDA_HOME=/usr/local/cuda
+ENV CUDA_PATH=/usr/local/cuda
+ENV MAMBA_ROOT_PREFIX=/opt/conda
+ENV PATH=/opt/conda/envs/rfd2/bin:$PATH
+
+# Runtime apt is minimal:
+#   build-essential   — REQUIRED. ipd.dev.cuda.cudabuild does runtime JIT compile
+#                       via torch.cpp_extension.load on first model construction.
+#                       Without gcc the inference call crashes.
+#   ca-certificates   — httpx HTTPS for OSS / signed URL inputs.
+#
+# We drop bzip2/curl/wget/git/micromamba (~150 MB on disk) and any other apt
+# headers from the builder. The env is fully self-contained at this point.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Bring over the conda env + trimmed source as two separate COPYs so the
+# big (and stable) one — the env — caches independently of source changes.
+COPY --from=builder /opt/conda /opt/conda
+COPY --from=builder /opt/rfdiffusion2 /opt/rfdiffusion2
+
+# Server code last so iterating on the FastAPI layer only rebuilds the tail.
 COPY services/rfdiffusion2-server/ /opt/rfdiffusion2/server/
 
 # Settings (env-driven; see services/rfdiffusion2-server/settings.py).
