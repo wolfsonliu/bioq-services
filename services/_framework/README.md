@@ -93,3 +93,26 @@ def echo(request: EchoRequest):
   schema refs, field list, copy-pasteable invocations. See
   `services/rfantibody-server/adapter.py` and `services/genie3-server/adapter.py`
   for worked implementations.
+
+## Helpers for service code & tests
+
+- **`read_version_file(__file__, default=...)`** — read a service's `VERSION`
+  file (sibling of `app.py`), strip a leading `v`, fall back to `default` if
+  missing. Use it in `create_app(..., version=read_version_file(__file__))`
+  so the HTTP version cannot drift from the Docker image tag.
+
+- **`bioagent_service.fc_testing`** — helpers for tests that hit the deployed
+  Function Compute URLs:
+  - `fc_url(service_name, start=Path(__file__))` resolves the URL from
+    [services/aliyun_fc_url.md](../aliyun_fc_url.md) (the single source of
+    truth — update that file when you redeploy).
+  - `poll_job(client, base_url, job_id, timeout_s=1800)` blocks until terminal.
+  - `register_fc_marker(config)` + `skip_fc_tests_unless_enabled(config, items)`
+    drop into a service's `tests/conftest.py` so `@pytest.mark.fc` tests are
+    skipped by default, opted in with `pytest -m fc` or `RUN_FC_TESTS=1`.
+
+  Pattern: `services/<svc>/tests/test_fc.py` covers smoke (health / manifest /
+  openapi / 404) plus one minimal-cost job per endpoint. Fixtures (`PDB`,
+  `JSON`, etc.) live in `tests/data/` — never reference `opensource/*` (it's
+  gitignored). End-to-end usage and failure-mode tables in
+  [engineering/guides/testing-fc-services.md](../../engineering/guides/testing-fc-services.md).
