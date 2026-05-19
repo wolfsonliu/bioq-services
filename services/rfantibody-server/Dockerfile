@@ -3,7 +3,7 @@
 #
 # RFantibody source must be at opensource/RFantibody/ (weights baked into image).
 # Base: cudnn-runtime (not -devel). RFantibody installs entirely from prebuilt
-# wheels via `uv sync`, no nvcc / CUDA headers needed at build or runtime.
+# wheels via `uv pip install`, no nvcc / CUDA headers needed at build or runtime.
 # Save ~5 GB vs the -devel variant on this CUDA 11.8 line.
 FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
@@ -11,6 +11,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
+# CN build hosts frequently time out on multi-MB wheels from files.pythonhosted.org
+# (biotraj/biotite/torch). Default uv timeout is 30s — bump it and trim parallel
+# downloads so each wheel gets more bandwidth.
+ENV UV_HTTP_TIMEOUT=600
+ENV UV_CONCURRENT_DOWNLOADS=4
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.10 python3-pip python3.10-venv wget curl ca-certificates \
@@ -21,15 +26,22 @@ COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
 # --- Install RFantibody ---
 WORKDIR /opt/rfantibody
 
-# Dependencies first (cache-friendly layer order)
-COPY opensource/RFantibody/pyproject.toml opensource/RFantibody/uv.lock ./
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-install-project
+# Create the venv up-front so subsequent `uv pip install` invocations target it
+# consistently (uv pip auto-detects .venv in CWD, but being explicit is safer).
+RUN uv venv .venv --python python3.10
 
-# Full RFantibody source + weights
+# Switched from `uv sync --frozen` to `uv pip install -e .` because uv.lock
+# pins each wheel to a hardcoded `files.pythonhosted.org` URL, which bypasses
+# the Huawei mirror set via UV_INDEX_URL above. From CN build hosts those URLs
+# time out on multi-MB wheels (biotraj/biotite/torch). `uv pip install` honors
+# UV_INDEX_URL for the default index and reads [tool.uv.sources] +
+# [[tool.uv.index]] from pyproject.toml for torch (pytorch index) / dgl
+# (direct wheel URL). Trade-off: lockfile reproducibility lost; acceptable
+# because the alternative (build failures behind a flaky CN→pypi link) is
+# strictly worse.
 COPY opensource/RFantibody/ .
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+    uv pip install --python .venv/bin/python -e .
 
 # Shared bioagent service framework (HTTP/job/error layer, pydantic models, NAS-aware
 # read-through cache). Installing it as a separate layer keeps cache hit rates high
