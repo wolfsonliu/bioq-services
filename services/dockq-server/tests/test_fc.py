@@ -77,8 +77,14 @@ def test_unknown_job_returns_404(client: httpx.Client) -> None:
 
 # ----- Inference: minimal job per endpoint -----
 
-def _assert_completed(client: httpx.Client, base_url: str, job_id: str) -> dict:
-    final = poll_job(client, base_url, job_id, timeout_s=600)
+def _assert_completed(
+    client: httpx.Client, base_url: str, job_id: str, *, timeout_s: int = 1800,
+) -> dict:
+    # DockQ on FC's small instances can take 5–20 minutes for a single (model,
+    # native) pair (vs. ~3 s locally) because the inner per-interface scoring
+    # is CPU-bound and serial. Default 1800 s matches the framework's default
+    # and other sibling tests.
+    final = poll_job(client, base_url, job_id, timeout_s=timeout_s)
     assert final["status"] == "completed", final
     return final
 
@@ -114,7 +120,9 @@ def test_score_batch_minimal_job(client: httpx.Client, base_url: str) -> None:
             ],
         )
     r.raise_for_status()
-    final = _assert_completed(client, base_url, r.json()["job_id"])
+    # Batch with 2 models scores them sequentially inside one subprocess, so
+    # give it 2× the per-pair budget.
+    final = _assert_completed(client, base_url, r.json()["job_id"], timeout_s=3600)
 
     files = set(client.get(f"/api/jobs/{final['job_id']}/files").json()["files"])
     assert "scores.csv" in files, files
