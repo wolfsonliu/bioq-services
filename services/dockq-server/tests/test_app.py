@@ -303,6 +303,28 @@ def test_batch_driver_summarize_multi_interface_averages():
     assert row["n_interfaces"] == 2
 
 
+def test_batch_driver_summarize_dockq2_global_key():
+    """DockQ 2.x renamed `total_DockQ` to `GlobalDockQ` (mean across interfaces).
+    Verify the summary picks it up; otherwise scores.csv DockQ column shows NaN."""
+    from server import batch_score
+    row = batch_score._summarize(
+        "m",
+        {
+            "best_dockq": 1.95,           # sum (DockQ 2.x)
+            "GlobalDockQ": 0.65,          # mean (DockQ 2.x — the headline)
+            "best_result": {
+                "AB": {"DockQ": 0.99, "iRMSD": 0.0, "F1": 0.98},
+                "AC": {"DockQ": 0.51, "iRMSD": 1.2, "F1": 0.50},
+                "BC": {"DockQ": 0.45, "iRMSD": 2.1, "F1": 0.64},
+            },
+        },
+    )
+    assert row["DockQ"] == 0.65
+    assert row["iRMSD"] == pytest.approx(1.1, abs=0.01)
+    assert row["F1"] == pytest.approx(0.7066, abs=0.001)
+    assert row["n_interfaces"] == 3
+
+
 # ----- URI resolution -----
 
 def test_uri_resolve_file(tmp_path):

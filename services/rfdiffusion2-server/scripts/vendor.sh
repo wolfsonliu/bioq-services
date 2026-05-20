@@ -28,6 +28,7 @@ rsync -a --delete \
     --exclude='datahub_pipelines/' \
     --exclude='benchmark/rotamer_library/' \
     --exclude='model_weights/' \
+    --exclude='third_party_model_weights/' \
     --exclude='*.pkl' \
     --exclude='*.pse' \
     --exclude='__pycache__' \

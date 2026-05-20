@@ -73,11 +73,18 @@ def _forwarded_flags(ns: argparse.Namespace) -> list[str]:
 def _summarize(model_basename: str, dockq_json: dict) -> dict:
     """Collapse DockQ's per-interface JSON into one summary row.
 
-    DockQ writes a top-level `"total_DockQ"` and a nested `"best_result"` dict
-    keyed by chain-mapping. We take total_DockQ as the headline score and
-    average the per-interface metrics across the best mapping.
+    DockQ 2.x writes `GlobalDockQ` (mean across interfaces) and `best_dockq`
+    (sum) at top level, plus a nested `best_result` dict keyed by chain
+    mapping. We use `GlobalDockQ` as the headline score and average the
+    per-interface metrics. Older keys (`total_DockQ`, top-level `DockQ`) are
+    kept as fallbacks for forward/backward compat.
     """
-    total = dockq_json.get("total_DockQ", dockq_json.get("DockQ", float("nan")))
+    total = float("nan")
+    for k in ("GlobalDockQ", "total_DockQ", "DockQ"):
+        v = dockq_json.get(k)
+        if isinstance(v, (int, float)):
+            total = v
+            break
     interfaces = dockq_json.get("best_result", {})
     if not interfaces:
         # Some output shapes put the interfaces at top-level (single interface).

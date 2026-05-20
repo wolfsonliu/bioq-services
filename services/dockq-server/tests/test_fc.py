@@ -97,7 +97,7 @@ def test_score_minimal_job(client: httpx.Client, base_url: str) -> None:
     final = _assert_completed(client, base_url, r.json()["job_id"])
 
     files = client.get(f"/api/jobs/{final['job_id']}/files").json()["files"]
-    assert any(f["path"].endswith("fc_smoke.json") for f in files), files
+    assert any(f.endswith("fc_smoke.json") for f in files), files
 
 
 def test_score_batch_minimal_job(client: httpx.Client, base_url: str) -> None:
@@ -116,6 +116,6 @@ def test_score_batch_minimal_job(client: httpx.Client, base_url: str) -> None:
     r.raise_for_status()
     final = _assert_completed(client, base_url, r.json()["job_id"])
 
-    files = {f["path"] for f in client.get(f"/api/jobs/{final['job_id']}/files").json()["files"]}
+    files = set(client.get(f"/api/jobs/{final['job_id']}/files").json()["files"])
     assert "scores.csv" in files, files
     assert any(p.startswith("per_model/") and p.endswith(".json") for p in files), files
