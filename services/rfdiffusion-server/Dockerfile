@@ -110,9 +110,14 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 #   2. code subdirs   — rfdiffusion package, env/, config/, scripts/.
 #
 # We deliberately skip `img/` (7 MB of PNG screenshots), `docker/`,
-# `examples/`, `tests/` — none of them are referenced by run_inference.py.
-# This shaves ~10 MB and avoids unnecessary cache invalidation on every
-# upstream README/docs update.
+# `tests/` — none of them are referenced by run_inference.py.
+#
+# `examples/input_pdbs/` MUST be copied: rfdiffusion/inference/model_runners.py
+# falls back to `examples/input_pdbs/1qys.pdb` as the placeholder target
+# whenever `inference.input_pdb` is None. Endpoints that don't ship a PDB
+# (unconditional / symmetry / freeform-without-pdb) crash with FileNotFound
+# at sampler init if this directory is missing. The rest of `examples/`
+# (shell scripts / output PDBs) is not on any code path → skipped.
 # ---------------------------------------------------------------------------
 COPY opensource/RFdiffusion/models /opt/rfdiffusion/models
 COPY opensource/RFdiffusion/rfdiffusion /opt/rfdiffusion/rfdiffusion
@@ -120,6 +125,7 @@ COPY opensource/RFdiffusion/env /opt/rfdiffusion/env
 COPY opensource/RFdiffusion/config /opt/rfdiffusion/config
 COPY opensource/RFdiffusion/scripts /opt/rfdiffusion/scripts
 COPY opensource/RFdiffusion/helper_scripts /opt/rfdiffusion/helper_scripts
+COPY opensource/RFdiffusion/examples/input_pdbs /opt/rfdiffusion/examples/input_pdbs
 COPY opensource/RFdiffusion/setup.py /opt/rfdiffusion/setup.py
 
 # ---------------------------------------------------------------------------
