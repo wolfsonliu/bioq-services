@@ -4,7 +4,7 @@ Two responsibilities:
 
   * `build_yaml(req, ...)` renders the structured pydantic request into a
     Boltz-compatible YAML file at `<job_dir>/input/input.yaml`. The stem is
-    fixed to `input` so the output path (`output/predictions/input/`) is
+    fixed to `input` so the output path (`output/boltz_results_input/predictions/input/`) is
     predictable for `JobAdapter.detect_outputs`.
 
   * `predict_argv(req, ...)` composes the argv for the `boltz predict`

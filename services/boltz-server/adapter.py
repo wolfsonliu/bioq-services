@@ -26,13 +26,13 @@ class BoltzAdapter(JobAdapter):
     def detect_outputs(self, job_dir: Path) -> bool:
         """Recognize boltz predict's output layout.
 
-        Boltz writes predictions to `<out_dir>/predictions/<yaml_stem>/`. The
-        service fixes the YAML stem to `input` (see tools.build_yaml), so a
+        Boltz writes predictions to `<out_dir>/boltz_results_<yaml_stem>/predictions/<yaml_stem>/`.
+        The service fixes the YAML stem to `input` (see tools.build_yaml), so a
         single glob covers both endpoints. Affinity adds an extra json file in
         the same directory, but at least one `*_model_*.{cif,pdb}` is required
         for the job to count as completed (no model = nothing useful to return).
         """
-        pred_dir = self.output_dir(job_dir) / "predictions" / "input"
+        pred_dir = self.output_dir(job_dir) / "boltz_results_input" / "predictions" / "input"
         if not pred_dir.is_dir():
             return False
         for ext in ("cif", "pdb"):
@@ -48,7 +48,7 @@ class BoltzAdapter(JobAdapter):
         return {
             "tool_outputs": {
                 "predict_structure": (
-                    "output/predictions/input/input_model_*.{cif,pdb} (one per diffusion_samples). "
+                    "output/boltz_results_input/predictions/input/input_model_*.{cif,pdb} (one per diffusion_samples). "
                     "confidence_input_model_*.json carries per-sample scores (confidence, ptm, iptm, "
                     "complex_plddt, chain-wise breakdowns)."
                 ),

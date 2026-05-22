@@ -1,7 +1,8 @@
-genie3-server: https://fc-genie-icjpnieeiz.cn-hangzhou.fcapp.run
-rfantibody-server: https://fc-rfantibody-guekbpucdo.cn-hangzhou.fcapp.run
-ppiflow-server: https://fc-ppiflow-lufflhmlaw.cn-hangzhou.fcapp.run
-proteinmpnn-server: https://fc-proteinmpnn-pahlhbttzb.cn-hangzhou.fcapp.run
-rfdiffusion-server: https://fc-rfdiffusion-cdskxiqtnk.cn-hangzhou.fcapp.run
-boltz2-server: https://fc-boltz-kbioniejif.cn-hangzhou.fcapp.run
-dockq-server: https://fc-dockq-tzqvjemokb.cn-hangzhou.fcapp.run
+genie3-server: https://fc-genie-icjpnieeiz.cn-hangzhou-vpc.fcapp.run
+rfantibody-server: https://fc-rfantibody-guekbpucdo.cn-hangzhou-vpc.fcapp.run
+ppiflow-server: https://fc-ppiflow-lufflhmlaw.cn-hangzhou-vpc.fcapp.run
+proteinmpnn-server: https://fc-proteinmpnn-pahlhbttzb.cn-hangzhou-vpc.fcapp.run
+rfdiffusion-server: https://fc-rfdiffusion-cdskxiqtnk.cn-hangzhou-vpc.fcapp.run
+rfdiffusion2-server: https://fc-rfdiffusion-xaxngakbwo.cn-hangzhou-vpc.fcapp.run
+boltz-server: https://fc-boltz-kbioniejif.cn-hangzhou-vpc.fcapp.run
+dockq-server: https://fc-dockq-tzqvjemokb.cn-hangzhou-vpc.fcapp.run
