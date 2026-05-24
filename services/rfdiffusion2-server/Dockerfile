@@ -122,17 +122,6 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
 COPY services/rfdiffusion2-server/upstream /opt/rfdiffusion2-server/upstream
 COPY services/rfdiffusion2-server/weights /opt/rfdiffusion2-server/upstream/rf_diffusion/model_weights
 
-# Patch SE3Transformer NVTX profiling — conda's PyTorch 2.4.0 doesn't compile
-# the _C._nvtx binding, so `from torch.cuda.nvtx import range` raises
-# RuntimeError at call time. Replace with a try/except fallback to
-# contextlib.nullcontext (no-op context manager). Done here in the Dockerfile
-# (not vendor.sh) so the patch is guaranteed present regardless of vendor state.
-RUN sed -i 's/from torch\.cuda\.nvtx import range as nvtx_range/try:\n    from torch.cuda.nvtx import range as nvtx_range\nexcept (RuntimeError, AttributeError):\n    from contextlib import nullcontext as nvtx_range/' \
-    /opt/rfdiffusion2-server/upstream/rf2aa/SE3Transformer/se3_transformer/model/basis.py \
-    /opt/rfdiffusion2-server/upstream/rf2aa/SE3Transformer/se3_transformer/model/layers/attention.py \
-    /opt/rfdiffusion2-server/upstream/rf2aa/SE3Transformer/se3_transformer/model/layers/norm.py \
-    /opt/rfdiffusion2-server/upstream/rf2aa/SE3Transformer/se3_transformer/model/layers/convolution.py
-
 COPY services/_framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     /opt/conda/envs/rfd2/bin/pip install \

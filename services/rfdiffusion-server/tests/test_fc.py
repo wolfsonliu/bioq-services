@@ -88,10 +88,32 @@ def test_unknown_job_returns_404(client: httpx.Client) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _assert_submitted(resp_json: dict) -> None:
+    """Validate the immediate POST response has expected fields."""
+    assert "job_id" in resp_json
+    assert resp_json["status"] in ("pending", "running")
+    assert resp_json["created_at"] is not None
+    assert resp_json["input_params"] is not None
+    assert isinstance(resp_json["input_params"], dict)
+
+
 def _assert_completed(job: dict, base_url: str, client: httpx.Client) -> None:
     assert job["status"] == "completed", (
         f"failed: kind={job.get('failure_kind')} summary={job.get('error_summary')!r}"
     )
+
+    assert job["created_at"] is not None
+    assert job["started_at"] is not None
+    assert job["completed_at"] is not None
+    assert job["duration_seconds"] is not None
+    assert job["duration_seconds"] > 0
+    assert job["input_params"] is not None
+    assert isinstance(job["input_params"], dict)
+    assert job["output_count"] is not None
+    assert job["output_count"] > 0
+    assert job["output_total_bytes"] is not None
+    assert job["output_total_bytes"] > 0
+
     files = client.get(f"/api/jobs/{job['job_id']}/files").json()["files"]
     assert files, "no output files"
 
@@ -108,7 +130,12 @@ def test_unconditional_minimal_job(client: httpx.Client, base_url: str) -> None:
         },
     )
     r.raise_for_status()
-    final = poll_job(client, base_url, r.json()["job_id"])
+    submit = r.json()
+    _assert_submitted(submit)
+    assert submit["input_params"]["num_designs"] == 1
+    assert submit["input_params"]["min_length"] == 60
+
+    final = poll_job(client, base_url, submit["job_id"])
     _assert_completed(final, base_url, client)
 
 
@@ -125,7 +152,12 @@ def test_motif_minimal_job(client: httpx.Client, base_url: str) -> None:
             },
         )
     r.raise_for_status()
-    final = poll_job(client, base_url, r.json()["job_id"])
+    submit = r.json()
+    _assert_submitted(submit)
+    assert submit["input_params"]["contigs"] == "10-40/A163-181/10-40"
+    assert submit["input_params"]["num_designs"] == 1
+
+    final = poll_job(client, base_url, submit["job_id"])
     _assert_completed(final, base_url, client)
 
 
@@ -143,7 +175,12 @@ def test_binder_minimal_job(client: httpx.Client, base_url: str) -> None:
             },
         )
     r.raise_for_status()
-    final = poll_job(client, base_url, r.json()["job_id"])
+    submit = r.json()
+    _assert_submitted(submit)
+    assert submit["input_params"]["contigs"] == "A1-150/0 70-70"
+    assert submit["input_params"]["hotspots"] == "A59,A83,A91"
+
+    final = poll_job(client, base_url, submit["job_id"])
     _assert_completed(final, base_url, client)
 
 
@@ -159,7 +196,12 @@ def test_symmetry_minimal_job(client: httpx.Client, base_url: str) -> None:
         },
     )
     r.raise_for_status()
-    final = poll_job(client, base_url, r.json()["job_id"])
+    submit = r.json()
+    _assert_submitted(submit)
+    assert submit["input_params"]["symmetry"] == "c2"
+    assert submit["input_params"]["total_length"] == 80
+
+    final = poll_job(client, base_url, submit["job_id"])
     _assert_completed(final, base_url, client)
 
 
@@ -175,5 +217,10 @@ def test_custom_minimal_job(client: httpx.Client, base_url: str) -> None:
         },
     )
     r.raise_for_status()
-    final = poll_job(client, base_url, r.json()["job_id"])
+    submit = r.json()
+    _assert_submitted(submit)
+    assert submit["input_params"]["contigs"] == "60-60"
+    assert submit["input_params"]["num_designs"] == 1
+
+    final = poll_job(client, base_url, submit["job_id"])
     _assert_completed(final, base_url, client)

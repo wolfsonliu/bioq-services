@@ -119,6 +119,35 @@ cp "$SRC/paths.py" "$DST/paths.py"
 cp "$SRC/envs/cuda124_env.yml" "$DST/envs/"
 cp "$SRC/envs/requirements_cuda124.txt" "$DST/envs/"
 
+# ---------------------------------------------------------------------------
+# Patch: SE3Transformer NVTX compatibility.
+#
+# PyTorch builds without libnvToolsExt (common in conda envs) define
+# torch.cuda.nvtx.range as a pure-Python stub that only raises at CALL
+# time, not import time. The four SE3Transformer files that use it would
+# crash during the first model forward pass.
+#
+# Fix: drop a small nvtx_compat.py shim next to the SE3Transformer model
+# package (probes NVTX at import time, falls back to nullcontext), then
+# rewrite the import lines to use it.
+# ---------------------------------------------------------------------------
+SE3_MODEL="$DST/rf2aa/SE3Transformer/se3_transformer/model"
+PATCHES="$PROJECT_ROOT/services/rfdiffusion2-server/patches"
+
+# Place the shim in both model/ and model/layers/ so the relative import
+# `from .nvtx_compat import nvtx_range` resolves from either package.
+cp "$PATCHES/nvtx_compat.py" "$SE3_MODEL/nvtx_compat.py"
+cp "$PATCHES/nvtx_compat.py" "$SE3_MODEL/layers/nvtx_compat.py"
+
+for f in \
+    "$SE3_MODEL/basis.py" \
+    "$SE3_MODEL/layers/attention.py" \
+    "$SE3_MODEL/layers/norm.py" \
+    "$SE3_MODEL/layers/convolution.py"
+do
+    sed -i 's|^from torch\.cuda\.nvtx import range as nvtx_range|from .nvtx_compat import nvtx_range|' "$f"
+done
+
 echo "Vendored to $DST"
 du -sh "$DST"
 du -sh "$DST"/{rf_diffusion,rf2aa,ipd,openfold,se3_flow_matching,envs} 2>/dev/null
