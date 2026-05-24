@@ -652,8 +652,8 @@ def test_detect_outputs_probs(tmp_path):
 
     a = ProteinMPNNAdapter(settings=_Off())
     job = tmp_path / "j"
-    (job / "output" / "probs").mkdir(parents=True)
-    (job / "output" / "probs" / "x.npz").write_bytes(b"npz")
+    (job / "output" / "conditional_probs_only").mkdir(parents=True)
+    (job / "output" / "conditional_probs_only" / "x.npz").write_bytes(b"npz")
     assert a.detect_outputs(job) is True
 
 
@@ -685,7 +685,8 @@ def test_manifest_extras_has_tool_outputs(client):
     extras = body["service_specific"]
     assert "design" in extras["tool_outputs"]
     assert "score" in extras["tool_outputs"]
-    assert "probs" in extras["tool_outputs"]
+    assert "probs_conditional" in extras["tool_outputs"]
+    assert "probs_unconditional" in extras["tool_outputs"]
 
 
 def test_manifest_extras_has_config_tips(client):

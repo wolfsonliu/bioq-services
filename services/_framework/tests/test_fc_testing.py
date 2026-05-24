@@ -101,3 +101,54 @@ def test_poll_job_times_out() -> None:
 
     with pytest.raises(TimeoutError, match="did not finish"):
         poll_job(FakeClient(), "http://x", "abc", timeout_s=0, interval_s=0)
+
+
+def test_poll_job_retries_transient_errors() -> None:
+    """Transient network errors are retried and don't break polling."""
+
+    class FakeResp:
+        def __init__(self, payload: dict) -> None:
+            self._p = payload
+
+        def raise_for_status(self) -> None:
+            pass
+
+        def json(self) -> dict:
+            return self._p
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def get(self, _url: str) -> FakeResp:
+            self.calls += 1
+            if self.calls == 2:
+                raise ConnectionError("No route to host")
+            if self.calls >= 3:
+                return FakeResp({"status": "completed", "job_id": "abc"})
+            return FakeResp({"status": "running"})
+
+    client = FakeClient()
+    out = poll_job(client, "http://x", "abc", timeout_s=10, interval_s=0)
+    assert out == {"status": "completed", "job_id": "abc"}
+    assert client.calls == 3
+
+
+def test_poll_job_raises_after_max_transient_errors() -> None:
+    """Consecutive transient errors beyond limit are re-raised."""
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def get(self, _url: str):
+            self.calls += 1
+            raise ConnectionError("No route to host")
+
+    client = FakeClient()
+    with pytest.raises(ConnectionError, match="No route to host"):
+        poll_job(
+            client, "http://x", "abc",
+            timeout_s=10, interval_s=0, max_transient_errors=3,
+        )
+    assert client.calls == 3

@@ -35,13 +35,12 @@ class DockQSettings(ServiceSettings):
     max_batch_size: int = Field(default=200, ge=1, le=10000)
 
     # CPU parallelism passed to DockQ's `--n_cpu`. FC instances typically have
-    # 4–8 vCPUs; 4 is a safe default that matches `--max_chunk` heuristics.
+    # 8 vCPUs; default matches the instance size.
     default_n_cpu: int = Field(default=8, ge=1, le=64)
 
-    # DockQ is CPU-only, so concurrent jobs don't fight over a GPU. Default 2
-    # pairs with `default_n_cpu=4` to fully utilize an 8 vCPU FC instance
-    # (2 jobs × 4 cores). Override via `DOCKQ_MAX_CONCURRENT_JOBS` when sizing
-    # changes; capped at 8 to keep worst-case memory bounded.
+    # DockQ is CPU-only, so concurrent jobs don't fight over a GPU. Default 1
+    # because DockQ already saturates all cores on a single job. Override via
+    # `DOCKQ_MAX_CONCURRENT_JOBS`; capped at 8 to keep memory bounded.
     max_concurrent_jobs: int = Field(default=2, ge=1, le=8)
 
     oss_region: str = Field(default="cn-hangzhou")

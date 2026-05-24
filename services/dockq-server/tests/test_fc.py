@@ -77,15 +77,36 @@ def test_unknown_job_returns_404(client: httpx.Client) -> None:
 
 # ----- Inference: minimal job per endpoint -----
 
+def _assert_submitted(resp_json: dict, *, expect_input_params: bool = True) -> None:
+    """Validate the immediate POST response has expected fields."""
+    assert "job_id" in resp_json
+    assert resp_json["status"] in ("pending", "running")
+    assert resp_json["created_at"] is not None
+    if expect_input_params:
+        assert resp_json["input_params"] is not None
+        assert isinstance(resp_json["input_params"], dict)
+
+
 def _assert_completed(
-    client: httpx.Client, base_url: str, job_id: str, *, timeout_s: int = 1800,
+    client: httpx.Client, base_url: str, job_id: str, *, timeout_s: int = 3600,
 ) -> dict:
-    # DockQ on FC's small instances can take 5–20 minutes for a single (model,
-    # native) pair (vs. ~3 s locally) because the inner per-interface scoring
-    # is CPU-bound and serial. Default 1800 s matches the framework's default
-    # and other sibling tests.
+    # DockQ on FC's 8 vCPU instances takes 30–40 minutes for a single (model,
+    # native) pair (vs. ~3 s locally) because FC CPU instances are severely
+    # throttled. Budget 3600 s (1 h) to account for cold-start + scoring.
     final = poll_job(client, base_url, job_id, timeout_s=timeout_s)
     assert final["status"] == "completed", final
+
+    assert final["created_at"] is not None
+    assert final["started_at"] is not None
+    assert final["completed_at"] is not None
+    assert final["duration_seconds"] is not None
+    assert final["duration_seconds"] > 0
+    assert final["input_params"] is not None
+    assert isinstance(final["input_params"], dict)
+    assert final["output_count"] is not None
+    assert final["output_count"] > 0
+    assert final["output_total_bytes"] is not None
+    assert final["output_total_bytes"] > 0
     return final
 
 
@@ -100,7 +121,11 @@ def test_score_minimal_job(client: httpx.Client, base_url: str) -> None:
             data={"name": "fc_smoke"},
         )
     r.raise_for_status()
-    final = _assert_completed(client, base_url, r.json()["job_id"])
+    submit = r.json()
+    _assert_submitted(submit)
+    assert submit["input_params"]["name"] == "fc_smoke"
+
+    final = _assert_completed(client, base_url, submit["job_id"])
 
     files = client.get(f"/api/jobs/{final['job_id']}/files").json()["files"]
     assert any(f.endswith("fc_smoke.json") for f in files), files
@@ -120,9 +145,14 @@ def test_score_batch_minimal_job(client: httpx.Client, base_url: str) -> None:
             ],
         )
     r.raise_for_status()
+    submit = r.json()
+    _assert_submitted(submit)
+    assert submit["input_params"]["name"] == "fc_batch"
+    assert submit["input_params"]["num_models"] == 2
+
     # Batch with 2 models scores them sequentially inside one subprocess, so
     # give it 2× the per-pair budget.
-    final = _assert_completed(client, base_url, r.json()["job_id"], timeout_s=3600)
+    final = _assert_completed(client, base_url, submit["job_id"], timeout_s=7200)
 
     files = set(client.get(f"/api/jobs/{final['job_id']}/files").json()["files"])
     assert "scores.csv" in files, files

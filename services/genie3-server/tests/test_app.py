@@ -195,8 +195,8 @@ def test_openapi_lists_all_four_endpoints() -> None:
     assert "/api/generate/motif" in paths
     assert "/api/generate/binder" in paths
     assert "/api/generate" in paths
-    # Pydantic request models registered.
+    # model_form_depends wraps request models as Body_<endpoint>_* in OpenAPI.
     models = set(schema["components"]["schemas"].keys())
-    assert "UnconditionalRequest" in models
-    assert "MotifRequest" in models
-    assert "BinderRequest" in models
+    assert any("unconditional" in m.lower() for m in models)
+    assert any("motif" in m.lower() for m in models)
+    assert any("binder" in m.lower() for m in models)

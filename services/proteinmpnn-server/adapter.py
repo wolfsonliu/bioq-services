@@ -27,12 +27,18 @@ class ProteinMPNNAdapter(JobAdapter):
         """Recognize any of the three modes' artifacts:
           - design  : output/seqs/*.fa
           - score   : output/score_only/*.npz
-          - probs   : output/probs/*.npz
+          - probs   : output/conditional_probs_only/*.npz
+                      output/unconditional_probs_only/*.npz
         """
         out = self.output_dir(job_dir)
         if not out.is_dir():
             return False
-        for pattern in ("seqs/*.fa", "score_only/*.npz", "probs/*.npz"):
+        for pattern in (
+            "seqs/*.fa",
+            "score_only/*.npz",
+            "conditional_probs_only/*.npz",
+            "unconditional_probs_only/*.npz",
+        ):
             for f in out.glob(pattern):
                 try:
                     if f.stat().st_size > 0:
@@ -49,7 +55,8 @@ class ProteinMPNNAdapter(JobAdapter):
             "tool_outputs": {
                 "design": "output/seqs/<name>.fa",
                 "score": "output/score_only/<name>_pdb.npz",
-                "probs": "output/probs/<name>.npz",
+                "probs_conditional": "output/conditional_probs_only/<name>.npz",
+                "probs_unconditional": "output/unconditional_probs_only/<name>.npz",
                 "note": (
                     "Use GET /api/jobs/{id}/files to enumerate; download a single "
                     "file via /api/jobs/{id}/file/{relpath}."

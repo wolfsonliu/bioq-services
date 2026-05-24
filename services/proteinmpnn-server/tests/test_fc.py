@@ -76,10 +76,32 @@ def test_unknown_job_returns_404(client: httpx.Client) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _assert_submitted(resp_json: dict) -> None:
+    """Validate the immediate POST response has expected fields."""
+    assert "job_id" in resp_json
+    assert resp_json["status"] in ("pending", "running")
+    assert resp_json["created_at"] is not None
+    assert resp_json["input_params"] is not None
+    assert isinstance(resp_json["input_params"], dict)
+
+
 def _assert_completed(job: dict, base_url: str, client: httpx.Client) -> None:
     assert job["status"] == "completed", (
         f"failed: kind={job.get('failure_kind')} summary={job.get('error_summary')!r}"
     )
+
+    assert job["created_at"] is not None
+    assert job["started_at"] is not None
+    assert job["completed_at"] is not None
+    assert job["duration_seconds"] is not None
+    assert job["duration_seconds"] > 0
+    assert job["input_params"] is not None
+    assert isinstance(job["input_params"], dict)
+    assert job["output_count"] is not None
+    assert job["output_count"] > 0
+    assert job["output_total_bytes"] is not None
+    assert job["output_total_bytes"] > 0
+
     files = client.get(f"/api/jobs/{job['job_id']}/files").json()["files"]
     assert files, "no output files"
 
@@ -97,7 +119,12 @@ def test_design_minimal_job(client: httpx.Client, base_url: str) -> None:
             },
         )
     r.raise_for_status()
-    final = poll_job(client, base_url, r.json()["job_id"])
+    submit = r.json()
+    _assert_submitted(submit)
+    assert submit["input_params"]["name"] == "fc_smoke_design"
+    assert submit["input_params"]["num_seq_per_target"] == 2
+
+    final = poll_job(client, base_url, submit["job_id"])
     _assert_completed(final, base_url, client)
 
 
@@ -110,7 +137,11 @@ def test_score_minimal_job(client: httpx.Client, base_url: str) -> None:
             data={"name": "fc_smoke_score", "num_seq_per_target": "2"},
         )
     r.raise_for_status()
-    final = poll_job(client, base_url, r.json()["job_id"])
+    submit = r.json()
+    _assert_submitted(submit)
+    assert submit["input_params"]["name"] == "fc_smoke_score"
+
+    final = poll_job(client, base_url, submit["job_id"])
     _assert_completed(final, base_url, client)
 
 
@@ -123,5 +154,9 @@ def test_probs_minimal_job(client: httpx.Client, base_url: str) -> None:
             data={"name": "fc_smoke_probs"},
         )
     r.raise_for_status()
-    final = poll_job(client, base_url, r.json()["job_id"])
+    submit = r.json()
+    _assert_submitted(submit)
+    assert submit["input_params"]["name"] == "fc_smoke_probs"
+
+    final = poll_job(client, base_url, submit["job_id"])
     _assert_completed(final, base_url, client)

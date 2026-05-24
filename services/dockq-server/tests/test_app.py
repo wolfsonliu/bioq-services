@@ -85,7 +85,7 @@ def test_settings_defaults():
     assert s.jobs_base_dir == Path("/data/dockq_jobs")
     assert s.root == Path("/opt/dockq")
     assert s.binary == "DockQ"
-    assert s.default_n_cpu == 4
+    assert s.default_n_cpu == 8
     assert s.max_batch_size == 200
     assert s.oss_region == "cn-hangzhou"
 
@@ -93,10 +93,10 @@ def test_settings_defaults():
 def test_settings_env_override(monkeypatch):
     from server.settings import DockQSettings
     monkeypatch.setenv("DOCKQ_BINARY", "/custom/DockQ")
-    monkeypatch.setenv("DOCKQ_DEFAULT_N_CPU", "8")
+    monkeypatch.setenv("DOCKQ_DEFAULT_N_CPU", "16")
     s = DockQSettings()
     assert s.binary == "/custom/DockQ"
-    assert s.default_n_cpu == 8
+    assert s.default_n_cpu == 16
 
 
 # ----- Adapter -----
@@ -206,7 +206,7 @@ def test_score_argv_basic(tmp_path):
     assert argv[argv.index("--json") + 1].endswith("run.json")
     assert "--short" in argv
     assert "--n_cpu" in argv
-    assert argv[argv.index("--n_cpu") + 1] == "4"
+    assert argv[argv.index("--n_cpu") + 1] == "8"
 
 
 def test_score_argv_with_flags(tmp_path):
@@ -373,6 +373,9 @@ def test_score_endpoint_returns_job(client):
     assert resp.status_code == 200
     body = resp.json()
     assert "job_id" in body
+    assert body["created_at"] is not None
+    assert body["input_params"] is not None
+    assert body["input_params"]["name"] == "demo"
 
 
 def test_score_batch_endpoint_requires_models(client):
@@ -403,3 +406,7 @@ def test_score_batch_endpoint_returns_job(client):
     assert resp.status_code == 200
     body = resp.json()
     assert "job_id" in body
+    assert body["created_at"] is not None
+    assert body["input_params"] is not None
+    assert body["input_params"]["sort_by"] == "DockQ"
+    assert body["input_params"]["num_models"] == 2
