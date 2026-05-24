@@ -30,12 +30,14 @@ def adapter(tmp_path: Path) -> _Adapter:
 
 def test_create_writes_sidecar(tmp_path: Path) -> None:
     store = JobStore(persist_dir=tmp_path)
-    store.create("abc")
+    store.create("abc", input_params={"model": "aa", "steps": 25})
     sidecar = tmp_path / "abc" / SIDECAR_NAME
     assert sidecar.exists()
     data = json.loads(sidecar.read_text())
     assert data["job_id"] == "abc"
     assert data["status"] == "pending"
+    assert data["created_at"] is not None
+    assert data["input_params"] == {"model": "aa", "steps": 25}
 
 
 def test_update_rewrites_sidecar(tmp_path: Path) -> None:
@@ -80,9 +82,12 @@ def test_reload_restores_from_sidecar(tmp_path: Path, adapter: _Adapter) -> None
 def test_reload_running_downgrades_to_interrupted(
     tmp_path: Path, adapter: _Adapter
 ) -> None:
+    from bioagent_service.models import utcnow
+
     pre = JobStore(persist_dir=tmp_path)
     pre.create("zombie")
-    pre.update("zombie", status=JobStatus.RUNNING, message="mid-flight")
+    started = utcnow()
+    pre.update("zombie", status=JobStatus.RUNNING, message="mid-flight", started_at=started)
 
     fresh = JobStore(persist_dir=tmp_path)
     reload_from_disk(fresh, adapter, tmp_path)
@@ -91,6 +96,9 @@ def test_reload_running_downgrades_to_interrupted(
     assert restored.status == JobStatus.FAILED
     assert restored.failure_kind == FailureKind.INTERRUPTED
     assert "Interrupted" in (restored.message or "")
+    assert restored.completed_at is not None
+    assert restored.duration_seconds is not None
+    assert restored.duration_seconds >= 0
 
     # The corrected status must be durable across the *next* restart too.
     sidecar = json.loads((tmp_path / "zombie" / SIDECAR_NAME).read_text())

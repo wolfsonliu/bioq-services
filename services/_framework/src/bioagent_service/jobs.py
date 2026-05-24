@@ -27,7 +27,7 @@ import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from bioagent_service.models import FailureKind, JobInfo, JobStatus
+from bioagent_service.models import FailureKind, JobInfo, JobStatus, utcnow
 
 if TYPE_CHECKING:
     from bioagent_service.adapter import JobAdapter
@@ -127,10 +127,20 @@ class JobStore:
 
     # ---- Public API ----
 
-    def create(self, job_id: str | None = None) -> JobInfo:
+    def create(
+        self,
+        job_id: str | None = None,
+        *,
+        input_params: dict[str, Any] | None = None,
+    ) -> JobInfo:
         if job_id is None:
             job_id = new_job_id()
-        info = JobInfo(job_id=job_id, status=JobStatus.PENDING)
+        info = JobInfo(
+            job_id=job_id,
+            status=JobStatus.PENDING,
+            created_at=utcnow(),
+            input_params=input_params,
+        )
         with self._lock:
             if job_id in self._jobs:
                 raise ValueError(f"job {job_id!r} already exists")
@@ -341,10 +351,16 @@ def reload_from_disk(
                 )
                 continue
             if job.status == JobStatus.RUNNING:
+                now = utcnow()
                 inserted = job.model_copy(update={
                     "status": JobStatus.FAILED,
                     "message": "Interrupted by container restart",
                     "failure_kind": FailureKind.INTERRUPTED,
+                    "completed_at": now,
+                    "duration_seconds": (
+                        (now - job.started_at).total_seconds()
+                        if job.started_at else None
+                    ),
                 })
                 rewrite_sidecar = True
             else:

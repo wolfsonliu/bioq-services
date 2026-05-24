@@ -11,11 +11,25 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from bioagent_service.models import FailureKind, JobStatus
+from bioagent_service.models import FailureKind, JobStatus, utcnow
 
 if TYPE_CHECKING:
     from bioagent_service.adapter import JobAdapter
     from bioagent_service.jobs import JobStore
+
+
+def _output_summary(output_dir: Path) -> tuple[int, int]:
+    """Walk *output_dir* and return ``(file_count, total_bytes)``."""
+    count = total = 0
+    if output_dir.exists():
+        for f in output_dir.rglob("*"):
+            if f.is_file():
+                count += 1
+                try:
+                    total += f.stat().st_size
+                except OSError:
+                    pass
+    return count, total
 
 
 # Matches the last meaningful exception line in a Python traceback, e.g.:
@@ -90,13 +104,22 @@ def finalize_job(
     if job is None:
         return  # caller already cleaned up
 
+    now = utcnow()
+    duration = (
+        (now - job.started_at).total_seconds() if job.started_at else None
+    )
     job_dir = adapter.job_dir(job_id)
+    out_count, out_bytes = _output_summary(adapter.output_dir(job_dir))
 
     if rc == 0 and adapter.detect_outputs(job_dir):
         store.update(
             job_id,
             status=JobStatus.COMPLETED,
             message=f"{label} completed",
+            completed_at=now,
+            duration_seconds=duration,
+            output_count=out_count or None,
+            output_total_bytes=out_bytes or None,
             error_summary=None,
             error_tail=None,
             failure_kind=None,
@@ -117,6 +140,10 @@ def finalize_job(
         job_id,
         status=JobStatus.FAILED,
         message=f"{base_msg}: {summary}" if summary else base_msg,
+        completed_at=now,
+        duration_seconds=duration,
+        output_count=out_count or None,
+        output_total_bytes=out_bytes or None,
         error_summary=summary,
         error_tail=tail,
         failure_kind=kind,

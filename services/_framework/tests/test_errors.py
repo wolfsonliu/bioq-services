@@ -69,6 +69,8 @@ def test_finalize_completed(tmp_path: Path) -> None:
     assert job.status == JobStatus.COMPLETED
     assert job.failure_kind is None
     assert job.error_summary is None
+    assert job.output_count == 1
+    assert job.output_total_bytes is not None and job.output_total_bytes > 0
 
 
 def test_finalize_subprocess_error_attaches_summary(tmp_path: Path) -> None:
@@ -98,6 +100,8 @@ def test_finalize_no_outputs_marks_distinct_failure_kind(tmp_path: Path) -> None
     assert job is not None
     assert job.status == JobStatus.FAILED
     assert job.failure_kind == FailureKind.NO_OUTPUTS
+    assert job.output_count is None
+    assert job.output_total_bytes is None
 
 
 def test_finalize_skips_when_job_missing(tmp_path: Path) -> None:

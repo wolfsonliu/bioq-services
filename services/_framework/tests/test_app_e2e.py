@@ -66,6 +66,7 @@ def client(tmp_path: Path) -> TestClient:
         return app.state.runner.submit(
             build_argv=lambda _job_id, job_dir: _echo_argv(req, job_dir),
             label="echo",
+            input_params=req.model_dump(mode="json"),
         )
 
     return TestClient(app)
@@ -112,6 +113,14 @@ def test_full_success_lifecycle(client: TestClient) -> None:
     final = _wait_for_terminal(client, job_id)
     assert final["status"] == JobStatus.COMPLETED.value
     assert final["failure_kind"] is None
+    assert final["created_at"] is not None
+    assert final["started_at"] is not None
+    assert final["completed_at"] is not None
+    assert final["duration_seconds"] is not None
+    assert final["duration_seconds"] >= 0
+    assert final["input_params"] == {"message": "hello", "fail": False, "produce_output": True}
+    assert final["output_count"] == 1
+    assert final["output_total_bytes"] is not None and final["output_total_bytes"] > 0
 
     files = client.get(f"/api/jobs/{job_id}/files").json()
     assert files["files"] == ["msg.txt"]
@@ -138,6 +147,11 @@ def test_subprocess_failure_attaches_summary(client: TestClient) -> None:
     assert final["error_summary"] is not None
     assert "ValueError" in final["error_summary"]
     assert final["error_tail"] is not None
+    assert final["created_at"] is not None
+    assert final["started_at"] is not None
+    assert final["completed_at"] is not None
+    assert final["duration_seconds"] is not None
+    assert final["input_params"] == {"message": "oops", "fail": True, "produce_output": True}
 
 
 def test_zero_rc_but_no_outputs_is_distinct_failure(client: TestClient) -> None:

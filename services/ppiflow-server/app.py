@@ -71,7 +71,10 @@ def sample_binder(
         target_pdb = resolve_input(target, target_uri, job_dir / "input" / "target.pdb", settings)
         return binder_argv(params, target_pdb, job_dir, settings)
 
-    return app.state.runner.submit(build_argv=_build, label="binder")
+    return app.state.runner.submit(
+        build_argv=_build, label="binder",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 @app.post("/api/sample/antibody", response_model=JobInfo)
@@ -89,7 +92,10 @@ def sample_antibody(
         framework_pdb = resolve_input(framework, framework_uri, job_dir / "input" / "framework.pdb", settings)
         return antibody_argv(params, antigen_pdb, framework_pdb, job_dir, settings)
 
-    return app.state.runner.submit(build_argv=_build, label="antibody")
+    return app.state.runner.submit(
+        build_argv=_build, label="antibody",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 @app.post("/api/sample/nanobody", response_model=JobInfo)
@@ -107,7 +113,10 @@ def sample_nanobody(
         framework_pdb = resolve_input(framework, framework_uri, job_dir / "input" / "framework.pdb", settings)
         return nanobody_argv(params, antigen_pdb, framework_pdb, job_dir, settings)
 
-    return app.state.runner.submit(build_argv=_build, label="nanobody")
+    return app.state.runner.submit(
+        build_argv=_build, label="nanobody",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 @app.post("/api/sample/monomer", response_model=JobInfo)
@@ -119,7 +128,10 @@ def sample_monomer(
     def _build(_job_id: str, job_dir: Path) -> list[str]:
         return monomer_argv(params, job_dir, settings)
 
-    return app.state.runner.submit(build_argv=_build, label="monomer")
+    return app.state.runner.submit(
+        build_argv=_build, label="monomer",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 @app.post("/api/sample/scaffolding", response_model=JobInfo)
@@ -136,7 +148,10 @@ def sample_scaffolding(
         csv_path = resolve_input(motif_csv, motif_csv_uri, job_dir / "input" / "motif_metadata.csv", settings)
         return scaffolding_argv(params, csv_path, job_dir, settings)
 
-    return app.state.runner.submit(build_argv=_build, label="scaffolding")
+    return app.state.runner.submit(
+        build_argv=_build, label="scaffolding",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 # Mount MCP server — must be AFTER all POST routes are registered so the

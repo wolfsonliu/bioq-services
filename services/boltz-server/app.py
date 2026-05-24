@@ -170,7 +170,10 @@ def post_predict_structure(
             params, job_dir=job_dir, yaml_path=yaml_path, settings=settings
         )
 
-    return app.state.runner.submit(build_argv=_build, label="predict_structure")
+    return app.state.runner.submit(
+        build_argv=_build, label="predict_structure",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 @app.post("/api/predict_affinity", response_model=JobInfo)
@@ -209,7 +212,10 @@ def post_predict_affinity(
             params, job_dir=job_dir, yaml_path=yaml_path, settings=settings
         )
 
-    return app.state.runner.submit(build_argv=_build, label="predict_affinity")
+    return app.state.runner.submit(
+        build_argv=_build, label="predict_affinity",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 # Mount MCP server — must be AFTER all POST routes are registered so the

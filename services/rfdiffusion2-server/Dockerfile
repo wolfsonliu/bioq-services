@@ -94,12 +94,17 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     && rm -rf /tmp/rfd2-env
 
 # ---------------------------------------------------------------------------
-# Two pip extras from upstream's apptainer .spec.
+# Pip extras from upstream's apptainer .spec.
+#
+# NOTE: `baker-laboratory/ipd` is NOT pip-installed here. Its github HEAD has
+# moved past the RFdiffusion2 cut and now imports `evn` at module load, which
+# isn't in the conda env. We instead vendor opensource/RFdiffusion2/ipd/ into
+# upstream/ipd/ (see scripts/vendor.sh) so the contemporary copy lives on
+# PYTHONPATH alongside rf_diffusion/.
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     /opt/conda/envs/rfd2/bin/pip install \
-        git+https://github.com/RalphMao/PyTimer.git \
-        git+https://github.com/baker-laboratory/ipd.git
+        git+https://github.com/RalphMao/PyTimer.git
 
 # ---------------------------------------------------------------------------
 # Pull in the vendored source + weights + framework. Strip dead weight from
@@ -116,6 +121,18 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
 # ---------------------------------------------------------------------------
 COPY services/rfdiffusion2-server/upstream /opt/rfdiffusion2-server/upstream
 COPY services/rfdiffusion2-server/weights /opt/rfdiffusion2-server/upstream/rf_diffusion/model_weights
+
+# Patch SE3Transformer NVTX profiling — conda's PyTorch 2.4.0 doesn't compile
+# the _C._nvtx binding, so `from torch.cuda.nvtx import range` raises
+# RuntimeError at call time. Replace with a try/except fallback to
+# contextlib.nullcontext (no-op context manager). Done here in the Dockerfile
+# (not vendor.sh) so the patch is guaranteed present regardless of vendor state.
+RUN sed -i 's/from torch\.cuda\.nvtx import range as nvtx_range/try:\n    from torch.cuda.nvtx import range as nvtx_range\nexcept (RuntimeError, AttributeError):\n    from contextlib import nullcontext as nvtx_range/' \
+    /opt/rfdiffusion2-server/upstream/rf2aa/SE3Transformer/se3_transformer/model/basis.py \
+    /opt/rfdiffusion2-server/upstream/rf2aa/SE3Transformer/se3_transformer/model/layers/attention.py \
+    /opt/rfdiffusion2-server/upstream/rf2aa/SE3Transformer/se3_transformer/model/layers/norm.py \
+    /opt/rfdiffusion2-server/upstream/rf2aa/SE3Transformer/se3_transformer/model/layers/convolution.py
+
 COPY services/_framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     /opt/conda/envs/rfd2/bin/pip install \
@@ -148,6 +165,8 @@ ENV CUDA_HOME=/usr/local/cuda
 ENV CUDA_PATH=/usr/local/cuda
 ENV MAMBA_ROOT_PREFIX=/opt/conda
 ENV PATH=/opt/conda/envs/rfd2/bin:$PATH
+# Checkpoint configs embed ${oc.env:USER} for wandb_dir; resolve needs this set.
+ENV USER=root
 
 # Runtime apt is minimal:
 #   build-essential   — REQUIRED. ipd.dev.cuda.cudabuild does runtime JIT compile

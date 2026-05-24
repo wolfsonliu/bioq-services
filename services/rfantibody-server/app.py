@@ -62,7 +62,10 @@ def run_rfdiffusion(
         framework_path = save_upload(framework, job_dir / "input" / "framework.pdb")
         return rfdiffusion_argv(params, target_path, framework_path, job_dir, settings)
 
-    return app.state.runner.submit(build_argv=_build, label="rfdiffusion")
+    return app.state.runner.submit(
+        build_argv=_build, label="rfdiffusion",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 @app.post("/api/proteinmpnn", response_model=JobInfo)
@@ -85,7 +88,10 @@ def run_proteinmpnn(
         qv_path = resolve_input(input_quiver, input_uri, job_dir / "input" / "input.qv", settings)
         return proteinmpnn_argv(params, qv_path, job_dir, settings)
 
-    return app.state.runner.submit(build_argv=_build, label="proteinmpnn")
+    return app.state.runner.submit(
+        build_argv=_build, label="proteinmpnn",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 @app.post("/api/rf2", response_model=JobInfo)
@@ -102,7 +108,10 @@ def run_rf2(
         qv_path = resolve_input(input_quiver, input_uri, job_dir / "input" / "input.qv", settings)
         return rf2_argv(params, qv_path, job_dir, settings)
 
-    return app.state.runner.submit(build_argv=_build, label="rf2")
+    return app.state.runner.submit(
+        build_argv=_build, label="rf2",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 # Mount MCP server — must be AFTER all POST routes are registered so the

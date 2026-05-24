@@ -7,10 +7,16 @@ between the framework and *every* service.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
+
+
+def utcnow() -> datetime:
+    """Timezone-aware UTC timestamp for job lifecycle events."""
+    return datetime.now(timezone.utc)
 
 
 class JobStatus(str, Enum):
@@ -45,6 +51,13 @@ class JobInfo(BaseModel):
     status: JobStatus
     message: Optional[str] = None
     progress: Optional[str] = None
+    created_at: Optional[datetime] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    duration_seconds: Optional[float] = None
+    input_params: Optional[dict[str, Any]] = None
+    output_count: Optional[int] = None
+    output_total_bytes: Optional[int] = None
     # Populated on failure: one-line exception summary extracted from the subprocess log.
     error_summary: Optional[str] = None
     # Populated on failure: trailing slice of the subprocess log (~4 KB) so clients can

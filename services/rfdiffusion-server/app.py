@@ -69,7 +69,10 @@ def generate_unconditional(
     def _build(_job_id: str, job_dir: Path) -> list[str]:
         return unconditional_argv(params, job_dir, settings)
 
-    return app.state.runner.submit(build_argv=_build, label="unconditional")
+    return app.state.runner.submit(
+        build_argv=_build, label="unconditional",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 @app.post("/api/generate/motif", response_model=JobInfo)
@@ -92,7 +95,10 @@ def generate_motif(
         pdb_path = resolve_input(input_pdb, input_uri, job_dir / "input" / "motif.pdb", settings)
         return motif_argv(params, pdb_path, job_dir, settings)
 
-    return app.state.runner.submit(build_argv=_build, label="motif")
+    return app.state.runner.submit(
+        build_argv=_build, label="motif",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 @app.post("/api/generate/binder", response_model=JobInfo)
@@ -109,7 +115,10 @@ def generate_binder(
         pdb_path = resolve_input(input_pdb, input_uri, job_dir / "input" / "target.pdb", settings)
         return binder_argv(params, pdb_path, job_dir, settings)
 
-    return app.state.runner.submit(build_argv=_build, label="binder")
+    return app.state.runner.submit(
+        build_argv=_build, label="binder",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 @app.post("/api/generate/symmetry", response_model=JobInfo)
@@ -121,7 +130,10 @@ def generate_symmetry(
     def _build(_job_id: str, job_dir: Path) -> list[str]:
         return symmetry_argv(params, job_dir, settings)
 
-    return app.state.runner.submit(build_argv=_build, label="symmetry")
+    return app.state.runner.submit(
+        build_argv=_build, label="symmetry",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 @app.post("/api/generate", response_model=JobInfo)
@@ -141,7 +153,10 @@ def generate_custom(
             pdb_path = resolve_input(input_pdb, input_uri, job_dir / "input" / "input.pdb", settings)
         return custom_argv(params, pdb_path, job_dir, settings)
 
-    return app.state.runner.submit(build_argv=_build, label="custom")
+    return app.state.runner.submit(
+        build_argv=_build, label="custom",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 # Mount MCP server — must be AFTER all POST routes are registered so the

@@ -14,12 +14,12 @@ import os
 import subprocess
 from concurrent.futures import Executor
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from bioagent_service.adapter import JobAdapter
 from bioagent_service.errors import finalize_job
 from bioagent_service.jobs import JobStore, cleanup_job, evict_finished_until_under_limit
-from bioagent_service.models import JobInfo, JobStatus
+from bioagent_service.models import JobInfo, JobStatus, utcnow
 from bioagent_service.settings import ServiceSettings
 
 logger = logging.getLogger(__name__)
@@ -102,6 +102,7 @@ class JobRunner:
         label: str | None = None,
         env: dict[str, str] | None = None,
         cwd: Path | None = None,
+        input_params: dict[str, Any] | None = None,
     ) -> JobInfo:
         """Create a job, build the argv via the callback, schedule the subprocess.
 
@@ -110,6 +111,7 @@ class JobRunner:
         `label` is used in status messages — typically the endpoint name
         (`"rfdiffusion"`, `"proteinmpnn"`). Defaults to `adapter.name`.
         `env` / `cwd` override the adapter defaults for this one job.
+        `input_params` is an opaque dict echoed back in JobInfo for debugging.
         """
         adapter = self.adapter
         # Best-effort disk hygiene before scheduling new work.
@@ -117,7 +119,7 @@ class JobRunner:
             self.store, self.settings.jobs_base_dir, self.settings.disk_limit_mb
         )
 
-        job = self.store.create()
+        job = self.store.create(input_params=input_params)
         job_id = job.job_id
         job_dir = adapter.job_dir(job_id)
         job_dir.mkdir(parents=True, exist_ok=True)
@@ -143,7 +145,10 @@ class JobRunner:
 
         def _run() -> None:
             self.store.update(
-                job_id, status=JobStatus.RUNNING, message=f"{resolved_label} running"
+                job_id,
+                status=JobStatus.RUNNING,
+                message=f"{resolved_label} running",
+                started_at=utcnow(),
             )
             rc = SubprocessRunner.run(
                 argv,

@@ -61,7 +61,10 @@ def post_design(
         )
         return design_argv(params, job_dir=job_dir, paths=paths, settings=settings)
 
-    return app.state.runner.submit(build_argv=_build, label="design")
+    return app.state.runner.submit(
+        build_argv=_build, label="design",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 @app.post("/api/score", response_model=JobInfo)
@@ -88,7 +91,10 @@ def post_score(
         )
         return score_argv(params, job_dir=job_dir, paths=paths, settings=settings)
 
-    return app.state.runner.submit(build_argv=_build, label="score")
+    return app.state.runner.submit(
+        build_argv=_build, label="score",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 @app.post("/api/probs", response_model=JobInfo)
@@ -115,7 +121,10 @@ def post_probs(
         )
         return probs_argv(params, job_dir=job_dir, paths=paths, settings=settings)
 
-    return app.state.runner.submit(build_argv=_build, label="probs")
+    return app.state.runner.submit(
+        build_argv=_build, label="probs",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 # Mount MCP server — must be AFTER all POST routes are registered so the

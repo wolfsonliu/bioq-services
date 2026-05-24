@@ -5,6 +5,20 @@
 # Excludes test/dev/data files per the vendor design doc; keeps all *.py +
 # config/ + benchmark/input/ + envs/cuda124_env.yml + requirements_cuda124.txt.
 # Weights (model_weights/) are NOT vendored here — use fetch_weights.sh.
+#
+# RFdiffusion2 is not a pip package — upstream's install pattern is
+# `export PYTHONPATH=/path/to/RFdiffusion2` so every top-level dir is
+# importable as a sibling. rf_diffusion/__init__.py imports rf2aa at module
+# load, rf2aa pulls from ipd at module load, and individual modules pull
+# from openfold/ and se3_flow_matching/ too. Four siblings (rf2aa, ipd,
+# openfold, se3_flow_matching) must be vendored alongside rf_diffusion/.
+#
+# Why vendor `ipd` instead of `pip install` from github: baker-laboratory/ipd
+# HEAD has progressed past the version RFdiffusion2 was built against and
+# now imports `evn` at module load, which isn't in the conda env. Vendoring
+# the contemporary copy from opensource/RFdiffusion2/ipd/ avoids the
+# version skew. (`lib/` and `fused_mpnn/` are not imported by rf_diffusion
+# at runtime, so they're skipped.)
 set -euo pipefail
 
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"
@@ -19,21 +33,87 @@ fi
 
 mkdir -p "$DST/envs"
 
-# Source tree (excluding test/dev/data + model_weights).
+# Truly universal junk — safe to drop from every sibling we vendor.
+#
+# IMPORTANT: rsync exclude patterns without a leading slash match at ANY
+# depth. So a pattern like 'dev/' would strip *both* an upstream top-level
+# `dev/` *and* nested packages named `dev` (e.g. ipd/dev/, rf_diffusion/dev/).
+# The latter two are runtime-required, so 'dev/' is NOT in this list. Anchor
+# RFdiffusion2-specific top-level junk to the rf_diffusion rsync below.
+COMMON_EXCLUDES=(
+    --exclude='__pycache__'
+    --exclude='*.pyc'
+    --exclude='*.pkl'
+    --exclude='*.pse'
+    --exclude='tests/'
+    --exclude='test_pickles/'
+    --exclude='media/'
+    --exclude='archived/'
+)
+
+# rf_diffusion/ — drop RFdiffusion2-specific top-level junk (anchored with
+# leading slash so we don't accidentally strip rf_diffusion/dev/, which has
+# `idealize_backbone` and friends that run_inference.py imports) plus the
+# bundled weights (separate `weights/` flow).
 rsync -a --delete \
-    --exclude='test_data/' \
-    --exclude='goldens/' \
-    --exclude='dev/' \
-    --exclude='exec/' \
-    --exclude='datahub_pipelines/' \
-    --exclude='benchmark/rotamer_library/' \
-    --exclude='model_weights/' \
-    --exclude='third_party_model_weights/' \
-    --exclude='*.pkl' \
-    --exclude='*.pse' \
-    --exclude='__pycache__' \
-    --exclude='*.pyc' \
+    "${COMMON_EXCLUDES[@]}" \
+    --exclude='/test_data/' \
+    --exclude='/goldens/' \
+    --exclude='/exec/' \
+    --exclude='/datahub_pipelines/' \
+    --exclude='/benchmark/rotamer_library/' \
+    --exclude='/model_weights/' \
+    --exclude='/third_party_model_weights/' \
     "$SRC/rf_diffusion/" "$DST/rf_diffusion/"
+
+# Sibling Python packages on PYTHONPATH alongside rf_diffusion/.
+#   rf2aa            — imported at rf_diffusion package load
+#   ipd              — imported transitively by rf2aa at module load. Extra
+#                      excludes drop the 98 MB spacegroup_data.pickle (only
+#                      used by ipd.sym.xtal, which the AME / binder /
+#                      unconditional configs do not reach) and ipd/data/tests.
+#   openfold         — namespace package (no top-level __init__.py); imported
+#                      via `from openfold.utils import ...` etc.
+#   se3_flow_matching — namespace package; imported via
+#                       `from se3_flow_matching.data import ...`
+for sibling in rf2aa openfold se3_flow_matching; do
+    if [[ ! -d "$SRC/$sibling" ]]; then
+        echo "ERROR: $SRC/$sibling not found — required sibling package." >&2
+        exit 1
+    fi
+    rsync -a --delete \
+        "${COMMON_EXCLUDES[@]}" \
+        "$SRC/$sibling/" "$DST/$sibling/"
+done
+
+# ipd — extra exclude for the 98 MB crystallography pickle. The universal
+# tests/ exclude already drops ipd/data/tests/.
+#
+# The 94 MB ipd/data/spacegroup_data.pickle is excluded to keep vendor size
+# down. However ipd.sym.xtal.spacegroup_deriveddata is imported transitively
+# at module load (rf2aa → ipd.sym) and calls load_package_data('spacegroup_data')
+# which looks in ipd/data/. A tiny stub (.xz, ~1 KB) lives in ipd/dev/data/
+# containing only P1 — enough to pass module-level KeyError checks. We copy
+# that stub into ipd/data/ so package_data_path() finds it.
+if [[ ! -d "$SRC/ipd" ]]; then
+    echo "ERROR: $SRC/ipd not found — required sibling package." >&2
+    exit 1
+fi
+rsync -a --delete \
+    "${COMMON_EXCLUDES[@]}" \
+    --exclude='data/spacegroup_data.pickle' \
+    "$SRC/ipd/" "$DST/ipd/"
+
+# Place the spacegroup stub where load_package_data() can find it.
+if [[ -f "$SRC/ipd/dev/data/spacegroup_data.pickle.xz" ]]; then
+    cp "$SRC/ipd/dev/data/spacegroup_data.pickle.xz" "$DST/ipd/data/spacegroup_data.pickle.xz"
+fi
+
+# Top-level .py modules imported by rf_diffusion at runtime.
+#   paths.py — `from paths import evaluate_path` in model_runners.py; resolves
+#              REPO_ROOT placeholder in Hydra config paths. __file__-based, so
+#              repo_root correctly becomes upstream/ after vendoring.
+cp "$SRC/paths.py" "$DST/paths.py"
 
 # Env files (only CUDA 12.4 — others not used by FC deployment).
 cp "$SRC/envs/cuda124_env.yml" "$DST/envs/"
@@ -41,5 +121,6 @@ cp "$SRC/envs/requirements_cuda124.txt" "$DST/envs/"
 
 echo "Vendored to $DST"
 du -sh "$DST"
+du -sh "$DST"/{rf_diffusion,rf2aa,ipd,openfold,se3_flow_matching,envs} 2>/dev/null
 echo
 echo "Review with: git -C $PROJECT_ROOT status -- services/rfdiffusion2-server/upstream/"

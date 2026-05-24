@@ -75,7 +75,10 @@ def generate_active_site(
         pdb_path = resolve_input(input_pdb, input_uri, job_dir / "input" / "motif.pdb", settings)
         return active_site_argv(params, pdb_path, job_dir, settings)
 
-    return app.state.runner.submit(build_argv=_build, label="active_site")
+    return app.state.runner.submit(
+        build_argv=_build, label="active_site",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 @app.post("/api/generate/small_molecule_binder", response_model=JobInfo)
@@ -93,7 +96,10 @@ def generate_small_molecule_binder(
         pdb_path = resolve_input(input_pdb, input_uri, job_dir / "input" / "ligand.pdb", settings)
         return small_molecule_binder_argv(params, pdb_path, job_dir, settings)
 
-    return app.state.runner.submit(build_argv=_build, label="small_molecule_binder")
+    return app.state.runner.submit(
+        build_argv=_build, label="small_molecule_binder",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 @app.post("/api/generate", response_model=JobInfo)
@@ -112,7 +118,10 @@ def generate_custom(
             pdb_path = resolve_input(input_pdb, input_uri, job_dir / "input" / "input.pdb", settings)
         return custom_argv(params, pdb_path, job_dir, settings)
 
-    return app.state.runner.submit(build_argv=_build, label="custom")
+    return app.state.runner.submit(
+        build_argv=_build, label="custom",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 # Mount MCP server — must be AFTER all POST routes are registered so the

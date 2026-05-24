@@ -59,7 +59,10 @@ def post_score(
             settings=settings,
         )
 
-    return app.state.runner.submit(build_argv=_build, label="score")
+    return app.state.runner.submit(
+        build_argv=_build, label="score",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 @app.post("/api/score_batch", response_model=JobInfo)
@@ -104,7 +107,10 @@ def post_score_batch(
             settings=settings,
         )
 
-    return app.state.runner.submit(build_argv=_build, label="score_batch")
+    return app.state.runner.submit(
+        build_argv=_build, label="score_batch",
+        input_params={**params.model_dump(mode="json"), "num_models": len(models)},
+    )
 
 
 # Mount MCP server — must be AFTER all POST routes are registered so the

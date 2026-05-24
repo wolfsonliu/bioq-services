@@ -102,7 +102,10 @@ def generate_unconditional(
         config_path = _write_yaml(config, job_dir)
         return _genie3_argv(config_path, params.num_devices)
 
-    return app.state.runner.submit(build_argv=_build, label="unconditional")
+    return app.state.runner.submit(
+        build_argv=_build, label="unconditional",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 @app.post("/api/generate/motif", response_model=JobInfo)
@@ -124,7 +127,10 @@ def generate_motif(
         config_path = _write_yaml(config, job_dir)
         return _genie3_argv(config_path, params.num_devices)
 
-    return app.state.runner.submit(build_argv=_build, label="motif")
+    return app.state.runner.submit(
+        build_argv=_build, label="motif",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 @app.post("/api/generate/binder", response_model=JobInfo)
@@ -146,7 +152,10 @@ def generate_binder(
         config_path = _write_yaml(config, job_dir)
         return _genie3_argv(config_path, params.num_devices)
 
-    return app.state.runner.submit(build_argv=_build, label="binder")
+    return app.state.runner.submit(
+        build_argv=_build, label="binder",
+        input_params=params.model_dump(mode="json"),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +201,10 @@ def generate_custom(
         config_path = _write_yaml(config, job_dir)
         return _genie3_argv(config_path, num_devices)
 
-    return app.state.runner.submit(build_argv=_build, label="custom")
+    return app.state.runner.submit(
+        build_argv=_build, label="custom",
+        input_params={"config_yaml": "(user-supplied)", "num_devices": num_devices},
+    )
 
 
 # Mount MCP server — must be AFTER all POST routes are registered so the
