@@ -163,6 +163,29 @@ def _render_contig_atoms(d: dict[str, str]) -> str:
     return "{" + ", ".join(parts) + "}"
 
 
+def _render_hydra_value(v: object) -> str:
+    """Render a JSON-deserialized value as an OmegaConf-compatible string.
+
+    Python's ``str(dict)`` quotes keys (``{'A106': ...}``), but OmegaConf
+    expects bare keys (``{A106: ...}``).  This function recurses through
+    dicts and lists so the output round-trips through Hydra's parser.
+    """
+    if isinstance(v, bool):
+        return str(v).lower()
+    if isinstance(v, dict):
+        parts = []
+        for dk, dv in v.items():
+            parts.append(f"{dk}: {_render_hydra_value(dv)}")
+        return "{" + ", ".join(parts) + "}"
+    if isinstance(v, list):
+        return "[" + ",".join(_render_hydra_value(item) for item in v) + "]"
+    if isinstance(v, str):
+        if "," in v:
+            return f"'{v}'"
+        return v
+    return str(v)
+
+
 def _render_partially_fixed_ligand(d: dict[str, list[str]]) -> str:
     """`{NAD: [O7N,C7N], OXM: [O3,C2]}` — values are bare-atom lists."""
     if not d:
@@ -317,9 +340,5 @@ def custom_argv(
                 raise HTTPException(
                     status_code=422, detail=f"Invalid override key: {k!r}"
                 )
-            # Hydra parses lowercase true/false; let booleans through unquoted.
-            if isinstance(v, bool):
-                cmd.append(f"{k}={str(v).lower()}")
-            else:
-                cmd.append(f"{k}={v}")
+            cmd.append(f"{k}={_render_hydra_value(v)}")
     return cmd

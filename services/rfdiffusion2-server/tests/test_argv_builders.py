@@ -259,6 +259,33 @@ def test_custom_extra_overrides(settings: RFdiffusion2Settings, tmp_path: Path) 
     assert "inference.deterministic=true" in argv
 
 
+def test_custom_extra_overrides_dict_values(
+    settings: RFdiffusion2Settings, tmp_path: Path
+) -> None:
+    """Dict/list values in extra_overrides must render as OmegaConf syntax, not Python str()."""
+    contig_atoms = {"A106": "NE,CD,CZ", "A166": "OD1,CG"}
+    argv = custom_argv(
+        CustomRequest(
+            contigs="46,A106-106,59,A166-166,46",
+            config_name="aa",
+            input_pdb_required=True,
+            extra_overrides=json.dumps({
+                "inference.contig_as_guidepost": True,
+                "contigmap.contig_atoms": contig_atoms,
+            }),
+        ),
+        input_pdb=tmp_path / "x.pdb",
+        job_dir=tmp_path / "j",
+        settings=settings,
+    )
+    assert "inference.contig_as_guidepost=true" in argv
+    atoms_tok = [t for t in argv if t.startswith("contigmap.contig_atoms=")]
+    assert atoms_tok, f"no contig_atoms token in {argv}"
+    assert "A106: 'NE,CD,CZ'" in atoms_tok[0]
+    assert "A166: 'OD1,CG'" in atoms_tok[0]
+    assert "'A106'" not in atoms_tok[0], "keys must be bare, not Python-quoted"
+
+
 def test_custom_invalid_json_returns_422(
     settings: RFdiffusion2Settings, tmp_path: Path
 ) -> None:

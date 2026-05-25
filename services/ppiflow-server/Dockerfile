@@ -24,8 +24,17 @@
 # We pre-compile the .so during image build (see the RUN below COPY of PPIFlow
 # source) so runtime cold starts skip the ~30s JIT step.
 #
+# Single-stage build (no multistage). PPIFlow needs devel for the pre-compile
+# step AND at runtime for any future JIT fallback. Splitting stages would just
+# copy back the same devel base — no size win.
+#
+# Layer ordering (stable → volatile):
+#   apt/micromamba/uv → mirrors → conda env → source + checkpoints →
+#   pre-compile → framework → server .py
+#
 # Size cost: devel = 6.7 GB vs runtime = 3.1 GB (~3.6 GB extra). Total image
 # stays well under the FC 15 GB limit.
+FROM mambaorg/micromamba:2.6.2 AS micromamba
 FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -58,23 +67,19 @@ ENV CUDA_HOME=/usr/local/cuda
 ENV CUDA_PATH=/usr/local/cuda
 
 # ---------------------------------------------------------------------------
-# Install micromamba on top of the nvidia/cuda base. We pin via the public
-# tarball URL rather than apt to avoid pulling in conda's whole channel cache.
-#
-# uv is brought in for the final framework-install layer only (replaces a
-# slower pip-on-conda-env install). The conda env itself stays conda-managed
-# because PPIFlow's env.yml leans on bioconda-only packages (pymol-open-source,
-# pyqt5, cuda-nvcc) that uv/PyPI can't supply.
+# micromamba (from pinned image) + uv + apt build tools. The conda env stays
+# conda-managed because PPIFlow's env.yml leans on bioconda-only packages
+# (pymol-open-source, pyqt5, cuda-nvcc) that uv/PyPI can't supply.
+# uv is brought in for the final framework-install layer only.
 # ---------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bzip2 curl git wget ca-certificates build-essential \
-    && rm -rf /var/lib/apt/lists/* \
-    && curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest \
-       | tar -xj -C /usr/local/bin --strip-components=1 bin/micromamba \
-    && /usr/local/bin/micromamba --version
+    git wget ca-certificates build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
+COPY --from=micromamba /bin/micromamba /bin/micromamba
 COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
 
+ENV MAMBA_EXE=/bin/micromamba
 ENV MAMBA_ROOT_PREFIX=/opt/conda
 ENV PATH=/opt/conda/envs/ppiflow/bin:$PATH
 
@@ -135,7 +140,6 @@ custom_channels:
   pytorch: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
   bioconda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
 EOF
-COPY opensource/PPIFlow/tool/PPIFlow/environment.yml /tmp/ppiflow-env.yml
 
 # ---------------------------------------------------------------------------
 # Create the `ppiflow` conda env from upstream's environment.yml.
@@ -160,6 +164,8 @@ COPY opensource/PPIFlow/tool/PPIFlow/environment.yml /tmp/ppiflow-env.yml
 # the cache mount still hits → most package downloads are re-used from cache,
 # only newly-added packages get fetched.
 # ---------------------------------------------------------------------------
+COPY opensource/PPIFlow/tool/PPIFlow/environment.yml /tmp/ppiflow-env.yml
+
 WORKDIR /opt/ppiflow
 
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
@@ -216,9 +222,16 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/ppiflow/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
-# Server code as `server` package — uvicorn imports `server.app:app`. Mounted
-# alongside PPIFlow's tool directory so subprocess_cwd resolves correctly.
-COPY services/ppiflow-server/ /opt/ppiflow/server/
+# Server code last — explicit file list so test changes don't bust cache.
+COPY services/ppiflow-server/__init__.py \
+     services/ppiflow-server/VERSION \
+     services/ppiflow-server/app.py \
+     services/ppiflow-server/adapter.py \
+     services/ppiflow-server/models.py \
+     services/ppiflow-server/settings.py \
+     services/ppiflow-server/tools.py \
+     services/ppiflow-server/uris.py \
+     /opt/ppiflow/server/
 
 # Settings via env (see services/ppiflow-server/settings.py).
 ENV PPIFLOW_ROOT=/opt/ppiflow

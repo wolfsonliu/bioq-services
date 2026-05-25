@@ -7,35 +7,40 @@
 #
 # Multistage layout
 # -----------------
-#   builder = heavy: bzip2/curl/wget/git + micromamba + conda env create
-#             (~8 GB env including pytorch 2.0.1+cu118, pyg, esm, etc.).
-#   runtime = lean: only ca-certificates. The finished conda env + source +
-#             weights + server code are copied over.
+#   builder = conda env only: micromamba env create + pip extras + framework +
+#             cleanup. No upstream source or weights — those go directly into
+#             the runtime stage so builder cache survives source edits.
+#   runtime = lean: conda env from builder + upstream source + ESM weights +
+#             server code.
+#
+# Layer ordering (stable → volatile):
+#   apt/micromamba → mirrors → conda env → pip extras → ittapi → framework
+#   → cleanup ‖ runtime: conda env → upstream source → ESM weights → server .py
 #
 # Base: CUDA 11.8 -devel (matching pytorch-cuda=11.8 in the conda env).
 # Using devel for both stages for safety — runtime would suffice since
 # DeepRank-Ab has no JIT CUDA compilation, but devel avoids edge cases
 # with torch extensions.
 ARG BASE_IMAGE=nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
+ARG MICROMAMBA_IMAGE=mambaorg/micromamba:2.6.2
 
 
 # ===========================================================================
-# Stage 1: builder — install the conda env + upstream source.
+# Stage 1: builder — conda env only (no upstream source or weights).
 # ===========================================================================
+FROM ${MICROMAMBA_IMAGE} AS micromamba
 FROM ${BASE_IMAGE} AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Build-only apt deps + micromamba bootstrap.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bzip2 curl git wget ca-certificates build-essential \
-    && rm -rf /var/lib/apt/lists/* \
-    && curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest \
-       | tar -xj -C /usr/local/bin --strip-components=1 bin/micromamba \
-    && /usr/local/bin/micromamba --version
+    git wget ca-certificates build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
+COPY --from=micromamba /bin/micromamba /bin/micromamba
+ENV MAMBA_EXE=/bin/micromamba
 ENV MAMBA_ROOT_PREFIX=/opt/conda
 ENV PATH=/opt/conda/envs/deeprank-ab/bin:$PATH
 
@@ -90,12 +95,6 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
         gcc -shared -o /opt/conda/envs/deeprank-ab/lib/libjitprofiling.so -x c -)
 
 # ---------------------------------------------------------------------------
-# Copy upstream source + ESM weights + framework.
-# ---------------------------------------------------------------------------
-COPY opensource/DeepRank-Ab /opt/deeprank-ab/DeepRank-Ab
-COPY services/deeprank-ab-server/weights/esm /opt/deeprank-ab/esm_weights
-
-# ---------------------------------------------------------------------------
 # Install the shared service framework.
 # ---------------------------------------------------------------------------
 COPY services/_framework /tmp/service-framework
@@ -127,7 +126,14 @@ RUN /opt/conda/envs/deeprank-ab/bin/pip uninstall -y \
 
 
 # ===========================================================================
-# Stage 2: runtime — drop build tools, keep the env + source.
+# Stage 2: runtime — conda env + upstream source + weights + server code.
+#
+# Layer order (stable → volatile):
+#   1. apt             — almost never changes
+#   2. conda env       — changes only when environment-gpu.yml or framework changes
+#   3. upstream source — changes when DeepRank-Ab upstream updates (rare)
+#   4. ESM weights     — changes when new weights are fetched (~2.6 GB, very rare)
+#   5. server code     — changes on every iteration (explicit file list)
 # ===========================================================================
 FROM ${BASE_IMAGE}
 
@@ -141,14 +147,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Bring over the conda env + source as separate COPYs for layer caching.
 COPY --from=builder /opt/conda /opt/conda
-COPY --from=builder /opt/deeprank-ab /opt/deeprank-ab
+
+COPY opensource/DeepRank-Ab /opt/deeprank-ab/DeepRank-Ab
+COPY services/deeprank-ab-server/weights/esm /opt/deeprank-ab/esm_weights
 
 WORKDIR /opt/deeprank-ab
 
-# Server code last so iterating on the FastAPI layer only rebuilds the tail.
-COPY services/deeprank-ab-server/ /opt/deeprank-ab/server/
+# Server code last — explicit file list so test/script/weight changes don't
+# invalidate this layer.
+COPY services/deeprank-ab-server/__init__.py \
+     services/deeprank-ab-server/VERSION \
+     services/deeprank-ab-server/app.py \
+     services/deeprank-ab-server/adapter.py \
+     services/deeprank-ab-server/models.py \
+     services/deeprank-ab-server/settings.py \
+     services/deeprank-ab-server/tools.py \
+     services/deeprank-ab-server/uris.py \
+     services/deeprank-ab-server/run_inference.py \
+     /opt/deeprank-ab/server/
 
 # Settings.
 ENV DEEPRANK_AB_ROOT=/opt/deeprank-ab

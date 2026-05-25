@@ -8,17 +8,15 @@
 #
 # Multistage layout
 # -----------------
-#   builder = heavy: bzip2/curl/wget/git + micromamba + conda env create
-#             (~10 GB env including pyrosetta, torch+cu124, dgl, openbabel).
-#             Final RUN strips jupyterlab/*.a/share/doc/tests/__pycache__.
-#   runtime = lean: only build-essential + ca-certificates. The finished
-#             conda env + vendored source + weights + server code are copied
-#             over.
+#   builder = conda env only: micromamba env create + pip extras + framework +
+#             cleanup. No vendored source or weights — those go directly into
+#             the runtime stage so builder cache survives source edits.
+#   runtime = build-essential (JIT compile) + conda env from builder + vendored
+#             source + weights + server code.
 #
-# Why two stages: bzip2/curl/wget/git/micromamba aren't needed once the env
-# is built, but in a single Dockerfile `apt-get remove` after install can't
-# reclaim the bytes from the install layer. Multistage is the only way to
-# leave those packages behind. Same playbook as rfdiffusion-server.
+# Layer ordering (stable → volatile):
+#   apt/micromamba → mirrors → conda env → pip extras → framework → cleanup
+#   ‖ runtime: apt → conda env → vendored source → weights → server .py
 #
 # Base: CUDA 12.4 -devel (REQUIRED, do not switch to -runtime). rf2aa imports
 # ipd.dev.cuda.cudabuild which calls `torch.utils.cpp_extension.load(...)` —
@@ -26,11 +24,13 @@
 # nvcc + cuda_runtime_api.h, only present in -devel. We also keep
 # build-essential in the runtime stage so the JIT compile succeeds.
 ARG BASE_IMAGE=nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
+ARG MICROMAMBA_IMAGE=mambaorg/micromamba:2.6.2
 
 
 # ===========================================================================
-# Stage 1: builder — install the rfd2 conda env + vendored source.
+# Stage 1: builder — conda env only (no vendored source or weights).
 # ===========================================================================
+FROM ${MICROMAMBA_IMAGE} AS micromamba
 FROM ${BASE_IMAGE} AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -41,14 +41,12 @@ ENV PYTHONUNBUFFERED=1
 ENV CUDA_HOME=/usr/local/cuda
 ENV CUDA_PATH=/usr/local/cuda
 
-# Build-only apt deps + micromamba bootstrap.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bzip2 curl git wget ca-certificates build-essential \
-    && rm -rf /var/lib/apt/lists/* \
-    && curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest \
-       | tar -xj -C /usr/local/bin --strip-components=1 bin/micromamba \
-    && /usr/local/bin/micromamba --version
+    git wget ca-certificates build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
+COPY --from=micromamba /bin/micromamba /bin/micromamba
+ENV MAMBA_EXE=/bin/micromamba
 ENV MAMBA_ROOT_PREFIX=/opt/conda
 ENV PATH=/opt/conda/envs/rfd2/bin:$PATH
 
@@ -107,21 +105,8 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
         git+https://github.com/RalphMao/PyTimer.git
 
 # ---------------------------------------------------------------------------
-# Pull in the vendored source + weights + framework. Strip dead weight from
-# the conda env in the SAME layer so cleanup actually shrinks the image.
-#
-# Cleanup targets (cumulative ~1.2 GB):
-#   1. jupyterlab + ipywidgets — pulled in by env.yml / requirements but never
-#      reached by the inference path.
-#   2. *.a static archives under the env's lib/. Conda's pytorch-cuda /
-#      cudatoolkit ship static libs alongside .so; only .so are dlopened.
-#   3. share/{doc,man,locale} — documentation + i18n catalogs.
-#   4. test/ + tests/ dirs inside site-packages.
-#   5. __pycache__ + *.pyc — conda packages ship pre-compiled bytecode.
+# Install the shared service framework + cleanup dead weight (~1.2 GB).
 # ---------------------------------------------------------------------------
-COPY services/rfdiffusion2-server/upstream /opt/rfdiffusion2-server/upstream
-COPY services/rfdiffusion2-server/weights /opt/rfdiffusion2-server/upstream/rf_diffusion/model_weights
-
 COPY services/_framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     /opt/conda/envs/rfd2/bin/pip install \
@@ -143,7 +128,14 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
 
 
 # ===========================================================================
-# Stage 2: runtime — keep the JIT-compile toolchain, drop the rest.
+# Stage 2: runtime — conda env + vendored source + weights + server code.
+#
+# Layer order (stable → volatile):
+#   1. apt             — almost never changes
+#   2. conda env       — changes only when env.yml or framework changes
+#   3. vendored source — changes when upstream updates or vendor.sh reruns
+#   4. model weights   — changes when new checkpoints are fetched
+#   5. server code     — changes on every iteration (explicit file list)
 # ===========================================================================
 FROM ${BASE_IMAGE}
 
@@ -165,17 +157,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Bring over the conda env + vendored source (with weights baked in) as
-# separate COPYs so the big stable layers cache independently.
 COPY --from=builder /opt/conda /opt/conda
-COPY --from=builder /opt/rfdiffusion2-server /opt/rfdiffusion2-server
 
-# WORKDIR must be set in the runtime stage; uvicorn imports `server.app:app`
-# from CWD.
+COPY services/rfdiffusion2-server/upstream /opt/rfdiffusion2-server/upstream
+COPY services/rfdiffusion2-server/weights /opt/rfdiffusion2-server/upstream/rf_diffusion/model_weights
+
 WORKDIR /opt/rfdiffusion2-server
 
-# Server code last so iterating on the FastAPI layer only rebuilds the tail.
-COPY services/rfdiffusion2-server/ /opt/rfdiffusion2-server/server/
+# Server code last — explicit file list so test/script/upstream changes don't
+# invalidate this layer.
+COPY services/rfdiffusion2-server/__init__.py \
+     services/rfdiffusion2-server/VERSION \
+     services/rfdiffusion2-server/app.py \
+     services/rfdiffusion2-server/adapter.py \
+     services/rfdiffusion2-server/models.py \
+     services/rfdiffusion2-server/settings.py \
+     services/rfdiffusion2-server/tools.py \
+     services/rfdiffusion2-server/uris.py \
+     /opt/rfdiffusion2-server/server/
 
 # Settings (env-driven; see services/rfdiffusion2-server/settings.py).
 ENV RFDIFFUSION2_ROOT=/opt/rfdiffusion2-server
