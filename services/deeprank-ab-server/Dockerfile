@@ -77,9 +77,17 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
 # bundled hmmscan binary via hmmerpath=. ANARCI ships its own HMM profiles.
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    /opt/conda/envs/deeprank-ab/bin/pip install anarci ittapi \
-    && ITTLIB=$(find /opt/conda/envs/deeprank-ab -path "*/ittapi*" -name "libjitprofiling.so" -print -quit) \
-    && if [ -n "$ITTLIB" ]; then ln -sf "$ITTLIB" /opt/conda/envs/deeprank-ab/lib/; fi
+    /opt/conda/envs/deeprank-ab/bin/pip install anarci
+
+# PyTorch 2.0.1 (conda) links against libjitprofiling.so (Intel VTune JIT
+# profiling API, provides iJIT_NotifyEvent). conda-forge ittapi installs the
+# .so into the env's lib/ where the dynamic linker finds it. If the conda
+# package is unavailable, fall back to a gcc stub (the symbol is a no-op
+# profiling callback).
+RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
+    micromamba install -n deeprank-ab -c conda-forge -y ittapi \
+    || (echo 'int iJIT_NotifyEvent(int t, void *d) { return 0; }' | \
+        gcc -shared -o /opt/conda/envs/deeprank-ab/lib/libjitprofiling.so -x c -)
 
 # ---------------------------------------------------------------------------
 # Copy upstream source + ESM weights + framework.
