@@ -1,0 +1,9 @@
+entities:
+  - protein:
+      id: A
+      sequence: 40..60
+  - file:
+      path: dummy_target.cif
+      include:
+        - chain:
+            id: A

@@ -1,0 +1,10 @@
+entities:
+  - file:
+      path: dummy_target.cif
+      include:
+        - chain:
+            id: A
+      design:
+        - chain:
+            id: A
+            res_index: 10..20
