@@ -77,7 +77,7 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
 # bundled hmmscan binary via hmmerpath=. ANARCI ships its own HMM profiles.
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    /opt/conda/envs/deeprank-ab/bin/pip install anarci
+    /opt/conda/envs/deeprank-ab/bin/pip install anarci ittapi
 
 # ---------------------------------------------------------------------------
 # Copy upstream source + ESM weights + framework.
@@ -110,6 +110,10 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     /opt/conda/envs/deeprank-ab/bin/pip install \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2 \
     && rm -rf /tmp/service-framework
+
+# Build-time import smoke — catches missing symbols (e.g. iJIT_NotifyEvent
+# from ittapi) at build, not at FC deploy time.
+RUN /opt/conda/envs/deeprank-ab/bin/python -c "import torch; print('torch', torch.__version__)"
 
 # ---------------------------------------------------------------------------
 # Cleanup dead weight from the conda env (~1+ GB).
