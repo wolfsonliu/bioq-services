@@ -77,30 +77,15 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
 # bundled hmmscan binary via hmmerpath=. ANARCI ships its own HMM profiles.
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    /opt/conda/envs/deeprank-ab/bin/pip install anarci ittapi
+    /opt/conda/envs/deeprank-ab/bin/pip install anarci ittapi \
+    && ITTLIB=$(find /opt/conda/envs/deeprank-ab -path "*/ittapi*" -name "libjitprofiling.so" -print -quit) \
+    && if [ -n "$ITTLIB" ]; then ln -sf "$ITTLIB" /opt/conda/envs/deeprank-ab/lib/; fi
 
 # ---------------------------------------------------------------------------
 # Copy upstream source + ESM weights + framework.
 # ---------------------------------------------------------------------------
 COPY opensource/DeepRank-Ab /opt/deeprank-ab/DeepRank-Ab
 COPY services/deeprank-ab-server/weights/esm /opt/deeprank-ab/esm_weights
-
-# ---------------------------------------------------------------------------
-# Patches applied to upstream inference.py:
-#
-# 1. fetch_weights() returns a bare filename ("esm2_t33_650M_UR50D.pt")
-#    which fails when CWD != the directory containing the weights. Patch
-#    to return the absolute path from WEIGHT_PATH env var.
-#
-# 2. NUM_WORKERS = 96 is excessive for FC GPU instances (typically 8 vCPU).
-#    DataLoader with 96 workers on a constrained env can exhaust processes.
-# ---------------------------------------------------------------------------
-RUN sed -i \
-        's|return f"{ESM_MODEL}.pt"|return os.getenv("WEIGHT_PATH") or f"{ESM_MODEL}.pt"|' \
-        /opt/deeprank-ab/DeepRank-Ab/scripts/inference.py \
-    && sed -i \
-        's|NUM_WORKERS = 96|NUM_WORKERS = 8|' \
-        /opt/deeprank-ab/DeepRank-Ab/scripts/inference.py
 
 # ---------------------------------------------------------------------------
 # Install the shared service framework.
@@ -161,11 +146,12 @@ COPY services/deeprank-ab-server/ /opt/deeprank-ab/server/
 ENV DEEPRANK_AB_ROOT=/opt/deeprank-ab
 ENV DEEPRANK_AB_JOBS_BASE_DIR=/data/deeprank_ab_jobs
 ENV DEEPRANK_AB_PYTHON=/opt/conda/envs/deeprank-ab/bin/python
-ENV DEEPRANK_AB_INFERENCE_SCRIPT=/opt/deeprank-ab/DeepRank-Ab/scripts/inference.py
+ENV DEEPRANK_AB_INFERENCE_SCRIPT=/opt/deeprank-ab/server/run_inference.py
+ENV DEEPRANK_AB_NUM_WORKERS=4
 
-# ESM-2 weight paths — read by the patched fetch_weights() and by
-# load_model_and_alphabet_local() which derives the regression path
-# from the model path.
+# ESM-2 weight paths — read by run_inference.py's patched fetch_weights()
+# and by load_model_and_alphabet_local() which derives the regression
+# path from the model path.
 ENV WEIGHT_PATH=/opt/deeprank-ab/esm_weights/esm2_t33_650M_UR50D.pt
 ENV REG_WEIGHT_PATH=/opt/deeprank-ab/esm_weights/esm2_t33_650M_UR50D-contact-regression.pt
 

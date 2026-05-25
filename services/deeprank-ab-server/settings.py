@@ -31,8 +31,8 @@ class DeepRankAbSettings(ServiceSettings):
     )
 
     inference_script: str = Field(
-        default="/opt/deeprank-ab/DeepRank-Ab/scripts/inference.py",
-        description="Absolute path to DeepRank-Ab inference.py.",
+        default="/opt/deeprank-ab/server/run_inference.py",
+        description="Wrapper that patches and runs upstream inference.py.",
     )
 
     oss_region: str = Field(default="cn-hangzhou")
