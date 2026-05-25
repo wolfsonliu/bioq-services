@@ -1,0 +1,51 @@
+# Curated conda env for deeprank-ab-server.
+#
+# Based on upstream DeepRank-Ab/environment-gpu.yml with:
+#   - Python 3.9 → 3.10 (framework [mcp] extra requires >=3.10)
+#   - Transitive dependencies removed — let conda resolve
+#   - Unused packages dropped (plotly, chart-studio, mpi4py, psutil, etc.)
+#   - Only packages actually imported in the inference path are kept
+#
+# Key pins:
+#   pytorch 2.0.1 + CUDA 11.8  — matches upstream training env
+#   pyg 2.3.0                   — EGNN graph layers
+#   fair-esm 2.0.0              — ESM-2 embedding API
+name: deeprank-ab
+channels:
+  - pytorch
+  - pyg
+  - nvidia
+  - defaults
+dependencies:
+  - python=3.10
+  # --- Core ML ---
+  - pytorch=2.0.1
+  - pytorch-cuda=11.8
+  # --- PyTorch Geometric (EGNN + graph ops) ---
+  - pyg=2.3.0
+  - pytorch-cluster=1.6.1
+  - pytorch-scatter=2.1.1
+  - pytorch-sparse=0.6.17
+  - pytorch-spline-conv=1.2.2
+  # --- Scientific stack ---
+  - numpy>=1.25,<2
+  - scipy>=1.10
+  - scikit-learn>=1.2
+  - h5py>=3.7
+  - biopython>=1.85
+  - networkx>=2.8
+  - matplotlib>=3.7
+  # --- Community detection ---
+  - python-louvain>=0.15
+  # --- Utilities ---
+  - tqdm>=4.65
+  - requests>=2.29
+  - pip
+  # --- Pip-only packages ---
+  - pip:
+      - fair-esm==2.0.0
+      - pandas>=2.0
+      - pdb2sql>=0.5
+      - freesasa>=2.2
+      - markov-clustering>=0.0.6.dev0
+      - transformers>=4.30

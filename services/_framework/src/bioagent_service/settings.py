@@ -49,3 +49,6 @@ class ServiceSettings(BaseSettings):
     max_concurrent_jobs: int = Field(default=1, ge=1)
     # How many trailing bytes of the log to embed in JobInfo.error_tail on failure.
     error_tail_chars: int = Field(default=4000, ge=200, le=64000)
+    # FC self-keepalive: while jobs are active, ping /healthz at this interval
+    # to prevent FC from reclaiming the instance. 0 = disabled.
+    keepalive_interval_s: int = Field(default=60, ge=0)

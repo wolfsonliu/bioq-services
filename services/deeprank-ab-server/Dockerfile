@@ -59,9 +59,11 @@ custom_channels:
 EOF
 
 # ---------------------------------------------------------------------------
-# Create the conda env from upstream's environment file.
+# Create the conda env from the server's curated environment file.
+# (upstream pins python=3.9; this copy upgrades to 3.10, drops unused
+#  packages, and relaxes transitive pins — see environment-gpu.yml)
 # ---------------------------------------------------------------------------
-COPY opensource/DeepRank-Ab/environment-gpu.yml /tmp/deeprank-ab-env/environment-gpu.yml
+COPY services/deeprank-ab-server/environment-gpu.yml /tmp/deeprank-ab-env/environment-gpu.yml
 
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     --mount=type=cache,target=/root/.cache/pip,sharing=locked \
@@ -120,7 +122,7 @@ RUN /opt/conda/envs/deeprank-ab/bin/pip uninstall -y \
         /opt/conda/envs/deeprank-ab/share/doc \
         /opt/conda/envs/deeprank-ab/share/man \
         /opt/conda/envs/deeprank-ab/share/locale \
-    && find /opt/conda/envs/deeprank-ab/lib/python3.9/site-packages \
+    && find /opt/conda/envs/deeprank-ab/lib/python3.10/site-packages \
         -depth -type d \( -name 'tests' -o -name 'test' \) \
         -exec rm -rf {} + \
     && find /opt/conda/envs/deeprank-ab -depth -type d -name '__pycache__' -exec rm -rf {} + \

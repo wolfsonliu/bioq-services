@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
+import threading
 from concurrent.futures import Executor
 from pathlib import Path
 from typing import Any, Callable
@@ -19,7 +20,7 @@ from typing import Any, Callable
 from bioagent_service.adapter import JobAdapter
 from bioagent_service.errors import finalize_job
 from bioagent_service.jobs import JobStore, cleanup_job, evict_finished_until_under_limit
-from bioagent_service.models import JobInfo, JobStatus, utcnow
+from bioagent_service.models import FailureKind, JobInfo, JobStatus, utcnow
 from bioagent_service.settings import ServiceSettings
 
 logger = logging.getLogger(__name__)
@@ -47,8 +48,14 @@ class SubprocessRunner:
         *,
         env: dict[str, str] | None = None,
         cwd: Path | None = None,
+        check_interval_s: float = 30.0,
     ) -> int:
         """Run `argv`, write merged stdout/stderr to `log_path`, return rc.
+
+        Uses ``proc.wait(timeout=check_interval_s)`` in a loop instead of a
+        blocking ``proc.wait()`` so the thread remains responsive.  On each
+        iteration a ``proc.poll()`` cross-check catches edge cases where the
+        child has exited but ``wait()`` did not return (zombie reap race).
 
         On Popen failure (e.g., binary missing) the exception is written to the
         log and rc=127 is returned, so callers can rely on the log being present
@@ -65,8 +72,18 @@ class SubprocessRunner:
                     env=full_env,
                     cwd=str(cwd) if cwd else None,
                 )
-                rc = proc.wait()
-                return rc
+                while True:
+                    try:
+                        return proc.wait(timeout=check_interval_s)
+                    except subprocess.TimeoutExpired:
+                        rc = proc.poll()
+                        if rc is not None:
+                            logger.warning(
+                                "proc.poll() returned %d but wait() timed out "
+                                "(pid=%d); treating as exited",
+                                rc, proc.pid,
+                            )
+                            return rc
         except FileNotFoundError as e:
             log_path.write_text(f"failed to spawn {argv[0]!r}: {e}\n", encoding="utf-8")
             return 127
@@ -94,6 +111,13 @@ class JobRunner:
         self.executor = executor
         self.settings = settings
         self.adapter = adapter
+        self._active_count = 0
+        self._active_lock = threading.Lock()
+
+    @property
+    def active_job_count(self) -> int:
+        """Number of jobs currently queued or running in the executor."""
+        return self._active_count
 
     def submit(
         self,
@@ -144,27 +168,46 @@ class JobRunner:
         resolved_cwd = cwd if cwd is not None else adapter.subprocess_cwd()
 
         def _run() -> None:
-            self.store.update(
-                job_id,
-                status=JobStatus.RUNNING,
-                message=f"{resolved_label} running",
-                started_at=utcnow(),
-            )
-            rc = SubprocessRunner.run(
-                argv,
-                adapter.log_path(job_dir),
-                env=resolved_env,
-                cwd=resolved_cwd,
-            )
-            finalize_job(
-                self.store,
-                adapter,
-                job_id,
-                rc,
-                resolved_label,
-                error_tail_chars=self.settings.error_tail_chars,
-            )
+            try:
+                self.store.update(
+                    job_id,
+                    status=JobStatus.RUNNING,
+                    message=f"{resolved_label} running",
+                    started_at=utcnow(),
+                )
+                rc = SubprocessRunner.run(
+                    argv,
+                    adapter.log_path(job_dir),
+                    env=resolved_env,
+                    cwd=resolved_cwd,
+                )
+                finalize_job(
+                    self.store,
+                    adapter,
+                    job_id,
+                    rc,
+                    resolved_label,
+                    error_tail_chars=self.settings.error_tail_chars,
+                )
+            except Exception:
+                logger.exception("unhandled error in _run for job %s", job_id)
+                try:
+                    self.store.update(
+                        job_id,
+                        status=JobStatus.FAILED,
+                        message=f"{resolved_label} failed: internal runner error",
+                        completed_at=utcnow(),
+                        failure_kind=FailureKind.SUBPROCESS_ERROR,
+                        error_summary="internal runner error (see server logs)",
+                    )
+                except Exception:
+                    logger.exception("failed to mark job %s as FAILED", job_id)
+            finally:
+                with self._active_lock:
+                    self._active_count -= 1
 
+        with self._active_lock:
+            self._active_count += 1
         self.executor.submit(_run)
         # Return the freshly-created PENDING info; status may already be RUNNING by the
         # time the client reads it back from /api/jobs/{id}.

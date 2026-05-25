@@ -57,7 +57,7 @@ def _echo_argv(req: _EchoRequest, job_dir: Path) -> list[str]:
 
 @pytest.fixture
 def client(tmp_path: Path) -> TestClient:
-    settings = _EchoSettings(jobs_base_dir=tmp_path / "jobs", max_concurrent_jobs=2)
+    settings = _EchoSettings(jobs_base_dir=tmp_path / "jobs", max_concurrent_jobs=2, keepalive_interval_s=0)
     adapter = _EchoAdapter(settings=settings)
     app = create_app(adapter, settings, title="Echo Test")
 
@@ -232,7 +232,7 @@ def test_two_instances_sharing_nas_observe_each_others_jobs(tmp_path: Path) -> N
     """
     shared_dir = tmp_path / "shared_jobs"
 
-    settings_a = _EchoSettings(jobs_base_dir=shared_dir, max_concurrent_jobs=2)
+    settings_a = _EchoSettings(jobs_base_dir=shared_dir, max_concurrent_jobs=2, keepalive_interval_s=0)
     adapter_a = _EchoAdapter(settings=settings_a)
     app_a = create_app(adapter_a, settings_a, title="Echo A")
 
@@ -242,7 +242,7 @@ def test_two_instances_sharing_nas_observe_each_others_jobs(tmp_path: Path) -> N
             build_argv=lambda _id, jd: _echo_argv(req, jd), label="echo"
         )
 
-    settings_b = _EchoSettings(jobs_base_dir=shared_dir, max_concurrent_jobs=2)
+    settings_b = _EchoSettings(jobs_base_dir=shared_dir, max_concurrent_jobs=2, keepalive_interval_s=0)
     adapter_b = _EchoAdapter(settings=settings_b)
     app_b = create_app(adapter_b, settings_b, title="Echo B")
 
@@ -274,6 +274,93 @@ def test_two_instances_sharing_nas_observe_each_others_jobs(tmp_path: Path) -> N
         assert cb.get(f"/api/jobs/{job_id}").status_code == 404
 
 
+def test_run_catch_all_marks_job_failed_on_unexpected_error(tmp_path: Path) -> None:
+    """If _run() hits an unexpected exception (e.g., finalize_job crashes),
+    the job must be marked FAILED instead of staying RUNNING forever."""
+    from unittest.mock import patch
+
+    settings = _EchoSettings(jobs_base_dir=tmp_path / "jobs", max_concurrent_jobs=2)
+    adapter = _EchoAdapter(settings=settings)
+    app = create_app(adapter, settings, title="Echo Catch-All")
+
+    @app.post("/api/echo")
+    def echo(req: _EchoRequest):
+        return app.state.runner.submit(
+            build_argv=lambda _id, jd: _echo_argv(req, jd), label="echo"
+        )
+
+    with TestClient(app) as c:
+        with patch(
+            "bioagent_service.runner.finalize_job",
+            side_effect=RuntimeError("disk exploded"),
+        ):
+            submit = c.post("/api/echo", json={"message": "boom"})
+            job_id = submit.json()["job_id"]
+            final = _wait_for_terminal(c, job_id)
+        assert final["status"] == JobStatus.FAILED.value
+        assert final["failure_kind"] == "subprocess_error"
+        assert "internal runner error" in final["message"]
+
+
+def test_subprocess_runner_returns_rc_for_fast_exit(tmp_path: Path) -> None:
+    """SubprocessRunner.run with check_interval_s loop returns correct rc."""
+    from bioagent_service.runner import SubprocessRunner
+
+    log = tmp_path / "test.log"
+    rc = SubprocessRunner.run(["bash", "-c", "exit 42"], log, check_interval_s=0.1)
+    assert rc == 42
+    assert log.exists()
+
+
+def test_active_job_count_tracks_lifecycle(tmp_path: Path) -> None:
+    """active_job_count increments on submit and decrements when _run finishes."""
+    settings = _EchoSettings(
+        jobs_base_dir=tmp_path / "jobs", max_concurrent_jobs=2, keepalive_interval_s=0,
+    )
+    adapter = _EchoAdapter(settings=settings)
+    app = create_app(adapter, settings, title="Echo Count")
+
+    @app.post("/api/echo")
+    def echo(req: _EchoRequest):
+        return app.state.runner.submit(
+            build_argv=lambda _id, jd: _echo_argv(req, jd), label="echo"
+        )
+
+    with TestClient(app) as c:
+        assert app.state.runner.active_job_count == 0
+        submit = c.post("/api/echo", json={"message": "track"})
+        job_id = submit.json()["job_id"]
+        _wait_for_terminal(c, job_id)
+        # After completion the count is back to 0.
+        assert app.state.runner.active_job_count == 0
+
+
+def test_keepalive_disabled_when_interval_zero(tmp_path: Path) -> None:
+    """keepalive_interval_s=0 means no keepalive thread is started."""
+    settings = _EchoSettings(
+        jobs_base_dir=tmp_path / "jobs", keepalive_interval_s=0,
+    )
+    adapter = _EchoAdapter(settings=settings)
+    app = create_app(adapter, settings, title="Echo NoKeepalive")
+    assert not hasattr(app.state, "keepalive_stop")
+
+
+def test_keepalive_thread_starts_when_enabled(tmp_path: Path) -> None:
+    """keepalive_interval_s > 0 creates a daemon thread and a stop event."""
+    settings = _EchoSettings(
+        jobs_base_dir=tmp_path / "jobs", keepalive_interval_s=30,
+    )
+    adapter = _EchoAdapter(settings=settings)
+    app = create_app(adapter, settings, title="Echo Keepalive")
+    assert hasattr(app.state, "keepalive_stop")
+    import threading
+    assert isinstance(app.state.keepalive_stop, threading.Event)
+    alive = [t for t in threading.enumerate() if t.name == "fc-keepalive"]
+    assert len(alive) >= 1
+    # Clean up.
+    app.state.keepalive_stop.set()
+
+
 def test_simulated_restart_recovers_jobs(tmp_path: Path) -> None:
     """Submit a job, tear the app down, build a fresh one pointed at the same dir.
 
@@ -281,7 +368,7 @@ def test_simulated_restart_recovers_jobs(tmp_path: Path) -> None:
     polled across an FC container restart can keep going without losing state.
     """
     jobs_dir = tmp_path / "jobs"
-    settings = _EchoSettings(jobs_base_dir=jobs_dir, max_concurrent_jobs=2)
+    settings = _EchoSettings(jobs_base_dir=jobs_dir, max_concurrent_jobs=2, keepalive_interval_s=0)
     adapter = _EchoAdapter(settings=settings)
 
     app1 = create_app(adapter, settings, title="Echo Restart")
@@ -299,7 +386,7 @@ def test_simulated_restart_recovers_jobs(tmp_path: Path) -> None:
         assert final["status"] == JobStatus.COMPLETED.value
 
     # Same jobs_base_dir, brand-new app instance — simulates an FC cold start.
-    settings2 = _EchoSettings(jobs_base_dir=jobs_dir, max_concurrent_jobs=2)
+    settings2 = _EchoSettings(jobs_base_dir=jobs_dir, max_concurrent_jobs=2, keepalive_interval_s=0)
     adapter2 = _EchoAdapter(settings=settings2)
     app2 = create_app(adapter2, settings2, title="Echo Restart Round 2")
 

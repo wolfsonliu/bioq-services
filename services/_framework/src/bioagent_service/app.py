@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import threading
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 
@@ -19,6 +21,38 @@ if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
 
 logger = logging.getLogger(__name__)
+
+
+def _start_keepalive(
+    runner: JobRunner, port: int, interval_s: int,
+) -> threading.Event:
+    """Spawn a daemon thread that pings ``/healthz`` while jobs are active.
+
+    FC determines instance idleness by HTTP request activity.  Background
+    subprocesses are invisible to FC, so an instance running a long GPU job
+    but receiving no poll requests will be reclaimed.  This thread prevents
+    that by generating a lightweight HTTP request every *interval_s* seconds
+    whenever ``runner.active_job_count > 0``.
+
+    Returns a :class:`threading.Event` — set it to stop the thread.
+    """
+    stop = threading.Event()
+    url = f"http://127.0.0.1:{port}/healthz"
+
+    def _loop() -> None:
+        while not stop.wait(interval_s):
+            if runner.active_job_count > 0:
+                try:
+                    urllib.request.urlopen(url, timeout=5)
+                except Exception:
+                    pass
+
+    t = threading.Thread(target=_loop, daemon=True, name="fc-keepalive")
+    t.start()
+    logger.info(
+        "FC keepalive thread started (interval=%ds, url=%s)", interval_s, url,
+    )
+    return stop
 
 
 def create_app(
@@ -67,6 +101,10 @@ def create_app(
     app.state.job_store = store
     app.state.executor = executor
     app.state.runner = runner
+
+    if settings.keepalive_interval_s > 0:
+        stop_keepalive = _start_keepalive(runner, settings.port, settings.keepalive_interval_s)
+        app.state.keepalive_stop = stop_keepalive
 
     if reload_jobs:
         n_restored = reload_from_disk(store, adapter, settings.jobs_base_dir)

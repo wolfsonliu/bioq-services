@@ -10,8 +10,9 @@ RFdiffusion2 has three endpoints:
   * `/api/generate`                       — raw contig + freeform Hydra overrides
 
 Test PDBs ship in `tests/data/` (copied from upstream RFdiffusion2 benchmarks)
-so the suite is self-contained. Each job generates 1 design with default
-timesteps to keep FC GPU time manageable (~2-5 min per endpoint).
+so the suite is self-contained. Each job generates 1 design with diffuser_t=10
+(instead of default 100) to keep FC GPU time manageable (~10-15 min per endpoint
+on slower FC instances). Quality doesn't matter — only pipeline correctness.
 """
 
 from __future__ import annotations
@@ -132,7 +133,9 @@ def test_unknown_job_returns_404(client: httpx.Client) -> None:
 def test_active_site_minimal_job(client: httpx.Client, base_url: str) -> None:
     """Active-site scaffolding: lactate dehydrogenase NAD+OXM (unindexed).
 
-    Reproduces the `active_site_unindexed_atomic` demo — 1 design only.
+    Uses diffuser_t=10 to keep GPU time manageable on slower FC instances
+    (~10 min instead of ~100 min at the default t=100). Quality doesn't
+    matter — this test only validates the end-to-end pipeline.
     """
     contig_atoms = {
         "A106": "NE,CD,CZ",
@@ -150,6 +153,7 @@ def test_active_site_minimal_job(client: httpx.Client, base_url: str) -> None:
                 "ligand": "NAD,OXM",
                 "contig_as_guidepost": "true",
                 "num_designs": "1",
+                "diffuser_t": "10",
             },
         )
     r.raise_for_status()
@@ -158,24 +162,29 @@ def test_active_site_minimal_job(client: httpx.Client, base_url: str) -> None:
     assert submit["input_params"]["ligand"] == "NAD,OXM"
     assert submit["input_params"]["contig_as_guidepost"] is True
     assert submit["input_params"]["num_designs"] == 1
+    assert submit["input_params"]["diffuser_t"] == 10
 
     final = poll_job(client, base_url, submit["job_id"])
     _assert_completed(final, base_url, client)
 
 
 def test_small_molecule_binder_minimal_job(client: httpx.Client, base_url: str) -> None:
-    """Small-molecule binder: 100aa buried binder around PH2 (RASA=0)."""
+    """Small-molecule binder: 50aa buried binder around PH2 (RASA=0).
+
+    Uses diffuser_t=10 + shorter contigs to keep FC GPU time under ~15 min.
+    """
     with open(SM_BINDER_PDB, "rb") as fh:
         r = client.post(
             "/api/generate/small_molecule_binder",
             files={"input_pdb": (SM_BINDER_PDB.name, fh, "chemical/x-pdb")},
             data={
-                "contigs": "100",
-                "length": "100-100",
+                "contigs": "50",
+                "length": "50-50",
                 "ligand": "PH2",
                 "rasa_active": "true",
                 "rasa_target": "0",
                 "num_designs": "1",
+                "diffuser_t": "10",
             },
         )
     r.raise_for_status()
@@ -184,6 +193,7 @@ def test_small_molecule_binder_minimal_job(client: httpx.Client, base_url: str) 
     assert submit["input_params"]["ligand"] == "PH2"
     assert submit["input_params"]["rasa_active"] is True
     assert submit["input_params"]["num_designs"] == 1
+    assert submit["input_params"]["diffuser_t"] == 10
 
     final = poll_job(client, base_url, submit["job_id"])
     _assert_completed(final, base_url, client)
@@ -194,6 +204,7 @@ def test_custom_active_site_minimal_job(client: httpx.Client, base_url: str) -> 
 
     Uses the same M0584_1ldm PDB but drives it through the generic /api/generate
     endpoint with explicit Hydra overrides instead of the typed active_site params.
+    Uses diffuser_t=10 for fast FC testing.
     """
     contig_atoms = {
         "A106": "NE,CD,CZ",
@@ -211,6 +222,7 @@ def test_custom_active_site_minimal_job(client: httpx.Client, base_url: str) -> 
                 "input_pdb_required": "true",
                 "ligand": "NAD,OXM",
                 "num_designs": "1",
+                "diffuser_t": "10",
                 "extra_overrides": json.dumps({
                     "inference.contig_as_guidepost": True,
                     "contigmap.contig_atoms": contig_atoms,
@@ -223,6 +235,7 @@ def test_custom_active_site_minimal_job(client: httpx.Client, base_url: str) -> 
     assert submit["input_params"]["contigs"] == "46,A106-106,59,A166-166,2,A169-169,23,A193-193,46"
     assert submit["input_params"]["num_designs"] == 1
     assert submit["input_params"]["ligand"] == "NAD,OXM"
+    assert submit["input_params"]["diffuser_t"] == 10
 
     final = poll_job(client, base_url, submit["job_id"])
     _assert_completed(final, base_url, client)
