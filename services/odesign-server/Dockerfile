@@ -21,7 +21,7 @@
 #   apt/micromamba → mirrors → conda env → pip extras → framework → cleanup
 #   ‖ runtime: apt → conda env → CUTLASS → source → weights → data → server .py
 
-ARG BASE_IMAGE=nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+ARG BASE_IMAGE=nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 ARG MICROMAMBA_IMAGE=mambaorg/micromamba:2.6.2
 
 
