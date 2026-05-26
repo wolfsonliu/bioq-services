@@ -1,0 +1,167 @@
+# ---------- ODesign Server ----------
+# Cross-modality biomolecular interaction design (protein/DNA/RNA/ligand/ion).
+#
+# Pre-build:
+#   Place model weights in opensource/ODesign/ckpt/ (see scripts/fetch_weights.sh)
+#   Place CCD data in opensource/ODesign/data/   (see scripts/fetch_ccd_data.sh)
+#
+# Build (from bioagent project root):
+#   docker build --platform linux/amd64 -t odesign-server \
+#       -f services/odesign-server/Dockerfile .
+#
+# Multistage layout
+# -----------------
+#   builder = conda env only: micromamba create + pip install + framework +
+#             cleanup. No ODesign source or weights — those go directly into
+#             the runtime stage so builder cache survives source/weight edits.
+#   runtime = apt + conda env from builder + CUTLASS + ODesign source +
+#             weights + CCD data + server code.
+#
+# Layer ordering (stable → volatile):
+#   apt/micromamba → mirrors → conda env → pip extras → framework → cleanup
+#   ‖ runtime: apt → conda env → CUTLASS → source → weights → data → server .py
+
+ARG BASE_IMAGE=nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+ARG MICROMAMBA_IMAGE=mambaorg/micromamba:2.6.2
+
+
+# ===== Stage 1: builder — conda env only =====
+FROM ${MICROMAMBA_IMAGE} AS micromamba
+FROM ${BASE_IMAGE} AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential cmake g++-12 git curl wget ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- micromamba ---
+COPY --from=micromamba /bin/micromamba /bin/micromamba
+ENV MAMBA_EXE=/bin/micromamba
+ENV MAMBA_ROOT_PREFIX=/opt/conda
+ENV PATH=/opt/conda/envs/odesign/bin:$PATH
+
+# ---------------------------------------------------------------------------
+# Mirror configuration for pip + conda.
+# pip: Aliyun mirror (+ PyPI fallback for packages missing from mirror).
+# conda: TUNA (Tsinghua) for standard channels.
+# ---------------------------------------------------------------------------
+RUN mkdir -p /root/.config/pip \
+    && printf '[global]\nindex-url = https://mirrors.aliyun.com/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
+       > /root/.config/pip/pip.conf \
+    && cat > /root/.condarc <<'EOF'
+channels:
+  - defaults
+show_channel_urls: true
+default_channels:
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/msys2
+custom_channels:
+  conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+  pytorch: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+EOF
+
+# ---------------------------------------------------------------------------
+# Create conda env with Python 3.10 (ODesign only has requirements.txt, no
+# environment.yml — so we create a bare env then pip install).
+# ---------------------------------------------------------------------------
+RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
+    micromamba create -y -n odesign -c conda-forge python=3.10
+
+# ---------------------------------------------------------------------------
+# pip install ODesign dependencies.
+# PyG wheels need the find-links URL for the torch-2.3.1+cu121 index.
+# ---------------------------------------------------------------------------
+COPY opensource/ODesign/requirements.txt /tmp/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    /opt/conda/envs/odesign/bin/pip install --no-cache-dir \
+        -r /tmp/requirements.txt \
+        -f https://data.pyg.org/whl/torch-2.3.1+cu121.html \
+    && rm /tmp/requirements.txt
+
+# ---------------------------------------------------------------------------
+# Install the shared service framework + cleanup dead weight.
+# ---------------------------------------------------------------------------
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    /opt/conda/envs/odesign/bin/pip install \
+        "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2 \
+    && rm -rf /tmp/service-framework \
+    && /opt/conda/envs/odesign/bin/pip uninstall -y \
+        jupyterlab jupyter_server jupyterlab_server jupyter_client \
+        ipywidgets ipykernel notebook nbconvert nbformat || true \
+    && find /opt/conda/envs/odesign/lib -name '*.a' -delete \
+    && rm -rf \
+        /opt/conda/envs/odesign/share/doc \
+        /opt/conda/envs/odesign/share/man \
+        /opt/conda/envs/odesign/share/locale \
+    && find /opt/conda/envs/odesign/lib/python3.10/site-packages \
+        -depth -type d \( -name 'tests' -o -name 'test' \) \
+        -exec rm -rf {} + \
+    && find /opt/conda/envs/odesign -depth -type d -name '__pycache__' -exec rm -rf {} + \
+    && find /opt/conda/envs/odesign -name '*.pyc' -delete
+
+
+# ===== Stage 2: runtime =====
+FROM ${BASE_IMAGE}
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV MAMBA_ROOT_PREFIX=/opt/conda
+ENV PATH=/opt/conda/envs/odesign/bin:$PATH
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates libgl1-mesa-glx libglib2.0-0 fontconfig \
+        librdmacm1 libibverbs1 ibverbs-providers \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- conda env from builder ---
+COPY --from=builder /opt/conda /opt/conda
+
+# --- CUTLASS (for DS4Sci_EvoformerAttention + fast_layernorm) ---
+# Cloned in runtime stage: header-only library, rarely changes, avoids
+# bloating the builder conda env cache layer.
+RUN git clone --depth 1 -b v3.5.1 https://github.com/NVIDIA/cutlass.git /kernels/cutlass
+
+# --- ODesign source ---
+COPY opensource/ODesign /opt/odesign/ODesign
+
+# --- Model weights (pre-placed in opensource/ODesign/ckpt/ before build) ---
+COPY opensource/ODesign/ckpt/ /opt/odesign/ckpt/
+
+# --- CCD data (pre-placed in opensource/ODesign/data/ before build) ---
+COPY opensource/ODesign/data/ /opt/odesign/data/
+
+# --- Server code (explicit file list — changes don't invalidate layers above) ---
+COPY services/odesign-server/VERSION    /opt/odesign/server/VERSION
+COPY services/odesign-server/__init__.py /opt/odesign/server/__init__.py
+COPY services/odesign-server/settings.py /opt/odesign/server/settings.py
+COPY services/odesign-server/models.py  /opt/odesign/server/models.py
+COPY services/odesign-server/adapter.py /opt/odesign/server/adapter.py
+COPY services/odesign-server/tools.py   /opt/odesign/server/tools.py
+COPY services/odesign-server/uris.py    /opt/odesign/server/uris.py
+COPY services/odesign-server/app.py     /opt/odesign/server/app.py
+
+# --- Environment ---
+ENV CUTLASS_PATH=/kernels/cutlass
+ENV LAYERNORM_TYPE=fast_layernorm
+
+ENV ODESIGN_ROOT=/opt/odesign/ODesign
+ENV ODESIGN_PYTHON=/opt/conda/envs/odesign/bin/python
+ENV ODESIGN_INFERENCE_SCRIPT=/opt/odesign/ODesign/scripts/inference.py
+ENV ODESIGN_JOBS_BASE_DIR=/data/odesign_jobs
+ENV ODESIGN_CKPT_ROOT_DIR=/opt/odesign/ckpt
+ENV ODESIGN_DATA_ROOT_DIR=/opt/odesign/data
+RUN mkdir -p /data/odesign_jobs
+
+WORKDIR /opt/odesign
+
+ENV PORT=9000
+EXPOSE 9000
+
+CMD ["/opt/conda/envs/odesign/bin/python", "-m", "uvicorn", "server.app:app", \
+     "--host", "0.0.0.0", "--port", "9000", "--timeout-keep-alive", "900"]

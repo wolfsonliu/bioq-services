@@ -1,0 +1,16 @@
+[
+  {
+    "name": "fc_test",
+    "ref_file": "",
+    "chains": [
+      {
+        "chain_type": "proteinChain",
+        "sequence": "40-60"
+      },
+      {
+        "chain_type": "proteinChain",
+        "sequence": "GGGILPWKWPWWPWRRGGG"
+      }
+    ]
+  }
+]

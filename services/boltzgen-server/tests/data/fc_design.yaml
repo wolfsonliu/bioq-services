@@ -1,0 +1,7 @@
+entities:
+  - protein:
+      id: A
+      sequence: 40..60
+  - protein:
+      id: B
+      sequence: GGGILPWKWPWWPWRRGGG
