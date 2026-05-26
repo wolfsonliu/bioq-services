@@ -14,8 +14,9 @@
 #             server code.
 #
 # Layer ordering (stable → volatile):
-#   apt/micromamba → mirrors → conda env → pip extras → ittapi → framework
-#   → cleanup ‖ runtime: conda env → upstream source → ESM weights → server .py
+#   apt/micromamba → mirrors → conda env (includes ittapi) → pip extras →
+#   framework → cleanup ‖ runtime: conda env → upstream source → ESM weights
+#   → server .py
 #
 # Base: CUDA 11.8 -devel (matching pytorch-cuda=11.8 in the conda env).
 # Using devel for both stages for safety — runtime would suffice since
@@ -83,16 +84,6 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     /opt/conda/envs/deeprank-ab/bin/pip install anarci
-
-# PyTorch 2.0.1 (conda) links against libjitprofiling.so (Intel VTune JIT
-# profiling API, provides iJIT_NotifyEvent). conda-forge ittapi installs the
-# .so into the env's lib/ where the dynamic linker finds it. If the conda
-# package is unavailable, fall back to a gcc stub (the symbol is a no-op
-# profiling callback).
-RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
-    micromamba install -n deeprank-ab -c conda-forge -y ittapi \
-    || (echo 'int iJIT_NotifyEvent(int t, void *d) { return 0; }' | \
-        gcc -shared -o /opt/conda/envs/deeprank-ab/lib/libjitprofiling.so -x c -)
 
 # ---------------------------------------------------------------------------
 # Install the shared service framework.

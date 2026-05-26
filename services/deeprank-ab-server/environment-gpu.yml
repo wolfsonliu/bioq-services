@@ -15,6 +15,7 @@ channels:
   - pytorch
   - pyg
   - nvidia
+  - conda-forge
   - defaults
 dependencies:
   - python=3.10
@@ -40,6 +41,11 @@ dependencies:
   # --- Utilities ---
   - tqdm>=4.65
   - requests>=2.29
+  # --- Runtime dependency of conda pytorch 2.0.1 ---
+  # Conda-built PyTorch links libjitprofiling.so (Intel VTune ITT JIT profiling
+  # API, symbol iJIT_NotifyEvent). ittapi provides this .so. Pip-installed
+  # PyTorch does not have this dependency.
+  - ittapi
   - pip
   # --- Pip-only packages ---
   - pip:
