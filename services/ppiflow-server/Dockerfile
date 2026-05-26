@@ -94,10 +94,17 @@ ENV PATH=/opt/conda/envs/ppiflow/bin:$PATH
 # rfantibody-server). The pytorch wheel index (download.pytorch.org) stays as
 # the explicit --extra-index-url inside env.yml's pip: section — we don't
 # override that.
+#
+# ~/.pydistutils.cfg: some pip: packages (tmtools==0.2.0) use the deprecated
+# setuptools `setup_requires` → `fetch_build_eggs` path, which bypasses
+# pip.conf and downloads from upstream pypi.org directly. The distutils config
+# redirects easy_install (used by fetch_build_eggs) to the Huawei mirror.
 # ---------------------------------------------------------------------------
 RUN mkdir -p /root/.config/pip && \
     printf '[global]\nindex-url = https://repo.huaweicloud.com/repository/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
-    > /root/.config/pip/pip.conf
+    > /root/.config/pip/pip.conf && \
+    printf '[easy_install]\nindex_url = https://repo.huaweicloud.com/repository/pypi/simple/\n' \
+    > /root/.pydistutils.cfg
 
 # ---------------------------------------------------------------------------
 # Redirect conda channels to TUNA (Tsinghua) mirror via `.condarc`.
