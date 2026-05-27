@@ -34,7 +34,7 @@ RUN uv venv .venv --python python3.10
 # RFantibody source — selective COPY for cache isolation.
 #
 # weights/ (1.6 GB, very stable) is a separate layer so code edits don't bust
-# the weight cache. test/ (29 MB), README.md, CLAUDE.md, uv.lock are skipped.
+# the weight cache. test/ (29 MB), CLAUDE.md, uv.lock are skipped.
 #
 # Switched from `uv sync --frozen` to `uv pip install -e .` because uv.lock
 # pins each wheel to a hardcoded `files.pythonhosted.org` URL, which bypasses
@@ -44,7 +44,7 @@ RUN uv venv .venv --python python3.10
 # ---------------------------------------------------------------------------
 COPY opensource/RFantibody/weights/ ./weights/
 
-COPY opensource/RFantibody/pyproject.toml ./pyproject.toml
+COPY opensource/RFantibody/pyproject.toml opensource/RFantibody/README.md ./
 COPY opensource/RFantibody/src/ ./src/
 COPY opensource/RFantibody/scripts/ ./scripts/
 COPY opensource/RFantibody/include/ ./include/

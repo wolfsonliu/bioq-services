@@ -47,7 +47,7 @@ def captured_argv(monkeypatch):
     """
     captured: list[dict] = []
 
-    def _fake_submit(build_argv, label):
+    def _fake_submit(build_argv, label, **kwargs):
         from bioagent_service import JobInfo, JobStatus
 
         job_id = f"stub-{label}-{len(captured)}"
@@ -323,7 +323,7 @@ def test_build_yaml_with_provided_msa(tmp_path):
         saved_msa_paths={"A": a3m_path}, saved_template_paths={},
     )
     doc = yaml.safe_load(yaml_path.read_text())
-    assert doc["sequences"][0]["protein"]["msa"] == "msa/A.a3m"
+    assert doc["sequences"][0]["protein"]["msa"] == str(a3m_path)
 
 
 def test_build_yaml_raw_yaml_passthrough(tmp_path):

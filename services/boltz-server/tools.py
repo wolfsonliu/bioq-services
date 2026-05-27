@@ -121,7 +121,7 @@ def _resolve_msa_field(
     Returns:
       * `None`  → omit `msa:` entirely (boltz will use --use_msa_server)
       * `"empty"` → single-sequence mode
-      * relative path → server-side a3m file (relative to input/input.yaml)
+      * absolute path string → server-side a3m file
     """
     chain_id = entry.id if isinstance(entry.id, str) else entry.id[0]
 
@@ -131,10 +131,7 @@ def _resolve_msa_field(
             return "empty"
         path = saved_msa_paths.get(chain_id)
         if path is not None:
-            # Relative to the YAML's directory (input/) so boltz can find it.
-            return f"msa/{path.name}"
-        # URI not pre-resolved by endpoint; should not happen if endpoint did
-        # its job, but degrade gracefully — treat as literal path.
+            return str(path)
         return entry.msa_uri
 
     # Fall back to global mode.
@@ -152,7 +149,7 @@ def _resolve_msa_field(
                 "set SequenceEntry.msa_uri or upload a matching `msa_files` (filename stem = chain id)."
             ),
         )
-    return f"msa/{path.name}"
+    return str(path)
 
 
 def _render_constraint(c: Union[BondConstraint, PocketConstraint, ContactConstraint]) -> dict[str, Any]:
@@ -184,11 +181,9 @@ def _render_template(t: TemplateEntry, saved_template_paths: dict[str, Path]) ->
     assert uri is not None  # validator guarantees one
     path = saved_template_paths.get(uri)
     if path is None:
-        # URI not resolved by endpoint (would only happen if endpoint forgot to
-        # save it). Pass through literally — boltz may fail loudly later.
         ref = uri
     else:
-        ref = f"templates/{path.name}"
+        ref = str(path)
 
     fields: dict[str, Any] = {}
     fields["cif" if t.cif_uri else "pdb"] = ref
