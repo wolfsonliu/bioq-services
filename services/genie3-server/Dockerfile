@@ -94,7 +94,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python --no-build-isolation -e . \
     && rm -rf /tmp/genie3-patches \
     && find /opt/genie3/.venv -depth -type d -name '__pycache__' -exec rm -rf {} + \
-    && find /opt/genie3/.venv -depth -type d \( -name 'tests' -o -name 'test' \) -exec rm -rf {} + \
     && find /opt/genie3/.venv -name '*.pyc' -delete
 
 # ---------------------------------------------------------------------------
