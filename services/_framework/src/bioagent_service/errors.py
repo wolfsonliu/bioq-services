@@ -18,6 +18,17 @@ if TYPE_CHECKING:
     from bioagent_service.jobs import JobStore
 
 
+class ServiceBusyError(Exception):
+    """Raised when a job submission is rejected because the instance is at capacity."""
+
+    def __init__(self, active: int, limit: int) -> None:
+        self.active = active
+        self.limit = limit
+        super().__init__(
+            f"instance at capacity ({active}/{limit} slots in use)"
+        )
+
+
 def _output_summary(output_dir: Path) -> tuple[int, int]:
     """Walk *output_dir* and return ``(file_count, total_bytes)``."""
     count = total = 0
@@ -150,4 +161,4 @@ def finalize_job(
     )
 
 
-__all__ = ["FailureKind", "extract_error_summary", "finalize_job"]
+__all__ = ["FailureKind", "ServiceBusyError", "extract_error_summary", "finalize_job"]

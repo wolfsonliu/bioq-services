@@ -361,6 +361,50 @@ def test_keepalive_thread_starts_when_enabled(tmp_path: Path) -> None:
     app.state.keepalive_stop.set()
 
 
+def test_submit_returns_503_when_at_capacity(tmp_path: Path) -> None:
+    """When all executor slots are occupied, a new submit returns 503."""
+    settings = _EchoSettings(
+        jobs_base_dir=tmp_path / "jobs", max_concurrent_jobs=1, keepalive_interval_s=0,
+    )
+    adapter = _EchoAdapter(settings=settings)
+    app = create_app(adapter, settings, title="Echo Busy")
+
+    import threading
+    gate = threading.Event()
+
+    def _blocking_argv(_job_id: str, job_dir: Path) -> list[str]:
+        out = job_dir / "output"
+        out.mkdir(parents=True, exist_ok=True)
+        gate_file = job_dir / "gate"
+        gate_file.write_text("")
+        return ["bash", "-c", f"while [ -f {gate_file} ]; do sleep 0.05; done; echo ok > {out / 'msg.txt'}"]
+
+    @app.post("/api/echo")
+    def echo(req: _EchoRequest):
+        return app.state.runner.submit(
+            build_argv=lambda _id, jd: _blocking_argv(_id, jd), label="echo",
+        )
+
+    with TestClient(app) as c:
+        first = c.post("/api/echo", json={"message": "hold"})
+        assert first.status_code == 200
+        job_id = first.json()["job_id"]
+
+        time.sleep(0.15)
+
+        second = c.post("/api/echo", json={"message": "rejected"})
+        assert second.status_code == 503
+        body = second.json()
+        assert body["active_jobs"] == 1
+        assert body["max_concurrent_jobs"] == 1
+        assert "Retry-After" in second.headers
+
+        gate_file = settings.jobs_base_dir / job_id / "gate"
+        if gate_file.exists():
+            gate_file.unlink()
+        _wait_for_terminal(c, job_id)
+
+
 def test_simulated_restart_recovers_jobs(tmp_path: Path) -> None:
     """Submit a job, tear the app down, build a fresh one pointed at the same dir.
 

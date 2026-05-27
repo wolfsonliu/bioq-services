@@ -45,8 +45,17 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
-# Server code as `server` package — uvicorn imports `server.app:app`.
-COPY services/dockq-server/ /opt/dockq/server/
+# Server code last — explicit file list so test/doc changes don't bust cache.
+COPY services/dockq-server/__init__.py \
+     services/dockq-server/VERSION \
+     services/dockq-server/app.py \
+     services/dockq-server/adapter.py \
+     services/dockq-server/batch_score.py \
+     services/dockq-server/models.py \
+     services/dockq-server/settings.py \
+     services/dockq-server/tools.py \
+     services/dockq-server/uris.py \
+     /opt/dockq/server/
 
 # DockQ CLI installed under .venv/bin/DockQ — make it the resolved binary.
 ENV DOCKQ_BINARY=/opt/dockq/.venv/bin/DockQ

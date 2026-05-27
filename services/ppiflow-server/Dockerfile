@@ -248,6 +248,7 @@ ENV PPIFLOW_JOBS_BASE_DIR=/data/ppiflow_jobs
 RUN mkdir -p /data/ppiflow_jobs
 
 # Alibaba Cloud FC plumbing.
+ENV PPIFLOW_MAX_CONCURRENT_JOBS=1
 ENV PORT=9000
 EXPOSE 9000
 CMD ["/opt/conda/envs/ppiflow/bin/python", "-m", "uvicorn", "server.app:app", \

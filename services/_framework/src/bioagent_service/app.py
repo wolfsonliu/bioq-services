@@ -8,9 +8,11 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from bioagent_service.adapter import JobAdapter
+from bioagent_service.errors import ServiceBusyError
 from bioagent_service.jobs import JobStore, reload_from_disk
 from bioagent_service.manifest import make_manifest_router
 from bioagent_service.routes import make_generic_router
@@ -110,6 +112,18 @@ def create_app(
         n_restored = reload_from_disk(store, adapter, settings.jobs_base_dir)
         if n_restored:
             logger.info("recovered %d job(s) from %s", n_restored, settings.jobs_base_dir)
+
+    @app.exception_handler(ServiceBusyError)
+    async def _busy_handler(request: Request, exc: ServiceBusyError) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": str(exc),
+                "active_jobs": exc.active,
+                "max_concurrent_jobs": exc.limit,
+            },
+            headers={"Retry-After": "30"},
+        )
 
     app.include_router(make_generic_router())
     app.include_router(make_manifest_router())

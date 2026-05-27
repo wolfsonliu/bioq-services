@@ -52,10 +52,13 @@ def make_generic_router() -> APIRouter:
     @router.get("/healthz/detail")
     def health_detail(request: Request) -> dict[str, object]:
         settings = _settings(request)
+        runner = request.app.state.runner
         return {
             "status": "ok",
             "service": _adapter(request).name,
             "version": request.app.version,
+            "active_jobs": runner.active_job_count,
+            "max_concurrent_jobs": settings.max_concurrent_jobs,
             "jobs_base_dir": str(settings.jobs_base_dir),
             "jobs_base_dir_exists": settings.jobs_base_dir.exists(),
             "disk_usage_mb": round(disk_usage_bytes(settings.jobs_base_dir) / 1024 / 1024, 2),

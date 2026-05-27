@@ -83,6 +83,7 @@ ENV BOLTZGEN_MOLDIR=/opt/boltzgen/moldir
 ENV BOLTZGEN_JOBS_BASE_DIR=/data/boltzgen_jobs
 RUN mkdir -p /data/boltzgen_jobs
 
+ENV BOLTZGEN_MAX_CONCURRENT_JOBS=1
 ENV PORT=9000
 EXPOSE 9000
 # WORKDIR is /opt/boltzgen — CPython prepends CWD to sys.path, making the

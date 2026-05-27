@@ -45,9 +45,16 @@ COPY services/_framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
-# Server code as `server` package — uvicorn imports `server.app:app`. Mounted
-# alongside ProteinMPNN's repo so subprocess_cwd resolves correctly.
-COPY services/proteinmpnn-server/ /opt/proteinmpnn/server/
+# Server code last — explicit file list so test/doc changes don't bust cache.
+COPY services/proteinmpnn-server/__init__.py \
+     services/proteinmpnn-server/VERSION \
+     services/proteinmpnn-server/app.py \
+     services/proteinmpnn-server/adapter.py \
+     services/proteinmpnn-server/models.py \
+     services/proteinmpnn-server/settings.py \
+     services/proteinmpnn-server/tools.py \
+     services/proteinmpnn-server/uris.py \
+     /opt/proteinmpnn/server/
 
 ENV PROTEINMPNN_ROOT=/opt/proteinmpnn
 ENV PROTEINMPNN_WEIGHTS_DIR=/opt/proteinmpnn

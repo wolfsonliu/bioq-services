@@ -182,9 +182,16 @@ COPY --from=builder /opt/rfdiffusion /opt/rfdiffusion
 # `ModuleNotFoundError: No module named 'server'` at FC cold start.
 WORKDIR /opt/rfdiffusion
 
-# Server code is in its own layer so changes here don't drag the 8 GB COPY
-# above through a rebuild — uvicorn imports `server.app:app`.
-COPY services/rfdiffusion-server/ /opt/rfdiffusion/server/
+# Server code last — explicit file list so test/doc changes don't bust cache.
+COPY services/rfdiffusion-server/__init__.py \
+     services/rfdiffusion-server/VERSION \
+     services/rfdiffusion-server/app.py \
+     services/rfdiffusion-server/adapter.py \
+     services/rfdiffusion-server/models.py \
+     services/rfdiffusion-server/settings.py \
+     services/rfdiffusion-server/tools.py \
+     services/rfdiffusion-server/uris.py \
+     /opt/rfdiffusion/server/
 
 # Settings (env-driven; see services/rfdiffusion-server/settings.py).
 ENV RFDIFFUSION_ROOT=/opt/rfdiffusion
@@ -195,6 +202,7 @@ ENV RFDIFFUSION_JOBS_BASE_DIR=/data/rfdiffusion_jobs
 RUN mkdir -p /data/rfdiffusion_jobs
 
 # Alibaba Cloud FC: port 9000, keep-alive ≥ 15 min, /healthz must be ready < 120 s.
+ENV RFDIFFUSION_MAX_CONCURRENT_JOBS=1
 ENV PORT=9000
 EXPOSE 9000
 CMD ["/opt/rfdiffusion/.venv/bin/python", "-m", "uvicorn", "server.app:app", \

@@ -136,15 +136,16 @@ COPY opensource/ODesign/ckpt/ /opt/odesign/ckpt/
 # --- CCD data (pre-placed in opensource/ODesign/data/ before build) ---
 COPY opensource/ODesign/data/ /opt/odesign/data/
 
-# --- Server code (explicit file list — changes don't invalidate layers above) ---
-COPY services/odesign-server/VERSION    /opt/odesign/server/VERSION
-COPY services/odesign-server/__init__.py /opt/odesign/server/__init__.py
-COPY services/odesign-server/settings.py /opt/odesign/server/settings.py
-COPY services/odesign-server/models.py  /opt/odesign/server/models.py
-COPY services/odesign-server/adapter.py /opt/odesign/server/adapter.py
-COPY services/odesign-server/tools.py   /opt/odesign/server/tools.py
-COPY services/odesign-server/uris.py    /opt/odesign/server/uris.py
-COPY services/odesign-server/app.py     /opt/odesign/server/app.py
+# Server code last — explicit file list so test/doc changes don't bust cache.
+COPY services/odesign-server/__init__.py \
+     services/odesign-server/VERSION \
+     services/odesign-server/app.py \
+     services/odesign-server/adapter.py \
+     services/odesign-server/models.py \
+     services/odesign-server/settings.py \
+     services/odesign-server/tools.py \
+     services/odesign-server/uris.py \
+     /opt/odesign/server/
 
 # --- Environment ---
 ENV CUTLASS_PATH=/kernels/cutlass
@@ -160,6 +161,7 @@ RUN mkdir -p /data/odesign_jobs
 
 WORKDIR /opt/odesign
 
+ENV ODESIGN_MAX_CONCURRENT_JOBS=1
 ENV PORT=9000
 EXPOSE 9000
 

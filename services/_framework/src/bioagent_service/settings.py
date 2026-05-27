@@ -45,8 +45,8 @@ class ServiceSettings(BaseSettings):
     port: int = Field(default=9000, ge=1, le=65535)
     # uvicorn keep-alive; FC requires >= 15 minutes for long jobs.
     keep_alive_sec: int = Field(default=900, ge=60)
-    # Bound on concurrent subprocesses. >1 only makes sense if the algorithm can share GPU.
-    max_concurrent_jobs: int = Field(default=1, ge=1)
+    # Bound on concurrent subprocesses. Exceeding this limit returns HTTP 503.
+    max_concurrent_jobs: int = Field(default=2, ge=1)
     # How many trailing bytes of the log to embed in JobInfo.error_tail on failure.
     error_tail_chars: int = Field(default=4000, ge=200, le=64000)
     # FC self-keepalive: while jobs are active, ping /healthz at this interval

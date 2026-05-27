@@ -186,6 +186,7 @@ ENV RFDIFFUSION2_JOBS_BASE_DIR=/data/rfdiffusion2_jobs
 RUN mkdir -p /data/rfdiffusion2_jobs
 
 # Alibaba Cloud FC: port 9000, keep-alive ≥ 15 min, /healthz ready < 120 s.
+ENV RFDIFFUSION2_MAX_CONCURRENT_JOBS=1
 ENV PORT=9000
 EXPOSE 9000
 CMD ["/opt/conda/envs/rfd2/bin/python", "-m", "uvicorn", "server.app:app", \

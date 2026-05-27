@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from bioagent_service.adapter import JobAdapter
-from bioagent_service.errors import finalize_job
+from bioagent_service.errors import ServiceBusyError, finalize_job
 from bioagent_service.jobs import JobStore, cleanup_job, evict_finished_until_under_limit
 from bioagent_service.models import FailureKind, JobInfo, JobStatus, utcnow
 from bioagent_service.settings import ServiceSettings
@@ -138,6 +138,10 @@ class JobRunner:
         `input_params` is an opaque dict echoed back in JobInfo for debugging.
         """
         adapter = self.adapter
+        # Admission control: reject early if all slots are occupied.
+        with self._active_lock:
+            if self._active_count >= self.settings.max_concurrent_jobs:
+                raise ServiceBusyError(self._active_count, self.settings.max_concurrent_jobs)
         # Best-effort disk hygiene before scheduling new work.
         evict_finished_until_under_limit(
             self.store, self.settings.jobs_base_dir, self.settings.disk_limit_mb

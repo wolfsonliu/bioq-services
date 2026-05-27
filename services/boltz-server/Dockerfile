@@ -80,8 +80,16 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2 pyyaml
 
-# Server code as `server` package — uvicorn imports `server.app:app`.
-COPY services/boltz-server/ /opt/boltz/server/
+# Server code last — explicit file list so test/doc changes don't bust cache.
+COPY services/boltz-server/__init__.py \
+     services/boltz-server/VERSION \
+     services/boltz-server/app.py \
+     services/boltz-server/adapter.py \
+     services/boltz-server/models.py \
+     services/boltz-server/settings.py \
+     services/boltz-server/tools.py \
+     services/boltz-server/uris.py \
+     /opt/boltz/server/
 
 # Service settings; mirror `services/boltz-server/settings.py` (BoltzSettings).
 ENV BOLTZ_ROOT=/opt/boltz

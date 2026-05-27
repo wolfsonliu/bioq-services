@@ -17,7 +17,7 @@ class _NoEnvSettings(ServiceSettings):
 def test_defaults() -> None:
     s = _NoEnvSettings()
     assert s.port == 9000
-    assert s.max_concurrent_jobs == 1
+    assert s.max_concurrent_jobs == 2
     assert s.disk_limit_mb == 8000
 
 

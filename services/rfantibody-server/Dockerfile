@@ -48,11 +48,18 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # when only the framework's source changes.
 COPY services/_framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install "/tmp/service-framework[mcp]" \
-    && uv pip install httpx alibabacloud-oss-v2
+    uv pip install "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
-# --- Copy server code as "server" package ---
-COPY services/rfantibody-server/ /opt/rfantibody/server/
+# Server code last — explicit file list so test/doc changes don't bust cache.
+COPY services/rfantibody-server/__init__.py \
+     services/rfantibody-server/VERSION \
+     services/rfantibody-server/app.py \
+     services/rfantibody-server/adapter.py \
+     services/rfantibody-server/models.py \
+     services/rfantibody-server/settings.py \
+     services/rfantibody-server/tools.py \
+     services/rfantibody-server/uris.py \
+     /opt/rfantibody/server/
 
 # Env-driven settings — see services/rfantibody-server/settings.py (RFantibodySettings).
 # The RFANTIBODY_ prefix is read by pydantic-settings; defaults match the image layout.
@@ -60,11 +67,13 @@ ENV RFANTIBODY_ROOT=/opt/rfantibody
 ENV RFANTIBODY_WEIGHTS_DIR=/opt/rfantibody/weights
 ENV RFANTIBODY_SCRIPTS_DIR=/opt/rfantibody/scripts
 ENV RFANTIBODY_JOBS_BASE_DIR=/data/rfantibody_jobs
+RUN mkdir -p /data/rfantibody_jobs
 
 # --- Alibaba Cloud FC configuration ---
 # CAPort: FC default listening port is 9000
 # Keep-alive: FC requires >= 15 minutes (900s)
 # Startup: HTTP server must be ready within 120s
+ENV RFANTIBODY_MAX_CONCURRENT_JOBS=1
 ENV PORT=9000
 EXPOSE 9000
 

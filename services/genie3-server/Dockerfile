@@ -76,8 +76,16 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
-# --- Server code ---
-COPY services/genie3-server/ /opt/genie3/server/
+# Server code last — explicit file list so test/patch changes don't bust cache.
+COPY services/genie3-server/__init__.py \
+     services/genie3-server/VERSION \
+     services/genie3-server/app.py \
+     services/genie3-server/adapter.py \
+     services/genie3-server/configs.py \
+     services/genie3-server/datasets.py \
+     services/genie3-server/models.py \
+     services/genie3-server/settings.py \
+     /opt/genie3/server/
 
 # Env-driven settings — see services/genie3-server/settings.py (Genie3Settings).
 # The GENIE3_ prefix is read by pydantic-settings; defaults match the image layout.
@@ -91,6 +99,7 @@ RUN mkdir -p /data/genie3_jobs
 # CAPort: FC default listening port is 9000
 # Keep-alive: FC requires >= 15 minutes (900s)
 # Startup: HTTP server must be ready within 120s
+ENV GENIE3_MAX_CONCURRENT_JOBS=1
 ENV PORT=9000
 EXPOSE 9000
 
