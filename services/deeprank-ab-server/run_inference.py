@@ -25,17 +25,20 @@ from pathlib import Path
 
 _DEEPRANK_AB_ROOT = os.environ.get("DEEPRANK_AB_ROOT", "/opt/deeprank-ab")
 _PROJECT_DIR = os.path.join(_DEEPRANK_AB_ROOT, "DeepRank-Ab")
-
-# Insert at front so ``from src.*`` and ``from tools.*`` resolve inside the
-# DeepRank-Ab tree, not inside the server directory.
-if _PROJECT_DIR not in sys.path:
-    sys.path.insert(0, _PROJECT_DIR)
+_SRC_DIR = os.path.join(_PROJECT_DIR, "src")
 
 # Remove the script's own directory if Python auto-added it, to avoid the
 # ``server/argv.py`` ↔ ``src/tools/`` collision entirely.
 _SCRIPT_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPT_DIR in sys.path:
     sys.path.remove(_SCRIPT_DIR)
+
+# Insert at front so ``from src.*`` resolves inside the DeepRank-Ab tree.
+# Also add ``src/`` because upstream modules (NeuralNet_focal_EMA, etc.) use
+# bare imports like ``from tools.FocalLoss import BMCLoss``.
+for _p in (_SRC_DIR, _PROJECT_DIR):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 # ---------------------------------------------------------------------------
 # Imports (safe now that sys.path is correct)
