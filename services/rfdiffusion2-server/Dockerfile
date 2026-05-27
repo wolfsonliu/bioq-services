@@ -36,6 +36,9 @@ FROM ${BASE_IMAGE} AS builder
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+# Huawei Cloud pip mirror via uv (project-wide convention).
+ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
+ENV UV_HTTP_TIMEOUT=600
 
 # Pin torch's CUDA discovery to the system toolkit.
 ENV CUDA_HOME=/usr/local/cuda
@@ -46,6 +49,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=micromamba /bin/micromamba /bin/micromamba
+COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
 ENV MAMBA_EXE=/bin/micromamba
 ENV MAMBA_ROOT_PREFIX=/opt/conda
 ENV PATH=/opt/conda/envs/rfd2/bin:$PATH
@@ -53,8 +57,9 @@ ENV PATH=/opt/conda/envs/rfd2/bin:$PATH
 # ---------------------------------------------------------------------------
 # Mirror configuration for pip + conda.
 #
-# pip: Aliyun mirror. Configure BEFORE micromamba env-create — env.yml's
+# pip.conf: Huawei Cloud. Configure BEFORE micromamba env-create — env.yml's
 # `pip:` section invokes pip during env create and would otherwise hit pypi.org.
+# uv: controlled by UV_INDEX_URL env above (post-env pip installs).
 #
 # conda: TUNA (Tsinghua) for the standard channels. Three upstream channels
 # we leave alone (fall through to conda.anaconda.org):
@@ -64,7 +69,7 @@ ENV PATH=/opt/conda/envs/rfd2/bin:$PATH
 #   - dglteam/label/th24_cu124    same limitation.
 # ---------------------------------------------------------------------------
 RUN mkdir -p /root/.config/pip \
-    && printf '[global]\nindex-url = https://mirrors.aliyun.com/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
+    && printf '[global]\nindex-url = https://repo.huaweicloud.com/repository/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
        > /root/.config/pip/pip.conf \
     && cat > /root/.condarc <<'EOF'
 channels:
@@ -82,14 +87,11 @@ EOF
 # ---------------------------------------------------------------------------
 # Create the rfd2 conda env from the vendored env files.
 # ---------------------------------------------------------------------------
-COPY services/rfdiffusion2-server/upstream/envs/cuda124_env.yml /tmp/rfd2-env/cuda124_env.yml
-COPY services/rfdiffusion2-server/upstream/envs/requirements_cuda124.txt /tmp/rfd2-env/requirements_cuda124.txt
-
-RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
+RUN --mount=type=bind,source=services/rfdiffusion2-server/upstream/envs,target=/tmp/rfd2-env \
+    --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     cd /tmp/rfd2-env \
-    && micromamba env create -y -n rfd2 -f cuda124_env.yml \
-    && rm -rf /tmp/rfd2-env
+    && micromamba env create -y -n rfd2 -f cuda124_env.yml
 
 # ---------------------------------------------------------------------------
 # Pip extras from upstream's apptainer .spec.
@@ -100,19 +102,16 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
 # upstream/ipd/ (see scripts/vendor.sh) so the contemporary copy lives on
 # PYTHONPATH alongside rf_diffusion/.
 # ---------------------------------------------------------------------------
-RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    /opt/conda/envs/rfd2/bin/pip install \
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python /opt/conda/envs/rfd2/bin/python \
         git+https://github.com/RalphMao/PyTimer.git
 
 # ---------------------------------------------------------------------------
-# Install the shared service framework + cleanup dead weight (~1.2 GB).
+# Cleanup dead weight from the conda env (~1.2 GB).
+# Multistage: COPY --from=builder copies the final filesystem state, so
+# cleanup in a separate RUN reclaims bytes just as effectively as fusing.
 # ---------------------------------------------------------------------------
-COPY services/_framework /tmp/service-framework
-RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    /opt/conda/envs/rfd2/bin/pip install \
-        "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2 \
-    && rm -rf /tmp/service-framework \
-    && /opt/conda/envs/rfd2/bin/pip uninstall -y \
+RUN /opt/conda/envs/rfd2/bin/pip uninstall -y \
         jupyterlab jupyter_server jupyterlab_server jupyter_client \
         ipywidgets ipykernel notebook nbconvert nbformat || true \
     && find /opt/conda/envs/rfd2/lib -name '*.a' -delete \
@@ -125,6 +124,15 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
         -exec rm -rf {} + \
     && find /opt/conda/envs/rfd2 -depth -type d -name '__pycache__' -exec rm -rf {} + \
     && find /opt/conda/envs/rfd2 -name '*.pyc' -delete
+
+# ---------------------------------------------------------------------------
+# Shared service framework — independent layer so framework changes don't
+# invalidate the (slow) conda env + cleanup above.
+# ---------------------------------------------------------------------------
+RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
+    --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python /opt/conda/envs/rfd2/bin/python \
+        "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
 
 # ===========================================================================

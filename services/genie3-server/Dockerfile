@@ -4,11 +4,31 @@
 # Genie3 source must be at opensource/genie3/ (pretrained v1 weights baked into image).
 # This image only supports `genie3 generate` — evaluation deps (ColabFold/ESMFold/FoldSeek/
 # ProteinMPNN/TMscore/DSSP/IPSAE) are intentionally excluded to keep the image small.
+#
+# Multistage layout
+# -----------------
+#   builder = heavy: apt build-essential + python-dev + git/wget for wheel compilation
+#             and git-hosted deps. Installs the venv, copies source, applies patches,
+#             does editable install, installs framework, and cleans up.
+#   runtime = lean: only python3.10 + ca-certificates; the finished /opt/genie3 tree
+#             (venv + source + weights) is copied over.
+#
+# Why multistage: build-essential / python3.10-dev / git / wget / curl pull in ~300 MB
+# of headers + gcc + libs the runtime never uses. In a single-stage Dockerfile
+# `apt-get remove` after install would leave the bytes in the original apt layer.
+#
 # Base: cudnn-runtime (not -devel). genie3 installs from prebuilt torch wheels +
 # pip wheels for its other deps; build-essential below is for numpy/Cython
 # wheel compilation, not CUDA — that works fine on -runtime too.
 # Save ~3.6 GB vs the -devel variant.
-FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+ARG BASE_IMAGE=nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+
+
+# ===========================================================================
+# Stage 1: builder — installs the venv, copies source + weights, applies
+# patches, does editable install, installs framework, and cleans up.
+# ===========================================================================
+FROM ${BASE_IMAGE} AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -16,6 +36,7 @@ ENV PYTHONUNBUFFERED=1
 # Huawei Cloud pip mirror via uv (project-wide convention, ~10× faster from
 # China than download.pytorch.org which has no China CDN).
 ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
+ENV UV_HTTP_TIMEOUT=600
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.10 python3.10-venv python3.10-dev \
@@ -64,17 +85,49 @@ RUN cd /opt/genie3 && for p in /tmp/genie3-patches/*.patch; do \
         echo "Applying $p"; patch -p1 < "$p"; \
     done
 
-# Editable install of genie3 (registers the `genie3` console entry point inside the venv)
+# ---------------------------------------------------------------------------
+# Editable install of genie3 + cleanup.
+# Multistage: COPY --from=builder copies the final filesystem state, so
+# cleanup in a separate RUN reclaims bytes just as effectively as fusing.
+# ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --python .venv/bin/python --no-build-isolation -e .
+    uv pip install --python .venv/bin/python --no-build-isolation -e . \
+    && rm -rf /tmp/genie3-patches \
+    && find /opt/genie3/.venv -depth -type d -name '__pycache__' -exec rm -rf {} + \
+    && find /opt/genie3/.venv -depth -type d \( -name 'tests' -o -name 'test' \) -exec rm -rf {} + \
+    && find /opt/genie3/.venv -name '*.pyc' -delete
 
-# --- Shared bioagent service framework + remote-fetch deps ---
-# Installing the framework as a separate layer keeps cache hits high when only
-# the framework's source changes. See services/_framework/ for the package.
-COPY services/_framework /tmp/service-framework
-RUN --mount=type=cache,target=/root/.cache/uv \
+# ---------------------------------------------------------------------------
+# Shared service framework — independent layer so framework changes don't
+# invalidate the (slow) editable install + cleanup above.
+# ---------------------------------------------------------------------------
+RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
+    --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
+
+
+# ===========================================================================
+# Stage 2: runtime — minimal apt surface + the finished tree from builder.
+# ===========================================================================
+FROM ${BASE_IMAGE}
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Runtime-only apt: python3.10 (the venv's shebang `.venv/bin/python` symlinks
+# to /usr/bin/python3.10) + ca-certificates (httpx HTTPS for OSS / URL inputs).
+# No gcc, no headers, no git — that all stayed in the builder stage.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 python3.10-venv ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# The whole prepared tree comes over in one COPY: venv + source + patched code
+# + weights + editable install metadata.
+COPY --from=builder /opt/genie3 /opt/genie3
+
+WORKDIR /opt/genie3
 
 # Server code last — explicit file list so test/patch changes don't bust cache.
 COPY services/genie3-server/__init__.py \

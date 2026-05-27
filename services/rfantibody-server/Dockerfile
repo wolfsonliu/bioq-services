@@ -30,24 +30,33 @@ WORKDIR /opt/rfantibody
 # consistently (uv pip auto-detects .venv in CWD, but being explicit is safer).
 RUN uv venv .venv --python python3.10
 
+# ---------------------------------------------------------------------------
+# RFantibody source — selective COPY for cache isolation.
+#
+# weights/ (1.6 GB, very stable) is a separate layer so code edits don't bust
+# the weight cache. test/ (29 MB), README.md, CLAUDE.md, uv.lock are skipped.
+#
 # Switched from `uv sync --frozen` to `uv pip install -e .` because uv.lock
 # pins each wheel to a hardcoded `files.pythonhosted.org` URL, which bypasses
-# the Huawei mirror set via UV_INDEX_URL above. From CN build hosts those URLs
-# time out on multi-MB wheels (biotraj/biotite/torch). `uv pip install` honors
-# UV_INDEX_URL for the default index and reads [tool.uv.sources] +
-# [[tool.uv.index]] from pyproject.toml for torch (pytorch index) / dgl
-# (direct wheel URL). Trade-off: lockfile reproducibility lost; acceptable
-# because the alternative (build failures behind a flaky CN→pypi link) is
-# strictly worse.
-COPY opensource/RFantibody/ .
+# the Huawei mirror set via UV_INDEX_URL above. Trade-off: lockfile
+# reproducibility lost; acceptable because the alternative (build failures
+# behind a flaky CN→pypi link) is strictly worse.
+# ---------------------------------------------------------------------------
+COPY opensource/RFantibody/weights/ ./weights/
+
+COPY opensource/RFantibody/pyproject.toml ./pyproject.toml
+COPY opensource/RFantibody/src/ ./src/
+COPY opensource/RFantibody/scripts/ ./scripts/
+COPY opensource/RFantibody/include/ ./include/
+
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python -e .
 
 # Shared bioagent service framework (HTTP/job/error layer, pydantic models, NAS-aware
-# read-through cache). Installing it as a separate layer keeps cache hit rates high
-# when only the framework's source changes.
-COPY services/_framework /tmp/service-framework
-RUN --mount=type=cache,target=/root/.cache/uv \
+# read-through cache). Bind mount avoids a COPY layer — framework dir is available
+# during RUN but never stored in the image.
+RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
+    --mount=type=cache,target=/root/.cache/uv \
     uv pip install "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
 # Server code last — explicit file list so test/doc changes don't bust cache.

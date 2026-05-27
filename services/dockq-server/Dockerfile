@@ -16,6 +16,7 @@ ENV PYTHONUNBUFFERED=1
 # Huawei Cloud pip mirror (project-wide convention, ~10× faster from China than
 # pypi.org).
 ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
+ENV UV_HTTP_TIMEOUT=600
 
 # build-essential is needed only for DockQ's Cython compile during install.
 # We keep it for now (~150 MB); a future optimization could do a multistage
@@ -40,8 +41,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # Shared bioagent service framework + remote-fetch deps (late layer so the
 # framework changing doesn't invalidate the DockQ install layer above).
-COPY services/_framework /tmp/service-framework
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
+    --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 

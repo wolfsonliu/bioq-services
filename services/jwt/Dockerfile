@@ -8,6 +8,7 @@ FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
+ENV UV_HTTP_TIMEOUT=600
 
 WORKDIR /opt/jwt
 RUN uv venv .venv --python python3.11

@@ -44,6 +44,7 @@ ENV PYTHONUNBUFFERED=1
 # uv pip layer below; pip.conf (further down) controls the pip invocations
 # micromamba makes while resolving env.yml's pip: section.
 ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
+ENV UV_HTTP_TIMEOUT=600
 
 # ---------------------------------------------------------------------------
 # Pin torch's CUDA discovery to the system toolkit, NOT conda's.
@@ -171,14 +172,12 @@ EOF
 # the cache mount still hits → most package downloads are re-used from cache,
 # only newly-added packages get fetched.
 # ---------------------------------------------------------------------------
-COPY opensource/PPIFlow/tool/PPIFlow/environment.yml /tmp/ppiflow-env.yml
-
 WORKDIR /opt/ppiflow
 
-RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
+RUN --mount=type=bind,source=opensource/PPIFlow/tool/PPIFlow/environment.yml,target=/tmp/ppiflow-env.yml \
+    --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    micromamba env create -y -n ppiflow -f /tmp/ppiflow-env.yml \
-    && rm /tmp/ppiflow-env.yml
+    micromamba env create -y -n ppiflow -f /tmp/ppiflow-env.yml
 
 # ---------------------------------------------------------------------------
 # Copy the PPIFlow tool source + pretrained checkpoints.
@@ -224,8 +223,8 @@ RUN rm -f /opt/ppiflow/models/layer_norm/fastfold_layer_norm_cuda.so \
 # conda env's interpreter — faster than conda env's bundled pip and benefits
 # from Huawei mirror (UV_INDEX_URL set above).
 # ---------------------------------------------------------------------------
-COPY services/_framework /tmp/service-framework
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
+    --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/ppiflow/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 

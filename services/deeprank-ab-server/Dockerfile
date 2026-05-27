@@ -35,21 +35,28 @@ FROM ${BASE_IMAGE} AS builder
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+# Huawei Cloud pip mirror via uv (project-wide convention).
+ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
+ENV UV_HTTP_TIMEOUT=600
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git wget ca-certificates build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=micromamba /bin/micromamba /bin/micromamba
+COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
 ENV MAMBA_EXE=/bin/micromamba
 ENV MAMBA_ROOT_PREFIX=/opt/conda
 ENV PATH=/opt/conda/envs/deeprank-ab/bin:$PATH
 
 # ---------------------------------------------------------------------------
 # Mirror configuration for pip + conda.
+# pip.conf: used by micromamba's pip: section during env create.
+# .condarc: TUNA mirrors for standard conda channels.
+# uv: controlled by UV_INDEX_URL env above (post-env pip installs).
 # ---------------------------------------------------------------------------
 RUN mkdir -p /root/.config/pip \
-    && printf '[global]\nindex-url = https://mirrors.aliyun.com/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
+    && printf '[global]\nindex-url = https://repo.huaweicloud.com/repository/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
        > /root/.config/pip/pip.conf \
     && cat > /root/.condarc <<'EOF'
 channels:
@@ -69,12 +76,10 @@ EOF
 # (upstream pins python=3.9; this copy upgrades to 3.10, drops unused
 #  packages, and relaxes transitive pins — see environment-gpu.yml)
 # ---------------------------------------------------------------------------
-COPY services/deeprank-ab-server/environment-gpu.yml /tmp/deeprank-ab-env/environment-gpu.yml
-
-RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
+RUN --mount=type=bind,source=services/deeprank-ab-server/environment-gpu.yml,target=/tmp/environment-gpu.yml \
+    --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    micromamba env create -y -n deeprank-ab -f /tmp/deeprank-ab-env/environment-gpu.yml \
-    && rm -rf /tmp/deeprank-ab-env
+    micromamba env create -y -n deeprank-ab -f /tmp/environment-gpu.yml
 
 # ---------------------------------------------------------------------------
 # Pip extras: ANARCI for CDR annotation.
@@ -82,17 +87,8 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
 # The upstream annotate.py does `from anarci import anarci` and passes the
 # bundled hmmscan binary via hmmerpath=. ANARCI ships its own HMM profiles.
 # ---------------------------------------------------------------------------
-RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    /opt/conda/envs/deeprank-ab/bin/pip install anarci
-
-# ---------------------------------------------------------------------------
-# Install the shared service framework.
-# ---------------------------------------------------------------------------
-COPY services/_framework /tmp/service-framework
-RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    /opt/conda/envs/deeprank-ab/bin/pip install \
-        "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2 \
-    && rm -rf /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python /opt/conda/envs/deeprank-ab/bin/python anarci
 
 # Build-time import smoke — catches missing symbols (e.g. iJIT_NotifyEvent
 # from ittapi) at build, not at FC deploy time.
@@ -114,6 +110,15 @@ RUN /opt/conda/envs/deeprank-ab/bin/pip uninstall -y \
         -exec rm -rf {} + \
     && find /opt/conda/envs/deeprank-ab -depth -type d -name '__pycache__' -exec rm -rf {} + \
     && find /opt/conda/envs/deeprank-ab -name '*.pyc' -delete
+
+# ---------------------------------------------------------------------------
+# Shared service framework — independent layer so framework changes don't
+# invalidate the (slow) conda env + cleanup above.
+# ---------------------------------------------------------------------------
+RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
+    --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python /opt/conda/envs/deeprank-ab/bin/python \
+        "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
 
 # ===========================================================================

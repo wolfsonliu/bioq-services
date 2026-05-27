@@ -32,24 +32,29 @@ FROM ${BASE_IMAGE} AS builder
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+# Huawei Cloud pip mirror via uv (project-wide convention).
+ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
+ENV UV_HTTP_TIMEOUT=600
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential cmake g++-12 git curl wget ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# --- micromamba ---
+# --- micromamba + uv ---
 COPY --from=micromamba /bin/micromamba /bin/micromamba
+COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
 ENV MAMBA_EXE=/bin/micromamba
 ENV MAMBA_ROOT_PREFIX=/opt/conda
 ENV PATH=/opt/conda/envs/odesign/bin:$PATH
 
 # ---------------------------------------------------------------------------
 # Mirror configuration for pip + conda.
-# pip: Aliyun mirror (+ PyPI fallback for packages missing from mirror).
-# conda: TUNA (Tsinghua) for standard channels.
+# pip.conf: Huawei Cloud (kept for any pip invocations inside conda env).
+# .condarc: TUNA (Tsinghua) for standard channels.
+# uv: controlled by UV_INDEX_URL env above (post-env pip installs).
 # ---------------------------------------------------------------------------
 RUN mkdir -p /root/.config/pip \
-    && printf '[global]\nindex-url = https://mirrors.aliyun.com/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
+    && printf '[global]\nindex-url = https://repo.huaweicloud.com/repository/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
        > /root/.config/pip/pip.conf \
     && cat > /root/.condarc <<'EOF'
 channels:
@@ -72,25 +77,21 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     micromamba create -y -n odesign -c conda-forge python=3.10
 
 # ---------------------------------------------------------------------------
-# pip install ODesign dependencies.
+# ODesign dependencies (uv pip — ~10× faster than pip, uses Huawei mirror).
 # PyG wheels need the find-links URL for the torch-2.3.1+cu121 index.
 # ---------------------------------------------------------------------------
-COPY opensource/ODesign/requirements.txt /tmp/requirements.txt
-RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    /opt/conda/envs/odesign/bin/pip install --no-cache-dir \
+RUN --mount=type=bind,source=opensource/ODesign/requirements.txt,target=/tmp/requirements.txt \
+    --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python /opt/conda/envs/odesign/bin/python \
         -r /tmp/requirements.txt \
-        -f https://data.pyg.org/whl/torch-2.3.1+cu121.html \
-    && rm /tmp/requirements.txt
+        --find-links https://data.pyg.org/whl/torch-2.3.1+cu121.html
 
 # ---------------------------------------------------------------------------
-# Install the shared service framework + cleanup dead weight.
+# Cleanup dead weight from the conda env (~1+ GB).
+# Multistage: COPY --from=builder copies the final filesystem state, so
+# cleanup in a separate RUN reclaims bytes just as effectively as fusing.
 # ---------------------------------------------------------------------------
-COPY services/_framework /tmp/service-framework
-RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    /opt/conda/envs/odesign/bin/pip install \
-        "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2 \
-    && rm -rf /tmp/service-framework \
-    && /opt/conda/envs/odesign/bin/pip uninstall -y \
+RUN /opt/conda/envs/odesign/bin/pip uninstall -y \
         jupyterlab jupyter_server jupyterlab_server jupyter_client \
         ipywidgets ipykernel notebook nbconvert nbformat || true \
     && find /opt/conda/envs/odesign/lib -name '*.a' -delete \
@@ -103,6 +104,15 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
         -exec rm -rf {} + \
     && find /opt/conda/envs/odesign -depth -type d -name '__pycache__' -exec rm -rf {} + \
     && find /opt/conda/envs/odesign -name '*.pyc' -delete
+
+# ---------------------------------------------------------------------------
+# Shared service framework — independent layer so framework changes don't
+# invalidate the (slow) conda env + cleanup above.
+# ---------------------------------------------------------------------------
+RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
+    --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python /opt/conda/envs/odesign/bin/python \
+        "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
 
 # ===== Stage 2: runtime =====

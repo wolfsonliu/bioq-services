@@ -17,6 +17,7 @@ ENV PYTHONUNBUFFERED=1
 # Huawei Cloud pip mirror via uv (project-wide convention, ~10× faster from
 # China than download.pytorch.org which has no China CDN).
 ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
+ENV UV_HTTP_TIMEOUT=600
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.10 python3.10-venv ca-certificates curl \
@@ -36,13 +37,22 @@ RUN uv venv .venv --python python3.10
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python torch==2.4.1 numpy
 
-# ProteinMPNN source + all four weight folders. COPY overlays files but
-# preserves the existing .venv dir.
-COPY opensource/ProteinMPNN /opt/proteinmpnn
+# ProteinMPNN source — selective COPY to skip non-runtime dirs (training/,
+# inputs/, outputs/, colab_notebooks/, examples/) and improve cache isolation.
+# Weights (stable, ~94 MB) as a separate layer from code (volatile, ~200 KB).
+# COPY overlays files but preserves the existing .venv dir.
+COPY opensource/ProteinMPNN/vanilla_model_weights/ ./vanilla_model_weights/
+COPY opensource/ProteinMPNN/soluble_model_weights/ ./soluble_model_weights/
+COPY opensource/ProteinMPNN/ca_model_weights/      ./ca_model_weights/
+COPY opensource/ProteinMPNN/AbMPNN_model_weights/  ./AbMPNN_model_weights/
+
+COPY opensource/ProteinMPNN/protein_mpnn_run.py   ./protein_mpnn_run.py
+COPY opensource/ProteinMPNN/protein_mpnn_utils.py ./protein_mpnn_utils.py
+COPY opensource/ProteinMPNN/helper_scripts/       ./helper_scripts/
 
 # Shared bioagent service framework + remote-fetch deps (late layer).
-COPY services/_framework /tmp/service-framework
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
+    --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
 # Server code last — explicit file list so test/doc changes don't bust cache.

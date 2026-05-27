@@ -35,6 +35,7 @@ ENV PYTHONUNBUFFERED=1
 # Huawei Cloud pip mirror (project-wide convention, ~10× faster than upstream
 # pypi.org from China build hosts). UV_INDEX_URL is consumed by `uv pip install`.
 ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
+ENV UV_HTTP_TIMEOUT=600
 
 # Build-only apt deps. `python3.10-dev` + `build-essential` are required by
 # legacy setup.py packages (SE3Transformer, rfdiffusion root) that build sdist
@@ -129,28 +130,31 @@ COPY opensource/RFdiffusion/examples/input_pdbs /opt/rfdiffusion/examples/input_
 COPY opensource/RFdiffusion/setup.py /opt/rfdiffusion/setup.py
 
 # ---------------------------------------------------------------------------
-# Three editable / wheel-from-source installs + shared framework, fused into
-# ONE layer with cleanup. None of these change in isolation in practice, and
-# combining them lets us strip `__pycache__` / build leftovers in the same
-# layer (deletion in a later RUN wouldn't reclaim bytes from earlier layers).
+# Editable / wheel-from-source installs + cleanup.
+# Multistage: COPY --from=builder copies the final filesystem state, so
+# cleanup in a separate RUN reclaims bytes just as effectively as fusing.
 #
 #   * SE3-Transformer (vendored under env/SE3Transformer; pure-python, no nvcc)
 #   * rfdiffusion editable install (--no-deps so we don't re-resolve the heavy
 #     stack we already installed; uses the source at /opt/rfdiffusion/rfdiffusion)
-#   * service framework + httpx + alibabacloud-oss-v2
 # ---------------------------------------------------------------------------
-COPY services/_framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python --no-build-isolation \
         /opt/rfdiffusion/env/SE3Transformer \
     && uv pip install --python .venv/bin/python --no-build-isolation --no-deps \
         -e /opt/rfdiffusion \
-    && uv pip install --python .venv/bin/python \
-        "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2 \
-    && rm -rf /tmp/service-framework \
     && find /opt/rfdiffusion/.venv -depth -type d -name '__pycache__' -exec rm -rf {} + \
     && find /opt/rfdiffusion/.venv -depth -type d -name 'tests' -exec rm -rf {} + \
     && find /opt/rfdiffusion/.venv -name '*.pyc' -delete
+
+# ---------------------------------------------------------------------------
+# Shared service framework — independent layer so framework changes don't
+# invalidate the (slow) SE3Transformer + editable install above.
+# ---------------------------------------------------------------------------
+RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
+    --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python .venv/bin/python \
+        "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
 
 # ===========================================================================

@@ -19,6 +19,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 # Huawei Cloud pip mirror (~10× faster from China than pypi.org).
 ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
+ENV UV_HTTP_TIMEOUT=600
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates wget \
@@ -58,8 +59,8 @@ RUN .venv/bin/python -c "import torch, cuequivariance_torch, boltzgen; \
 
 # Shared bioagent service framework + remote-fetch deps (late layer so the
 # framework changing doesn't invalidate the BoltzGen install/weight layers).
-COPY services/_framework /tmp/service-framework
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
+    --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2 pyyaml
 
