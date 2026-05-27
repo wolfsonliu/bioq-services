@@ -181,7 +181,7 @@ def test_score_request_custom_chains():
 def test_score_argv_basic(tmp_path):
     from server.models import ScoreRequest
     from server.settings import DeepRankAbSettings
-    from server.tools import score_argv
+    from server.argv import score_argv
 
     class _Off(DeepRankAbSettings):
         model_config = SettingsConfigDict(env_prefix="DEEPRANK_AB_TEST_", env_file=None, extra="ignore")
@@ -209,7 +209,7 @@ def test_score_argv_basic(tmp_path):
 def test_score_argv_nanobody(tmp_path):
     from server.models import ScoreRequest
     from server.settings import DeepRankAbSettings
-    from server.tools import score_argv
+    from server.argv import score_argv
 
     class _Off(DeepRankAbSettings):
         model_config = SettingsConfigDict(env_prefix="DEEPRANK_AB_TEST_", env_file=None, extra="ignore")

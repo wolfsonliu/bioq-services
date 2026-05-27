@@ -17,7 +17,7 @@ from fastapi import Depends, File, Form, UploadFile
 from .adapter import DeepRankAbAdapter
 from .models import ScoreRequest
 from .settings import DeepRankAbSettings
-from .tools import score_argv
+from .argv import score_argv
 from .uris import resolve_input
 
 logging.basicConfig(
