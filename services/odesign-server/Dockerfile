@@ -125,7 +125,7 @@ ENV MAMBA_ROOT_PREFIX=/opt/conda
 ENV PATH=/opt/conda/envs/odesign/bin:$PATH
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates libgl1-mesa-glx libglib2.0-0 fontconfig \
+        ca-certificates git libgl1-mesa-glx libglib2.0-0 fontconfig \
         librdmacm1 libibverbs1 ibverbs-providers \
     && rm -rf /var/lib/apt/lists/*
 
