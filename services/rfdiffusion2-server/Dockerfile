@@ -90,8 +90,7 @@ EOF
 RUN --mount=type=bind,source=services/rfdiffusion2-server/upstream/envs,target=/tmp/rfd2-env \
     --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    cd /tmp/rfd2-env \
-    && micromamba env create -y -n rfd2 -f cuda124_env.yml
+    micromamba env create -y -n rfd2 -f /tmp/rfd2-env/cuda124_env.yml
 
 # ---------------------------------------------------------------------------
 # Pip extras from upstream's apptainer .spec.

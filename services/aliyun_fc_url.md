@@ -6,5 +6,6 @@ rfdiffusion2-server: https://fc-rfdiffusion-xaxngakbwo.cn-hangzhou-vpc.fcapp.run
 proteinmpnn-server: https://fc-proteinmpnn-pahlhbttzb.cn-hangzhou-vpc.fcapp.run
 boltz-server: https://fc-boltz-kbioniejif.cn-hangzhou-vpc.fcapp.run
 boltzgen-server: https://fc-boltzgen-karzusdoih.cn-hangzhou-vpc.fcapp.run
+immunebuilder-server: https://fc-immuebuilder-mhxbldkfhc.cn-hangzhou-vpc.fcapp.run
 dockq-server: https://fc-dockq-tzqvjemokb.cn-hangzhou-vpc.fcapp.run
 deeprank-ab-server: https://fc-deeprank-ab-lxzlfasfol.cn-hangzhou-vpc.fcapp.run
