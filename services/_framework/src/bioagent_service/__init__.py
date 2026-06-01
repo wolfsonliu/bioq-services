@@ -46,6 +46,7 @@ from pathlib import Path
 
 from bioagent_service.adapter import JobAdapter
 from bioagent_service.app import attach_mcp, create_app
+from bioagent_service.cli import CLIEndpoint, create_cli
 from bioagent_service.errors import FailureKind, extract_error_summary, finalize_job
 from bioagent_service.forms import model_form_depends
 from bioagent_service.manifest import EndpointExample, ServiceManifest
@@ -72,6 +73,7 @@ def read_version_file(caller_file: str, default: str = "0.0.0") -> str:
 
 
 __all__ = [
+    "CLIEndpoint",
     "EndpointExample",
     "JobAdapter",
     "JobInfo",
@@ -81,6 +83,7 @@ __all__ = [
     "ServiceSettings",
     "attach_mcp",
     "create_app",
+    "create_cli",
     "extract_error_summary",
     "finalize_job",
     "model_form_depends",

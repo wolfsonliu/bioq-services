@@ -130,6 +130,7 @@ WORKDIR /opt/genie3
 
 # Server code last — explicit file list so test/patch changes don't bust cache.
 COPY services/genie3-server/__init__.py \
+     services/genie3-server/__main__.py \
      services/genie3-server/VERSION \
      services/genie3-server/app.py \
      services/genie3-server/adapter.py \
@@ -142,6 +143,7 @@ COPY services/genie3-server/__init__.py \
 # Env-driven settings — see services/genie3-server/settings.py (Genie3Settings).
 # The GENIE3_ prefix is read by pydantic-settings; defaults match the image layout.
 # GENIE3_BIN points at the venv's console entry, since `.venv/bin` isn't on PATH.
+ENV PYTHONPATH=/opt/genie3
 ENV GENIE3_ROOT=/opt/genie3
 ENV GENIE3_BIN=/opt/genie3/.venv/bin/genie3
 ENV GENIE3_JOBS_BASE_DIR=/data/genie3_jobs

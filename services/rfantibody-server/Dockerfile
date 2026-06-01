@@ -61,6 +61,7 @@ RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
 
 # Server code last — explicit file list so test/doc changes don't bust cache.
 COPY services/rfantibody-server/__init__.py \
+     services/rfantibody-server/__main__.py \
      services/rfantibody-server/VERSION \
      services/rfantibody-server/app.py \
      services/rfantibody-server/adapter.py \
@@ -72,6 +73,7 @@ COPY services/rfantibody-server/__init__.py \
 
 # Env-driven settings — see services/rfantibody-server/settings.py (RFantibodySettings).
 # The RFANTIBODY_ prefix is read by pydantic-settings; defaults match the image layout.
+ENV PYTHONPATH=/opt/rfantibody
 ENV RFANTIBODY_ROOT=/opt/rfantibody
 ENV RFANTIBODY_WEIGHTS_DIR=/opt/rfantibody/weights
 ENV RFANTIBODY_SCRIPTS_DIR=/opt/rfantibody/scripts

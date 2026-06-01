@@ -174,6 +174,7 @@ WORKDIR /opt/rfdiffusion2-server
 # Server code last — explicit file list so test/script/upstream changes don't
 # invalidate this layer.
 COPY services/rfdiffusion2-server/__init__.py \
+     services/rfdiffusion2-server/__main__.py \
      services/rfdiffusion2-server/VERSION \
      services/rfdiffusion2-server/app.py \
      services/rfdiffusion2-server/adapter.py \
@@ -184,6 +185,7 @@ COPY services/rfdiffusion2-server/__init__.py \
      /opt/rfdiffusion2-server/server/
 
 # Settings (env-driven; see services/rfdiffusion2-server/settings.py).
+ENV PYTHONPATH=/opt/rfdiffusion2-server
 ENV RFDIFFUSION2_ROOT=/opt/rfdiffusion2-server
 ENV RFDIFFUSION2_MODELS_DIR=/opt/rfdiffusion2-server/upstream/rf_diffusion/model_weights
 ENV RFDIFFUSION2_INFERENCE_SCRIPT=/opt/rfdiffusion2-server/upstream/rf_diffusion/run_inference.py

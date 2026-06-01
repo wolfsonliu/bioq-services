@@ -57,6 +57,7 @@ RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
 
 # Server code last — explicit file list so test/doc changes don't bust cache.
 COPY services/proteinmpnn-server/__init__.py \
+     services/proteinmpnn-server/__main__.py \
      services/proteinmpnn-server/VERSION \
      services/proteinmpnn-server/app.py \
      services/proteinmpnn-server/adapter.py \
@@ -66,6 +67,7 @@ COPY services/proteinmpnn-server/__init__.py \
      services/proteinmpnn-server/uris.py \
      /opt/proteinmpnn/server/
 
+ENV PYTHONPATH=/opt/proteinmpnn
 ENV PROTEINMPNN_ROOT=/opt/proteinmpnn
 ENV PROTEINMPNN_WEIGHTS_DIR=/opt/proteinmpnn
 ENV PROTEINMPNN_JOBS_BASE_DIR=/data/proteinmpnn_jobs

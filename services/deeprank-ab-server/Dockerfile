@@ -153,6 +153,7 @@ WORKDIR /opt/deeprank-ab
 # Server code last — explicit file list so test/script/weight changes don't
 # invalidate this layer.
 COPY services/deeprank-ab-server/__init__.py \
+     services/deeprank-ab-server/__main__.py \
      services/deeprank-ab-server/VERSION \
      services/deeprank-ab-server/app.py \
      services/deeprank-ab-server/adapter.py \
@@ -178,7 +179,7 @@ ENV REG_WEIGHT_PATH=/opt/deeprank-ab/esm_weights/esm2_t33_650M_UR50D-contact-reg
 
 # PYTHONPATH: project root for `from src.*` imports; src/ for upstream bare
 # imports (`from tools.FocalLoss`, `from DataSet`, `from Metrics`, etc.).
-ENV PYTHONPATH=/opt/deeprank-ab/DeepRank-Ab/src:/opt/deeprank-ab/DeepRank-Ab
+ENV PYTHONPATH=/opt/deeprank-ab:/opt/deeprank-ab/DeepRank-Ab/src:/opt/deeprank-ab/DeepRank-Ab
 
 RUN mkdir -p /data/deeprank_ab_jobs
 

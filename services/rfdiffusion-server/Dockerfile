@@ -188,6 +188,7 @@ WORKDIR /opt/rfdiffusion
 
 # Server code last — explicit file list so test/doc changes don't bust cache.
 COPY services/rfdiffusion-server/__init__.py \
+     services/rfdiffusion-server/__main__.py \
      services/rfdiffusion-server/VERSION \
      services/rfdiffusion-server/app.py \
      services/rfdiffusion-server/adapter.py \
@@ -198,6 +199,7 @@ COPY services/rfdiffusion-server/__init__.py \
      /opt/rfdiffusion/server/
 
 # Settings (env-driven; see services/rfdiffusion-server/settings.py).
+ENV PYTHONPATH=/opt/rfdiffusion
 ENV RFDIFFUSION_ROOT=/opt/rfdiffusion
 ENV RFDIFFUSION_MODELS_DIR=/opt/rfdiffusion/models
 ENV RFDIFFUSION_INFERENCE_SCRIPT=/opt/rfdiffusion/scripts/run_inference.py

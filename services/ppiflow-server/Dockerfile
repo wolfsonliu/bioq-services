@@ -230,6 +230,7 @@ RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
 
 # Server code last — explicit file list so test changes don't bust cache.
 COPY services/ppiflow-server/__init__.py \
+     services/ppiflow-server/__main__.py \
      services/ppiflow-server/VERSION \
      services/ppiflow-server/app.py \
      services/ppiflow-server/adapter.py \
@@ -240,6 +241,7 @@ COPY services/ppiflow-server/__init__.py \
      /opt/ppiflow/server/
 
 # Settings via env (see services/ppiflow-server/settings.py).
+ENV PYTHONPATH=/opt/ppiflow
 ENV PPIFLOW_ROOT=/opt/ppiflow
 ENV PPIFLOW_CKPT_DIR=/opt/ppiflow/checkpoint
 ENV PPIFLOW_CONFIG_DIR=/opt/ppiflow/configs

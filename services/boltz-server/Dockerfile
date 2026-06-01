@@ -84,6 +84,7 @@ RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
 
 # Server code last — explicit file list so test/doc changes don't bust cache.
 COPY services/boltz-server/__init__.py \
+     services/boltz-server/__main__.py \
      services/boltz-server/VERSION \
      services/boltz-server/app.py \
      services/boltz-server/adapter.py \
@@ -94,6 +95,7 @@ COPY services/boltz-server/__init__.py \
      /opt/boltz/server/
 
 # Service settings; mirror `services/boltz-server/settings.py` (BoltzSettings).
+ENV PYTHONPATH=/opt/boltz
 ENV BOLTZ_ROOT=/opt/boltz
 ENV BOLTZ_BINARY=/opt/boltz/.venv/bin/boltz
 ENV BOLTZ_CACHE_DIR=/opt/boltz/weights

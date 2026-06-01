@@ -48,6 +48,7 @@ RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
 
 # Server code last — explicit file list so test/doc changes don't bust cache.
 COPY services/dockq-server/__init__.py \
+     services/dockq-server/__main__.py \
      services/dockq-server/VERSION \
      services/dockq-server/app.py \
      services/dockq-server/adapter.py \
@@ -59,6 +60,7 @@ COPY services/dockq-server/__init__.py \
      /opt/dockq/server/
 
 # DockQ CLI installed under .venv/bin/DockQ — make it the resolved binary.
+ENV PYTHONPATH=/opt/dockq
 ENV DOCKQ_BINARY=/opt/dockq/.venv/bin/DockQ
 ENV DOCKQ_ROOT=/opt/dockq
 ENV DOCKQ_JOBS_BASE_DIR=/data/dockq_jobs

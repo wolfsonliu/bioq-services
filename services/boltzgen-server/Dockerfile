@@ -66,6 +66,7 @@ RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
 
 # Server code — explicit file list to avoid re-copying weights/moldir/tests.
 COPY services/boltzgen-server/__init__.py \
+     services/boltzgen-server/__main__.py \
      services/boltzgen-server/VERSION \
      services/boltzgen-server/app.py \
      services/boltzgen-server/adapter.py \
@@ -76,6 +77,7 @@ COPY services/boltzgen-server/__init__.py \
      /opt/boltzgen/server/
 
 # Service settings — mirror services/boltzgen-server/settings.py (BoltzGenSettings).
+ENV PYTHONPATH=/opt/boltzgen
 ENV BOLTZGEN_ROOT=/opt/boltzgen
 ENV BOLTZGEN_CLI=/opt/boltzgen/.venv/bin/boltzgen
 ENV BOLTZGEN_PYTHON=/opt/boltzgen/.venv/bin/python

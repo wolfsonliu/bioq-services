@@ -150,6 +150,7 @@ WORKDIR /opt/immunebuilder
 
 # Server code last — explicit file list so test/script changes don't bust cache.
 COPY services/immunebuilder-server/__init__.py \
+     services/immunebuilder-server/__main__.py \
      services/immunebuilder-server/VERSION \
      services/immunebuilder-server/app.py \
      services/immunebuilder-server/adapter.py \
@@ -159,6 +160,7 @@ COPY services/immunebuilder-server/__init__.py \
      /opt/immunebuilder/server/
 
 # --- Environment ---
+ENV PYTHONPATH=/opt/immunebuilder
 ENV IMMUNEBUILDER_JOBS_BASE_DIR=/data/immunebuilder_jobs
 ENV IMMUNEBUILDER_VENV_BIN=/opt/conda/envs/immunebuilder/bin
 RUN mkdir -p /data/immunebuilder_jobs

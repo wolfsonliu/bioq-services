@@ -148,6 +148,7 @@ COPY opensource/ODesign/data/ /opt/odesign/data/
 
 # Server code last — explicit file list so test/doc changes don't bust cache.
 COPY services/odesign-server/__init__.py \
+     services/odesign-server/__main__.py \
      services/odesign-server/VERSION \
      services/odesign-server/app.py \
      services/odesign-server/adapter.py \
@@ -158,6 +159,7 @@ COPY services/odesign-server/__init__.py \
      /opt/odesign/server/
 
 # --- Environment ---
+ENV PYTHONPATH=/opt/odesign
 ENV CUTLASS_PATH=/kernels/cutlass
 ENV LAYERNORM_TYPE=fast_layernorm
 
