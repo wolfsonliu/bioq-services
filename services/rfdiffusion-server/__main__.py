@@ -2,10 +2,10 @@
 
 Usage::
 
-    python -m server.cli unconditional --num-designs 10 --min-length 100 --max-length 200 \\
+    python -m server unconditional --num-designs 10 --min-length 100 --max-length 200 \\
         --output-dir /scratch/results/
 
-    python -m server.cli binder --input-pdb /data/target.pdb \\
+    python -m server binder --input-pdb /data/target.pdb \\
         --contigs "A1-150/0 70-100" --hotspots "A146,A170" \\
         --output-dir /scratch/results/
 """

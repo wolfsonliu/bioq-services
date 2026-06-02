@@ -2,10 +2,10 @@
 
 Usage::
 
-    python -m server.cli design --design-yaml /data/spec.yaml \\
+    python -m server design --design-yaml /data/spec.yaml \\
         --output-dir /scratch/results/
 
-    python -m server.cli inverse_fold --design-yaml /data/spec.yaml \\
+    python -m server inverse_fold --design-yaml /data/spec.yaml \\
         --output-dir /scratch/results/
 
 Note: Reference CIF/PDB files referenced in the YAML should be accessible

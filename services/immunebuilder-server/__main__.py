@@ -2,15 +2,15 @@
 
 Usage::
 
-    python -m server.cli predict_antibody \\
+    python -m server predict_antibody \\
         --heavy-sequence "EVQLVESGGGLVQPGG..." --light-sequence "DIQMTQSPSSLSA..." \\
         --output-dir /scratch/results/
 
-    python -m server.cli predict_nanobody \\
+    python -m server predict_nanobody \\
         --heavy-sequence "EVQLVESGGGLVQPGG..." \\
         --output-dir /scratch/results/
 
-    python -m server.cli predict_tcr \\
+    python -m server predict_tcr \\
         --alpha-sequence "METLL..." --beta-sequence "MGIRL..." \\
         --output-dir /scratch/results/
 """

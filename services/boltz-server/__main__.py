@@ -2,11 +2,11 @@
 
 Usage::
 
-    python -m server.cli predict_structure \\
+    python -m server predict_structure \\
         --raw-yaml /data/input.yaml \\
         --output-dir /scratch/results/
 
-    python -m server.cli predict_structure \\
+    python -m server predict_structure \\
         --params-json '{"sequences": [{"type": "protein", "id": "A", "sequence": "MKTL..."}], "msa_mode": "empty"}' \\
         --output-dir /scratch/results/
 

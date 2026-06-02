@@ -2,7 +2,7 @@
 
 Usage::
 
-    python -m server.cli active_site --input-pdb /data/motif.pdb \\
+    python -m server active_site --input-pdb /data/motif.pdb \\
         --ligand NAD --contigs "46,A106-106" \\
         --output-dir /scratch/results/
 """

@@ -2,7 +2,7 @@
 
 Usage::
 
-    python -m server.cli design --input-json /data/spec.json \\
+    python -m server design --input-json /data/spec.json \\
         --model odesign_base_prot_flex --output-dir /scratch/results/
 
 Note: Reference CIF/PDB files referenced in the JSON should be accessible

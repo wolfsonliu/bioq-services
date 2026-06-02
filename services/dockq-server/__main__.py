@@ -2,11 +2,11 @@
 
 Usage::
 
-    python -m server.cli score \\
+    python -m server score \\
         --model /data/model.pdb --native /data/native.pdb \\
         --output-dir /scratch/results/
 
-    python -m server.cli score_batch \\
+    python -m server score_batch \\
         --native /data/native.pdb --models-dir /data/candidates/ \\
         --output-dir /scratch/results/
 """

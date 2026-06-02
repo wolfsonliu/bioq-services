@@ -2,10 +2,10 @@
 
 Usage::
 
-    python -m server.cli unconditional --n-sample 10 --min-length 100 --max-length 200 \\
+    python -m server unconditional --n-sample 10 --min-length 100 --max-length 200 \\
         --output-dir /scratch/results/
 
-    python -m server.cli binder --dataset /data/targets.zip \\
+    python -m server binder --dataset /data/targets.zip \\
         --output-dir /scratch/results/
 
 Note: motif and binder endpoints require a dataset zip file (containing

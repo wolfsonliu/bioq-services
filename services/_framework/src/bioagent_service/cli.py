@@ -1,14 +1,14 @@
 """CLI batch-mode entry point for bioagent services.
 
 Lets the same Docker image run as either an HTTP service (``uvicorn``, the
-default CMD) or a one-shot batch job (``python -m server.cli <endpoint> ...``).
+default CMD) or a one-shot batch job (``python -m server <endpoint> ...``).
 The CLI path reuses each service's ``tools.py`` argv builders, ``adapter.py``
 output detection, and ``SubprocessRunner`` — but skips FastAPI, the thread pool,
 the job store, MCP, and FC keepalive entirely.
 
 Typical Slurm usage::
 
-    apptainer exec --nv image.sif python -m server.cli score \\
+    apptainer exec --nv image.sif python -m server score \\
         --model /data/model.pdb --native /data/native.pdb \\
         --output-dir /scratch/$SLURM_JOB_ID/
 
@@ -216,7 +216,7 @@ def create_cli(
     subprocess return code (or 1 if outputs are missing).
     """
     parser = argparse.ArgumentParser(
-        prog=f"python -m server.cli",
+        prog=f"python -m server",
         description=f"{adapter.name} — CLI batch mode",
     )
     parser.add_argument("--version", action="version", version=version)

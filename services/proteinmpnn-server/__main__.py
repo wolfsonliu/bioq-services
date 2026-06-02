@@ -2,7 +2,7 @@
 
 Usage::
 
-    python -m server.cli design --pdb /data/structure.pdb \\
+    python -m server design --pdb /data/structure.pdb \\
         --chains-to-design "A,B" --output-dir /scratch/results/
 
 Note: The ProteinMPNN CLI runs helper scripts synchronously to prepare JSONL

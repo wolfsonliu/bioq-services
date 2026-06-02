@@ -67,6 +67,7 @@ def rfdiffusion_argv(
     cmd = [
         sys.executable, str(script),
         "--config-name", "antibody",
+        f"hydra.run.dir={job_dir / 'hydra'}",
         f"antibody.target_pdb={target_pdb.resolve()}",
         f"antibody.framework_pdb={framework_pdb.resolve()}",
         f"inference.quiver={output_qv}",
@@ -132,6 +133,7 @@ def rf2_argv(
 
     cmd = [
         sys.executable, str(script),
+        f"hydra.run.dir={job_dir / 'hydra'}",
         f"input.quiver={input_quiver.resolve()}",
         f"output.quiver={output_qv}",
         f"inference.num_recycles={req.num_recycles}",

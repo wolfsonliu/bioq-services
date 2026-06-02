@@ -2,7 +2,7 @@
 
 Usage::
 
-    python -m server.cli score --input-pdb /data/complex.pdb \\
+    python -m server score --input-pdb /data/complex.pdb \\
         --heavy-chain-id H --light-chain-id L --antigen-chain-id A \\
         --output-dir /scratch/results/
 """

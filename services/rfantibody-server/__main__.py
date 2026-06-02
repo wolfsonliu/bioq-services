@@ -2,15 +2,15 @@
 
 Usage::
 
-    python -m server.cli rfdiffusion \\
+    python -m server rfdiffusion \\
         --target /data/target.pdb --framework /data/framework.pdb \\
         --output-dir /scratch/results/
 
-    python -m server.cli proteinmpnn \\
+    python -m server proteinmpnn \\
         --input-quiver /scratch/results/output/1_rfdiffusion.qv \\
         --output-dir /scratch/results_mpnn/
 
-    python -m server.cli rf2 \\
+    python -m server rf2 \\
         --input-quiver /scratch/results_mpnn/output/2_proteinmpnn.qv \\
         --output-dir /scratch/results_rf2/
 """

@@ -2,13 +2,13 @@
 
 Usage::
 
-    python -m server.cli binder --target /data/target.pdb \\
+    python -m server binder --target /data/target.pdb \\
         --samples-per-target 10 --output-dir /scratch/results/
 
-    python -m server.cli antibody --antigen /data/antigen.pdb \\
+    python -m server antibody --antigen /data/antigen.pdb \\
         --framework /data/framework.pdb --output-dir /scratch/results/
 
-    python -m server.cli monomer --output-dir /scratch/results/
+    python -m server monomer --output-dir /scratch/results/
 """
 
 from __future__ import annotations
