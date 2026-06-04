@@ -25,7 +25,9 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="ESMFold2 inference")
     p.add_argument("--input-json", type=Path, required=True)
     p.add_argument("--output-dir", type=Path, required=True)
-    p.add_argument("--model-dir", type=str, required=True)
+    p.add_argument("--model-dir", type=Path, required=True)
+    p.add_argument("--esmc-dir", type=Path, default=None,
+                   help="Local path to ESMC-6B weights. If not set, inferred as <model-dir>/../esmc-6b.")
     p.add_argument("--ccd-path", type=Path, default=None)
     p.add_argument("--num-loops", type=int, default=3)
     p.add_argument("--num-sampling-steps", type=int, default=50)
@@ -115,10 +117,17 @@ def main() -> None:
     print("Loading ESMFold2 model...", flush=True)
     t0 = time.time()
 
+    from transformers import AutoConfig
     from transformers.models.esmfold2.modeling_esmfold2 import ESMFold2Model
 
+    esmc_dir = args.esmc_dir or (args.model_dir.parent / "esmc-6b")
+    config = AutoConfig.from_pretrained(args.model_dir, local_files_only=True)
+    config.esmc_id = str(esmc_dir)
+    print(f"  ESMFold2 weights: {args.model_dir}", flush=True)
+    print(f"  ESMC-6B weights:  {esmc_dir}", flush=True)
+
     model = ESMFold2Model.from_pretrained(
-        args.model_dir, local_files_only=True
+        args.model_dir, config=config, local_files_only=True
     ).cuda().eval()
     load_time = time.time() - t0
     print(f"Model loaded in {load_time:.1f}s", flush=True)

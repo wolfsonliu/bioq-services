@@ -30,6 +30,8 @@ class ESMFold2Settings(ServiceSettings):
 
     model_dir: Path = Field(default=Path("/opt/esmfold2/weights"))
 
+    esmc_dir: Path = Field(default=Path("/opt/esmfold2/esmc-6b"))
+
     ccd_path: Path = Field(default=Path("/opt/esmfold2/weights/ccd.pkl"))
 
     max_concurrent_jobs: int = Field(default=1, ge=1, le=4)

@@ -81,6 +81,7 @@ def fold_argv(
         "--input-json", str(input_json),
         "--output-dir", str(out_dir),
         "--model-dir", str(settings.model_dir),
+        "--esmc-dir", str(settings.esmc_dir),
         "--ccd-path", str(settings.ccd_path),
         "--num-loops", str(req.num_loops),
         "--num-sampling-steps", str(req.num_sampling_steps),
