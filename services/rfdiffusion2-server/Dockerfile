@@ -87,10 +87,12 @@ EOF
 # ---------------------------------------------------------------------------
 # Create the rfd2 conda env from the vendored env files.
 # ---------------------------------------------------------------------------
-RUN --mount=type=bind,source=services/rfdiffusion2-server/upstream/envs,target=/tmp/rfd2-env \
+RUN --mount=type=bind,source=services/rfdiffusion2-server/upstream/envs,target=/tmp/rfd2-env-ro \
     --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    micromamba env create -y -n rfd2 -f /tmp/rfd2-env/cuda124_env.yml
+    cp -r /tmp/rfd2-env-ro /tmp/rfd2-env \
+    && micromamba env create -y -n rfd2 -f /tmp/rfd2-env/cuda124_env.yml \
+    && rm -rf /tmp/rfd2-env
 
 # ---------------------------------------------------------------------------
 # Pip extras from upstream's apptainer .spec.
