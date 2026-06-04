@@ -67,6 +67,9 @@ COPY services/esmfold2-server/__init__.py \
      /opt/esmfold2/server/
 
 ENV PYTHONPATH=/opt/esmfold2
+# Prevent any HuggingFace network access at runtime (FC VPC has no internet).
+ENV HF_HUB_OFFLINE=1
+ENV TRANSFORMERS_OFFLINE=1
 ENV ESMFOLD2_ROOT=/opt/esmfold2
 ENV ESMFOLD2_PYTHON=/opt/esmfold2/.venv/bin/python
 ENV ESMFOLD2_INFERENCE_SCRIPT=/opt/esmfold2/inference.py

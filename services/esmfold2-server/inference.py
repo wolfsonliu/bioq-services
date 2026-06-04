@@ -117,7 +117,9 @@ def main() -> None:
 
     from transformers.models.esmfold2.modeling_esmfold2 import ESMFold2Model
 
-    model = ESMFold2Model.from_pretrained(args.model_dir).cuda().eval()
+    model = ESMFold2Model.from_pretrained(
+        args.model_dir, local_files_only=True
+    ).cuda().eval()
     load_time = time.time() - t0
     print(f"Model loaded in {load_time:.1f}s", flush=True)
 
