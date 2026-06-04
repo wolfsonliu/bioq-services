@@ -4,12 +4,12 @@
 #   ./services/esmfold2-server/scripts/fetch_weights.sh
 #
 # Requires: pip install huggingface-hub
-# Weights are downloaded to weights/esmfold2/ (relative to project root).
+# Weights are downloaded to services/esmfold2-server/weights/esmfold2/.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-DST="$PROJECT_ROOT/weights/esmfold2"
+SERVICE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+DST="$SERVICE_DIR/weights/esmfold2"
 
 mkdir -p "$DST"
 

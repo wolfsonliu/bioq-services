@@ -36,7 +36,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # Pre-staged ESMFold2 weights from HuggingFace (pre-download before build).
 # See scripts/fetch_weights.sh.
-COPY weights/esmfold2/ /opt/esmfold2/weights/
+COPY services/esmfold2-server/weights/esmfold2/ /opt/esmfold2/weights/
 
 # Build-time import smoke test.
 RUN .venv/bin/python -c "\
