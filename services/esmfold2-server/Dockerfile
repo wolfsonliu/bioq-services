@@ -34,12 +34,11 @@ COPY opensource/esm/esm /opt/esmfold2/esm/esm
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python -e ./esm
 
-# Pre-staged weights from HuggingFace (pre-download before build).
-# See scripts/fetch_weights.sh. Two models:
-#   1. ESMFold2 (main)  → /opt/esmfold2/weights/
-#   2. ESMC-6B (sub)    → /opt/esmfold2/esmc-6b/
-COPY services/esmfold2-server/weights/esmfold2/ /opt/esmfold2/weights/
-COPY services/esmfold2-server/weights/esmc-6b/ /opt/esmfold2/esmc-6b/
+# Weights are NOT bundled in the image — they live on a NAS volume
+# mounted at /data/models/ by FC configuration.
+# Expected layout:
+#   /data/models/esmfold2/   — ESMFold2 checkpoint + ccd.pkl
+#   /data/models/esmc/6b/    — ESMC-6B checkpoint
 
 # Build-time import smoke test.
 RUN .venv/bin/python -c "\
@@ -76,10 +75,10 @@ ENV TRANSFORMERS_OFFLINE=1
 ENV ESMFOLD2_ROOT=/opt/esmfold2
 ENV ESMFOLD2_PYTHON=/opt/esmfold2/.venv/bin/python
 ENV ESMFOLD2_INFERENCE_SCRIPT=/opt/esmfold2/inference.py
-ENV ESMFOLD2_MODEL_DIR=/opt/esmfold2/weights
-ENV ESMFOLD2_ESMC_DIR=/opt/esmfold2/esmc-6b
-ENV ESMFOLD2_CCD_PATH=/opt/esmfold2/weights/ccd.pkl
-ENV ESMCFOLD_CCD_PATH=/opt/esmfold2/weights/ccd.pkl
+ENV ESMFOLD2_MODEL_DIR=/data/models/esmfold2
+ENV ESMFOLD2_ESMC_DIR=/data/models/esmc/6b
+ENV ESMFOLD2_CCD_PATH=/data/models/esmfold2/ccd.pkl
+ENV ESMCFOLD_CCD_PATH=/data/models/esmfold2/ccd.pkl
 ENV ESMFOLD2_JOBS_BASE_DIR=/data/esmfold2_jobs
 RUN mkdir -p /data/esmfold2_jobs
 

@@ -28,11 +28,11 @@ class ESMFold2Settings(ServiceSettings):
 
     inference_script: str = Field(default="/opt/esmfold2/inference.py")
 
-    model_dir: Path = Field(default=Path("/opt/esmfold2/weights"))
+    model_dir: Path = Field(default=Path("/data/models/esmfold2"))
 
-    esmc_dir: Path = Field(default=Path("/opt/esmfold2/esmc-6b"))
+    esmc_dir: Path = Field(default=Path("/data/models/esmc/6b"))
 
-    ccd_path: Path = Field(default=Path("/opt/esmfold2/weights/ccd.pkl"))
+    ccd_path: Path = Field(default=Path("/data/models/esmfold2/ccd.pkl"))
 
     max_concurrent_jobs: int = Field(default=1, ge=1, le=4)
 
