@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 def _start_keepalive(
     runner: JobRunner, port: int, interval_s: int,
+    keepalive_url: str | None = None,
 ) -> threading.Event:
     """Spawn a daemon thread that pings ``/healthz`` while jobs are active.
 
@@ -36,23 +37,39 @@ def _start_keepalive(
     that by generating a lightweight HTTP request every *interval_s* seconds
     whenever ``runner.active_job_count > 0``.
 
+    When *keepalive_url* is set the ping goes through FC's gateway (counted
+    as real activity).  Otherwise falls back to localhost (works for local
+    dev but invisible to FC).
+
     Returns a :class:`threading.Event` — set it to stop the thread.
     """
     stop = threading.Event()
-    url = f"http://127.0.0.1:{port}/healthz"
+    local_url = f"http://127.0.0.1:{port}/healthz"
+    external_url = keepalive_url.rstrip("/") + "/healthz" if keepalive_url else None
 
     def _loop() -> None:
         while not stop.wait(interval_s):
             if runner.active_job_count > 0:
-                try:
-                    urllib.request.urlopen(url, timeout=5)
-                except Exception:
-                    pass
+                if external_url:
+                    try:
+                        urllib.request.urlopen(external_url, timeout=10)
+                    except Exception:
+                        logger.debug("external keepalive failed, falling back to localhost")
+                        try:
+                            urllib.request.urlopen(local_url, timeout=5)
+                        except Exception:
+                            pass
+                else:
+                    try:
+                        urllib.request.urlopen(local_url, timeout=5)
+                    except Exception:
+                        pass
 
     t = threading.Thread(target=_loop, daemon=True, name="fc-keepalive")
     t.start()
     logger.info(
-        "FC keepalive thread started (interval=%ds, url=%s)", interval_s, url,
+        "FC keepalive thread started (interval=%ds, external=%s, local=%s)",
+        interval_s, external_url or "(none)", local_url,
     )
     return stop
 
@@ -105,7 +122,10 @@ def create_app(
     app.state.runner = runner
 
     if settings.keepalive_interval_s > 0:
-        stop_keepalive = _start_keepalive(runner, settings.port, settings.keepalive_interval_s)
+        stop_keepalive = _start_keepalive(
+            runner, settings.port, settings.keepalive_interval_s,
+            keepalive_url=settings.keepalive_url,
+        )
         app.state.keepalive_stop = stop_keepalive
 
     if reload_jobs:

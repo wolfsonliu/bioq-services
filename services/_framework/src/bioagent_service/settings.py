@@ -52,3 +52,8 @@ class ServiceSettings(BaseSettings):
     # FC self-keepalive: while jobs are active, ping /healthz at this interval
     # to prevent FC from reclaiming the instance. 0 = disabled.
     keepalive_interval_s: int = Field(default=60, ge=0)
+    # External URL to ping for keepalive. When set, the keepalive thread sends
+    # requests through FC's gateway (which counts as activity) instead of
+    # localhost (which FC ignores). Typically the function's own fcapp.run URL
+    # with /healthz appended.  Env: <PREFIX>_KEEPALIVE_URL
+    keepalive_url: str | None = Field(default=None)

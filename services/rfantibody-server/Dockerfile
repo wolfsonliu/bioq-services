@@ -85,6 +85,9 @@ RUN mkdir -p /data/rfantibody_jobs
 # Keep-alive: FC requires >= 15 minutes (900s)
 # Startup: HTTP server must be ready within 120s
 ENV RFANTIBODY_MAX_CONCURRENT_JOBS=1
+# Keepalive pings this URL through FC's gateway so the instance stays alive
+# during long GPU jobs. Override at deploy time if the URL changes.
+# ENV RFANTIBODY_KEEPALIVE_URL=https://fc-rfantibody-guekbpucdo.cn-hangzhou-vpc.fcapp.run
 ENV PORT=9000
 EXPOSE 9000
 
