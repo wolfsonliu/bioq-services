@@ -260,22 +260,6 @@ def main():
 
     print_report(results)
 
-    # Verification: re-check all job statuses without session header
-    all_job_ids = [j.job_id for r in results for j in r.jobs if j.job_id]
-    if all_job_ids:
-        print("\n--- Verification (direct check, no session header) ---")
-        with httpx.Client(timeout=httpx.Timeout(30.0)) as vc:
-            for jid in all_job_ids:
-                try:
-                    vr = vc.get(f"{base_url}/api/jobs/{jid}")
-                    if vr.status_code == 200:
-                        vb = vr.json()
-                        print(f"  {jid}: status={vb['status']} duration={vb.get('duration_seconds')}s")
-                    else:
-                        print(f"  {jid}: HTTP {vr.status_code}")
-                except Exception as e:
-                    print(f"  {jid}: error {e!r}")
-
 
 if __name__ == "__main__":
     main()
