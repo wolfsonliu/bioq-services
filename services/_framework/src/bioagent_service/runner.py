@@ -138,38 +138,46 @@ class JobRunner:
         `input_params` is an opaque dict echoed back in JobInfo for debugging.
         """
         adapter = self.adapter
-        # Admission control: reject early if all slots are occupied.
+        # Admission control — atomic check-and-reserve to prevent TOCTOU races
+        # where concurrent requests all see _active_count == 0 and slip through.
         with self._active_lock:
             if self._active_count >= self.settings.max_concurrent_jobs:
                 raise ServiceBusyError(self._active_count, self.settings.max_concurrent_jobs)
-        # Best-effort disk hygiene before scheduling new work.
-        evict_finished_until_under_limit(
-            self.store, self.settings.jobs_base_dir, self.settings.disk_limit_mb
-        )
+            self._active_count += 1
 
-        job = self.store.create(input_params=input_params)
-        job_id = job.job_id
-        job_dir = adapter.job_dir(job_id)
-        job_dir.mkdir(parents=True, exist_ok=True)
-        (job_dir / "output").mkdir(exist_ok=True)
-        adapter.log_path(job_dir).parent.mkdir(parents=True, exist_ok=True)
-
-        # Build argv inside the request handler so upload streams + path lookups
-        # can use the just-created job_dir. If the callback raises (bad zip,
-        # missing input, fastapi.HTTPException for validation errors, ...),
-        # clean up the half-created job so callers don't leave PENDING
-        # stragglers in the store and on disk.
         try:
-            argv = build_argv(job_id, job_dir)
-            if not argv:
-                raise ValueError("build_argv returned an empty argv")
-        except Exception:
-            cleanup_job(self.store, self.settings.jobs_base_dir, job_id)
-            raise
+            # Best-effort disk hygiene before scheduling new work.
+            evict_finished_until_under_limit(
+                self.store, self.settings.jobs_base_dir, self.settings.disk_limit_mb
+            )
 
-        resolved_label = label or adapter.name
-        resolved_env = {**adapter.subprocess_env(), **(env or {})}
-        resolved_cwd = cwd if cwd is not None else adapter.subprocess_cwd()
+            job = self.store.create(input_params=input_params)
+            job_id = job.job_id
+            job_dir = adapter.job_dir(job_id)
+            job_dir.mkdir(parents=True, exist_ok=True)
+            (job_dir / "output").mkdir(exist_ok=True)
+            adapter.log_path(job_dir).parent.mkdir(parents=True, exist_ok=True)
+
+            # Build argv inside the request handler so upload streams + path lookups
+            # can use the just-created job_dir. If the callback raises (bad zip,
+            # missing input, fastapi.HTTPException for validation errors, ...),
+            # clean up the half-created job so callers don't leave PENDING
+            # stragglers in the store and on disk.
+            try:
+                argv = build_argv(job_id, job_dir)
+                if not argv:
+                    raise ValueError("build_argv returned an empty argv")
+            except Exception:
+                cleanup_job(self.store, self.settings.jobs_base_dir, job_id)
+                raise
+
+            resolved_label = label or adapter.name
+            resolved_env = {**adapter.subprocess_env(), **(env or {})}
+            resolved_cwd = cwd if cwd is not None else adapter.subprocess_cwd()
+        except Exception:
+            with self._active_lock:
+                self._active_count -= 1
+            raise
 
         def _run() -> None:
             try:
@@ -210,8 +218,6 @@ class JobRunner:
                 with self._active_lock:
                     self._active_count -= 1
 
-        with self._active_lock:
-            self._active_count += 1
         self.executor.submit(_run)
         # Return the freshly-created PENDING info; status may already be RUNNING by the
         # time the client reads it back from /api/jobs/{id}.

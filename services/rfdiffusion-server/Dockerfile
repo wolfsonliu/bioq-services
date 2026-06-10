@@ -207,6 +207,14 @@ ENV RFDIFFUSION_PYTHON=/opt/rfdiffusion/.venv/bin/python
 ENV RFDIFFUSION_JOBS_BASE_DIR=/data/rfdiffusion_jobs
 RUN mkdir -p /data/rfdiffusion_jobs
 
+
+# Keepalive pings this URL through FC's gateway so the instance stays alive
+# during long GPU jobs. Override at deploy time if the URL changes.
+# ENV RFDIFFUSION_KEEPALIVE_URL=https://fc-rfdiffusion-cdskxiqtnk.cn-hangzhou-vpc.fcapp.run
+# FC session affinity: inject this header in POST responses so FC binds
+# follow-up requests to the same instance. Requires FC console config too.
+ENV RFDIFFUSION_SESSION_HEADER_NAME=bioagent-session-id
+
 # Alibaba Cloud FC: port 9000, keep-alive ≥ 15 min, /healthz must be ready < 120 s.
 ENV RFDIFFUSION_MAX_CONCURRENT_JOBS=1
 ENV PORT=9000

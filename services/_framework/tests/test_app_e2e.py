@@ -442,3 +442,64 @@ def test_simulated_restart_recovers_jobs(tmp_path: Path) -> None:
         # Outputs are still on disk → /download still works.
         dl = c2.get(f"/api/jobs/{job_id}/download")
         assert dl.status_code == 200
+
+
+def test_session_affinity_header_injected_on_post(tmp_path: Path) -> None:
+    """When session_header_name is set, POST responses include the header with job_id."""
+    header_name = "bioagent-session-id"
+    settings = _EchoSettings(
+        jobs_base_dir=tmp_path / "jobs",
+        max_concurrent_jobs=2,
+        keepalive_interval_s=0,
+        session_header_name=header_name,
+    )
+    adapter = _EchoAdapter(settings=settings)
+    app = create_app(adapter, settings, title="Echo Session")
+
+    @app.post("/api/echo")
+    def echo(req: _EchoRequest):
+        return app.state.runner.submit(
+            build_argv=lambda _id, jd: _echo_argv(req, jd), label="echo"
+        )
+
+    with TestClient(app) as c:
+        # POST should carry the session header.
+        resp = c.post("/api/echo", json={"message": "session-test"})
+        assert resp.status_code == 200
+        job_id = resp.json()["job_id"]
+        assert resp.headers.get(header_name) == job_id
+
+        # GET should NOT carry it (middleware only injects on POST).
+        _wait_for_terminal(c, job_id)
+        get_resp = c.get(f"/api/jobs/{job_id}")
+        assert get_resp.status_code == 200
+        assert header_name not in get_resp.headers
+
+        # healthz/detail reports the header name.
+        detail = c.get("/healthz/detail").json()
+        assert detail["session_header"] == header_name
+
+
+def test_session_affinity_disabled_by_default(tmp_path: Path) -> None:
+    """Without session_header_name, POST responses have no extra header."""
+    settings = _EchoSettings(
+        jobs_base_dir=tmp_path / "jobs",
+        max_concurrent_jobs=2,
+        keepalive_interval_s=0,
+    )
+    adapter = _EchoAdapter(settings=settings)
+    app = create_app(adapter, settings, title="Echo No Session")
+
+    @app.post("/api/echo")
+    def echo(req: _EchoRequest):
+        return app.state.runner.submit(
+            build_argv=lambda _id, jd: _echo_argv(req, jd), label="echo"
+        )
+
+    with TestClient(app) as c:
+        resp = c.post("/api/echo", json={"message": "no-session"})
+        assert resp.status_code == 200
+        assert "bioagent-session-id" not in resp.headers
+
+        detail = c.get("/healthz/detail").json()
+        assert detail["session_header"] is None

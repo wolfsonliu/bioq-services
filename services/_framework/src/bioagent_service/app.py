@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 import urllib.request
@@ -10,6 +11,8 @@ from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
 from bioagent_service.adapter import JobAdapter
 from bioagent_service.errors import ServiceBusyError
@@ -74,6 +77,40 @@ def _start_keepalive(
     return stop
 
 
+class _SessionAffinityMiddleware(BaseHTTPMiddleware):
+    """Inject a session header into POST responses that carry a ``job_id``.
+
+    FC HeaderField affinity reads this header to bind follow-up requests
+    (poll, download) to the same instance that owns the job.  When
+    ``header_name`` is *None* (local dev, Slurm), the middleware is a no-op.
+    """
+
+    def __init__(self, app: FastAPI, header_name: str) -> None:  # type: ignore[override]
+        super().__init__(app)
+        self.header_name = header_name
+
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        response = await call_next(request)
+        if request.method != "POST" or response.status_code != 200:
+            return response
+        body = b""
+        async for chunk in response.body_iterator:
+            body += chunk
+        try:
+            job_id = json.loads(body).get("job_id")
+        except (json.JSONDecodeError, AttributeError):
+            job_id = None
+        new_response = Response(
+            content=body,
+            status_code=response.status_code,
+            headers=dict(response.headers),
+            media_type=response.media_type,
+        )
+        if job_id:
+            new_response.headers[self.header_name] = str(job_id)
+        return new_response
+
+
 def create_app(
     adapter: JobAdapter,
     settings: ServiceSettings,
@@ -104,6 +141,10 @@ def create_app(
         title = f"{adapter.name}-server"
 
     app = FastAPI(title=title, version=version)
+
+    if settings.session_header_name:
+        app.add_middleware(_SessionAffinityMiddleware, header_name=settings.session_header_name)
+        logger.info("Session affinity middleware enabled (header=%s)", settings.session_header_name)
 
     # Ensure the jobs root exists before we try to scan it (and so /healthz/detail
     # is accurate on the first request).

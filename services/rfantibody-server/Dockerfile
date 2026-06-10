@@ -88,6 +88,7 @@ ENV RFANTIBODY_MAX_CONCURRENT_JOBS=1
 # Keepalive pings this URL through FC's gateway so the instance stays alive
 # during long GPU jobs. Override at deploy time if the URL changes.
 # ENV RFANTIBODY_KEEPALIVE_URL=https://fc-rfantibody-guekbpucdo.cn-hangzhou-vpc.fcapp.run
+ENV RFANTIBODY_SESSION_HEADER_NAME=bioagent-session-id
 ENV PORT=9000
 EXPOSE 9000
 

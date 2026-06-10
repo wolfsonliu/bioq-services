@@ -63,6 +63,7 @@ def make_generic_router() -> APIRouter:
             "jobs_base_dir_exists": settings.jobs_base_dir.exists(),
             "disk_usage_mb": round(disk_usage_bytes(settings.jobs_base_dir) / 1024 / 1024, 2),
             "disk_limit_mb": settings.disk_limit_mb,
+            "session_header": settings.session_header_name,
         }
 
     # ---------- Job lifecycle (read) ----------

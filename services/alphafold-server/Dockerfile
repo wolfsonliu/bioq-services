@@ -97,6 +97,14 @@ ENV XLA_PYTHON_CLIENT_MEM_FRACTION=4.0
 ENV OPENMM_CPU_THREADS=8
 ENV PYTHONPATH=/opt/alphafold
 
+
+# Keepalive pings this URL through FC's gateway so the instance stays alive
+# during long GPU jobs. Override at deploy time if the URL changes.
+# ENV ALPHAFOLD_KEEPALIVE_URL=
+# FC session affinity: inject this header in POST responses so FC binds
+# follow-up requests to the same instance. Requires FC console config too.
+ENV ALPHAFOLD_SESSION_HEADER_NAME=bioagent-session-id
+
 WORKDIR /opt/alphafold
 
 # ldconfig must run before GPU access.

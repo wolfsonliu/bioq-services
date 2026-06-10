@@ -165,6 +165,13 @@ ENV IMMUNEBUILDER_JOBS_BASE_DIR=/data/immunebuilder_jobs
 ENV IMMUNEBUILDER_VENV_BIN=/opt/conda/envs/immunebuilder/bin
 RUN mkdir -p /data/immunebuilder_jobs
 
+
+# Keepalive pings this URL through FC's gateway so the instance stays alive
+# during long GPU jobs. Override at deploy time if the URL changes.
+# ENV IMMUNEBUILDER_KEEPALIVE_URL=https://fc-immuebuilder-mhxbldkfhc.cn-hangzhou-vpc.fcapp.run
+# FC session affinity: inject this header in POST responses so FC binds
+# follow-up requests to the same instance. Requires FC console config too.
+ENV IMMUNEBUILDER_SESSION_HEADER_NAME=bioagent-session-id
 ENV IMMUNEBUILDER_MAX_CONCURRENT_JOBS=1
 ENV PORT=9000
 EXPOSE 9000

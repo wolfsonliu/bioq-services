@@ -57,3 +57,8 @@ class ServiceSettings(BaseSettings):
     # localhost (which FC ignores). Typically the function's own fcapp.run URL
     # with /healthz appended.  Env: <PREFIX>_KEEPALIVE_URL
     keepalive_url: str | None = Field(default=None)
+    # FC session affinity header name. When set, POST responses that contain a
+    # job_id will include this header so FC can bind follow-up requests to the
+    # same instance.  Env: <PREFIX>_SESSION_HEADER_NAME
+    # Naming rules: no "x-fc-" prefix, letter-start, 5-40 chars, [a-zA-Z0-9_-].
+    session_header_name: str | None = Field(default=None)

@@ -97,12 +97,16 @@ def poll_job(
     timeout_s: int = 1800,
     interval_s: int = 15,
     max_transient_errors: int = 10,
+    extra_headers: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Poll `GET /api/jobs/{job_id}` until status is terminal.
 
     `client` is any object with a `.get(url)` method whose response has
     `.raise_for_status()` and `.json()` — httpx.Client and requests.Session
     both fit. Returns the final JobInfo dict; raises TimeoutError on deadline.
+
+    ``extra_headers`` are forwarded on every poll request — use this to pass
+    the FC session affinity header so polls hit the correct instance.
 
     Transient network errors (connection refused, DNS failures, FC cold-start
     hiccups) are retried up to `max_transient_errors` consecutive times before
@@ -111,9 +115,10 @@ def poll_job(
     deadline = time.monotonic() + timeout_s
     body: dict[str, Any] = {}
     consecutive_errors = 0
+    hdrs = extra_headers or {}
     while time.monotonic() < deadline:
         try:
-            resp = client.get(f"{base_url}/api/jobs/{job_id}")
+            resp = client.get(f"{base_url}/api/jobs/{job_id}", headers=hdrs)
             resp.raise_for_status()
             body = resp.json()
             consecutive_errors = 0

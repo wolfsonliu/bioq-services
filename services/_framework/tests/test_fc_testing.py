@@ -71,7 +71,7 @@ def test_poll_job_returns_on_completed() -> None:
             self._p = list(payloads)
             self.calls = 0
 
-        def get(self, _url: str) -> FakeResp:
+        def get(self, _url: str, **kwargs) -> FakeResp:
             self.calls += 1
             return FakeResp(self._p.pop(0))
 
@@ -96,7 +96,7 @@ def test_poll_job_times_out() -> None:
             return {"status": "running"}
 
     class FakeClient:
-        def get(self, _url: str) -> FakeResp:
+        def get(self, _url: str, **kwargs) -> FakeResp:
             return FakeResp()
 
     with pytest.raises(TimeoutError, match="did not finish"):
@@ -120,7 +120,7 @@ def test_poll_job_retries_transient_errors() -> None:
         def __init__(self) -> None:
             self.calls = 0
 
-        def get(self, _url: str) -> FakeResp:
+        def get(self, _url: str, **kwargs) -> FakeResp:
             self.calls += 1
             if self.calls == 2:
                 raise ConnectionError("No route to host")
@@ -141,7 +141,7 @@ def test_poll_job_raises_after_max_transient_errors() -> None:
         def __init__(self) -> None:
             self.calls = 0
 
-        def get(self, _url: str):
+        def get(self, _url: str, **kwargs):
             self.calls += 1
             raise ConnectionError("No route to host")
 

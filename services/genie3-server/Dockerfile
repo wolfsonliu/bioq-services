@@ -150,6 +150,15 @@ ENV GENIE3_JOBS_BASE_DIR=/data/genie3_jobs
 RUN mkdir -p /data/genie3_jobs
 
 # --- Alibaba Cloud FC configuration ---
+
+
+# Keepalive pings this URL through FC's gateway so the instance stays alive
+# during long GPU jobs. Override at deploy time if the URL changes.
+# ENV GENIE3_KEEPALIVE_URL=https://fc-genie-icjpnieeiz.cn-hangzhou-vpc.fcapp.run
+# FC session affinity: inject this header in POST responses so FC binds
+# follow-up requests to the same instance. Requires FC console config too.
+ENV GENIE3_SESSION_HEADER_NAME=bioagent-session-id
+
 # CAPort: FC default listening port is 9000
 # Keep-alive: FC requires >= 15 minutes (900s)
 # Startup: HTTP server must be ready within 120s

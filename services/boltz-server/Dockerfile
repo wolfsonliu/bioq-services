@@ -102,6 +102,12 @@ ENV BOLTZ_CACHE_DIR=/opt/boltz/weights
 ENV BOLTZ_JOBS_BASE_DIR=/data/boltz_jobs
 RUN mkdir -p /data/boltz_jobs
 
+# Keepalive pings this URL through FC's gateway so the instance stays alive
+# during long GPU jobs. Override at deploy time if the URL changes.
+# ENV BOLTZ_KEEPALIVE_URL=https://fc-boltz-kbioniejif.cn-hangzhou-vpc.fcapp.run
+# FC session affinity: inject this header in POST responses so FC binds
+# follow-up requests to the same instance. Requires FC console config too.
+ENV BOLTZ_SESSION_HEADER_NAME=bioagent-session-id
 ENV PORT=9000
 EXPOSE 9000
 # WORKDIR is /opt/boltz (set above) — CPython prepends CWD to sys.path,

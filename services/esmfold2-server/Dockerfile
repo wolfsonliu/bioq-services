@@ -82,6 +82,12 @@ ENV ESMCFOLD_CCD_PATH=/data/models/esmfold2/ccd.pkl
 ENV ESMFOLD2_JOBS_BASE_DIR=/data/esmfold2_jobs
 RUN mkdir -p /data/esmfold2_jobs
 
+# Keepalive pings this URL through FC's gateway so the instance stays alive
+# during long GPU jobs. Override at deploy time if the URL changes.
+# ENV ESMFOLD2_KEEPALIVE_URL=https://fc-esmfold-spayusioug.cn-hangzhou-vpc.fcapp.run
+# FC session affinity: inject this header in POST responses so FC binds
+# follow-up requests to the same instance. Requires FC console config too.
+ENV ESMFOLD2_SESSION_HEADER_NAME=bioagent-session-id
 ENV PORT=9000
 EXPOSE 9000
 CMD [".venv/bin/python", "-m", "uvicorn", "server.app:app", \
