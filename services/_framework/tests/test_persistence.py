@@ -82,14 +82,16 @@ def test_reload_restores_from_sidecar(tmp_path: Path, adapter: _Adapter) -> None
 def test_reload_running_downgrades_to_interrupted(
     tmp_path: Path, adapter: _Adapter
 ) -> None:
+    """Same instance restarting should mark its own running jobs as interrupted."""
     from bioagent_service.models import utcnow
 
-    pre = JobStore(persist_dir=tmp_path)
+    instance_id = "same-instance"
+    pre = JobStore(persist_dir=tmp_path, instance_id=instance_id)
     pre.create("zombie")
     started = utcnow()
     pre.update("zombie", status=JobStatus.RUNNING, message="mid-flight", started_at=started)
 
-    fresh = JobStore(persist_dir=tmp_path)
+    fresh = JobStore(persist_dir=tmp_path, instance_id=instance_id)
     reload_from_disk(fresh, adapter, tmp_path)
     restored = fresh.get("zombie")
     assert restored is not None
@@ -104,6 +106,28 @@ def test_reload_running_downgrades_to_interrupted(
     sidecar = json.loads((tmp_path / "zombie" / SIDECAR_NAME).read_text())
     assert sidecar["status"] == "failed"
     assert sidecar["failure_kind"] == "interrupted"
+
+
+def test_reload_skips_running_job_from_other_instance(
+    tmp_path: Path, adapter: _Adapter
+) -> None:
+    """A different instance's running job must NOT be marked interrupted."""
+    from bioagent_service.models import utcnow
+
+    owner = JobStore(persist_dir=tmp_path, instance_id="instance-A")
+    owner.create("active")
+    owner.update("active", status=JobStatus.RUNNING, started_at=utcnow())
+
+    other = JobStore(persist_dir=tmp_path, instance_id="instance-B")
+    reload_from_disk(other, adapter, tmp_path)
+    restored = other.get("active")
+    assert restored is not None
+    assert restored.status == JobStatus.RUNNING
+
+    # Sidecar on disk must NOT be rewritten.
+    sidecar = json.loads((tmp_path / "active" / SIDECAR_NAME).read_text())
+    assert sidecar["status"] == "running"
+    assert sidecar["instance_id"] == "instance-A"
 
 
 def test_reload_infers_legacy_dir_with_outputs(

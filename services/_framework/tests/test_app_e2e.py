@@ -503,3 +503,105 @@ def test_session_affinity_disabled_by_default(tmp_path: Path) -> None:
 
         detail = c.get("/healthz/detail").json()
         assert detail["session_header"] is None
+
+
+# ---------- FC PreStop lifecycle ----------
+
+
+def test_prestop_marks_running_jobs_interrupted(tmp_path: Path) -> None:
+    """GET /pre-stop should mark this instance's running jobs as failed/interrupted."""
+    settings = _EchoSettings(
+        jobs_base_dir=tmp_path / "jobs", max_concurrent_jobs=2, keepalive_interval_s=0,
+    )
+    adapter = _EchoAdapter(settings=settings)
+    app = create_app(adapter, settings, title="Echo PreStop")
+
+    gate_file = tmp_path / "gate"
+    gate_file.write_text("")
+
+    @app.post("/api/echo")
+    def echo(req: _EchoRequest):
+        return app.state.runner.submit(
+            build_argv=lambda _id, jd: [
+                "bash", "-c",
+                f"while [ -f {gate_file} ]; do sleep 0.05; done; "
+                f"echo ok > {jd / 'output' / 'msg.txt'}",
+            ],
+            label="echo",
+        )
+
+    with TestClient(app) as c:
+        resp = c.post("/api/echo", json={"message": "long-running"})
+        assert resp.status_code == 200
+        job_id = resp.json()["job_id"]
+
+        # Wait for RUNNING state.
+        for _ in range(50):
+            r = c.get(f"/api/jobs/{job_id}")
+            if r.json()["status"] == "running":
+                break
+            time.sleep(0.05)
+        assert r.json()["status"] == "running"
+
+        # Call PreStop.
+        ps = c.get("/pre-stop")
+        assert ps.status_code == 200
+        body = ps.json()
+        assert body["status"] == "ok"
+        assert job_id in body["interrupted_jobs"]
+
+        # Job should now be failed/interrupted.
+        job = c.get(f"/api/jobs/{job_id}").json()
+        assert job["status"] == "failed"
+        assert job["failure_kind"] == "interrupted"
+        assert "PreStop" in job["message"]
+
+        # Clean up blocking subprocess.
+        gate_file.unlink(missing_ok=True)
+
+
+def test_prestop_skips_other_instance_jobs(tmp_path: Path) -> None:
+    """PreStop must not touch running jobs owned by a different instance."""
+    import json as _json
+
+    jobs_dir = tmp_path / "jobs"
+    settings = _EchoSettings(
+        jobs_base_dir=jobs_dir, max_concurrent_jobs=2, keepalive_interval_s=0,
+    )
+    adapter = _EchoAdapter(settings=settings)
+    app = create_app(adapter, settings, title="Echo PreStop Cross")
+
+    # Plant a sidecar for a running job owned by a different instance.
+    foreign_dir = jobs_dir / "foreign123"
+    foreign_dir.mkdir(parents=True)
+    foreign_sidecar = {
+        "job_id": "foreign123",
+        "status": "running",
+        "instance_id": "other-instance-xyz",
+        "started_at": "2026-06-10T00:00:00Z",
+    }
+    (foreign_dir / "job.json").write_text(_json.dumps(foreign_sidecar))
+
+    with TestClient(app) as c:
+        # Force the store to load the foreign job via a GET.
+        r = c.get("/api/jobs/foreign123")
+        assert r.status_code == 200
+        assert r.json()["status"] == "running"
+
+        # PreStop should NOT touch it.
+        ps = c.get("/pre-stop")
+        assert ps.status_code == 200
+        assert ps.json()["interrupted_jobs"] == []
+
+        # Verify it's still running on disk.
+        disk = _json.loads((foreign_dir / "job.json").read_text())
+        assert disk["status"] == "running"
+
+
+def test_prestop_returns_ok_when_no_active_jobs(client: TestClient) -> None:
+    """PreStop with nothing running returns an empty list."""
+    ps = client.get("/pre-stop")
+    assert ps.status_code == 200
+    body = ps.json()
+    assert body["status"] == "ok"
+    assert body["interrupted_jobs"] == []

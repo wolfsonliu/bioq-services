@@ -6,6 +6,8 @@ same router works for every service — no per-service codegen needed.
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 
@@ -16,8 +18,10 @@ from bioagent_service.jobs import (
     cleanup_job,
     disk_usage_bytes,
 )
-from bioagent_service.models import JobInfo, JobStatus
+from bioagent_service.models import FailureKind, JobInfo, JobStatus, utcnow
 from bioagent_service.settings import ServiceSettings
+
+logger = logging.getLogger(__name__)
 
 
 def make_generic_router() -> APIRouter:
@@ -65,6 +69,41 @@ def make_generic_router() -> APIRouter:
             "disk_limit_mb": settings.disk_limit_mb,
             "session_header": settings.session_header_name,
         }
+
+    # ---------- FC lifecycle ----------
+
+    @router.get("/pre-stop")
+    def pre_stop(request: Request) -> dict[str, object]:
+        """FC PreStop hook — mark this instance's running jobs as interrupted."""
+        store = _store(request)
+        instance_id = store.instance_id
+        interrupted: list[str] = []
+        for job in store.all_jobs():
+            if job.status != JobStatus.RUNNING:
+                continue
+            if job.instance_id is not None and job.instance_id != instance_id:
+                continue
+            now = utcnow()
+            store.update(
+                job.job_id,
+                status=JobStatus.FAILED,
+                message="FC PreStop: instance shutting down",
+                failure_kind=FailureKind.INTERRUPTED,
+                completed_at=now,
+                duration_seconds=(
+                    (now - job.started_at).total_seconds()
+                    if job.started_at else None
+                ),
+            )
+            interrupted.append(job.job_id)
+        if interrupted:
+            logger.warning(
+                "pre-stop interrupted %d job(s): %s (instance=%s)",
+                len(interrupted), interrupted, instance_id,
+            )
+        else:
+            logger.info("pre-stop: no running jobs to interrupt (instance=%s)", instance_id)
+        return {"status": "ok", "interrupted_jobs": interrupted}
 
     # ---------- Job lifecycle (read) ----------
 

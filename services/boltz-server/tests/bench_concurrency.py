@@ -36,23 +36,36 @@ def _fc_url(service: str) -> str:
 
 
 def _poll_job(client: httpx.Client, base_url: str, job_id: str,
-              timeout_s: int = 1800, interval_s: int = 15) -> dict:
+              timeout_s: int = 1800, interval_s: int = 15,
+              extra_headers: dict[str, str] | None = None,
+              tag: str = "") -> dict:
     deadline = time.monotonic() + timeout_s
+    hdrs = extra_headers or {}
     body: dict = {}
+    attempt = 0
     while time.monotonic() < deadline:
+        attempt += 1
         try:
-            resp = client.get(f"{base_url}/api/jobs/{job_id}")
+            resp = client.get(f"{base_url}/api/jobs/{job_id}", headers=hdrs)
             resp.raise_for_status()
             body = resp.json()
-        except Exception:
+        except Exception as exc:
+            print(f"    [{tag}] poll #{attempt} exception: {exc!r}")
             time.sleep(interval_s)
             continue
-        if body.get("status") in ("completed", "failed"):
+        status = body.get("status")
+        print(f"    [{tag}] poll #{attempt} status={status} duration={body.get('duration_seconds')}")
+        if status in ("completed", "failed"):
+            if status == "failed":
+                tail = body.get("error_tail") or ""
+                print(f"    [{tag}] FAILED detail: error_summary={body.get('error_summary')}, "
+                      f"failure_kind={body.get('failure_kind')}, error_tail={tail[:300]}")
             return body
         time.sleep(interval_s)
     raise TimeoutError(f"job {job_id} did not finish within {timeout_s}s; last: {body.get('status')}")
 
 
+SESSION_HEADER = "bioagent-session-id"
 SHORT_PROTEIN = "QLEDSEVEAVAKGLEEMYANGVTEDNFKNYVKNNFAQQEISSVEEELNVNISDSC"
 FAST_PARAMS = {
     "name": "bench",
@@ -101,10 +114,24 @@ def submit_and_poll(
             )
 
         job_id = r.json()["job_id"]
-        print(f"  [{tag}] submitted {job_id} in {submit_time:.1f}s")
+        session_hdrs = {}
+        session_val = r.headers.get(SESSION_HEADER)
+        if session_val:
+            session_hdrs[SESSION_HEADER] = session_val
+        print(f"  [{tag}] submitted {job_id} in {submit_time:.1f}s (session={session_val})")
 
-        final = _poll_job(c, base_url, job_id, timeout_s=timeout_s, interval_s=10)
+        final = _poll_job(c, base_url, job_id, timeout_s=timeout_s, interval_s=10,
+                          extra_headers=session_hdrs, tag=tag)
         total = time.monotonic() - t0
+
+        if final["status"] == "failed":
+            try:
+                log_r = c.get(f"{base_url}/api/jobs/{job_id}/log", headers=session_hdrs)
+                log_text = log_r.json().get("log", "") if log_r.status_code == 200 else ""
+                if log_text:
+                    print(f"  [{tag}] LOG (last 500 chars):\n{log_text[-500:]}")
+            except Exception:
+                pass
 
         return JobResult(
             job_id=job_id,
@@ -113,6 +140,7 @@ def submit_and_poll(
             total_time=total,
             final_status=final["status"],
             duration_server=final.get("duration_seconds"),
+            error=final.get("error_summary"),
         )
 
 
@@ -231,6 +259,22 @@ def main():
     results.append(seq)
 
     print_report(results)
+
+    # Verification: re-check all job statuses without session header
+    all_job_ids = [j.job_id for r in results for j in r.jobs if j.job_id]
+    if all_job_ids:
+        print("\n--- Verification (direct check, no session header) ---")
+        with httpx.Client(timeout=httpx.Timeout(30.0)) as vc:
+            for jid in all_job_ids:
+                try:
+                    vr = vc.get(f"{base_url}/api/jobs/{jid}")
+                    if vr.status_code == 200:
+                        vb = vr.json()
+                        print(f"  {jid}: status={vb['status']} duration={vb.get('duration_seconds')}s")
+                    else:
+                        print(f"  {jid}: HTTP {vr.status_code}")
+                except Exception as e:
+                    print(f"  {jid}: error {e!r}")
 
 
 if __name__ == "__main__":

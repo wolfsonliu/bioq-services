@@ -153,6 +153,7 @@ def create_app(
     # Persist sidecars under jobs_base_dir so the store survives restarts; see
     # `JobStore._persist` and `reload_from_disk`.
     store = JobStore(persist_dir=settings.jobs_base_dir)
+    logger.info("instance_id=%s", store.instance_id)
     executor = ThreadPoolExecutor(max_workers=settings.max_concurrent_jobs)
     runner = JobRunner(store=store, executor=executor, settings=settings, adapter=adapter)
 

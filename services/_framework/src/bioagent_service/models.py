@@ -65,3 +65,7 @@ class JobInfo(BaseModel):
     error_tail: Optional[str] = None
     # Populated on failure: classification (subprocess_error / no_outputs / ...).
     failure_kind: Optional[FailureKind] = None
+    # Instance that created (and owns the subprocess for) this job.  Used by
+    # reload_from_disk to avoid corrupting running jobs that belong to a
+    # different FC instance sharing the same NAS.
+    instance_id: Optional[str] = None

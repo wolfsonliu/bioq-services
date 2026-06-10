@@ -74,13 +74,14 @@ class JobStore:
     `persist_dir=None` disables both sides (in-memory only); useful in tests.
     """
 
-    def __init__(self, persist_dir: Path | None = None) -> None:
+    def __init__(self, persist_dir: Path | None = None, instance_id: str | None = None) -> None:
         self._jobs: dict[str, JobInfo] = {}
         # mtime captured at the time of the last read or write of <persist_dir>/<id>/job.json.
         # Used by `get` to decide whether the in-memory copy is still authoritative.
         self._mtimes: dict[str, float] = {}
         self._lock = threading.Lock()
         self._persist_dir = persist_dir
+        self.instance_id: str = instance_id or uuid.uuid4().hex[:12]
 
     # ---- Internal helpers ----
 
@@ -140,6 +141,7 @@ class JobStore:
             status=JobStatus.PENDING,
             created_at=utcnow(),
             input_params=input_params,
+            instance_id=self.instance_id,
         )
         with self._lock:
             if job_id in self._jobs:
@@ -351,18 +353,30 @@ def reload_from_disk(
                 )
                 continue
             if job.status == JobStatus.RUNNING:
-                now = utcnow()
-                inserted = job.model_copy(update={
-                    "status": JobStatus.FAILED,
-                    "message": "Interrupted by container restart",
-                    "failure_kind": FailureKind.INTERRUPTED,
-                    "completed_at": now,
-                    "duration_seconds": (
-                        (now - job.started_at).total_seconds()
-                        if job.started_at else None
-                    ),
-                })
-                rewrite_sidecar = True
+                owned_by_this_instance = (
+                    job.instance_id is None  # legacy sidecar (pre-instance_id)
+                    or job.instance_id == store.instance_id
+                )
+                if owned_by_this_instance:
+                    now = utcnow()
+                    inserted = job.model_copy(update={
+                        "status": JobStatus.FAILED,
+                        "message": "Interrupted by container restart",
+                        "failure_kind": FailureKind.INTERRUPTED,
+                        "completed_at": now,
+                        "duration_seconds": (
+                            (now - job.started_at).total_seconds()
+                            if job.started_at else None
+                        ),
+                    })
+                    rewrite_sidecar = True
+                else:
+                    logger.info(
+                        "skipping running job %s owned by instance %s (this=%s)",
+                        job_id, job.instance_id, store.instance_id,
+                    )
+                    inserted = job
+                    rewrite_sidecar = False
             else:
                 inserted = job
                 rewrite_sidecar = False
