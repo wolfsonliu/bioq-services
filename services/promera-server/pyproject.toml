@@ -1,0 +1,13 @@
+[project]
+name = "promera-server"
+version = "0.0.1"
+requires-python = ">=3.12"
+dependencies = [
+    "bioagent-service-framework[mcp]",
+    "httpx",
+    "alibabacloud-oss-v2",
+    "pyyaml",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
