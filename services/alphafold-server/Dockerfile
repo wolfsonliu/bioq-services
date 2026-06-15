@@ -90,7 +90,7 @@ COPY opensource/alphafold/requirements.txt /tmp/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/af2/bin/python \
         absl-py==1.0.0 \
-        biopython==1.79 \
+        biopython==1.84 \
         dm-haiku==0.0.12 \
         docker==5.0.0 \
         matplotlib==3.8.0 \
