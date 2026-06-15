@@ -95,7 +95,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         docker==5.0.0 \
         matplotlib==3.8.0 \
         ml-collections==0.1.0 \
-        numpy==1.24.3 \
         "pytest<8.5.0" \
         "setuptools<72.0.0" \
         tensorflow-cpu==2.16.1 \
