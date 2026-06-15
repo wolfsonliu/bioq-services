@@ -1,3 +1,4 @@
+alphafold-server: https://fc-alphafold-fcizetpnjc.cn-hangzhou-vpc.fcapp.run
 genie3-server: https://fc-genie-icjpnieeiz.cn-hangzhou-vpc.fcapp.run
 rfantibody-server: https://fc-rfantibody-guekbpucdo.cn-hangzhou-vpc.fcapp.run
 ppiflow-server: https://fc-ppiflow-lufflhmlaw.cn-hangzhou-vpc.fcapp.run
