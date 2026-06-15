@@ -31,9 +31,18 @@ RUN uv venv .venv --python python3.12
 # Heavy deps first. BoltzGen pins numpy==2.0.2 and requires torch>=2.4.1.
 # torch's wheel transitively pulls nvidia-cuda-runtime-cu12 / nvidia-cudnn-cu12 /
 # nvidia-cublas-cu12 / etc. (~2.7 GB total) — these provide GPU runtime libs.
+#
+# Pin CUDA 12.4 torch builds — HPC nodes may have older drivers (CUDA 12.4 /
+# driver 550.x) that reject cu126+ runtime.  Use PyTorch's cu124 index as
+# primary so uv resolves torch from there; Huawei mirror stays as extra for
+# numpy, nvidia-* sub-packages, and other deps.
+# Override at build time: --build-arg TORCH_INDEX_URL=.../cu126
+ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
-        "torch>=2.4.1" "numpy==2.0.2"
+        "torch>=2.4.1" "numpy==2.0.2" \
+        --index-url "$TORCH_INDEX_URL" \
+        --extra-index-url "$UV_INDEX_URL"
 
 # BoltzGen source + editable install. cuequivariance deps (cu12 wheels, no nvcc
 # needed) are listed as direct dependencies in pyproject.toml.
