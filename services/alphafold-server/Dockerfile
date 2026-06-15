@@ -139,7 +139,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         cuda-command-line-tools-$(cut -f1,2 -d- <<< ${CUDA//./-}) \
-        hmmer kalign ca-certificates \
+        hmmer kalign wget ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # HH-suite binaries from builder.
