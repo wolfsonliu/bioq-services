@@ -4,29 +4,39 @@
 # AlphaFold source must be at opensource/alphafold/.
 # Databases and weights are NOT bundled — mount NAS at /data/models/alphafold/.
 #
+# Multistage layout
+# -----------------
+#   builder = micromamba env (Python + openmm/pdbfixer via conda-forge) +
+#             uv pip extras (tensorflow, jax, framework) + cleanup.
+#   runtime = minimal apt + conda env from builder + AlphaFold source +
+#             server code.
+#
 # Base: nvidia/cuda 12.2 + cuDNN8, matching the official AlphaFold Dockerfile.
 ARG CUDA=12.2.2
-FROM nvidia/cuda:${CUDA}-cudnn8-runtime-ubuntu20.04
+ARG BASE_IMAGE=nvidia/cuda:${CUDA}-cudnn8-runtime-ubuntu20.04
+ARG MICROMAMBA_IMAGE=mambaorg/micromamba:2.6.2
+
+
+# ===========================================================================
+# Stage 1: builder — conda env + pip deps.
+# ===========================================================================
+FROM ${MICROMAMBA_IMAGE} AS micromamba
+FROM ${BASE_IMAGE} AS builder
 ARG CUDA
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
+ENV UV_HTTP_TIMEOUT=600
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-ARG DEBIAN_FRONTEND=noninteractive
-RUN apt-get update --quiet \
-    && apt-get install --no-install-recommends --yes --quiet \
-        build-essential \
-        cmake \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential cmake git wget curl ca-certificates \
         cuda-command-line-tools-$(cut -f1,2 -d- <<< ${CUDA//./-}) \
-        git \
-        hmmer \
-        kalign \
-        tzdata \
-        wget \
-        curl \
-        ca-certificates \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get autoremove --yes \
-    && apt-get clean
+        hmmer kalign tzdata \
+    && rm -rf /var/lib/apt/lists/*
 
 # HH-suite from source.
 RUN git clone --branch v3.3.0 --single-branch https://github.com/soedinglab/hh-suite.git /tmp/hh-suite \
@@ -38,40 +48,116 @@ RUN git clone --branch v3.3.0 --single-branch https://github.com/soedinglab/hh-s
     && popd \
     && rm -rf /tmp/hh-suite
 
-# Miniconda.
-RUN wget -q -P /tmp \
-  https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
-    && bash /tmp/Miniconda3-latest-Linux-x86_64.sh -b -p /opt/conda \
-    && rm /tmp/Miniconda3-latest-Linux-x86_64.sh
+COPY --from=micromamba /bin/micromamba /bin/micromamba
+COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
+ENV MAMBA_EXE=/bin/micromamba
+ENV MAMBA_ROOT_PREFIX=/opt/conda
+ENV PATH=/opt/conda/envs/af2/bin:$PATH
 
-ENV PATH="/opt/conda/bin:$PATH"
-ENV LD_LIBRARY_PATH="/opt/conda/lib:$LD_LIBRARY_PATH"
-ENV CONDA_PLUGINS_AUTO_ACCEPT_TOS="yes"
-RUN conda install --quiet --yes conda==24.11.1 pip python=3.11 \
-    && conda install --quiet --yes --channel nvidia cuda=${CUDA_VERSION} \
-    && conda clean --all --force-pkgs-dirs --yes
+# ---------------------------------------------------------------------------
+# Mirror configuration for pip + conda.
+# ---------------------------------------------------------------------------
+RUN mkdir -p /root/.config/pip \
+    && printf '[global]\nindex-url = https://repo.huaweicloud.com/repository/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
+       > /root/.config/pip/pip.conf \
+    && cat > /root/.condarc <<'EOF'
+channels:
+  - defaults
+show_channel_urls: true
+default_channels:
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/msys2
+custom_channels:
+  conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+  pytorch: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+EOF
+
+# ---------------------------------------------------------------------------
+# Conda env: Python 3.12 + openmm + pdbfixer (conda-only packages).
+# ---------------------------------------------------------------------------
+RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
+    micromamba create -y -n af2 -c conda-forge \
+        python=3.12 \
+        openmm=8.2.0 \
+        pdbfixer=1.12.0
+
+# ---------------------------------------------------------------------------
+# Pip deps via uv: AlphaFold requirements (minus openmm/pdbfixer) + JAX CUDA.
+# ---------------------------------------------------------------------------
+COPY opensource/alphafold/requirements.txt /tmp/requirements.txt
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python /opt/conda/envs/af2/bin/python \
+        absl-py==1.0.0 \
+        biopython==1.79 \
+        dm-haiku==0.0.12 \
+        docker==5.0.0 \
+        matplotlib==3.8.0 \
+        ml-collections==0.1.0 \
+        numpy==1.24.3 \
+        "pytest<8.5.0" \
+        "setuptools<72.0.0" \
+        tensorflow-cpu==2.16.1 \
+    && uv pip install --python /opt/conda/envs/af2/bin/python \
+        jax==0.4.26 \
+        jaxlib==0.4.26+cuda12.cudnn89 \
+        --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+
+# ---------------------------------------------------------------------------
+# Cleanup dead weight from the conda env.
+# ---------------------------------------------------------------------------
+RUN find /opt/conda/envs/af2/lib -name '*.a' -delete \
+    && rm -rf \
+        /opt/conda/envs/af2/share/doc \
+        /opt/conda/envs/af2/share/man \
+        /opt/conda/envs/af2/share/locale \
+    && find /opt/conda/envs/af2 -depth -type d -name '__pycache__' -exec rm -rf {} + \
+    && find /opt/conda/envs/af2 -name '*.pyc' -delete
+
+# ---------------------------------------------------------------------------
+# Shared service framework.
+# ---------------------------------------------------------------------------
+RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
+    --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python /opt/conda/envs/af2/bin/python \
+        "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
+
+
+# ===========================================================================
+# Stage 2: runtime — conda env + AlphaFold source + server code.
+# ===========================================================================
+FROM ${BASE_IMAGE}
+ARG CUDA
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV MAMBA_ROOT_PREFIX=/opt/conda
+ENV PATH=/opt/conda/envs/af2/bin:$PATH
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        cuda-command-line-tools-$(cut -f1,2 -d- <<< ${CUDA//./-}) \
+        hmmer kalign ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# HH-suite binaries from builder.
+COPY --from=builder /opt/hhsuite /opt/hhsuite
+RUN ln -s /opt/hhsuite/bin/* /usr/bin
+
+# Conda env from builder.
+COPY --from=builder /opt/conda/envs/af2 /opt/conda/envs/af2
 
 # AlphaFold source.
 COPY opensource/alphafold/ /opt/alphafold/
 RUN wget -q -P /opt/alphafold/alphafold/common/ \
   https://git.scicore.unibas.ch/schwede/openstructure/-/raw/7102c63615b64735c4941278d92b554ec94415f8/modules/mol/alg/src/stereo_chemical_props.txt
 
-# Python dependencies (AlphaFold requirements + JAX CUDA).
-RUN pip3 install --upgrade pip setuptools --no-cache-dir \
-    && pip3 install -r /opt/alphafold/requirements.txt --no-cache-dir \
-    && pip3 install --upgrade --no-cache-dir \
-      jax==0.4.26 \
-      jaxlib==0.4.26+cuda12.cudnn89 \
-      -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-
 # Fix SETUID for ldconfig (GPU visibility in non-root).
 RUN chmod u+s /sbin/ldconfig.real
-RUN ln -sf /usr/lib/x86_64-linux-gnu/libffi.so.7 /opt/conda/lib/libffi.so.7
-
-# Shared bioagent service framework + remote-fetch deps.
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
-    pip3 install --no-cache-dir \
-        "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
+RUN ln -sf /usr/lib/x86_64-linux-gnu/libffi.so.7 /opt/conda/envs/af2/lib/libffi.so.7
 
 # Server code — explicit file list so test/doc changes don't bust cache.
 COPY services/alphafold-server/__init__.py \
@@ -87,7 +173,7 @@ COPY services/alphafold-server/__init__.py \
 
 # Environment.
 ENV ALPHAFOLD_ROOT=/opt/alphafold
-ENV ALPHAFOLD_PYTHON=/opt/conda/bin/python
+ENV ALPHAFOLD_PYTHON=/opt/conda/envs/af2/bin/python
 ENV ALPHAFOLD_JOBS_BASE_DIR=/data/alphafold_jobs
 ENV ALPHAFOLD_DATA_DIR=/data/models/alphafold
 ENV ALPHAFOLD_N_CPU=8
@@ -97,12 +183,6 @@ ENV XLA_PYTHON_CLIENT_MEM_FRACTION=4.0
 ENV OPENMM_CPU_THREADS=8
 ENV PYTHONPATH=/opt/alphafold
 
-
-# Keepalive pings this URL through FC's gateway so the instance stays alive
-# during long GPU jobs. Override at deploy time if the URL changes.
-# ENV ALPHAFOLD_KEEPALIVE_URL=
-# FC session affinity: inject this header in POST responses so FC binds
-# follow-up requests to the same instance. Requires FC console config too.
 ENV ALPHAFOLD_SESSION_HEADER_NAME=bioagent-session-id
 
 WORKDIR /opt/alphafold
@@ -113,4 +193,5 @@ RUN echo $'#!/bin/bash\nldconfig\nexec "$@"' > /opt/entrypoint.sh \
 ENTRYPOINT ["/opt/entrypoint.sh"]
 
 EXPOSE 8000
-CMD ["uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/opt/conda/envs/af2/bin/python", "-m", "uvicorn", "server.app:app", \
+     "--host", "0.0.0.0", "--port", "8000"]
