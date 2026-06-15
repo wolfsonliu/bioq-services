@@ -57,7 +57,7 @@ RUN wget -q -P /opt/alphafold/alphafold/common/ \
   https://git.scicore.unibas.ch/schwede/openstructure/-/raw/7102c63615b64735c4941278d92b554ec94415f8/modules/mol/alg/src/stereo_chemical_props.txt
 
 # Python dependencies (AlphaFold requirements + JAX CUDA).
-RUN pip3 install --upgrade pip --no-cache-dir \
+RUN pip3 install --upgrade pip setuptools --no-cache-dir \
     && pip3 install -r /opt/alphafold/requirements.txt --no-cache-dir \
     && pip3 install --upgrade --no-cache-dir \
       jax==0.4.26 \
