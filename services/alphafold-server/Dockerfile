@@ -92,6 +92,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         absl-py==1.0.0 \
         biopython==1.84 \
         dm-haiku==0.0.12 \
+        "flax<0.8.6" \
         docker==5.0.0 \
         matplotlib==3.8.0 \
         ml-collections==0.1.0 \
