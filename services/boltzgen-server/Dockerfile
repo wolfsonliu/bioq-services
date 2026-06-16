@@ -22,8 +22,12 @@ ENV PYTHONUNBUFFERED=1
 ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
 ENV UV_HTTP_TIMEOUT=600
 
+# gcc/g++ required at runtime: cuequivariance Triton kernels JIT-compile CUDA
+# code via triton.runtime.build, which shells out to `cc`. Blackwell (compute
+# capability ≥ 12) has no pre-built cuequivariance kernel so JIT is the only
+# path. Without gcc the design step fails with "Failed to find C compiler".
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates wget curl \
+    ca-certificates wget curl gcc g++ \
     && rm -rf /var/lib/apt/lists/*
 
 # uv binary + uv-managed Python 3.12 (avoids deadsnakes PPA — Ubuntu 22.04
