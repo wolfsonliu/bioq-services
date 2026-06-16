@@ -101,6 +101,20 @@ class _BoltzGenCommon(BaseModel):
         default=False,
         description="Reuse existing results (resume interrupted pipeline).",
     )
+    # Upstream boltzgen defaults `analysis.num_processes=32` (see
+    # opensource/boltzgen/src/boltzgen/resources/config/analysis.yaml). Each
+    # analysis worker loads CIF + tools (PLIP, SASA) and uses 1-3 GB; 32 workers
+    # × 500 designs exceeds 64 GB on memory-constrained HPC nodes, OOM-killing
+    # the step (observed 2026-06-16 on IL-33 BoltzGen, HPC SLURM mem=64G).
+    # Lowering this to 8-16 trades a few minutes of analysis wallclock for safe
+    # memory. Forwarded to boltzgen as `--config analysis num_processes=<N>`.
+    analysis_num_processes: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=64,
+        description="Parallel workers for the analysis step (upstream default 32; "
+        "use 8-16 on nodes with ≤64 GB RAM to avoid OOM). None=upstream default.",
+    )
 
 
 class DesignRequest(_BoltzGenCommon):

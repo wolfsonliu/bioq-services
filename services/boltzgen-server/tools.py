@@ -63,6 +63,17 @@ def design_argv(
     if req.reuse:
         argv.append("--reuse")
 
+    # `--config <step> key=value` is boltzgen's escape hatch for overriding
+    # per-step Hydra config. We use it here to lower the analysis step's
+    # parallel worker count, which defaults to 32 upstream and OOMs on HPC
+    # nodes with ≤64 GB RAM (see DesignRequest.analysis_num_processes docs).
+    # Format requires a separate `--config` invocation per step.
+    if req.analysis_num_processes is not None:
+        argv += [
+            "--config", "analysis",
+            f"num_processes={req.analysis_num_processes}",
+        ]
+
     return argv
 
 
@@ -104,5 +115,14 @@ def inverse_fold_argv(
         argv += ["--filter_biased", req.filter_biased]
     if req.reuse:
         argv.append("--reuse")
+
+    # Override analysis-step parallelism to fit memory-constrained nodes.
+    # See design_argv() for full rationale; inverse_fold also runs the
+    # analysis step so the same OOM trigger applies.
+    if req.analysis_num_processes is not None:
+        argv += [
+            "--config", "analysis",
+            f"num_processes={req.analysis_num_processes}",
+        ]
 
     return argv
