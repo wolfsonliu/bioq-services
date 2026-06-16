@@ -102,7 +102,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     && uv pip install --python /opt/conda/envs/af2/bin/python \
         jax==0.4.26 \
         jaxlib==0.4.26+cuda12.cudnn89 \
-        --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+        --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html \
+    && uv pip install --python /opt/conda/envs/af2/bin/python \
+        "nvidia-cuda-nvcc-cu12==12.3.*"
 
 # ---------------------------------------------------------------------------
 # Cleanup dead weight from the conda env.
