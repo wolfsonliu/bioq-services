@@ -8,11 +8,12 @@
 # Weights in services/boltzgen-server/weights/ (~10 GB, 5 checkpoints).
 # Molecule data in services/boltzgen-server/moldir/ (~6 GB, CCD .pkl files).
 #
-# Base: uv's pre-built python3.12 slim image (Debian bookworm + uv pre-installed).
-# Same rationale as boltz-server: modern PyTorch (>=2.0) bundles CUDA / cuDNN libs
-# via nvidia-* PyPI sub-packages, so the nvidia/cuda base's libs are redundant.
-# Slim + PyPI-bundled CUDA saves ~3 GB on the final image.
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+# Base: nvidia/cuda 12.4.1 cudnn-runtime — provides a CUDA 12.4 runtime that
+# matches the HPC node drivers (driver reports max CUDA 12.4.0).  Earlier
+# slim base let pip resolve nvidia-*-cu12 wheels whose versions could drift to
+# CUDA 12.5/12.6 runtimes, triggering "NVIDIA driver too old" on HPC.  The
+# CUDA base image guarantees a consistent, validated 12.4 runtime baseline.
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -22,11 +23,15 @@ ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
 ENV UV_HTTP_TIMEOUT=600
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates wget \
+    ca-certificates wget curl \
     && rm -rf /var/lib/apt/lists/*
 
+# uv binary + uv-managed Python 3.12 (avoids deadsnakes PPA — Ubuntu 22.04
+# ships Python 3.10).  uv downloads a standalone CPython 3.12 build.
+COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
+
 WORKDIR /opt/boltzgen
-RUN uv venv .venv --python python3.12
+RUN uv venv .venv --python 3.12
 
 # Heavy deps first. BoltzGen pins numpy==2.0.2 and requires torch>=2.4.1.
 # torch's wheel transitively pulls nvidia-cuda-runtime-cu12 / nvidia-cudnn-cu12 /
@@ -38,9 +43,13 @@ RUN uv venv .venv --python python3.12
 # numpy, nvidia-* sub-packages, and other deps.
 # Override at build time: --build-arg TORCH_INDEX_URL=.../cu126
 ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124
+# Pin torch to 2.4.1 (not >=2.4.1): newer cu124 wheels (torch 2.5+ / 2.6+)
+# transitively pull nvidia-cublas-cu12 / nvidia-cudnn-cu12 versions that
+# need a CUDA runtime newer than driver 12.4 supports, producing
+# "NVIDIA driver too old (found version 12040)" on HPC nodes.
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
-        "torch>=2.4.1" "numpy==2.0.2" \
+        "torch==2.4.1" "numpy==2.0.2" \
         --index-url "$TORCH_INDEX_URL" \
         --extra-index-url "$UV_INDEX_URL"
 
