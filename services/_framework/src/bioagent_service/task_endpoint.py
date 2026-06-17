@@ -68,7 +68,68 @@ def execute_task(
     Honors duplicate-job semantics: if the JobStore already has an entry
     for `job_id`, returns the existing JobInfo without re-running.
     """
-    raise NotImplementedError("see Task 1.3")
+    store = request.app.state.job_store
+    adapter = request.app.state.adapter
+    settings = request.app.state.settings
+
+    # Duplicate-job semantics: if a job with this ID already exists in the
+    # store (e.g. FC retried an Async invocation), return its current state
+    # without re-running.  Idempotent client retries are safe.
+    existing = store.get(job_id)
+    if existing is not None:
+        logger.info("task %s already exists with status=%s; returning existing", job_id, existing.status)
+        return existing
+
+    # Allocate the job dir + create PENDING record.
+    job_dir = adapter.job_dir(job_id)
+    job_dir.mkdir(parents=True, exist_ok=True)
+    (job_dir / "output").mkdir(exist_ok=True)
+    adapter.log_path(job_dir).parent.mkdir(parents=True, exist_ok=True)
+    store.create(job_id=job_id, input_params=params.model_dump(mode="json"))
+
+    # Persist uploaded inputs before subprocess starts.
+    input_dir = job_dir / "input"
+    input_dir.mkdir(exist_ok=True)
+    if save_inputs is not None:
+        save_inputs(params, input_dir)
+
+    try:
+        argv = build_argv(params, job_id, job_dir)
+        if not argv:
+            raise ValueError("build_argv returned an empty argv")
+    except Exception as exc:
+        logger.exception("build_argv failed for task %s", job_id)
+        store.update(
+            job_id,
+            status=JobStatus.FAILED,
+            message=f"{label} setup error",
+            error_summary=str(exc),
+            completed_at=utcnow(),
+        )
+        return store.get(job_id)  # type: ignore[return-value]
+
+    env = adapter.subprocess_env()
+    cwd = adapter.subprocess_cwd()
+    log_path = adapter.log_path(job_dir)
+
+    store.update(
+        job_id,
+        status=JobStatus.RUNNING,
+        message=f"{label} running",
+        started_at=utcnow(),
+    )
+
+    rc = SubprocessRunner.run(argv, log_path, env=env, cwd=cwd)
+
+    finalize_job(
+        store,
+        adapter,
+        job_id,
+        rc,
+        label,
+        error_tail_chars=settings.error_tail_chars,
+    )
+    return store.get(job_id)  # type: ignore[return-value]
 
 
 def register_task_endpoint(
@@ -94,4 +155,38 @@ def register_task_endpoint(
     Honors `settings.task_endpoints_enabled` — when False, no route is
     registered (useful in local/test settings).
     """
-    raise NotImplementedError("see Task 1.3")
+    settings = app.state.settings
+    if not settings.task_endpoints_enabled:
+        logger.info("task_endpoints_enabled=False; skipping %s", path)
+        return
+
+    primary_header = settings.task_job_id_header
+
+    # NOTE: `params: request_model = Depends(...)` uses a closure-captured class
+    # as the annotation.  This works ONLY because this module does NOT use
+    # `from __future__ import annotations` — otherwise FastAPI's get_type_hints
+    # would see the string "request_model" and fail to resolve it against the
+    # module's globals.  Do not add that future import here.
+    def _task_handler(
+        request: Request,
+        params: request_model = Depends(model_form_depends(request_model)),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias=primary_header),
+        x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+    ) -> JobInfo:
+        job_id = x_bioagent_job_id or x_fc_async_task_id or uuid.uuid4().hex[:20]
+        return execute_task(
+            request,
+            job_id=job_id,
+            label=label,
+            params=params,
+            build_argv=build_argv,
+            save_inputs=save_inputs,
+        )
+
+    app.add_api_route(
+        path,
+        _task_handler,
+        methods=["POST"],
+        response_model=JobInfo,
+    )
+    logger.info("registered task endpoint %s (label=%s)", path, label)
