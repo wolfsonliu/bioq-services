@@ -36,6 +36,7 @@ from pydantic import BaseModel
 
 from bioagent_service.errors import finalize_job
 from bioagent_service.forms import model_form_depends
+from bioagent_service.jobs import cleanup_job, evict_finished_until_under_limit
 from bioagent_service.models import JobInfo, JobStatus, utcnow
 from bioagent_service.runner import SubprocessRunner
 
@@ -80,12 +81,24 @@ def execute_task(
         logger.info("task %s already exists with status=%s; returning existing", job_id, existing.status)
         return existing
 
+    # Disk hygiene: evict completed/failed jobs if over limit (matches JobRunner.submit).
+    evict_finished_until_under_limit(store, settings.jobs_base_dir, settings.disk_limit_mb)
+
     # Allocate the job dir + create PENDING record.
     job_dir = adapter.job_dir(job_id)
     job_dir.mkdir(parents=True, exist_ok=True)
     (job_dir / "output").mkdir(exist_ok=True)
     adapter.log_path(job_dir).parent.mkdir(parents=True, exist_ok=True)
-    store.create(job_id=job_id, input_params=params.model_dump(mode="json"))
+    try:
+        store.create(job_id=job_id, input_params=params.model_dump(mode="json"))
+    except ValueError:
+        # Lost a concurrent-create race; the winner's record is now in store.
+        # Return it to keep idempotent semantics (matches duplicate-job check above).
+        existing = store.get(job_id)
+        if existing is not None:
+            logger.info("task %s won concurrent create race; returning existing", job_id)
+            return existing
+        raise
 
     # Persist uploaded inputs before subprocess starts.
     input_dir = job_dir / "input"
@@ -97,16 +110,10 @@ def execute_task(
         argv = build_argv(params, job_id, job_dir)
         if not argv:
             raise ValueError("build_argv returned an empty argv")
-    except Exception as exc:
+    except Exception:
         logger.exception("build_argv failed for task %s", job_id)
-        store.update(
-            job_id,
-            status=JobStatus.FAILED,
-            message=f"{label} setup error",
-            error_summary=str(exc),
-            completed_at=utcnow(),
-        )
-        return store.get(job_id)  # type: ignore[return-value]
+        cleanup_job(store, settings.jobs_base_dir, job_id)
+        raise
 
     env = adapter.subprocess_env()
     cwd = adapter.subprocess_cwd()
