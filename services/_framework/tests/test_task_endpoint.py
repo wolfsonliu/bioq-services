@@ -66,6 +66,15 @@ def test_task_endpoint_blocks_until_completion(client: TestClient) -> None:
     body = r.json()
     assert body["status"] == JobStatus.COMPLETED.value
     assert body["output_count"] == 1
+    # Follow-up GET should see the persisted COMPLETED state (not a
+    # transient cached value), confirming the JobStore wrote the
+    # terminal lifecycle through.
+    g = client.get(f"/api/jobs/{body['job_id']}")
+    assert g.status_code == 200
+    persisted = g.json()
+    assert persisted["status"] == JobStatus.COMPLETED.value
+    assert persisted["output_count"] == 1
+    assert persisted["completed_at"] is not None
 
 
 def test_task_endpoint_reads_job_id_header(client: TestClient) -> None:
@@ -94,6 +103,8 @@ def test_task_endpoint_duplicate_returns_existing(client: TestClient) -> None:
     assert r1.json()["job_id"] == r2.json()["job_id"]
     # First job's message should win; the second one should NOT have re-run.
     assert r2.json()["input_params"]["message"] == "a"
+    # created_at is set in store.create and would change on re-run.
+    assert r1.json()["created_at"] == r2.json()["created_at"]
 
 
 def test_task_endpoint_subprocess_failure(client: TestClient) -> None:
