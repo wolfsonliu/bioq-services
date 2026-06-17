@@ -62,3 +62,12 @@ class ServiceSettings(BaseSettings):
     # same instance.  Env: <PREFIX>_SESSION_HEADER_NAME
     # Naming rules: no "x-fc-" prefix, letter-start, 5-40 chars, [a-zA-Z0-9_-].
     session_header_name: str | None = Field(default=None)
+    # Task endpoint (FC async task mode) — controls /api/tasks/<name> registration.
+    # When False, `register_task_endpoint` is a no-op (useful for services that have
+    # not yet declared task endpoints, or for legacy deployments).
+    task_endpoints_enabled: bool = Field(default=True)
+    # HTTP header from which the task endpoint reads a client-supplied job_id.
+    # Empty/missing → server generates a UUID job_id.  Naming: avoid 'X-Fc-' prefix
+    # (FC strips those); we ALSO read 'X-Fc-Async-Task-Id' as a fallback so a single
+    # FCDispatcher.submit can populate both.
+    task_job_id_header: str = Field(default="X-Bioagent-Job-Id")
