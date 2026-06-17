@@ -66,8 +66,25 @@ def execute_task(
     Service-side endpoints with custom signatures (file uploads, special
     headers) call this directly after parsing their own form data.
 
-    Honors duplicate-job semantics: if the JobStore already has an entry
-    for `job_id`, returns the existing JobInfo without re-running.
+    Lifecycle:
+      1. Idempotent duplicate-job check — if a JobInfo for `job_id` already
+         exists, return it without re-running.  Handles FC Async retries.
+      2. Disk hygiene — evict completed/failed jobs if over `disk_limit_mb`
+         (matches `JobRunner.submit`).
+      3. Allocate job dir + create PENDING JobInfo; tolerates the rare
+         concurrent-create race (winner's record is returned to the loser).
+      4. Optional `save_inputs(params, input_dir)` callback for persisting
+         uploads before subprocess starts.
+      5. Call `build_argv(params, job_id, job_dir)` to get the subprocess argv.
+         If `build_argv` raises, the partial job dir and store record are
+         cleaned via `cleanup_job` and the exception propagates — FastAPI
+         turns this into a 5xx (or, for `HTTPException`, the declared status).
+      6. Run the subprocess synchronously; finalize via `finalize_job`.
+      7. Return the terminal JobInfo (status COMPLETED or FAILED).
+
+    Subprocess failure (non-zero rc) returns 200 + status=FAILED with
+    error_summary populated — NOT a raised exception.  Only setup-time
+    failures (build_argv, save_inputs) propagate as HTTP errors.
     """
     store = request.app.state.job_store
     adapter = request.app.state.adapter
@@ -154,13 +171,19 @@ def register_task_endpoint(
       1. Parse form/multipart body into `request_model`.
       2. Read job_id from `settings.task_job_id_header` (also accepts
          `X-Fc-Async-Task-Id`).  Generate UUID if absent.
-      3. Delegate to `execute_task`.
+      3. Delegate to `execute_task` — see its docstring for the full
+         pipeline lifecycle, idempotency, disk hygiene, and exception
+         semantics.
 
     For endpoints that need UploadFile or custom Form fields, define the
     handler yourself and call `execute_task` directly.
 
     Honors `settings.task_endpoints_enabled` — when False, no route is
     registered (useful in local/test settings).
+
+    Errors raised inside `build_argv` propagate as HTTP errors (FastAPI
+    will return 5xx, or the status of any `HTTPException` raised).
+    Subprocess failures (non-zero rc) come back as 200 + status=FAILED.
     """
     settings = app.state.settings
     if not settings.task_endpoints_enabled:
