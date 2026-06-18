@@ -15,10 +15,12 @@ from bioagent_service import (
     JobInfo,
     attach_mcp,
     create_app,
+    execute_task,
     model_form_depends,
     read_version_file,
+    resolve_task_id,
 )
-from fastapi import Depends, File, UploadFile
+from fastapi import Depends, File, Header, Request, UploadFile
 
 from .adapter import BoltzAdapter
 from .models import PredictAffinityRequest, PredictStructureRequest
@@ -216,6 +218,93 @@ def post_predict_affinity(
         build_argv=_build, label="predict_affinity",
         input_params=params.model_dump(mode="json"),
     )
+
+
+if settings.task_endpoints_enabled:
+
+    @app.post("/api/tasks/predict_structure", response_model=JobInfo)
+    def post_predict_structure_task(
+        request: Request,
+        params: PredictStructureRequest = Depends(model_form_depends(PredictStructureRequest)),
+        msa_files: Optional[list[UploadFile]] = File(None),
+        template_files: Optional[list[UploadFile]] = File(None),
+        raw_yaml_upload: Optional[UploadFile] = File(None),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+        x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+    ) -> JobInfo:
+        """Predict structure as a single atomic task (blocks until completion).
+
+        Designed for FC Async Task Mode (X-Fc-Invocation-Type: Async).  For the
+        submit/poll interface, use POST /api/predict_structure instead.
+        """
+        job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
+        saved_state: dict[str, dict] = {"msa": {}, "tmpl": {}}
+
+        def _save(_req, input_dir: Path) -> None:
+            if raw_yaml_upload is not None:
+                save_upload(raw_yaml_upload, input_dir / "input.yaml")
+                params.raw_yaml = (input_dir / "input.yaml").read_text(encoding="utf-8")
+            saved_state["msa"] = _save_msa_uploads(msa_files, input_dir)
+            _resolve_per_chain_msa_uris(params, input_dir, saved_state["msa"])
+            saved_state["tmpl"] = _save_template_uploads(template_files, input_dir)
+            _resolve_template_uris(params, input_dir, saved_state["tmpl"])
+
+        def _build(req, _job_id: str, job_dir: Path) -> list[str]:
+            yaml_path = build_yaml(
+                req, job_dir=job_dir, settings=settings,
+                saved_msa_paths=saved_state["msa"],
+                saved_template_paths=saved_state["tmpl"],
+            )
+            return predict_argv(req, job_dir=job_dir, yaml_path=yaml_path, settings=settings)
+
+        return execute_task(
+            request,
+            job_id=job_id,
+            label="predict_structure",
+            params=params,
+            build_argv=_build,
+            save_inputs=_save,
+        )
+
+    @app.post("/api/tasks/predict_affinity", response_model=JobInfo)
+    def post_predict_affinity_task(
+        request: Request,
+        params: PredictAffinityRequest = Depends(model_form_depends(PredictAffinityRequest)),
+        msa_files: Optional[list[UploadFile]] = File(None),
+        template_files: Optional[list[UploadFile]] = File(None),
+        raw_yaml_upload: Optional[UploadFile] = File(None),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+        x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+    ) -> JobInfo:
+        """Predict structure + ligand affinity as a single atomic task."""
+        job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
+        saved_state: dict[str, dict] = {"msa": {}, "tmpl": {}}
+
+        def _save(_req, input_dir: Path) -> None:
+            if raw_yaml_upload is not None:
+                save_upload(raw_yaml_upload, input_dir / "input.yaml")
+                params.raw_yaml = (input_dir / "input.yaml").read_text(encoding="utf-8")
+            saved_state["msa"] = _save_msa_uploads(msa_files, input_dir)
+            _resolve_per_chain_msa_uris(params, input_dir, saved_state["msa"])
+            saved_state["tmpl"] = _save_template_uploads(template_files, input_dir)
+            _resolve_template_uris(params, input_dir, saved_state["tmpl"])
+
+        def _build(req, _job_id: str, job_dir: Path) -> list[str]:
+            yaml_path = build_yaml(
+                req, job_dir=job_dir, settings=settings,
+                saved_msa_paths=saved_state["msa"],
+                saved_template_paths=saved_state["tmpl"],
+            )
+            return predict_argv(req, job_dir=job_dir, yaml_path=yaml_path, settings=settings)
+
+        return execute_task(
+            request,
+            job_id=job_id,
+            label="predict_affinity",
+            params=params,
+            build_argv=_build,
+            save_inputs=_save,
+        )
 
 
 # Mount MCP server — must be AFTER all POST routes are registered so the

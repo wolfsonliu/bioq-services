@@ -511,3 +511,39 @@ def test_predict_affinity_rejects_protein_binder(client):
 def test_predict_structure_rejects_empty_input(client):
     r = client.post("/api/predict_structure", data={"name": "smoke", "msa_mode": "empty"})
     assert r.status_code == 422
+
+
+# ---- Task endpoint smoke (blocking; uses /bin/true as boltz binary) ----
+
+def test_predict_structure_task_endpoint_returns_terminal_status(client):
+    """POST /api/tasks/predict_structure blocks until subprocess exits."""
+    payload = {
+        "name": "smoke",
+        "msa_mode": "empty",
+        "sequences": '[{"type":"protein","id":"A","sequence":"MKT","msa_uri":"empty"}]',
+    }
+    resp = client.post("/api/tasks/predict_structure", data=payload)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert "job_id" in body
+    assert body["status"] in {"completed", "failed"}
+    assert body["completed_at"] is not None
+
+
+def test_predict_affinity_task_endpoint_returns_terminal_status(client):
+    """POST /api/tasks/predict_affinity blocks until subprocess exits."""
+    payload = {
+        "name": "smoke",
+        "binder_id": "B",
+        "msa_mode": "empty",
+        "sequences": (
+            '[{"type":"protein","id":"A","sequence":"MKT","msa_uri":"empty"},'
+            '{"type":"ligand","id":"B","smiles":"CCO"}]'
+        ),
+    }
+    resp = client.post("/api/tasks/predict_affinity", data=payload)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert "job_id" in body
+    assert body["status"] in {"completed", "failed"}
+    assert body["completed_at"] is not None
