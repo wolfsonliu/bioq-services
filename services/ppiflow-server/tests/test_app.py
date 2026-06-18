@@ -132,3 +132,62 @@ def test_openapi_registers_all_five_request_models() -> None:
         "JobInfo",
     ):
         assert m in models, f"{m} not in OpenAPI components"
+
+
+# =====================================================================
+# Task endpoint smoke tests (synchronous FC Async Task Mode-friendly)
+# =====================================================================
+
+
+@pytest.fixture
+def real_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    """Load the real `server.app` with tmp-path env overrides so subprocess
+    can be launched (subprocess_cwd = settings.root must exist)."""
+    monkeypatch.setenv("PPIFLOW_JOBS_BASE_DIR", str(tmp_path / "jobs"))
+    monkeypatch.setenv("PPIFLOW_ROOT", str(tmp_path / "ppiflow"))
+    monkeypatch.setenv("PPIFLOW_CKPT_DIR", str(tmp_path / "ppiflow" / "checkpoint"))
+    monkeypatch.setenv("PPIFLOW_CONFIG_DIR", str(tmp_path / "ppiflow" / "configs"))
+    (tmp_path / "ppiflow").mkdir(parents=True, exist_ok=True)
+
+    import importlib
+    import sys
+    sys.modules.pop("server.app", None)
+    server_app = importlib.import_module("server.app")
+    return TestClient(server_app.app)
+
+
+def test_binder_task_endpoint_returns_terminal_status(real_client: TestClient) -> None:
+    """POST /api/tasks/sample/binder blocks until subprocess exits."""
+    pdb_bytes = b"REMARK fake pdb\nATOM\nEND\n"
+    resp = real_client.post(
+        "/api/tasks/sample/binder",
+        data={"target_chain": "B"},
+        files={"target": ("target.pdb", pdb_bytes, "chemical/x-pdb")},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "job_id" in body
+    assert body["status"] in {"completed", "failed"}
+    assert body["completed_at"] is not None
+
+
+def test_monomer_task_endpoint_returns_terminal_status(real_client: TestClient) -> None:
+    """POST /api/tasks/sample/monomer blocks; no uploads needed."""
+    resp = real_client.post(
+        "/api/tasks/sample/monomer",
+        data={},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] in {"completed", "failed"}
+    assert body["completed_at"] is not None
+
+
+def test_monomer_task_endpoint_honors_job_id_header(real_client: TestClient) -> None:
+    resp = real_client.post(
+        "/api/tasks/sample/monomer",
+        data={},
+        headers={"X-Bioagent-Job-Id": "ppiflow-task-001"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["job_id"] == "ppiflow-task-001"
