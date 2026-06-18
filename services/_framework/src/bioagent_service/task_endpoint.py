@@ -96,8 +96,8 @@ def execute_task(
          record are cleaned via `cleanup_job` and the exception propagates —
          FastAPI turns this into a 5xx (or, for `HTTPException`, the declared
          status).
-      6. Run the subprocess synchronously; finalize via `finalize_job`.
-      7. Return the terminal JobInfo (status COMPLETED or FAILED).
+      5. Run the subprocess synchronously; finalize via `finalize_job`.
+      6. Return the terminal JobInfo (status COMPLETED or FAILED).
 
     Subprocess failure (non-zero rc) returns 200 + status=FAILED with
     error_summary populated — NOT a raised exception.  Only setup-time
@@ -224,7 +224,7 @@ def register_task_endpoint(
         x_bioagent_job_id: Optional[str] = Header(default=None, alias=primary_header),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
     ) -> JobInfo:
-        job_id = x_bioagent_job_id or x_fc_async_task_id or uuid.uuid4().hex[:20]
+        job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
         return execute_task(
             request,
             job_id=job_id,
