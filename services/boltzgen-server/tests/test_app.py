@@ -56,7 +56,6 @@ def test_manifest_lists_endpoints(client):
         "/api/inverse_fold",
         "/api/tasks/design",
         "/api/tasks/inverse_fold",
-        "/pre-stop",
     }
 
 
