@@ -11,8 +11,16 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import JobInfo, attach_mcp, create_app, model_form_depends, read_version_file
-from fastapi import Depends, File, Form, HTTPException, UploadFile
+from bioagent_service import (
+    JobInfo,
+    attach_mcp,
+    create_app,
+    execute_task,
+    model_form_depends,
+    read_version_file,
+    resolve_task_id,
+)
+from fastapi import Depends, File, Form, Header, HTTPException, Request, UploadFile
 
 from .adapter import DockQAdapter
 from .models import ScoreBatchRequest, ScoreRequest
@@ -111,6 +119,97 @@ def post_score_batch(
         build_argv=_build, label="score_batch",
         input_params={**params.model_dump(mode="json"), "num_models": len(models)},
     )
+
+
+if settings.task_endpoints_enabled:
+
+    @app.post("/api/tasks/score", response_model=JobInfo)
+    def post_score_task(
+        request: Request,
+        params: ScoreRequest = Depends(model_form_depends(ScoreRequest)),
+        model: Optional[UploadFile] = File(None),
+        native: Optional[UploadFile] = File(None),
+        model_uri: Optional[str] = Form(None),
+        native_uri: Optional[str] = Form(None),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+        x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+    ) -> JobInfo:
+        """Score a single (model, native) pair as a single atomic task.
+
+        Blocks until DockQ completes.  For the submit/poll interface, use POST /api/score.
+        """
+        job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
+        paths: dict[str, Path] = {}
+
+        def _save(_req, input_dir: Path) -> None:
+            paths["model"] = resolve_input(model, model_uri, input_dir / "model.pdb", settings)
+            paths["native"] = resolve_input(native, native_uri, input_dir / "native.pdb", settings)
+
+        def _build(req, _job_id: str, job_dir: Path) -> list[str]:
+            return score_argv(
+                req, job_dir=job_dir,
+                model_path=paths["model"], native_path=paths["native"],
+                settings=settings,
+            )
+
+        return execute_task(
+            request,
+            job_id=job_id,
+            label="score",
+            params=params,
+            build_argv=_build,
+            save_inputs=_save,
+        )
+
+    @app.post("/api/tasks/score_batch", response_model=JobInfo)
+    def post_score_batch_task(
+        request: Request,
+        params: ScoreBatchRequest = Depends(model_form_depends(ScoreBatchRequest)),
+        native: Optional[UploadFile] = File(None),
+        native_uri: Optional[str] = Form(None),
+        models: Optional[list[UploadFile]] = File(None),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+        x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+    ) -> JobInfo:
+        """Score N candidate models against 1 native as a single atomic task."""
+        if not models:
+            raise HTTPException(
+                status_code=422,
+                detail="At least one `models` upload is required (use repeated -F models=@...).",
+            )
+        if len(models) > settings.max_batch_size:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Batch size {len(models)} exceeds max_batch_size={settings.max_batch_size}.",
+            )
+
+        job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
+        paths: dict[str, Path] = {}
+
+        def _save(_req, input_dir: Path) -> None:
+            paths["native"] = resolve_input(native, native_uri, input_dir / "native.pdb", settings)
+            models_dir = input_dir / "models"
+            models_dir.mkdir(parents=True, exist_ok=True)
+            for i, upload in enumerate(models):
+                basename = Path(upload.filename or f"model_{i:04d}.pdb").name
+                save_upload(upload, models_dir / basename)
+            paths["models_dir"] = models_dir
+
+        def _build(req, _job_id: str, job_dir: Path) -> list[str]:
+            return batch_argv(
+                req, job_dir=job_dir,
+                native_path=paths["native"], models_dir=paths["models_dir"],
+                settings=settings,
+            )
+
+        return execute_task(
+            request,
+            job_id=job_id,
+            label="score_batch",
+            params=params,
+            build_argv=_build,
+            save_inputs=_save,
+        )
 
 
 # Mount MCP server — must be AFTER all POST routes are registered so the

@@ -410,3 +410,52 @@ def test_score_batch_endpoint_returns_job(client):
     assert body["input_params"] is not None
     assert body["input_params"]["sort_by"] == "DockQ"
     assert body["input_params"]["num_models"] == 2
+
+
+# ----- task endpoint smoke -----
+
+def test_score_task_endpoint_returns_terminal_status(client):
+    """POST /api/tasks/score blocks until subprocess exits."""
+    pdb_bytes = b"REMARK fake pdb\nATOM\nEND\n"
+    resp = client.post(
+        "/api/tasks/score",
+        data={},
+        files={
+            "model": ("model.pdb", pdb_bytes, "chemical/x-pdb"),
+            "native": ("native.pdb", pdb_bytes, "chemical/x-pdb"),
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "job_id" in body
+    assert body["status"] in {"completed", "failed"}
+    assert body["completed_at"] is not None
+
+
+def test_score_batch_task_endpoint_returns_terminal_status(client):
+    """POST /api/tasks/score_batch blocks until subprocess exits."""
+    pdb_bytes = b"REMARK\nEND\n"
+    resp = client.post(
+        "/api/tasks/score_batch",
+        data={},
+        files=[
+            ("native", ("native.pdb", pdb_bytes, "chemical/x-pdb")),
+            ("models", ("model_0.pdb", pdb_bytes, "chemical/x-pdb")),
+            ("models", ("model_1.pdb", pdb_bytes, "chemical/x-pdb")),
+        ],
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] in {"completed", "failed"}
+    assert body["completed_at"] is not None
+
+
+def test_score_batch_task_endpoint_rejects_empty_models(client):
+    """422 returned up-front before allocating a job."""
+    pdb_bytes = b"REMARK\nEND\n"
+    resp = client.post(
+        "/api/tasks/score_batch",
+        data={},
+        files={"native": ("native.pdb", pdb_bytes, "chemical/x-pdb")},
+    )
+    assert resp.status_code == 422
