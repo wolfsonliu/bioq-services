@@ -25,8 +25,16 @@ from pathlib import Path
 from typing import Any, Optional
 
 import yaml
-from bioagent_service import JobInfo, attach_mcp, create_app, model_form_depends, read_version_file
-from fastapi import Depends, File, Form, HTTPException, UploadFile
+from bioagent_service import (
+    JobInfo,
+    attach_mcp,
+    create_app,
+    execute_task,
+    model_form_depends,
+    read_version_file,
+    resolve_task_id,
+)
+from fastapi import Depends, File, Form, Header, HTTPException, Request, UploadFile
 
 from .adapter import Genie3Adapter
 from .configs import (
@@ -205,6 +213,165 @@ def generate_custom(
         build_argv=_build, label="custom",
         input_params={"config_yaml": "(user-supplied)", "num_devices": num_devices},
     )
+
+
+# ---------------------------------------------------------------------------
+# Task endpoints (atomic; for FC Async Task Mode)
+# ---------------------------------------------------------------------------
+
+
+if settings.task_endpoints_enabled:
+
+    @app.post("/api/tasks/generate/unconditional", response_model=JobInfo)
+    def generate_unconditional_task(
+        request: Request,
+        params: UnconditionalRequest = Depends(model_form_depends(UnconditionalRequest)),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+        x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+    ) -> JobInfo:
+        """Unconditional protein backbone generation as a single atomic task."""
+        job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
+
+        def _build(req, _job_id: str, job_dir: Path) -> list[str]:
+            config = build_unconditional_config(rootdir=job_dir / "output", req=req)
+            config_path = _write_yaml(config, job_dir)
+            return _genie3_argv(config_path, req.num_devices)
+
+        return execute_task(
+            request,
+            job_id=job_id,
+            label="unconditional",
+            params=params,
+            build_argv=_build,
+        )
+
+    @app.post("/api/tasks/generate/motif", response_model=JobInfo)
+    def generate_motif_task(
+        request: Request,
+        dataset: UploadFile = File(..., description="Zip with problems/ + motifs/."),
+        params: MotifRequest = Depends(model_form_depends(MotifRequest)),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+        x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+    ) -> JobInfo:
+        """Motif scaffolding generation as a single atomic task."""
+        job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
+        dataset_state: dict[str, Path] = {}
+
+        def _save(_req, input_dir: Path) -> None:
+            zip_path = _save_upload(dataset, input_dir / "dataset.zip")
+            try:
+                dataset_state["root"] = extract_dataset(zip_path, input_dir / "dataset")
+            except (zipfile.BadZipFile, ValueError) as e:
+                raise HTTPException(status_code=422, detail=f"Invalid dataset zip: {e}") from e
+
+        def _build(req, _job_id: str, job_dir: Path) -> list[str]:
+            config = build_motif_config(
+                rootdir=job_dir / "output", dataset_root=dataset_state["root"], req=req,
+            )
+            config_path = _write_yaml(config, job_dir)
+            return _genie3_argv(config_path, req.num_devices)
+
+        return execute_task(
+            request,
+            job_id=job_id,
+            label="motif",
+            params=params,
+            build_argv=_build,
+            save_inputs=_save,
+        )
+
+    @app.post("/api/tasks/generate/binder", response_model=JobInfo)
+    def generate_binder_task(
+        request: Request,
+        dataset: UploadFile = File(..., description="Zip with problems/ + targets/."),
+        params: BinderRequest = Depends(model_form_depends(BinderRequest)),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+        x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+    ) -> JobInfo:
+        """Binder design generation as a single atomic task."""
+        job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
+        dataset_state: dict[str, Path] = {}
+
+        def _save(_req, input_dir: Path) -> None:
+            zip_path = _save_upload(dataset, input_dir / "dataset.zip")
+            try:
+                dataset_state["root"] = extract_dataset(zip_path, input_dir / "dataset")
+            except (zipfile.BadZipFile, ValueError) as e:
+                raise HTTPException(status_code=422, detail=f"Invalid dataset zip: {e}") from e
+
+        def _build(req, _job_id: str, job_dir: Path) -> list[str]:
+            config = build_binder_config(
+                rootdir=job_dir / "output", dataset_root=dataset_state["root"], req=req,
+            )
+            config_path = _write_yaml(config, job_dir)
+            return _genie3_argv(config_path, req.num_devices)
+
+        return execute_task(
+            request,
+            job_id=job_id,
+            label="binder",
+            params=params,
+            build_argv=_build,
+            save_inputs=_save,
+        )
+
+    @app.post("/api/tasks/generate", response_model=JobInfo)
+    def generate_custom_task(
+        request: Request,
+        config_yaml: str = Form(..., description="Full experiment YAML as a string."),
+        dataset: Optional[UploadFile] = File(None),
+        num_devices: Optional[int] = Form(None),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+        x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+    ) -> JobInfo:
+        """Custom YAML generation as a single atomic task."""
+        job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
+
+        # Parse + validate user YAML up-front so 422s never allocate a job.
+        try:
+            user_config = yaml.safe_load(config_yaml)
+        except yaml.YAMLError as e:
+            raise HTTPException(status_code=422, detail=f"Invalid YAML: {e}") from e
+        if not isinstance(user_config, dict):
+            raise HTTPException(
+                status_code=422, detail="config_yaml must be a mapping at the top level",
+            )
+
+        dataset_state: dict[str, Optional[Path]] = {"root": None}
+
+        # The custom endpoint takes no Pydantic request model — synthesize a tiny
+        # echo model so execute_task can record `input_params` consistently.
+        from pydantic import BaseModel as _BaseModel
+
+        class _CustomEcho(_BaseModel):
+            num_devices: Optional[int] = None
+            config_yaml_summary: str = "(user-supplied)"
+
+        params_echo = _CustomEcho(num_devices=num_devices)
+
+        def _save(_req, input_dir: Path) -> None:
+            if dataset is not None:
+                zip_path = _save_upload(dataset, input_dir / "dataset.zip")
+                try:
+                    dataset_state["root"] = extract_dataset(zip_path, input_dir / "dataset")
+                except (zipfile.BadZipFile, ValueError) as e:
+                    raise HTTPException(status_code=422, detail=f"Invalid dataset zip: {e}") from e
+
+        def _build(_req, _job_id: str, job_dir: Path) -> list[str]:
+            config = rewrite_custom_paths(
+                user_config, rootdir=job_dir / "output", dataset_root=dataset_state["root"],
+            )
+            config_path = _write_yaml(config, job_dir)
+            return _genie3_argv(config_path, num_devices)
+
+        return execute_task(
+            request,
+            job_id=job_id,
+            label="custom",
+            params=params_echo,
+            build_argv=_build,
+            save_inputs=_save,
+        )
 
 
 # Mount MCP server — must be AFTER all POST routes are registered so the
