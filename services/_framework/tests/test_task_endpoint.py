@@ -129,3 +129,63 @@ def test_task_endpoint_disabled_when_setting_false(tmp_path: Path) -> None:
     client = TestClient(app)
     # Route not registered → 404
     assert client.post("/api/tasks/echo", data={"message": "x"}).status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Custom-signature endpoint pattern (file uploads) — what services with
+# multipart inputs (boltzgen-server, dockq-server, etc.) will follow.
+# ---------------------------------------------------------------------------
+from fastapi import Depends, File, Header, Request, UploadFile  # noqa: E402
+
+from bioagent_service import execute_task  # noqa: E402
+from bioagent_service.forms import model_form_depends  # noqa: E402
+from bioagent_service.models import JobInfo  # noqa: E402
+from typing import Optional  # noqa: E402
+
+
+def test_execute_task_with_file_upload(tmp_path: Path) -> None:
+    """Verify execute_task works when caller defines a custom endpoint with UploadFile.
+
+    This is the pattern services like boltzgen-server use: their endpoint
+    accepts multipart form fields including UploadFile, persists them in
+    a save_inputs callback, then delegates to execute_task for the actual
+    pipeline run.
+    """
+    settings = _EchoSettings(jobs_base_dir=tmp_path / "jobs", keepalive_interval_s=0)
+    adapter = _EchoAdapter(settings=settings)
+    app = create_app(adapter, settings, title="Echo Upload")
+
+    @app.post("/api/tasks/echo-upload", response_model=JobInfo)
+    def post_upload(
+        request: Request,
+        params: _EchoRequest = Depends(model_form_depends(_EchoRequest)),
+        attachment: UploadFile = File(None),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+    ) -> JobInfo:
+        job_id = x_bioagent_job_id or "upload-001"
+
+        def _save(_req, input_dir: Path) -> None:
+            if attachment and attachment.filename:
+                (input_dir / attachment.filename).write_bytes(attachment.file.read())
+
+        return execute_task(
+            request,
+            job_id=job_id,
+            label="echo-upload",
+            params=params,
+            build_argv=_echo_argv,
+            save_inputs=_save,
+        )
+
+    client = TestClient(app)
+    payload = b"hello attachment"
+    r = client.post(
+        "/api/tasks/echo-upload",
+        data={"message": "hi"},
+        files={"attachment": ("a.txt", payload, "text/plain")},
+    )
+    assert r.status_code == 200
+    assert r.json()["status"] == JobStatus.COMPLETED.value
+    # The saved file should land under the job dir's input/.
+    saved = (tmp_path / "jobs" / "upload-001" / "input" / "a.txt").read_bytes()
+    assert saved == payload
