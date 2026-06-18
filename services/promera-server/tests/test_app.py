@@ -336,3 +336,39 @@ def test_design_vhh_returns_job(client):
 def test_cofold_requires_input(client):
     resp = client.post("/api/cofold", data={"num_seeds": "1"})
     assert resp.status_code == 422
+
+
+# ----- Task endpoints (atomic mode) -----
+
+
+def test_cofold_task_endpoint_returns_terminal_status(client):
+    """POST /api/tasks/cofold blocks until subprocess exits."""
+    with open(TEST_TARGET, "rb") as fh:
+        resp = client.post(
+            "/api/tasks/cofold",
+            files={"input_schema": ("test.json", fh, "application/json")},
+            data={"num_seeds": "1", "diffusion_samples": "1"},
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "job_id" in body
+    assert body["status"] in {"completed", "failed"}
+
+
+def test_design_task_endpoint_returns_terminal_status(client):
+    """POST /api/tasks/design blocks until subprocess exits."""
+    with open(TEST_TARGET, "rb") as fh:
+        resp = client.post(
+            "/api/tasks/design",
+            files={"target_schema": ("target.json", fh, "application/json")},
+            data={
+                "design_type": "minibinder",
+                "num_backbones": "3",
+                "binder_length_min": "50",
+                "binder_length_max": "70",
+            },
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "job_id" in body
+    assert body["status"] in {"completed", "failed"}
