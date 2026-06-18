@@ -277,3 +277,38 @@ def test_score_endpoint_returns_job(client):
     assert body["input_params"]["heavy_chain_id"] == "H"
     assert body["input_params"]["light_chain_id"] == "L"
     assert body["input_params"]["antigen_chain_id"] == "A"
+
+
+def test_score_task_endpoint_returns_terminal_status(client):
+    """POST /api/tasks/score blocks until subprocess exits."""
+    pdb_bytes = b"REMARK fake pdb\nATOM  1 N MET A   1   0.0  0.0  0.0  1.00  0.00\nEND\n"
+    resp = client.post(
+        "/api/tasks/score",
+        data={},
+        files={"input_pdb": ("test.pdb", pdb_bytes, "chemical/x-pdb")},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "job_id" in body
+    assert body["status"] in {"completed", "failed"}
+    assert body["completed_at"] is not None
+
+
+def test_score_task_endpoint_honors_job_id_header(client):
+    pdb_bytes = b"REMARK\nEND\n"
+    resp = client.post(
+        "/api/tasks/score",
+        data={},
+        files={"input_pdb": ("x.pdb", pdb_bytes, "chemical/x-pdb")},
+        headers={"X-Bioagent-Job-Id": "deeprank-task-001"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["job_id"] == "deeprank-task-001"
+
+
+def test_score_task_endpoint_duplicate_returns_existing(client):
+    hdrs = {"X-Bioagent-Job-Id": "deeprank-dup-001"}
+    r1 = client.post("/api/tasks/score", data={}, files={"input_pdb": ("a.pdb", b"X", "chemical/x-pdb")}, headers=hdrs)
+    r2 = client.post("/api/tasks/score", data={}, files={"input_pdb": ("b.pdb", b"Y", "chemical/x-pdb")}, headers=hdrs)
+    assert r1.json()["job_id"] == r2.json()["job_id"]
+    assert r1.json()["created_at"] == r2.json()["created_at"]
