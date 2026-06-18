@@ -10,7 +10,14 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from bioagent_service import JobInfo, attach_mcp, create_app, model_form_depends, read_version_file
+from bioagent_service import (
+    JobInfo,
+    attach_mcp,
+    create_app,
+    model_form_depends,
+    read_version_file,
+    register_task_endpoint,
+)
 from fastapi import Depends
 
 from .adapter import ImmuneBuilderAdapter
@@ -105,5 +112,54 @@ def post_predict_tcr(
         input_params=params.model_dump(mode="json"),
     )
 
+
+# Task endpoints (synchronous; FC Async Task Mode-friendly).
+# No file uploads, so we use the framework's simpler register_task_endpoint helper.
+
+def _antibody_build(req, _job_id: str, job_dir: Path) -> list[str]:
+    fasta_path = write_fasta(
+        {"H": req.heavy_sequence, "L": req.light_sequence},
+        job_dir / "input" / "input.fasta",
+    )
+    return predict_antibody_argv(req, job_dir=job_dir, fasta_path=fasta_path, settings=settings)
+
+
+def _nanobody_build(req, _job_id: str, job_dir: Path) -> list[str]:
+    fasta_path = write_fasta(
+        {"H": req.heavy_sequence},
+        job_dir / "input" / "input.fasta",
+    )
+    return predict_nanobody_argv(req, job_dir=job_dir, fasta_path=fasta_path, settings=settings)
+
+
+def _tcr_build(req, _job_id: str, job_dir: Path) -> list[str]:
+    fasta_path = write_fasta(
+        {"A": req.alpha_sequence, "B": req.beta_sequence},
+        job_dir / "input" / "input.fasta",
+    )
+    return predict_tcr_argv(req, job_dir=job_dir, fasta_path=fasta_path, settings=settings)
+
+
+register_task_endpoint(
+    app,
+    path="/api/tasks/predict_antibody",
+    label="predict_antibody",
+    request_model=AntibodyRequest,
+    build_argv=_antibody_build,
+)
+register_task_endpoint(
+    app,
+    path="/api/tasks/predict_nanobody",
+    label="predict_nanobody",
+    request_model=NanobodyRequest,
+    build_argv=_nanobody_build,
+)
+register_task_endpoint(
+    app,
+    path="/api/tasks/predict_tcr",
+    label="predict_tcr",
+    request_model=TCRRequest,
+    build_argv=_tcr_build,
+)
 
 attach_mcp(app)

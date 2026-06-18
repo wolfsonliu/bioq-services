@@ -65,7 +65,7 @@ def test_manifest_lists_three_endpoints(client):
     r = client.get("/api/manifest")
     r.raise_for_status()
     paths = {e["path"] for e in r.json()["endpoints"]}
-    assert paths == {"/api/predict_antibody", "/api/predict_nanobody", "/api/predict_tcr"}
+    assert {"/api/predict_antibody", "/api/predict_nanobody", "/api/predict_tcr"} <= paths
 
 
 def test_manifest_predictors(client):
@@ -442,3 +442,35 @@ def test_tcr_endpoint_returns_job(client):
 
 def test_unknown_job_returns_404(client):
     assert client.get("/api/jobs/nonexistent-id").status_code == 404
+
+
+# =====================================================================
+# Task endpoint smoke tests (synchronous FC Async Task Mode-friendly)
+# =====================================================================
+
+def test_predict_antibody_task_endpoint_returns_terminal_status(client):
+    """POST /api/tasks/predict_antibody blocks until subprocess exits."""
+    resp = client.post(
+        "/api/tasks/predict_antibody",
+        data={
+            "heavy_sequence": HEAVY_SEQ,
+            "light_sequence": LIGHT_SEQ,
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "job_id" in body
+    assert body["status"] in {"completed", "failed"}
+    assert body["completed_at"] is not None
+
+
+def test_predict_nanobody_task_endpoint_honors_job_id_header(client):
+    resp = client.post(
+        "/api/tasks/predict_nanobody",
+        data={
+            "heavy_sequence": NANOBODY_SEQ,
+        },
+        headers={"X-Bioagent-Job-Id": "imb-task-001"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["job_id"] == "imb-task-001"
