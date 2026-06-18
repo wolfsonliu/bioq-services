@@ -52,6 +52,23 @@ submit/poll endpoint and the task endpoint without re-parsing form data.
 """
 
 
+def resolve_task_id(
+    x_bioagent_job_id: Optional[str],
+    x_fc_async_task_id: Optional[str],
+) -> str:
+    """Pick a task ID from headers, falling back to a fresh UUID.
+
+    Header priority:
+      1. `X-Bioagent-Job-Id` — our convention
+      2. `X-Fc-Async-Task-Id` — FC's convention (when invoked via FC Async)
+
+    Use this in service-side handlers that delegate to `execute_task` so the
+    UUID length / fallback / header-precedence stay consistent across all
+    services migrating to task endpoints.
+    """
+    return x_bioagent_job_id or x_fc_async_task_id or uuid.uuid4().hex[:20]
+
+
 def execute_task(
     request: Request,
     *,
@@ -73,12 +90,12 @@ def execute_task(
          (matches `JobRunner.submit`).
       3. Allocate job dir + create PENDING JobInfo; tolerates the rare
          concurrent-create race (winner's record is returned to the loser).
-      4. Optional `save_inputs(params, input_dir)` callback for persisting
-         uploads before subprocess starts.
-      5. Call `build_argv(params, job_id, job_dir)` to get the subprocess argv.
-         If `build_argv` raises, the partial job dir and store record are
-         cleaned via `cleanup_job` and the exception propagates — FastAPI
-         turns this into a 5xx (or, for `HTTPException`, the declared status).
+      4. Setup phase — call `save_inputs(params, input_dir)` (persists
+         uploads) then `build_argv(params, job_id, job_dir)` (computes the
+         subprocess argv).  If either raises, the partial job dir and store
+         record are cleaned via `cleanup_job` and the exception propagates —
+         FastAPI turns this into a 5xx (or, for `HTTPException`, the declared
+         status).
       6. Run the subprocess synchronously; finalize via `finalize_job`.
       7. Return the terminal JobInfo (status COMPLETED or FAILED).
 
@@ -117,18 +134,22 @@ def execute_task(
             return existing
         raise
 
-    # Persist uploaded inputs before subprocess starts.
+    # Persist uploaded inputs and build argv inside the same try-block so any
+    # setup failure (UploadFile parsing, URI resolution, malformed YAML, ...)
+    # triggers cleanup_job — otherwise the PENDING record + job dir leak and
+    # the idempotency check (`existing is not None: return existing`) would
+    # permanently mask the failure on retry.
     input_dir = job_dir / "input"
     input_dir.mkdir(exist_ok=True)
-    if save_inputs is not None:
-        save_inputs(params, input_dir)
 
     try:
+        if save_inputs is not None:
+            save_inputs(params, input_dir)
         argv = build_argv(params, job_id, job_dir)
         if not argv:
             raise ValueError("build_argv returned an empty argv")
     except Exception:
-        logger.exception("build_argv failed for task %s", job_id)
+        logger.exception("setup failed for task %s", job_id)
         cleanup_job(store, settings.jobs_base_dir, job_id)
         raise
 

@@ -189,3 +189,54 @@ def test_execute_task_with_file_upload(tmp_path: Path) -> None:
     # The saved file should land under the job dir's input/.
     saved = (tmp_path / "jobs" / "upload-001" / "input" / "a.txt").read_bytes()
     assert saved == payload
+
+
+def test_save_inputs_failure_cleans_up_and_allows_retry(tmp_path: Path) -> None:
+    """When save_inputs raises, the half-created job is removed so a retry can succeed.
+
+    Regression for the bug where save_inputs exceptions left a PENDING
+    JobInfo + half-built job dir, and the next retry hit the idempotency
+    cache returning that stale PENDING record forever.
+    """
+    settings = _EchoSettings(jobs_base_dir=tmp_path / "jobs", keepalive_interval_s=0)
+    adapter = _EchoAdapter(settings=settings)
+    app = create_app(adapter, settings, title="Echo SaveFails")
+
+    fail_first_call = {"count": 0}
+
+    def _flaky_save(_req, _input_dir: Path) -> None:
+        fail_first_call["count"] += 1
+        if fail_first_call["count"] == 1:
+            raise RuntimeError("simulated upload failure")
+        # second call succeeds (no-op)
+
+    @app.post("/api/tasks/echo-flaky", response_model=JobInfo)
+    def post_flaky(
+        request: Request,
+        params: _EchoRequest = Depends(model_form_depends(_EchoRequest)),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+    ) -> JobInfo:
+        return execute_task(
+            request,
+            job_id=x_bioagent_job_id or "flaky-001",
+            label="echo-flaky",
+            params=params,
+            build_argv=_echo_argv,
+            save_inputs=_flaky_save,
+        )
+
+    # raise_server_exceptions=False so the TestClient returns 500 instead of
+    # re-raising the RuntimeError into the test (matches real HTTP behavior).
+    client = TestClient(app, raise_server_exceptions=False)
+    hdrs = {"X-Bioagent-Job-Id": "retry-target"}
+
+    # First request: save_inputs raises → FastAPI returns 5xx (no JobInfo body).
+    r1 = client.post("/api/tasks/echo-flaky", data={"message": "first"}, headers=hdrs)
+    assert r1.status_code == 500
+    assert not (tmp_path / "jobs" / "retry-target").exists(), "job dir should be cleaned up"
+
+    # Second request with same job_id should re-run cleanly (NOT return stale PENDING).
+    r2 = client.post("/api/tasks/echo-flaky", data={"message": "second"}, headers=hdrs)
+    assert r2.status_code == 200
+    assert r2.json()["status"] == JobStatus.COMPLETED.value
+    assert r2.json()["input_params"]["message"] == "second"

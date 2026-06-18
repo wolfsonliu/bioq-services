@@ -52,7 +52,7 @@ from bioagent_service.forms import model_form_depends
 from bioagent_service.manifest import EndpointExample, ServiceManifest
 from bioagent_service.models import JobInfo, JobStatus
 from bioagent_service.settings import ServiceSettings
-from bioagent_service.task_endpoint import execute_task, register_task_endpoint
+from bioagent_service.task_endpoint import execute_task, register_task_endpoint, resolve_task_id
 
 
 def read_version_file(caller_file: str, default: str = "0.0.0") -> str:
@@ -91,4 +91,5 @@ __all__ = [
     "model_form_depends",
     "read_version_file",
     "register_task_endpoint",
+    "resolve_task_id",
 ]
