@@ -51,7 +51,13 @@ def test_manifest_service_name(client):
 def test_manifest_lists_endpoints(client):
     body = client.get("/api/manifest").json()
     paths = {e["path"] for e in body["endpoints"]}
-    assert paths == {"/api/design", "/api/inverse_fold"}
+    assert paths == {
+        "/api/design",
+        "/api/inverse_fold",
+        "/api/tasks/design",
+        "/api/tasks/inverse_fold",
+        "/pre-stop",
+    }
 
 
 def test_manifest_protocols(client):
@@ -350,3 +356,77 @@ def test_inverse_fold_endpoint_returns_job(client):
     body = resp.json()
     assert "job_id" in body
     assert body["input_params"]["inverse_fold_num_sequences"] == 5
+
+
+# ----- task endpoint smoke (synchronous; /bin/true so it returns immediately) -----
+
+def test_design_task_endpoint_returns_terminal_status(client):
+    """POST /api/tasks/design should block until /bin/true exits and return terminal JobInfo.
+
+    With BOLTZGEN_CLI=/bin/true the "pipeline" runs instantly, exits rc=0, and
+    produces no CIF/CSV → adapter.detect_outputs returns False → JobInfo
+    status=failed with failure_kind=no_outputs.  Either outcome (completed or
+    failed) means the synchronous endpoint waited for the subprocess.
+    """
+    with open(DATA_DIR / "vanilla.yaml", "rb") as fh:
+        resp = client.post(
+            "/api/tasks/design",
+            data={
+                "protocol": "protein-anything",
+                "num_designs": "10",
+                "budget": "5",
+            },
+            files={
+                "design_yaml": ("vanilla.yaml", fh, "application/x-yaml"),
+            },
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "job_id" in body
+    # Synchronous endpoint → JobInfo is already terminal (not PENDING/RUNNING).
+    assert body["status"] in {"completed", "failed"}
+    assert body["completed_at"] is not None
+    assert body["input_params"]["protocol"] == "protein-anything"
+
+
+def test_design_task_endpoint_honors_job_id_header(client):
+    """X-Bioagent-Job-Id should become the response job_id."""
+    with open(DATA_DIR / "vanilla.yaml", "rb") as fh:
+        resp = client.post(
+            "/api/tasks/design",
+            data={"protocol": "protein-anything", "num_designs": "10", "budget": "5"},
+            files={"design_yaml": ("vanilla.yaml", fh, "application/x-yaml")},
+            headers={"X-Bioagent-Job-Id": "boltzgen-task-001"},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["job_id"] == "boltzgen-task-001"
+
+
+def test_design_task_endpoint_duplicate_returns_existing(client):
+    """Two requests with the same task_id: second returns the first's JobInfo.
+
+    Proves the framework-level idempotency check works through boltzgen-server's
+    custom-signature handler (i.e. execute_task's idempotency wraps cleanly
+    around the UploadFile parsing).
+    """
+    hdrs = {"X-Bioagent-Job-Id": "boltzgen-dup-001"}
+    with open(DATA_DIR / "vanilla.yaml", "rb") as fh:
+        r1 = client.post(
+            "/api/tasks/design",
+            data={"protocol": "protein-anything", "num_designs": "10", "budget": "5"},
+            files={"design_yaml": ("vanilla.yaml", fh, "application/x-yaml")},
+            headers=hdrs,
+        )
+    with open(DATA_DIR / "vanilla.yaml", "rb") as fh:
+        r2 = client.post(
+            "/api/tasks/design",
+            data={"protocol": "nanobody-anything", "num_designs": "99", "budget": "5"},
+            files={"design_yaml": ("vanilla.yaml", fh, "application/x-yaml")},
+            headers=hdrs,
+        )
+    assert r1.json()["job_id"] == r2.json()["job_id"]
+    # First request's params should win — proves no re-run.
+    assert r2.json()["input_params"]["protocol"] == "protein-anything"
+    assert r2.json()["input_params"]["num_designs"] == 10
+    # created_at identity proves store.create wasn't called the second time.
+    assert r1.json()["created_at"] == r2.json()["created_at"]
