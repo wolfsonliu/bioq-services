@@ -15,10 +15,12 @@ from bioagent_service import (
     JobInfo,
     attach_mcp,
     create_app,
+    execute_task,
     model_form_depends,
     read_version_file,
+    resolve_task_id,
 )
-from fastapi import Depends, File, UploadFile
+from fastapi import Depends, File, Header, Request, UploadFile
 
 from .adapter import ESMFold2Adapter
 from .models import FoldRequest
@@ -90,6 +92,42 @@ def post_fold(
         label="fold",
         input_params=params.model_dump(mode="json"),
     )
+
+
+if settings.task_endpoints_enabled:
+
+    @app.post("/api/tasks/fold", response_model=JobInfo)
+    def post_fold_task(
+        request: Request,
+        params: FoldRequest = Depends(model_form_depends(FoldRequest)),
+        msa_files: Optional[list[UploadFile]] = File(None),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+        x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+    ) -> JobInfo:
+        """Predict 3D structure as a single atomic task.
+
+        Blocks until pipeline completion.  For submit/poll, use POST /api/fold.
+        """
+        job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
+        saved_state: dict[str, dict] = {"msa": {}}
+
+        def _save(_req, input_dir: Path) -> None:
+            saved_state["msa"] = _save_msa_uploads(msa_files, input_dir)
+
+        def _build(req, _job_id: str, job_dir: Path) -> list[str]:
+            input_json = build_input_json(
+                req, job_dir=job_dir, saved_msa_paths=saved_state["msa"]
+            )
+            return fold_argv(req, job_dir=job_dir, input_json=input_json, settings=settings)
+
+        return execute_task(
+            request,
+            job_id=job_id,
+            label="fold",
+            params=params,
+            build_argv=_build,
+            save_inputs=_save,
+        )
 
 
 attach_mcp(app)

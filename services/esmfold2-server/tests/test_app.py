@@ -416,3 +416,29 @@ def test_fold_endpoint_writes_input_json(client_with_stub_runner):
 def test_fold_endpoint_rejects_empty_sequences(client):
     r = client.post("/api/fold", data={"sequences": "[]"})
     assert r.status_code == 422
+
+
+# ---- Task endpoint smoke ----
+
+
+def test_fold_task_endpoint_returns_terminal_status(client):
+    """POST /api/tasks/fold blocks until subprocess exits."""
+    resp = client.post(
+        "/api/tasks/fold",
+        data={"sequences": '[{"type":"protein","id":"A","sequence":"MKT"}]'},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "job_id" in body
+    assert body["status"] in {"completed", "failed"}
+    assert body["completed_at"] is not None
+
+
+def test_fold_task_endpoint_honors_job_id_header(client):
+    resp = client.post(
+        "/api/tasks/fold",
+        data={"sequences": '[{"type":"protein","id":"A","sequence":"MKT"}]'},
+        headers={"X-Bioagent-Job-Id": "esmfold-task-001"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["job_id"] == "esmfold-task-001"
