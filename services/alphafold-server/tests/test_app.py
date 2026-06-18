@@ -426,3 +426,54 @@ def test_fold_endpoint_saves_fasta(client_with_stub_runner, tmp_path):
 def test_fold_endpoint_rejects_no_fasta(client):
     r = client.post("/api/fold", data={})
     assert r.status_code == 422
+
+
+# ----- task endpoint smoke (synchronous; /bin/true so it returns immediately) -----
+
+
+def test_fold_task_endpoint_returns_terminal_status(client):
+    """POST /api/tasks/fold blocks until /bin/true exits, returns terminal JobInfo."""
+    # Use a minimal valid fasta for the request.
+    fasta_bytes = b">test\nMKQHKAMIVALIVICITAVVAALVTRKDLCEVHIRTGQTEVAVF\n"
+    resp = client.post(
+        "/api/tasks/fold",
+        data={},
+        files={"input_fasta": ("test.fasta", fasta_bytes, "text/plain")},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "job_id" in body
+    assert body["status"] in {"completed", "failed"}
+    assert body["completed_at"] is not None
+
+
+def test_fold_task_endpoint_honors_job_id_header(client):
+    fasta_bytes = b">x\nMKQ\n"
+    resp = client.post(
+        "/api/tasks/fold",
+        data={},
+        files={"input_fasta": ("x.fasta", fasta_bytes, "text/plain")},
+        headers={"X-Bioagent-Job-Id": "af-task-001"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["job_id"] == "af-task-001"
+
+
+def test_fold_task_endpoint_duplicate_returns_existing(client):
+    hdrs = {"X-Bioagent-Job-Id": "af-dup-001"}
+    fasta_a = b">a\nMKQ\n"
+    fasta_b = b">b\nLLL\n"
+    r1 = client.post(
+        "/api/tasks/fold",
+        data={},
+        files={"input_fasta": ("a.fasta", fasta_a, "text/plain")},
+        headers=hdrs,
+    )
+    r2 = client.post(
+        "/api/tasks/fold",
+        data={},
+        files={"input_fasta": ("b.fasta", fasta_b, "text/plain")},
+        headers=hdrs,
+    )
+    assert r1.json()["job_id"] == r2.json()["job_id"]
+    assert r1.json()["created_at"] == r2.json()["created_at"]
