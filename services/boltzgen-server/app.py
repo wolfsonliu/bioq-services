@@ -8,11 +8,19 @@ come from `bioagent_service.create_app`.
 from __future__ import annotations
 
 import logging
+import uuid
 from pathlib import Path
 from typing import List, Optional
 
-from bioagent_service import JobInfo, attach_mcp, create_app, model_form_depends, read_version_file
-from fastapi import Depends, File, Form, UploadFile
+from bioagent_service import (
+    JobInfo,
+    attach_mcp,
+    create_app,
+    execute_task,
+    model_form_depends,
+    read_version_file,
+)
+from fastapi import Depends, File, Form, Header, Request, UploadFile
 
 from .adapter import BoltzGenAdapter
 from .models import DesignRequest, InverseFoldRequest
@@ -104,6 +112,89 @@ def post_inverse_fold(
         build_argv=_build,
         label="inverse_fold",
         input_params=params.model_dump(mode="json"),
+    )
+
+
+def _resolve_task_id(*, hdr_bioagent: Optional[str], hdr_fc: Optional[str]) -> str:
+    """Pick the task ID from headers, generating a UUID fallback.
+
+    Both `X-Bioagent-Job-Id` (our convention) and `X-Fc-Async-Task-Id`
+    (FC's convention) are accepted so a single client request can populate
+    both — see engineering/decisions/2026-06-17-fc-async-task-mode.md.
+    """
+    return hdr_bioagent or hdr_fc or uuid.uuid4().hex[:20]
+
+
+@app.post("/api/tasks/design", response_model=JobInfo)
+def post_design_task(
+    request: Request,
+    params: DesignRequest = Depends(model_form_depends(DesignRequest)),
+    design_yaml: Optional[UploadFile] = File(None),
+    design_yaml_uri: Optional[str] = Form(None),
+    ref_files: List[UploadFile] = File([]),
+    x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+    x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+) -> JobInfo:
+    """Run the full BoltzGen design pipeline as a single atomic task.
+
+    Blocks until pipeline completion.  Designed to be invoked via FC Async
+    Task Mode (X-Fc-Invocation-Type: Async): FC enqueues and dispatches,
+    the HTTP request stays active for the full subprocess lifetime so FC
+    won't recycle the instance mid-run.
+
+    For the legacy submit/poll interface, use POST /api/design instead.
+    """
+    job_id = _resolve_task_id(hdr_bioagent=x_bioagent_job_id, hdr_fc=x_fc_async_task_id)
+
+    def _save(_req, input_dir: Path) -> None:
+        _save_inputs(design_yaml, design_yaml_uri, ref_files, input_dir)
+
+    def _build(req, _job_id: str, job_dir: Path) -> list[str]:
+        # `_save` already populated input_dir with design_spec.yaml + refs.
+        yaml_path = job_dir / "input" / "design_spec.yaml"
+        return design_argv(req, job_dir=job_dir, yaml_path=yaml_path, settings=settings)
+
+    return execute_task(
+        request,
+        job_id=job_id,
+        label="design",
+        params=params,
+        build_argv=_build,
+        save_inputs=_save,
+    )
+
+
+@app.post("/api/tasks/inverse_fold", response_model=JobInfo)
+def post_inverse_fold_task(
+    request: Request,
+    params: InverseFoldRequest = Depends(model_form_depends(InverseFoldRequest)),
+    design_yaml: Optional[UploadFile] = File(None),
+    design_yaml_uri: Optional[str] = Form(None),
+    ref_files: List[UploadFile] = File([]),
+    x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+    x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+) -> JobInfo:
+    """Run BoltzGen inverse-fold-only mode as a single atomic task.
+
+    Same lifecycle as /api/tasks/design but skips the design diffusion
+    step; runs inverse_folding -> folding -> analysis -> filtering.
+    """
+    job_id = _resolve_task_id(hdr_bioagent=x_bioagent_job_id, hdr_fc=x_fc_async_task_id)
+
+    def _save(_req, input_dir: Path) -> None:
+        _save_inputs(design_yaml, design_yaml_uri, ref_files, input_dir)
+
+    def _build(req, _job_id: str, job_dir: Path) -> list[str]:
+        yaml_path = job_dir / "input" / "design_spec.yaml"
+        return inverse_fold_argv(req, job_dir=job_dir, yaml_path=yaml_path, settings=settings)
+
+    return execute_task(
+        request,
+        job_id=job_id,
+        label="inverse_fold",
+        params=params,
+        build_argv=_build,
+        save_inputs=_save,
     )
 
 
