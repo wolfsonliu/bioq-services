@@ -52,7 +52,7 @@ def test_manifest_service_name(client):
 def test_manifest_lists_endpoint(client):
     body = client.get("/api/manifest").json()
     paths = {e["path"] for e in body["endpoints"]}
-    assert paths == {"/api/design"}
+    assert paths == {"/api/design", "/api/tasks/design"}
 
 
 def test_manifest_models(client):
@@ -367,3 +367,52 @@ def test_design_endpoint_na_model(client):
     body = resp.json()
     assert body["input_params"]["model"] == "odesign_base_na_rigid"
     assert body["input_params"]["design_modality"] == "rna"
+
+
+# ----- task endpoint smoke (synchronous; /bin/true so it returns immediately) -----
+
+def test_design_task_endpoint_returns_terminal_status(client):
+    """POST /api/tasks/design blocks until subprocess exits."""
+    with open(DATA_DIR / "fc_design.json", "rb") as fh:
+        resp = client.post(
+            "/api/tasks/design",
+            data={},
+            files={"input_json": ("fc_design.json", fh, "application/json")},
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "job_id" in body
+    assert body["status"] in {"completed", "failed"}
+    assert body["completed_at"] is not None
+
+
+def test_design_task_endpoint_honors_job_id_header(client):
+    with open(DATA_DIR / "fc_design.json", "rb") as fh:
+        resp = client.post(
+            "/api/tasks/design",
+            data={},
+            files={"input_json": ("fc_design.json", fh, "application/json")},
+            headers={"X-Bioagent-Job-Id": "odesign-task-001"},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["job_id"] == "odesign-task-001"
+
+
+def test_design_task_endpoint_duplicate_returns_existing(client):
+    hdrs = {"X-Bioagent-Job-Id": "odesign-dup-001"}
+    with open(DATA_DIR / "fc_design.json", "rb") as fh:
+        r1 = client.post(
+            "/api/tasks/design",
+            data={},
+            files={"input_json": ("fc_design.json", fh, "application/json")},
+            headers=hdrs,
+        )
+    with open(DATA_DIR / "fc_design.json", "rb") as fh:
+        r2 = client.post(
+            "/api/tasks/design",
+            data={},
+            files={"input_json": ("fc_design.json", fh, "application/json")},
+            headers=hdrs,
+        )
+    assert r1.json()["job_id"] == r2.json()["job_id"]
+    assert r1.json()["created_at"] == r2.json()["created_at"]
