@@ -10,12 +10,41 @@ This is an operational probe (not a pytest) for sizing FC's max-async-concurrenc
 and GPU quota. Use after migrating a new service to task endpoints, or whenever
 FC console concurrency settings change.
 
+Polling modes
+-------------
+``--mode fc-api`` *(recommended)*
+    Polls FC's ``GetAsyncTask`` control-plane API for state transitions; this
+    does NOT touch our function instances, so it avoids forcing FC to cold-start
+    extra GPU instances just to serve ``GET /api/jobs/<id>`` reads.  Only when
+    a task reaches a terminal state (Succeeded / Failed) do we issue ONE HTTP
+    GET ``/api/jobs/<task_id>`` per task to fetch rich ``JobInfo`` for the
+    report (started_at / completed_at / instance_id / duration).
+
+    Requires AK/SK (``--ak`` / ``--sk`` or ``$ALI_AK`` / ``$ALI_SK``) plus the
+    FC function name (``--function``).
+
+``--mode http`` *(legacy fallback)*
+    Polls ``GET /api/jobs/<id>`` every interval, which routes via the function
+    URL and can cold-start extra polling instances.  Use only when AK/SK
+    credentials are unavailable.
+
+``--mode auto`` *(default)*
+    Picks ``fc-api`` when ``ALI_AK`` + ``ALI_SK`` are set AND ``--function``
+    is provided; otherwise falls back to ``http`` and logs the missing inputs.
+
 Usage
 -----
-Minimum (boltz-server default payload, N=10)::
+Minimum (boltz-server default payload, N=10, http mode)::
 
     FC_URL=https://fc-boltz-XXX.cn-hangzhou-vpc.fcapp.run \
         uv run python services/_framework/scripts/probe_fc_concurrency.py
+
+Recommended (fc-api mode, control-plane polling)::
+
+    FC_URL=https://fc-boltz-XXX.cn-hangzhou-vpc.fcapp.run \
+    ALI_AK=... ALI_SK=... \
+        uv run python services/_framework/scripts/probe_fc_concurrency.py \
+        --function boltz-server --region cn-hangzhou
 
 Generic, with custom payload file::
 
@@ -23,7 +52,7 @@ Generic, with custom payload file::
         uv run python services/_framework/scripts/probe_fc_concurrency.py \
         --endpoint /api/tasks/generate/unconditional \
         --payload-file payload.json \
-        --n 20
+        --n 20 --function genie3-server
 
 Payload file format (JSON object → form fields, list/dict values are JSON-stringified)::
 
@@ -65,6 +94,9 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import httpx
+
+from pipelines.framework.dispatcher import DispatchHandle, TaskStatus
+from pipelines.framework.fc_dispatcher import FCDispatcher
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +196,7 @@ async def submit_all(
     print(f"[{time.strftime('%F %T')}] Submit phase took {time.time()-t0:.1f}s")
 
 
-async def poll_one(
+async def _poll_via_http(
     client: httpx.AsyncClient,
     *,
     url: str,
@@ -173,10 +205,14 @@ async def poll_one(
     poll_interval_s: float,
     timeout_s: float,
 ) -> None:
-    # Send session affinity header so FC routes polls to the instance that
-    # owns the task — avoids cold-starting a separate "polling instance" just
-    # to read the NAS-backed job.json on each interval. Server-side framework
-    # uses job_id == task_id as the session key (see resolve_task_id).
+    """Legacy HTTP polling: GET /api/jobs/<id> until terminal.
+
+    Used when AK/SK credentials are unavailable for FC's GetAsyncTask API.
+    Sends session affinity header so FC routes polls to the instance that
+    owns the task — avoids cold-starting a separate "polling instance" just
+    to read the NAS-backed job.json on each interval.  Server-side framework
+    uses job_id == task_id as the session key (see resolve_task_id).
+    """
     affinity_headers = {"X-Bioagent-Session-Id": rec.task_id}
     while True:
         elapsed = time.time() - t0
@@ -220,26 +256,127 @@ async def poll_one(
         await asyncio.sleep(poll_interval_s)
 
 
+async def _poll_via_fc_api(
+    rec: TaskRecord,
+    *,
+    dispatcher: FCDispatcher,
+    handle: DispatchHandle,
+    t0: float,
+    poll_interval_s: float,
+    timeout_s: float,
+) -> None:
+    """Poll FC's GetAsyncTask API until terminal. Does NOT touch function instances.
+
+    On terminal state, returns; the caller is expected to call
+    `_fetch_terminal_jobinfo(rec, url=...)` to populate rich JobInfo fields.
+    """
+    while True:
+        elapsed = time.time() - t0
+        if elapsed > timeout_s:
+            rec.state_log.append((elapsed, "TIMEOUT"))
+            return
+        try:
+            # Run the synchronous FC SDK call in a thread to avoid blocking the
+            # event loop.
+            status = await asyncio.to_thread(dispatcher.get_status, handle)
+        except Exception as e:
+            rec.state_log.append((elapsed, f"fc_api_poll_error: {e}"))
+            await asyncio.sleep(poll_interval_s)
+            continue
+
+        if rec.first_seen_t is None:
+            rec.first_seen_t = elapsed
+            rec.state_log.append((elapsed, f"first_seen status={status.value}"))
+
+        last_status = rec.state_log[-1][1].split()[-1] if rec.state_log else None
+        if not rec.state_log or status.value != last_status:
+            rec.state_log.append((elapsed, status.value))
+
+        if status in (TaskStatus.SUCCEEDED, TaskStatus.FAILED):
+            # Map FC enum back to server-side terminal status for downstream report.
+            rec.final_status = "completed" if status == TaskStatus.SUCCEEDED else "failed"
+            return
+        await asyncio.sleep(poll_interval_s)
+
+
+async def _fetch_terminal_jobinfo(
+    client: httpx.AsyncClient,
+    rec: TaskRecord,
+    *,
+    url: str,
+) -> None:
+    """One HTTP GET to fetch the rich JobInfo body once the task is terminal.
+
+    Sets affinity header so this single call lands on the compute instance.
+    """
+    try:
+        r = await client.get(
+            f"{url}/api/jobs/{rec.task_id}",
+            headers={"X-Bioagent-Session-Id": rec.task_id},
+            timeout=30.0,
+        )
+        r.raise_for_status()
+        body = r.json()
+    except Exception as e:
+        rec.state_log.append((time.time(), f"terminal_fetch_error: {e}"))
+        return
+
+    rec.created_at = body.get("created_at")
+    rec.started_at = body.get("started_at")
+    rec.completed_at = body.get("completed_at")
+    rec.instance_id = body.get("instance_id")
+    if not rec.final_status:
+        rec.final_status = body.get("status")
+    rec.duration_seconds = body.get("duration_seconds")
+
+
 async def poll_all(
     records: list[TaskRecord],
     *,
+    mode: str,
     url: str,
+    dispatcher: FCDispatcher | None,
+    handles: dict[str, DispatchHandle] | None,
     poll_interval_s: float,
     timeout_s: float,
 ) -> None:
     t0 = time.time()
     print(
         f"[{time.strftime('%F %T')}] Polling {len(records)} tasks "
-        f"(interval {poll_interval_s}s, timeout {timeout_s}s)..."
+        f"via {mode} (interval {poll_interval_s}s, timeout {timeout_s}s)..."
     )
     async with httpx.AsyncClient() as client:
-        await asyncio.gather(*[
-            poll_one(
-                client, url=url, rec=r, t0=t0,
-                poll_interval_s=poll_interval_s, timeout_s=timeout_s,
+        if mode == "fc-api":
+            assert dispatcher is not None and handles is not None
+            # Step 1: cheap polling via FC control plane (no instance touched).
+            await asyncio.gather(*[
+                _poll_via_fc_api(
+                    r,
+                    dispatcher=dispatcher,
+                    handle=handles[r.task_id],
+                    t0=t0,
+                    poll_interval_s=poll_interval_s,
+                    timeout_s=timeout_s,
+                )
+                for r in records
+            ])
+            # Step 2: one HTTP GET per terminal task for rich JobInfo.
+            print(
+                f"[{time.strftime('%F %T')}] Fetching terminal JobInfo via HTTP "
+                f"(1 call per task)..."
             )
-            for r in records
-        ])
+            await asyncio.gather(*[
+                _fetch_terminal_jobinfo(client, r, url=url)
+                for r in records if r.final_status in ("completed", "failed")
+            ])
+        else:
+            await asyncio.gather(*[
+                _poll_via_http(
+                    client, url=url, rec=r, t0=t0,
+                    poll_interval_s=poll_interval_s, timeout_s=timeout_s,
+                )
+                for r in records
+            ])
     print(f"[{time.strftime('%F %T')}] Polling phase took {time.time()-t0:.1f}s")
 
 
@@ -387,6 +524,40 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         default=2400.0,
         help="Per-task polling timeout in seconds (default: 2400 = 40 min)",
     )
+    parser.add_argument(
+        "--mode",
+        choices=["auto", "fc-api", "http"],
+        default="auto",
+        help=(
+            "Polling mode: 'fc-api' uses FC's GetAsyncTask control-plane API "
+            "(does not touch function instances; recommended); 'http' polls "
+            "/api/jobs/<id> (legacy fallback); 'auto' picks fc-api when AK/SK "
+            "+ --function are available, otherwise http (default: auto)"
+        ),
+    )
+    parser.add_argument(
+        "--region",
+        default="cn-hangzhou",
+        help="FC region for fc-api mode (default: cn-hangzhou)",
+    )
+    parser.add_argument(
+        "--function",
+        default=None,
+        help=(
+            "FC function name (required for fc-api mode, e.g. 'boltz-server'). "
+            "Without it, the probe falls back to http polling."
+        ),
+    )
+    parser.add_argument(
+        "--ak",
+        default=os.environ.get("ALI_AK"),
+        help="Alibaba Cloud AccessKey ID for fc-api mode (default: $ALI_AK)",
+    )
+    parser.add_argument(
+        "--sk",
+        default=os.environ.get("ALI_SK"),
+        help="Alibaba Cloud AccessKey Secret for fc-api mode (default: $ALI_SK)",
+    )
     return parser
 
 
@@ -396,6 +567,44 @@ async def _main() -> int:
         print("error: --url is required (or set FC_URL env var)")
         return 2
     url = args.url.rstrip("/")
+
+    # Resolve polling mode.
+    ak = args.ak or os.environ.get("ALI_AK")
+    sk = args.sk or os.environ.get("ALI_SK")
+    function = args.function
+
+    if args.mode == "fc-api":
+        if not (ak and sk and function):
+            print(
+                "error: --mode fc-api requires ALI_AK + ALI_SK env vars "
+                "(or --ak/--sk) plus --function"
+            )
+            return 2
+        mode = "fc-api"
+        print(
+            f"[mode] fc-api (region={args.region}, function={function}); "
+            f"polling via FC GetAsyncTask control-plane API"
+        )
+    elif args.mode == "http":
+        mode = "http"
+        print("[mode] http (legacy HTTP polling via /api/jobs/<id>)")
+    else:  # auto
+        if ak and sk and function:
+            mode = "fc-api"
+            print(
+                f"[mode] auto-detected fc-api "
+                f"(region={args.region}, function={function})"
+            )
+        else:
+            missing = []
+            if not ak:
+                missing.append("ALI_AK")
+            if not sk:
+                missing.append("ALI_SK")
+            if not function:
+                missing.append("--function")
+            mode = "http"
+            print(f"[mode] falling back to http (missing: {', '.join(missing)})")
 
     if args.payload_file:
         with open(args.payload_file, "r", encoding="utf-8") as f:
@@ -414,9 +623,34 @@ async def _main() -> int:
         report(records, url=url, endpoint=args.endpoint)
         return 1
 
+    dispatcher: FCDispatcher | None = None
+    handles: dict[str, DispatchHandle] | None = None
+    if mode == "fc-api":
+        dispatcher = FCDispatcher(
+            region=args.region,
+            function=function,
+            access_key_id=ak,
+            access_key_secret=sk,
+            http_base_url=url,
+        )
+        # Pre-build handles so the poller can resolve task_id → handle without
+        # resubmitting (we already submitted via direct HTTP POST above; FC
+        # uses task_id as the GetAsyncTask lookup key).
+        handles = {
+            r.task_id: DispatchHandle(
+                backend="fc",
+                task_id=r.task_id,
+                backend_ref={"invocation_id": r.task_id, "function": function},
+            )
+            for r in records
+        }
+
     await poll_all(
         records,
+        mode=mode,
         url=url,
+        dispatcher=dispatcher,
+        handles=handles,
         poll_interval_s=args.poll_interval,
         timeout_s=args.timeout,
     )
