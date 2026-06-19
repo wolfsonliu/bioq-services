@@ -274,31 +274,28 @@ class TestJobLifecycle:
         assert r.status_code == 200
         files = r.json()["files"]
         assert len(files) > 0
-        names = {f["name"] for f in files}
-        assert any("ranked_0.pdb" in n for n in names), f"No ranked_0.pdb in {names}"
+        assert any("ranked_0.pdb" in n for n in files), f"No ranked_0.pdb in {files}"
 
     def test_output_contains_ranking_debug(self, client, fold_job):
         job_id = fold_job["job_id"]
         files = client.get(f"/api/jobs/{job_id}/files").json()["files"]
-        names = {f["name"] for f in files}
-        assert any("ranking_debug.json" in n for n in names), (
-            f"Expected ranking_debug.json in output files: {names}"
+        assert any("ranking_debug.json" in n for n in files), (
+            f"Expected ranking_debug.json in output files: {files}"
         )
 
     def test_output_contains_relaxed_model(self, client, fold_job):
         job_id = fold_job["job_id"]
         files = client.get(f"/api/jobs/{job_id}/files").json()["files"]
-        names = {f["name"] for f in files}
-        assert any("relaxed_model" in n for n in names), (
-            f"Expected relaxed_model_*.pdb in output files: {names}"
+        assert any("relaxed_model" in n for n in files), (
+            f"Expected relaxed_model_*.pdb in output files: {files}"
         )
 
     def test_single_file_download_ranked_pdb(self, client, fold_job):
         job_id = fold_job["job_id"]
         files = client.get(f"/api/jobs/{job_id}/files").json()["files"]
-        ranked = [f for f in files if "ranked_0.pdb" in f["name"]]
+        ranked = [f for f in files if "ranked_0.pdb" in f]
         assert ranked, "ranked_0.pdb not found"
-        path = ranked[0]["name"]
+        path = ranked[0]
 
         data = _download_bytes(client, job_id, path)
         assert len(data) > 100, "PDB file too small"
@@ -308,9 +305,9 @@ class TestJobLifecycle:
     def test_single_file_download_ranking_json(self, client, fold_job):
         job_id = fold_job["job_id"]
         files = client.get(f"/api/jobs/{job_id}/files").json()["files"]
-        ranking = [f for f in files if "ranking_debug.json" in f["name"]]
+        ranking = [f for f in files if "ranking_debug.json" in f]
         assert ranking, "ranking_debug.json not found"
-        path = ranking[0]["name"]
+        path = ranking[0]
 
         import json
 
