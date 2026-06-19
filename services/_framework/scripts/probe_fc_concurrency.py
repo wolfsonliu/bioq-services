@@ -173,13 +173,22 @@ async def poll_one(
     poll_interval_s: float,
     timeout_s: float,
 ) -> None:
+    # Send session affinity header so FC routes polls to the instance that
+    # owns the task — avoids cold-starting a separate "polling instance" just
+    # to read the NAS-backed job.json on each interval. Server-side framework
+    # uses job_id == task_id as the session key (see resolve_task_id).
+    affinity_headers = {"X-Bioagent-Session-Id": rec.task_id}
     while True:
         elapsed = time.time() - t0
         if elapsed > timeout_s:
             rec.state_log.append((elapsed, "TIMEOUT"))
             return
         try:
-            r = await client.get(f"{url}/api/jobs/{rec.task_id}", timeout=30.0)
+            r = await client.get(
+                f"{url}/api/jobs/{rec.task_id}",
+                headers=affinity_headers,
+                timeout=30.0,
+            )
             if r.status_code == 404:
                 await asyncio.sleep(poll_interval_s)
                 continue
