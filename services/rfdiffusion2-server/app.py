@@ -18,8 +18,16 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import JobInfo, attach_mcp, create_app, model_form_depends, read_version_file
-from fastapi import Depends, File, Form, UploadFile
+from bioagent_service import (
+    JobInfo,
+    attach_mcp,
+    create_app,
+    execute_task,
+    model_form_depends,
+    read_version_file,
+    resolve_task_id,
+)
+from fastapi import Depends, File, Form, Header, Request, UploadFile
 
 from .adapter import RFdiffusion2Adapter
 from .models import (
@@ -122,6 +130,88 @@ def generate_custom(
         build_argv=_build, label="custom",
         input_params=params.model_dump(mode="json"),
     )
+
+
+# ---------------------------------------------------------------------------
+# Task endpoints (synchronous; FC Async Task Mode-friendly)
+# ---------------------------------------------------------------------------
+
+if settings.task_endpoints_enabled:
+
+    @app.post("/api/tasks/generate/active_site", response_model=JobInfo)
+    def generate_active_site_task(
+        request: Request,
+        input_pdb: Optional[UploadFile] = File(None),
+        input_uri: Optional[str] = Form(None),
+        params: ActiveSiteRequest = Depends(model_form_depends(ActiveSiteRequest)),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+        x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+    ) -> JobInfo:
+        """Active-site scaffolding as a single atomic task."""
+        job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
+        paths: dict[str, Path] = {}
+
+        def _save(_req, input_dir: Path) -> None:
+            paths["pdb"] = resolve_input(input_pdb, input_uri, input_dir / "motif.pdb", settings)
+
+        def _build(req, _job_id: str, job_dir: Path) -> list[str]:
+            return active_site_argv(req, paths["pdb"], job_dir, settings)
+
+        return execute_task(
+            request, job_id=job_id, label="active_site", params=params,
+            build_argv=_build, save_inputs=_save,
+        )
+
+    @app.post("/api/tasks/generate/small_molecule_binder", response_model=JobInfo)
+    def generate_small_molecule_binder_task(
+        request: Request,
+        input_pdb: Optional[UploadFile] = File(None),
+        input_uri: Optional[str] = Form(None),
+        params: SmallMoleculeBinderRequest = Depends(model_form_depends(SmallMoleculeBinderRequest)),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+        x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+    ) -> JobInfo:
+        """Small-molecule binder design as a single atomic task."""
+        job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
+        paths: dict[str, Path] = {}
+
+        def _save(_req, input_dir: Path) -> None:
+            paths["pdb"] = resolve_input(input_pdb, input_uri, input_dir / "ligand.pdb", settings)
+
+        def _build(req, _job_id: str, job_dir: Path) -> list[str]:
+            return small_molecule_binder_argv(req, paths["pdb"], job_dir, settings)
+
+        return execute_task(
+            request, job_id=job_id, label="small_molecule_binder", params=params,
+            build_argv=_build, save_inputs=_save,
+        )
+
+    @app.post("/api/tasks/generate", response_model=JobInfo)
+    def generate_custom_task(
+        request: Request,
+        input_pdb: Optional[UploadFile] = File(None),
+        input_uri: Optional[str] = Form(None),
+        params: CustomRequest = Depends(model_form_depends(CustomRequest)),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+        x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+    ) -> JobInfo:
+        """Custom Hydra-override generation as a single atomic task."""
+        job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
+        paths: dict[str, Optional[Path]] = {"pdb": None}
+
+        def _save(_req, input_dir: Path) -> None:
+            if input_pdb is not None or input_uri:
+                paths["pdb"] = resolve_input(
+                    input_pdb, input_uri, input_dir / "input.pdb", settings
+                )
+
+        def _build(req, _job_id: str, job_dir: Path) -> list[str]:
+            return custom_argv(req, paths["pdb"], job_dir, settings)
+
+        return execute_task(
+            request, job_id=job_id, label="custom", params=params,
+            build_argv=_build, save_inputs=_save,
+        )
 
 
 # Mount MCP server — must be AFTER all POST routes are registered so the
