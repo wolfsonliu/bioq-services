@@ -508,14 +508,23 @@ def test_async_task_predict_structure_honors_bioagent_job_id(
     assert final["job_id"] == task_id, "JobInfo.job_id must equal X-Bioagent-Job-Id"
 
 
-def test_async_task_duplicate_returns_existing(
+def test_async_task_duplicate_rejected_at_fc_platform_layer(
     client: httpx.Client, base_url: str,
 ) -> None:
-    """Two async invokes with the same X-Bioagent-Job-Id are idempotent.
+    """Same X-Fc-Async-Task-Id twice → FC rejects the second at platform layer.
 
-    The second invocation hits execute_task's duplicate-job check and is
-    rejected without re-running the pipeline.  After both finish, the
-    JobInfo's input_params reflect the FIRST invocation's payload only.
+    Important discovery from the first end-to-end run (2026-06-19): FC's async
+    task mode itself dedups by X-Fc-Async-Task-Id; the second invocation never
+    reaches our function (returns HTTP 409 Conflict at the FC layer).  This is
+    *better* than the framework-layer dedup we built into `execute_task` —
+    duplicates don't even cost a cold-start.  Our framework dedup remains a
+    defense-in-depth fallback for invocation paths that bypass FC (LocalDispatcher,
+    direct curl, future K8s backend).
+
+    Test verifies:
+      1. First submit succeeds (HTTP 202) and runs to completion.
+      2. Second submit with SAME task_id returns HTTP 409 (FC platform dedup).
+      3. The original JobInfo is unchanged (created_at, input_params).
     """
     import time
     task_id = f"fc-async-dup-{int(time.time())}"
@@ -546,15 +555,17 @@ def test_async_task_duplicate_returns_existing(
     )
     assert r1.status_code == 202
 
-    # Wait for first to finish before retrying — the framework's duplicate
-    # check is a serial defense (concurrent same-id submits are a separate
-    # race path).  Polling here keeps the test simple.
+    # Wait for first to finish — FC's async dedup window covers in-flight tasks too,
+    # but waiting for completion gives us a clean state to inspect.
     final = poll_job(client, base_url, task_id, timeout_s=1800, interval_s=20)
     assert final["status"] == "completed", final
     first_created_at = final["created_at"]
     first_name = final["input_params"].get("name")
 
-    # Second submit with the SAME task_id should NOT re-run.
+    # Second submit with the SAME task_id → FC platform rejects with 409.
+    # (If the platform behavior ever changes to accept and let the function
+    # dedup, accept 202 too — the framework's execute_task duplicate check
+    # would then catch it.  See engineering/decisions/2026-06-17-fc-async-task-mode.md.)
     r2 = client.post(
         "/api/tasks/predict_structure",
         data=payload_second,
@@ -564,13 +575,14 @@ def test_async_task_duplicate_returns_existing(
             "X-Fc-Async-Task-Id": task_id,
         },
     )
-    # FC always returns 202 for async (it just queues; the server may then
-    # return the existing JobInfo without re-running).  We verify
-    # idempotency by re-querying.
-    assert r2.status_code == 202
+    assert r2.status_code in (202, 409), (
+        f"expected 409 (FC dedup) or 202 (FC accepts → server dedups); got {r2.status_code}"
+    )
 
-    # Give FC a moment to dispatch; idempotency check returns immediately.
-    time.sleep(30)
+    # Either way, JobInfo must not change.
+    if r2.status_code == 202:
+        # Function was invoked; give server-side dedup a moment.
+        time.sleep(30)
     re_query = client.get(f"/api/jobs/{task_id}").json()
     assert re_query["status"] == "completed"
     assert re_query["created_at"] == first_created_at, (
