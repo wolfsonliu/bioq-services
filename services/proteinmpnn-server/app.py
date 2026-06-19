@@ -11,8 +11,16 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import JobInfo, attach_mcp, create_app, model_form_depends, read_version_file
-from fastapi import Depends, File, Form, UploadFile
+from bioagent_service import (
+    JobInfo,
+    attach_mcp,
+    create_app,
+    execute_task,
+    model_form_depends,
+    read_version_file,
+    resolve_task_id,
+)
+from fastapi import Depends, File, Form, Header, Request, UploadFile
 
 from .adapter import ProteinMPNNAdapter
 from .models import DesignRequest, ProbsRequest, ScoreRequest
@@ -125,6 +133,103 @@ def post_probs(
         build_argv=_build, label="probs",
         input_params=params.model_dump(mode="json"),
     )
+
+
+if settings.task_endpoints_enabled:
+
+    @app.post("/api/tasks/design", response_model=JobInfo)
+    def post_design_task(
+        request: Request,
+        params: DesignRequest = Depends(model_form_depends(DesignRequest)),
+        pdb: Optional[UploadFile] = File(None),
+        pdb_uri: Optional[str] = Form(None),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+        x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+    ) -> JobInfo:
+        """Sequence design as a single atomic task."""
+        job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
+
+        def _save(_req, input_dir: Path) -> None:
+            resolve_input(pdb, pdb_uri, input_dir / f"{params.name}.pdb", settings)
+
+        def _build(req, _job_id: str, job_dir: Path) -> list[str]:
+            paths = prepare_inputs(
+                job_dir, settings=settings,
+                ca_only=(req.model_variant == "ca_only"),
+                chains_to_design=req.chains_to_design,
+                fixed_positions=req.fixed_positions,
+                tied_positions=req.tied_positions,
+                homooligomer=req.homooligomer,
+                bias_AA=req.bias_AA,
+                bias_by_res=req.bias_by_res,
+                omit_AA_per_chain=req.omit_AA_per_chain,
+            )
+            return design_argv(req, job_dir=job_dir, paths=paths, settings=settings)
+
+        return execute_task(
+            request, job_id=job_id, label="design", params=params,
+            build_argv=_build, save_inputs=_save,
+        )
+
+    @app.post("/api/tasks/score", response_model=JobInfo)
+    def post_score_task(
+        request: Request,
+        params: ScoreRequest = Depends(model_form_depends(ScoreRequest)),
+        pdb: Optional[UploadFile] = File(None),
+        pdb_uri: Optional[str] = Form(None),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+        x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+    ) -> JobInfo:
+        """Score as a single atomic task."""
+        job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
+
+        def _save(_req, input_dir: Path) -> None:
+            resolve_input(pdb, pdb_uri, input_dir / f"{params.name}.pdb", settings)
+
+        def _build(req, _job_id: str, job_dir: Path) -> list[str]:
+            paths = prepare_inputs(
+                job_dir, settings=settings,
+                ca_only=(req.model_variant == "ca_only"),
+                chains_to_design=req.chains_to_design,
+                fixed_positions=None, tied_positions=None, homooligomer=False,
+                bias_AA=None, bias_by_res=None, omit_AA_per_chain=None,
+            )
+            return score_argv(req, job_dir=job_dir, paths=paths, settings=settings)
+
+        return execute_task(
+            request, job_id=job_id, label="score", params=params,
+            build_argv=_build, save_inputs=_save,
+        )
+
+    @app.post("/api/tasks/probs", response_model=JobInfo)
+    def post_probs_task(
+        request: Request,
+        params: ProbsRequest = Depends(model_form_depends(ProbsRequest)),
+        pdb: Optional[UploadFile] = File(None),
+        pdb_uri: Optional[str] = Form(None),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+        x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+    ) -> JobInfo:
+        """Probabilities as a single atomic task."""
+        job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
+
+        def _save(_req, input_dir: Path) -> None:
+            resolve_input(pdb, pdb_uri, input_dir / f"{params.name}.pdb", settings)
+
+        def _build(req, _job_id: str, job_dir: Path) -> list[str]:
+            paths = prepare_inputs(
+                job_dir, settings=settings,
+                ca_only=(req.model_variant == "ca_only"),
+                chains_to_design=req.chains_to_design,
+                fixed_positions=None, tied_positions=None, homooligomer=False,
+                bias_AA=None, bias_by_res=None, omit_AA_per_chain=None,
+            )
+            return probs_argv(req, job_dir=job_dir, paths=paths, settings=settings)
+
+        return execute_task(
+            request, job_id=job_id, label="probs", params=params,
+            build_argv=_build, save_inputs=_save,
+        )
 
 
 # Mount MCP server — must be AFTER all POST routes are registered so the
