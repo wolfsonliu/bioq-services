@@ -21,8 +21,16 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import JobInfo, attach_mcp, create_app, model_form_depends, read_version_file
-from fastapi import Depends, File, Form, UploadFile
+from bioagent_service import (
+    JobInfo,
+    attach_mcp,
+    create_app,
+    execute_task,
+    model_form_depends,
+    read_version_file,
+    resolve_task_id,
+)
+from fastapi import Depends, File, Form, Header, Request, UploadFile
 
 from .adapter import RFantibodyAdapter
 from .models import ProteinMPNNRequest, RF2Request, RFdiffusionRequest
@@ -112,6 +120,82 @@ def run_rf2(
         build_argv=_build, label="rf2",
         input_params=params.model_dump(mode="json"),
     )
+
+
+if settings.task_endpoints_enabled:
+
+    @app.post("/api/tasks/rfdiffusion", response_model=JobInfo)
+    def run_rfdiffusion_task(
+        request: Request,
+        target: UploadFile = File(...),
+        framework: UploadFile = File(...),
+        params: RFdiffusionRequest = Depends(model_form_depends(RFdiffusionRequest)),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+        x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+    ) -> JobInfo:
+        """RFdiffusion antibody-framework backbone design as a single atomic task."""
+        job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
+        paths: dict[str, Path] = {}
+
+        def _save(_req, input_dir: Path) -> None:
+            paths["target"] = save_upload(target, input_dir / "target.pdb")
+            paths["framework"] = save_upload(framework, input_dir / "framework.pdb")
+
+        def _build(req, _job_id: str, job_dir: Path) -> list[str]:
+            return rfdiffusion_argv(req, paths["target"], paths["framework"], job_dir, settings)
+
+        return execute_task(
+            request, job_id=job_id, label="rfdiffusion", params=params,
+            build_argv=_build, save_inputs=_save,
+        )
+
+    @app.post("/api/tasks/proteinmpnn", response_model=JobInfo)
+    def run_proteinmpnn_task(
+        request: Request,
+        input_quiver: Optional[UploadFile] = File(None),
+        input_uri: Optional[str] = Form(None),
+        params: ProteinMPNNRequest = Depends(model_form_depends(ProteinMPNNRequest)),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+        x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+    ) -> JobInfo:
+        """ProteinMPNN CDR sequence design as a single atomic task."""
+        job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
+        paths: dict[str, Path] = {}
+
+        def _save(_req, input_dir: Path) -> None:
+            paths["qv"] = resolve_input(input_quiver, input_uri, input_dir / "input.qv", settings)
+
+        def _build(req, _job_id: str, job_dir: Path) -> list[str]:
+            return proteinmpnn_argv(req, paths["qv"], job_dir, settings)
+
+        return execute_task(
+            request, job_id=job_id, label="proteinmpnn", params=params,
+            build_argv=_build, save_inputs=_save,
+        )
+
+    @app.post("/api/tasks/rf2", response_model=JobInfo)
+    def run_rf2_task(
+        request: Request,
+        input_quiver: Optional[UploadFile] = File(None),
+        input_uri: Optional[str] = Form(None),
+        params: RF2Request = Depends(model_form_depends(RF2Request)),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+        x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+    ) -> JobInfo:
+        """RF2 structure prediction as a single atomic task."""
+        job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
+        paths: dict[str, Path] = {}
+
+        def _save(_req, input_dir: Path) -> None:
+            paths["qv"] = resolve_input(input_quiver, input_uri, input_dir / "input.qv", settings)
+
+        def _build(req, _job_id: str, job_dir: Path) -> list[str]:
+            return rf2_argv(req, paths["qv"], job_dir, settings)
+
+        return execute_task(
+            request, job_id=job_id, label="rf2", params=params,
+            build_argv=_build, save_inputs=_save,
+        )
 
 
 # Mount MCP server — must be AFTER all POST routes are registered so the
