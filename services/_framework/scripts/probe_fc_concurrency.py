@@ -154,6 +154,7 @@ async def submit_one(
     url: str,
     endpoint: str,
     form_data: dict[str, str],
+    file_payload: dict[str, tuple[str, bytes, str]] | None,
     rec: TaskRecord,
     t0: float,
 ) -> None:
@@ -166,6 +167,7 @@ async def submit_one(
         r = await client.post(
             f"{url}{endpoint}",
             data=form_data,
+            files=file_payload,
             headers=headers,
             timeout=60.0,
         )
@@ -184,13 +186,33 @@ async def submit_all(
     url: str,
     endpoint: str,
     payload: dict,
+    file_specs: list[tuple[str, Path]] | None = None,
 ) -> None:
     print(f"[{time.strftime('%F %T')}] Submitting {len(records)} tasks concurrently to {endpoint}...")
     form_data = _form_encode(payload)
+    # Pre-read file contents once so every submit shares the same bytes
+    # (httpx requires a fresh tuple per request).
+    file_payload: dict[str, tuple[str, bytes, str]] | None = None
+    if file_specs:
+        file_payload = {}
+        for field_name, path in file_specs:
+            mime = "application/octet-stream"
+            if path.suffix in (".yaml", ".yml"):
+                mime = "application/x-yaml"
+            elif path.suffix == ".json":
+                mime = "application/json"
+            elif path.suffix == ".fasta":
+                mime = "text/plain"
+            file_payload[field_name] = (path.name, path.read_bytes(), mime)
+        print(f"  Files: {[f'{k}={v[0]} ({len(v[1])} bytes)' for k, v in file_payload.items()]}")
+
     t0 = time.time()
     async with httpx.AsyncClient() as client:
         await asyncio.gather(*[
-            submit_one(client, url=url, endpoint=endpoint, form_data=form_data, rec=r, t0=t0)
+            submit_one(
+                client, url=url, endpoint=endpoint,
+                form_data=form_data, file_payload=file_payload, rec=r, t0=t0,
+            )
             for r in records
         ])
     print(f"[{time.strftime('%F %T')}] Submit phase took {time.time()-t0:.1f}s")
@@ -558,6 +580,13 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         default=os.environ.get("ALI_SK"),
         help="Alibaba Cloud AccessKey Secret for fc-api mode (default: $ALI_SK)",
     )
+    parser.add_argument(
+        "--file",
+        action="append",
+        default=[],
+        help="Multipart file upload as field=path; repeat for multiple files. "
+        "Example: --file design_yaml=services/boltzgen-server/tests/data/fc_design.yaml",
+    )
     return parser
 
 
@@ -615,7 +644,23 @@ async def _main() -> int:
     label = args.label or f"probe-{int(time.time())}"
     records = [TaskRecord(task_id=f"{label}-{i:02d}") for i in range(args.n)]
 
-    await submit_all(records, url=url, endpoint=args.endpoint, payload=payload)
+    # Parse --file field=path specs
+    file_specs: list[tuple[str, Path]] = []
+    for spec in args.file:
+        if "=" not in spec:
+            print(f"error: --file {spec!r} must be field=path")
+            return 2
+        field_name, path_str = spec.split("=", 1)
+        p = Path(path_str)
+        if not p.is_file():
+            print(f"error: --file {field_name}: path not found: {path_str}")
+            return 2
+        file_specs.append((field_name, p))
+
+    await submit_all(
+        records, url=url, endpoint=args.endpoint, payload=payload,
+        file_specs=file_specs or None,
+    )
 
     accepted = sum(1 for r in records if r.submit_status == 202)
     if accepted == 0:
