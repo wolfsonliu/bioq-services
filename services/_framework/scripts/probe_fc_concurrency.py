@@ -23,10 +23,37 @@ Polling modes
     Requires AK/SK (``--ak`` / ``--sk`` or ``$ALI_AK`` / ``$ALI_SK``) plus the
     FC function name (``--function``).
 
-``--mode http`` *(legacy fallback)*
+``--mode http`` *(legacy fallback — DO NOT trust final_status at high N)*
     Polls ``GET /api/jobs/<id>`` every interval, which routes via the function
     URL and can cold-start extra polling instances.  Use only when AK/SK
     credentials are unavailable.
+
+    .. warning:: HTTP mode is **unreliable for observing terminal state at high
+       concurrency** (N >= 5).  Two failure modes have been observed in
+       production (2026-06-20 boltzgen N=10 probe):
+
+       1. **FC HTTP rate limiting (429)**: N tasks × poll_interval = sustained
+          request rate that triggers FC's per-function 429 throttling once
+          tasks transition to running.  Probes report exceptions / no status
+          update for the rest of the run.
+
+       2. **Affinity routing meets single-instance-concurrency=1**: when the
+          probe sets ``X-Bioagent-Session-Id`` for affinity (default behavior),
+          GETs are routed to the compute instance that's currently busy with
+          the GPU pipeline.  With ``instanceConcurrency=1`` the GET queues
+          behind compute → poll timeout or 429 → probe never sees the
+          ``completed`` transition.  The task itself completes fine on FC's
+          side; the probe just can't observe it.
+
+       Symptom: ``Final status: running: N`` at probe exit despite tasks having
+       completed successfully (verifiable by curling individual task_ids later
+       with a long timeout + sleep between requests).
+
+       This affects **monitoring only** — it does NOT affect the FC submit /
+       compute / output paths.  The submit-phase HTTP code histogram and
+       unique-instance fanout numbers in the report remain trustworthy.
+
+       For accurate monitoring at any N, use ``--mode fc-api``.
 
 ``--mode auto`` *(default)*
     Picks ``fc-api`` when ``ALI_AK`` + ``ALI_SK`` are set AND ``--function``
@@ -79,6 +106,14 @@ Interpreting the numbers
   cap, GPU quota, or single-instance-concurrency=1 with limited cold-start budget.
 - Healthy concurrency target for GPU services: peak == N == unique instance count
   (each task gets its own GPU instance, all run in parallel).
+- **http mode + Final status: running: N**: probe lost the terminal-state
+  transition due to 429 throttling or affinity routing collision (see warning
+  on http mode above).  Tasks may have completed successfully — verify by
+  querying individual task_ids:
+
+  ``curl -H "X-Bioagent-Session-Id: <task_id>" <url>/api/jobs/<task_id>``
+
+  Re-run with ``--mode fc-api`` for reliable monitoring.
 """
 
 from __future__ import annotations
@@ -409,10 +444,10 @@ def _parse_iso(t: Optional[str]) -> Optional[dt.datetime]:
     return dt.datetime.fromisoformat(t.replace("Z", "+00:00"))
 
 
-def report(records: list[TaskRecord], *, url: str, endpoint: str) -> None:
+def report(records: list[TaskRecord], *, url: str, endpoint: str, mode: str = "unknown") -> None:
     print()
     print("=" * 80)
-    print(f"FC Concurrency Probe Report (N={len(records)})")
+    print(f"FC Concurrency Probe Report (N={len(records)}, mode={mode})")
     print(f"  URL:      {url}")
     print(f"  Endpoint: {endpoint}")
     print("=" * 80)
@@ -439,6 +474,21 @@ def report(records: list[TaskRecord], *, url: str, endpoint: str) -> None:
     print(f"\n## Final status")
     for s, c in final_statuses.most_common():
         print(f"  {s or '<unknown>'}: {c}")
+
+    # http mode caveat: 'running' as final status is almost always a probe-side
+    # observability failure (429 throttling or affinity routing collision), NOT a
+    # real task stall. See module docstring for details.
+    non_terminal = sum(c for s, c in final_statuses.items() if s not in ("completed", "failed"))
+    if mode == "http" and non_terminal > 0:
+        print()
+        print("  ⚠ Probe could not observe terminal state for "
+              f"{non_terminal}/{len(records)} task(s) in HTTP mode.")
+        print("    Likely cause: FC 429 throttling or X-Bioagent-Session-Id affinity")
+        print("    queued GET behind compute on single-concurrency instance.")
+        print("    The tasks themselves likely completed; verify with:")
+        print("      curl -H \"X-Bioagent-Session-Id: <task_id>\" "
+              f"{url}/api/jobs/<task_id>")
+        print("    For accurate monitoring at any N, use --mode fc-api.")
 
     # Durations
     durations = sorted(r.duration_seconds for r in records if r.duration_seconds)
@@ -666,7 +716,7 @@ async def _main() -> int:
     accepted = sum(1 for r in records if r.submit_status == 202)
     if accepted == 0:
         print("No tasks accepted; skipping poll phase.")
-        report(records, url=url, endpoint=args.endpoint)
+        report(records, url=url, endpoint=args.endpoint, mode=mode)
         return 1
 
     dispatcher: FCDispatcher | None = None
@@ -700,7 +750,7 @@ async def _main() -> int:
         poll_interval_s=args.poll_interval,
         timeout_s=args.timeout,
     )
-    report(records, url=url, endpoint=args.endpoint)
+    report(records, url=url, endpoint=args.endpoint, mode=mode)
     return 0
 
 
