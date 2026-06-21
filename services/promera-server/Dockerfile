@@ -48,6 +48,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Promera weights (pre-downloaded via scripts/fetch_weights.sh).
 COPY services/promera-server/weights/promera/ /opt/promera/weights/
 
+# tinyprot LMDB caches — must be present at import time of tinyprot.msa,
+# otherwise the cofold/design subprocess crashes before it can run.
+# scripts/fetch_weights.sh pre-downloads these from HuggingFace.
+COPY services/promera-server/weights/tinyprot/ccd.lmdb/      /opt/promera/tinyprot_cache/ccd.lmdb/
+COPY services/promera-server/weights/tinyprot/taxonomy.lmdb/ /opt/promera/tinyprot_cache/taxonomy.lmdb/
+
 # LigandMPNN source + weights for design endpoint inverse folding.
 COPY opensource/LigandMPNN/run.py \
      opensource/LigandMPNN/model_utils.py \
@@ -84,6 +90,9 @@ ENV PROMERA_LIGANDMPNN_DIR=/opt/promera/LigandMPNN
 ENV PROMERA_TEMPLATES_DIR=/opt/promera/promera_src/examples/templates
 ENV PROMERA_JOBS_BASE_DIR=/data/promera_jobs
 ENV PROMERA_SESSION_HEADER_NAME=bioagent-session-id
+# tinyprot/init.py reads TINYPROT_CACHE at import time (falls back to
+# ~/.cache/tinyprot which isn't populated on ephemeral FC instances).
+ENV TINYPROT_CACHE=/opt/promera/tinyprot_cache
 RUN mkdir -p /data/promera_jobs
 
 ENV PORT=9000
