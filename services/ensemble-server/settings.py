@@ -3,7 +3,7 @@
 Inherits from bioagent_service.ServiceSettings for jobs_base_dir / NAS
 conventions, then adds aggregator-specific config:
   - Per-method FC function connection (URL + function name + region)
-  - Static API key allowlist (Phase 1 MVP; replaced by Tablestore in Phase 3)
+  - Multi-layer auth: VPC bypass + JWT verification + static API keys
 """
 
 from __future__ import annotations
@@ -17,22 +17,42 @@ from bioagent_service import ServiceSettings
 class FCMethodConfig(BaseModel):
     """Per-method connection to an underlying FC service."""
 
-    function: str           # FC function name, e.g. "alphafold-server"
+    function: str
     region: str = "cn-hangzhou"
-    http_base_url: str      # fcapp.run URL
-    task_endpoint: str      # e.g. "/api/tasks/fold"
+    http_base_url: str
+    task_endpoint: str
     enabled: bool = True
-    timeout_seconds: int = 7200   # per-method polling timeout
+    timeout_seconds: int = 7200
 
 
 class APIKeyConfig(BaseModel):
     """Static API key entry (Phase 1)."""
 
-    key_id: str             # "ek_test_001"
-    secret_hash: str        # sha256 hex digest of the secret
+    key_id: str
+    secret_hash: str
     customer_id: str
     plan: str = "internal"
     monthly_quota_calls: int = 1000
+
+
+class AuthSettings(BaseModel):
+    """Multi-layer auth configuration.
+
+    See engineering/decisions/2026-06-21-ensemble-server-auth.md for the
+    fallthrough chain (VPC bypass → JWT → API Key).
+    """
+
+    # ----- VPC bypass -----
+    bypass_vpc: bool = True
+    vpc_customer_id: str = "internal_vpc"
+
+    # ----- JWT verification (disabled when jwt_jwks_url is empty) -----
+    jwt_jwks_url: str = ""
+    jwt_audience: str = "ensemble-server"
+    jwt_issuer: str = ""               # empty = don't validate iss claim
+    jwt_jwks_cache_ttl_sec: int = 3600
+    jwt_sub_is_customer: bool = True   # if False, look up via jwt_sub_to_customer
+    jwt_sub_to_customer: dict[str, str] = Field(default_factory=dict)
 
 
 class EnsembleSettings(ServiceSettings):
@@ -45,16 +65,15 @@ class EnsembleSettings(ServiceSettings):
 
     service_name: str = "ensemble"
 
-    # FC OpenAPI credentials (the aggregator needs them to invoke other services).
     fc_access_key_id: str = ""
     fc_access_key_secret: str = ""
 
-    # Per-method FC config — populated from env vars or .env, key = method name.
-    # Example env: ENSEMBLE_FC_METHODS__ALPHAFOLD__FUNCTION=alphafold-server
     fc_methods: dict[str, FCMethodConfig] = Field(default_factory=dict)
 
-    # Phase-1 hardcoded API keys.  Replaced by Tablestore in Phase 3.
+    # Auth: VPC bypass + JWT + static API keys.  api_keys kept as a top-level
+    # field for env-var ergonomics (ENSEMBLE_API_KEYS__0__*) and Phase-1
+    # backward compatibility; auth.* groups the new VPC/JWT knobs.
+    auth: AuthSettings = Field(default_factory=AuthSettings)
     api_keys: list[APIKeyConfig] = Field(default_factory=list)
 
-    # Cross-method default ranking metric for folding ensemble.
     folding_default_ranking_metric: str = "mean_plddt"
