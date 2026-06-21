@@ -84,6 +84,8 @@ ENSEMBLE_FC_METHODS__BOLTZ__TASK_ENDPOINT=/api/tasks/predict_structure
 
 ### API key 名单（Phase 1 静态）
 
+详细生成 + 配置 + 客户使用流程见下方 [API Key 配置](#api-key-配置) 一节。最简形态：
+
 ```bash
 ENSEMBLE_API_KEYS__0__KEY_ID=ek_test_001
 ENSEMBLE_API_KEYS__0__SECRET_HASH=<sha256(plaintext) 十六进制>
@@ -92,11 +94,7 @@ ENSEMBLE_API_KEYS__0__PLAN=internal               # optional
 ENSEMBLE_API_KEYS__0__MONTHLY_QUOTA_CALLS=1000    # optional, 未生效（Phase 3）
 ```
 
-多个 key 用 `__0__`、`__1__`、... 编号。生成 SHA256 hash：
-
-```bash
-echo -n "your_plaintext_secret" | sha256sum | awk '{print $1}'
-```
+多个 key 用 `__0__`、`__1__`、... 编号。
 
 ### NAS 路径
 
@@ -107,6 +105,113 @@ ENSEMBLE_JOBS_BASE_DIR=/data/jobs/ensemble    # default: /data/jobs
 ```
 
 FC 部署时挂载 NAS 到 `/data` 即可。
+
+## API Key 配置
+
+每个 API key 三个字段：
+
+| 字段 | 含义 | 公开/敏感 |
+|---|---|---|
+| `KEY_ID` | 客户可见的 key 标识符（写在合同 / 邮件里方便支持查询） | 公开 |
+| `SECRET_HASH` | 验证用的 sha256 hex，**服务端永不存明文** | 公开（hash 而已）|
+| `CUSTOMER_ID` | job 归属 + quota / 计费 key（同 CUSTOMER_ID 的多个 key 共享数据可见性） | 内部 |
+
+### 一键生成 N 个 key
+
+```bash
+python <<'PY' > /tmp/ensemble_keys.txt
+import secrets, hashlib
+
+records = [
+    # (KEY_ID,             CUSTOMER_ID,    PLAN)
+    ("ek_internal_test",   "internal_test", "internal"),
+    ("ek_acme_001",        "cust_acme",     "pro"),
+]
+for i, (key_id, cust, plan) in enumerate(records):
+    secret = secrets.token_urlsafe(32)
+    sha = hashlib.sha256(secret.encode()).hexdigest()
+    print(f"# {key_id} ({cust}, {plan})")
+    print(f"#   PLAINTEXT SECRET (give to customer + store safely): {secret}")
+    print(f"ENSEMBLE_API_KEYS__{i}__KEY_ID={key_id}")
+    print(f"ENSEMBLE_API_KEYS__{i}__SECRET_HASH={sha}")
+    print(f"ENSEMBLE_API_KEYS__{i}__CUSTOMER_ID={cust}")
+    print(f"ENSEMBLE_API_KEYS__{i}__PLAN={plan}")
+    print()
+PY
+
+cat /tmp/ensemble_keys.txt
+# 1. 把 PLAINTEXT SECRET 行单独发给对应客户（safely）
+# 2. 把 ENSEMBLE_API_KEYS__* 行粘到 FC 控制台环境变量界面
+# 3. 用完立即销毁 /tmp/ensemble_keys.txt（含明文）
+rm /tmp/ensemble_keys.txt
+```
+
+### 手动算单个 hash（已有现成 secret 时）
+
+```bash
+SECRET='aB3kfP_xQ7yN-mLqRsT5vW8zA1bC4dE6gH9jKlMnOpQ'
+echo -n "$SECRET" | sha256sum | awk '{print $1}'
+```
+
+⚠ 必须用 `echo -n`（无尾换行），否则算出来的 hash 不对。
+
+### 客户怎么用
+
+每次请求带 `X-API-Key: <明文 secret>`：
+
+```bash
+SECRET='<你给客户的明文>'
+curl -H "X-API-Key: $SECRET" https://fc-ensemble-XXX.cn-hangzhou-vpc.fcapp.run/v1/healthz
+```
+
+服务端拿到 header → sha256 → 在 `api_keys` 列表里查匹配 → 取出 `CUSTOMER_ID` 用于 job 归属和后续 quota 计费。
+
+### 本地验证 auth 工作正常
+
+```bash
+cd services/ensemble-server
+
+SECRET='test_local_001'
+SHA=$(echo -n "$SECRET" | sha256sum | awk '{print $1}')
+
+export ENSEMBLE_JOBS_BASE_DIR=/tmp/ensemble_jobs
+export ENSEMBLE_API_KEYS__0__KEY_ID=ek_local
+export ENSEMBLE_API_KEYS__0__SECRET_HASH=$SHA
+export ENSEMBLE_API_KEYS__0__CUSTOMER_ID=local_dev
+mkdir -p $ENSEMBLE_JOBS_BASE_DIR
+
+uv run python -m server &
+sleep 2
+
+# 提交 endpoint 没 header → 401
+curl -s -o /dev/null -w "no header: %{http_code}\n" -X POST \
+    -H "Content-Type: application/json" -d '{"input":{"sequences":[]}}' \
+    http://localhost:9000/v1/folding/ensemble
+
+# 错 secret → 401
+curl -s -o /dev/null -w "wrong secret: %{http_code}\n" -X POST \
+    -H "X-API-Key: wrong" -H "Content-Type: application/json" -d '{"input":{"sequences":[]}}' \
+    http://localhost:9000/v1/folding/ensemble
+
+# 对 secret + 没注册任何方法 → 422 或 503
+curl -s -X POST -H "X-API-Key: $SECRET" \
+    -H "Content-Type: application/json" \
+    -d '{"input":{"sequences":[{"id":"A","sequence":"MKQH"}]}}' \
+    http://localhost:9000/v1/folding/ensemble
+
+kill %1
+```
+
+期望：第一个 401，第二个 401，第三个 503（没方法注册）—— 证明 auth 工作正常。
+
+### 实战注意事项
+
+- **不要把明文 secret 提交到 git**，只 commit `SECRET_HASH`。明文走 1password / Vault / 邮件密文等渠道发给客户。
+- **每个客户独立 secret**：同一个 secret 分发给两个客户 = 无法独立 quota / 撤销。
+- **撤销 key（Phase 1 静态机制下）**：FC 控制台删掉对应 `ENSEMBLE_API_KEYS__<N>__*` 项 → 触发函数重新部署。后续 Phase 3 上 Tablestore 后秒级撤销。
+- **轮换 key**：先在 env 里追加一组 `__<N+1>__*` 给客户新 secret → 客户切到新的 → 删除旧的 `__<N>__*` 项 → 重新部署。
+- **`PLAN` 和 `MONTHLY_QUOTA_CALLS` 字段当前只读、不强制执行**（Phase 3 才落实计费）—— 但**现在就把语义填对**，将来直接接 Stripe 不用回改。
+- **FC 控制台环境变量界面**：建议把 `SECRET_HASH` 标成 secret 类型字段，避免出现在函数日志里（虽然 hash 本身泄露也不致命）。
 
 ## 本地开发
 
