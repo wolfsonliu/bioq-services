@@ -106,9 +106,72 @@ ENSEMBLE_JOBS_BASE_DIR=/data/jobs/ensemble    # default: /data/jobs
 
 FC 部署时挂载 NAS 到 `/data` 即可。
 
-## API Key 配置
+## 认证配置（VPC bypass + JWT + API Key）
 
-每个 API key 三个字段：
+ensemble-server 应用层实现三层 fallthrough 认证链：
+
+```
+HTTP request → require_auth dependency
+  ↓
+  1. VPC bypass？检查 Host header → 匹配 `*-vpc.fcapp.run` 或 localhost → 放行
+  ↓ 未匹配
+  2. JWT？`Authorization: Bearer <token>` → 验签 → 取 `sub` 作 customer_id
+  ↓ 未提供 / 验签失败
+  3. API Key？`X-API-Key` header → sha256 → 静态 allowlist 查表
+  ↓ 都未通过
+  401 unauthorized
+```
+
+任一通过即可。三种 auth 可同时配置（默认全部启用），客户端选最方便的用。
+
+设计原因 + 三层取舍详见
+[engineering/decisions/2026-06-21-ensemble-server-auth.md](../../engineering/decisions/2026-06-21-ensemble-server-auth.md)。
+
+### 三种 auth 各自的使用场景
+
+| 来源 | 怎么调 | 后端识别为 |
+|---|---|---|
+| **VPC 内部脚本** | 直接打 VPC URL，无任何 auth header | `customer_id=internal_vpc`, `method=vpc_bypass` |
+| **企业客户**（先拿 JWT） | `curl ... -H "Authorization: Bearer <jwt>"` | `customer_id=<jwt.sub>`, `method=jwt` |
+| **SaaS 客户**（静态 API Key） | `curl ... -H "X-API-Key: <secret>"` | `customer_id=<APIKeyConfig.customer_id>`, `method=api_key` |
+
+### 配置环境变量
+
+#### 1. VPC bypass
+
+```bash
+# 默认开。希望关闭则设 false（这样从 VPC URL 来的请求也必须带 JWT 或 API Key）
+ENSEMBLE_AUTH__BYPASS_VPC=true
+ENSEMBLE_AUTH__VPC_CUSTOMER_ID=internal_vpc    # 内部请求归属的 customer_id
+```
+
+VPC 检测基于 `Host` header：匹配 `*-vpc.fcapp.run` 或 `localhost` / `127.0.0.1` 视为 VPC 内访问。
+外部攻击者无法路由到 VPC URL（物理隔离），所以 Host 检查可靠。
+
+#### 2. JWT（可选；不配则禁用 JWT 路径）
+
+复用 `services/jwt/` 的 JWKS：
+
+```bash
+ENSEMBLE_AUTH__JWT_JWKS_URL=https://fc-jwt-XXX.cn-hangzhou-vpc.fcapp.run/.well-known/jwks.json
+ENSEMBLE_AUTH__JWT_AUDIENCE=ensemble-server
+ENSEMBLE_AUTH__JWT_ISSUER=                          # 留空 = 不校验 iss
+ENSEMBLE_AUTH__JWT_JWKS_CACHE_TTL_SEC=3600
+ENSEMBLE_AUTH__JWT_SUB_IS_CUSTOMER=true             # true: 直接把 sub 当 customer_id
+```
+
+`sub → customer_id` 映射（`JWT_SUB_IS_CUSTOMER=false` 时启用）：
+
+```bash
+# 把 sub="ext-acme-001" 映射成内部 customer_id="cust_acme"
+ENSEMBLE_AUTH__JWT_SUB_TO_CUSTOMER='{"ext-acme-001": "cust_acme"}'
+```
+
+JWKS 默认 cache 1 小时；遇到 kid miss（key rotation 场景）自动 force-refresh 一次再判定失败。
+
+#### 3. 静态 API Key（Phase 1）
+
+每个 key 三个必填字段：
 
 | 字段 | 含义 | 公开/敏感 |
 |---|---|---|
@@ -116,7 +179,7 @@ FC 部署时挂载 NAS 到 `/data` 即可。
 | `SECRET_HASH` | 验证用的 sha256 hex，**服务端永不存明文** | 公开（hash 而已）|
 | `CUSTOMER_ID` | job 归属 + quota / 计费 key（同 CUSTOMER_ID 的多个 key 共享数据可见性） | 内部 |
 
-### 一键生成 N 个 key
+##### 一键生成 N 个 key
 
 ```bash
 python <<'PY' > /tmp/ensemble_keys.txt
@@ -146,7 +209,7 @@ cat /tmp/ensemble_keys.txt
 rm /tmp/ensemble_keys.txt
 ```
 
-### 手动算单个 hash（已有现成 secret 时）
+##### 手动算单个 hash（已有现成 secret 时）
 
 ```bash
 SECRET='aB3kfP_xQ7yN-mLqRsT5vW8zA1bC4dE6gH9jKlMnOpQ'
@@ -155,16 +218,30 @@ echo -n "$SECRET" | sha256sum | awk '{print $1}'
 
 ⚠ 必须用 `echo -n`（无尾换行），否则算出来的 hash 不对。
 
-### 客户怎么用
-
-每次请求带 `X-API-Key: <明文 secret>`：
+### 客户端使用示例
 
 ```bash
-SECRET='<你给客户的明文>'
-curl -H "X-API-Key: $SECRET" https://fc-ensemble-XXX.cn-hangzhou-vpc.fcapp.run/v1/healthz
+# 1. 内部 VPC 脚本（什么都不用带）
+curl https://fc-ensemble-XXX.cn-hangzhou-vpc.fcapp.run/v1/folding/ensemble \
+    -X POST -H "Content-Type: application/json" -d '{...}'
+
+# 2. 企业客户先去 JWT service 拿 token，再带 Bearer
+TOKEN=$(curl -X POST https://fc-jwt-XXX/api/token \
+    -H "X-API-Key: $JWT_SVC_ADMIN_KEY" \
+    -d '{"sub":"customer-acme"}' | jq -r .token)
+curl https://fc-ensemble-XXX.cn-hangzhou.fcapp.run/v1/folding/ensemble \
+    -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{...}'
+
+# 3. SaaS 客户用 API Key
+curl https://fc-ensemble-XXX.cn-hangzhou.fcapp.run/v1/folding/ensemble \
+    -X POST -H "X-API-Key: $API_KEY" -H "Content-Type: application/json" -d '{...}'
 ```
 
-服务端拿到 header → sha256 → 在 `api_keys` 列表里查匹配 → 取出 `CUSTOMER_ID` 用于 job 归属和后续 quota 计费。
+### 优先级 / fallthrough 细节
+
+- VPC bypass **优先于** JWT/API Key：从 VPC URL 来的请求即使带了 Bearer 或 X-API-Key 也走 VPC bypass 路径，customer_id 是 `internal_vpc`。生产中如果想让 VPC URL 也走 JWT/API Key（比如要按客户身份记账），设 `ENSEMBLE_AUTH__BYPASS_VPC=false`。
+- **JWT 验签失败会 fallthrough 到 API Key**：客户同时带了 `Authorization: Bearer ...` 和 `X-API-Key: ...` 时，先试 JWT；JWT 验签失败（过期 / 签名错 / 网络拉 JWKS 失败）则继续试 API Key。这是为了兼容老客户从静态 API Key 平滑迁移到 JWT。如果想严格要求 JWT 必须通过、不允许 fallthrough，把 API Key allowlist 设空即可。
+- **3 种都没通过 → 401**，响应 body：`{"detail": "missing or invalid credentials (provide Authorization: Bearer or X-API-Key)"}`。
 
 ### 本地验证 auth 工作正常
 
@@ -175,6 +252,7 @@ SECRET='test_local_001'
 SHA=$(echo -n "$SECRET" | sha256sum | awk '{print $1}')
 
 export ENSEMBLE_JOBS_BASE_DIR=/tmp/ensemble_jobs
+export ENSEMBLE_AUTH__BYPASS_VPC=false       # 关闭 VPC bypass 强制走 API Key
 export ENSEMBLE_API_KEYS__0__KEY_ID=ek_local
 export ENSEMBLE_API_KEYS__0__SECRET_HASH=$SHA
 export ENSEMBLE_API_KEYS__0__CUSTOMER_ID=local_dev
@@ -184,12 +262,12 @@ uv run python -m server &
 sleep 2
 
 # 提交 endpoint 没 header → 401
-curl -s -o /dev/null -w "no header: %{http_code}\n" -X POST \
+curl -s -o /dev/null -w "no auth: %{http_code}\n" -X POST \
     -H "Content-Type: application/json" -d '{"input":{"sequences":[]}}' \
     http://localhost:9000/v1/folding/ensemble
 
 # 错 secret → 401
-curl -s -o /dev/null -w "wrong secret: %{http_code}\n" -X POST \
+curl -s -o /dev/null -w "wrong api key: %{http_code}\n" -X POST \
     -H "X-API-Key: wrong" -H "Content-Type: application/json" -d '{"input":{"sequences":[]}}' \
     http://localhost:9000/v1/folding/ensemble
 
@@ -199,19 +277,41 @@ curl -s -X POST -H "X-API-Key: $SECRET" \
     -d '{"input":{"sequences":[{"id":"A","sequence":"MKQH"}]}}' \
     http://localhost:9000/v1/folding/ensemble
 
+# 验证 VPC bypass：开启 + 用 localhost host → 没 key 也通
+export ENSEMBLE_AUTH__BYPASS_VPC=true
+# 重启 server（kill + 重跑）后：
+# curl -H "Host: localhost" ... → 不带 X-API-Key 也走通
+
 kill %1
 ```
 
-期望：第一个 401，第二个 401，第三个 503（没方法注册）—— 证明 auth 工作正常。
+### FC 平台层 JWT 验证（可选启用，与应用层不冲突）
+
+FC HTTP 触发器本身支持 JWT 验签作为请求前置处理。如果你希望让 FC 网关在请求到达函数**之前**就过滤无效 token，可在 FC 控制台启用：
+
+- 函数详情 → 触发器 → HTTP 触发器 → JWT 鉴权配置
+- JWKS URL：填 `services/jwt/` 的 `.well-known/jwks.json` 地址
+- 期望 audience：填 `ensemble-server`
+
+启用后，平台层和应用层会**各自验一遍**（多花 3-5 ms / 请求），但能挡住打到函数的恶意流量。
+应用层验证不删除，因为：
+
+1. K8s 迁移时 FC 平台层这一层消失，应用层必须能独立承担
+2. 本地开发没有 FC 网关
+3. 应用层要从 sub 取出 customer_id 做 quota / 计费
+4. VPC bypass 是业务逻辑，平台层不知道我们的策略
+
+详见 [设计文档「为什么应用层仍然要写 JWT 验证逻辑」一节](../../engineering/decisions/2026-06-21-ensemble-server-auth.md)。
 
 ### 实战注意事项
 
-- **不要把明文 secret 提交到 git**，只 commit `SECRET_HASH`。明文走 1password / Vault / 邮件密文等渠道发给客户。
-- **每个客户独立 secret**：同一个 secret 分发给两个客户 = 无法独立 quota / 撤销。
-- **撤销 key（Phase 1 静态机制下）**：FC 控制台删掉对应 `ENSEMBLE_API_KEYS__<N>__*` 项 → 触发函数重新部署。后续 Phase 3 上 Tablestore 后秒级撤销。
-- **轮换 key**：先在 env 里追加一组 `__<N+1>__*` 给客户新 secret → 客户切到新的 → 删除旧的 `__<N>__*` 项 → 重新部署。
+- **不要把明文 secret / JWT 提交到 git**。明文 secret 走 1password / Vault / 邮件密文等渠道发给客户；JWT 走客户端代码 env var。
+- **每个客户独立凭证**：同一份 secret / JWT key 给两个客户 = 无法独立 quota / 撤销。
+- **撤销 API Key（Phase 1 静态机制下）**：FC 控制台删掉对应 `ENSEMBLE_API_KEYS__<N>__*` 项 → 触发函数重新部署。后续 Phase 3 上 Tablestore 后秒级撤销。
+- **撤销 JWT**：服务端短期内无 token 黑名单机制，只能等 token 自然过期（建议签发时 `exp` ≤ 24h）。需要紧急撤销时旋转 JWKS kid。
+- **轮换 API Key**：先在 env 里追加一组 `__<N+1>__*` 给客户新 secret → 客户切到新的 → 删除旧的 `__<N>__*` → 重新部署。
+- **JWT 与 API Key 同时配置时**：客户两个 header 都带，JWT 优先生效；JWT 失败时降级到 API Key（fallthrough）。
 - **`PLAN` 和 `MONTHLY_QUOTA_CALLS` 字段当前只读、不强制执行**（Phase 3 才落实计费）—— 但**现在就把语义填对**，将来直接接 Stripe 不用回改。
-- **FC 控制台环境变量界面**：建议把 `SECRET_HASH` 标成 secret 类型字段，避免出现在函数日志里（虽然 hash 本身泄露也不致命）。
 
 ## 本地开发
 
