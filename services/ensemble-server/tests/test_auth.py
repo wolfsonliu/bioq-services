@@ -78,3 +78,42 @@ def test_require_api_key_raises_401_on_empty():
     with pytest.raises(HTTPException) as exc_info:
         require_api_key(request, x_api_key="")
     assert exc_info.value.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# VPC detection
+# ---------------------------------------------------------------------------
+
+from server.auth.vpc import is_vpc_host
+
+
+def test_vpc_host_matches_vpc_fcapp_run():
+    assert is_vpc_host("fc-ensemble-abc123.cn-hangzhou-vpc.fcapp.run") is True
+
+
+def test_vpc_host_rejects_public_fcapp_run():
+    assert is_vpc_host("fc-ensemble-abc123.cn-hangzhou.fcapp.run") is False
+
+
+def test_vpc_host_matches_localhost():
+    assert is_vpc_host("localhost") is True
+    assert is_vpc_host("localhost:9000") is True
+
+
+def test_vpc_host_matches_127_loopback():
+    assert is_vpc_host("127.0.0.1") is True
+    assert is_vpc_host("127.0.0.1:8080") is True
+
+
+def test_vpc_host_case_insensitive():
+    assert is_vpc_host("FC-Ensemble-ABC.CN-Hangzhou-VPC.fcapp.run") is True
+
+
+def test_vpc_host_handles_empty_and_none():
+    assert is_vpc_host("") is False
+    assert is_vpc_host(None) is False
+
+
+def test_vpc_host_rejects_arbitrary_external():
+    assert is_vpc_host("evil.example.com") is False
+    assert is_vpc_host("api.bioagent.com") is False
