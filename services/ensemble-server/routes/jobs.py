@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 
-from ..auth.deps import require_api_key
+from ..auth.deps import AuthIdentity, require_auth
 
 router = APIRouter()
 
@@ -14,12 +14,12 @@ router = APIRouter()
 async def get_job(
     request: Request,
     task_id: str,
-    api_key=Depends(require_api_key),
+    auth: AuthIdentity = Depends(require_auth),
 ) -> dict:
     """Get current state of an ensemble job, refreshing sub-task status lazily."""
     orchestrator = request.app.state.orchestrator
     job = await orchestrator.refresh(task_id)
-    if job is None or job.customer_id != api_key.customer_id:
+    if job is None or job.customer_id != auth.customer_id:
         raise HTTPException(404, "job not found")
     return job.model_dump(mode="json")
 
@@ -30,7 +30,7 @@ async def download_structure(
     task_id: str,
     method: str,
     filename: str,
-    api_key=Depends(require_api_key),
+    auth: AuthIdentity = Depends(require_auth),
 ) -> FileResponse:
     """Stream one structure file from a completed sub-task.
 
@@ -41,7 +41,7 @@ async def download_structure(
 
     orchestrator = request.app.state.orchestrator
     job = await orchestrator.refresh(task_id)
-    if job is None or job.customer_id != api_key.customer_id:
+    if job is None or job.customer_id != auth.customer_id:
         raise HTTPException(404, "job not found")
 
     settings = request.app.state.settings

@@ -106,6 +106,7 @@ def app(tmp_path) -> FastAPI:
             customer_id="customer_a",
         )],
     )
+    settings.auth.bypass_vpc = False  # force tests to authenticate explicitly
     settings.jobs_base_dir.mkdir(parents=True, exist_ok=True)
 
     # Orchestrator
@@ -294,3 +295,165 @@ def test_download_structure_rejects_path_traversal(client: TestClient, app):
     )
     # FastAPI may normalize the path before route matching; either 400 or 404 is acceptable
     assert bad.status_code in (400, 404)
+
+
+# ---------------------------------------------------------------------------
+# Multi-auth tests: VPC bypass + JWT
+# ---------------------------------------------------------------------------
+
+def test_vpc_bypass_allows_request_without_api_key(tmp_path):
+    """Re-create the app with bypass_vpc=True and verify no creds needed."""
+    from server.settings import EnsembleSettings, AuthSettings
+    from server.adapters.registry import MethodRegistry
+    from server.orchestrator.store import EnsembleJobStore
+    from server.orchestrator.orchestrator import Orchestrator
+    from server.folding.aggregator import aggregate_folding
+    from server.routes import folding as folding_routes
+    from server.routes import jobs as jobs_routes
+    from server.routes import manifest as manifest_routes
+    from server.task_kind import TaskKind
+    from fastapi import FastAPI
+
+    app = FastAPI(title="t", version="t")
+    registry = MethodRegistry()
+    fc_mock = _make_fc_mock("fake-server")
+    registry.register(_FakeFoldingAdapter("fake_a", fc_mock))
+
+    settings = EnsembleSettings(
+        jobs_base_dir=tmp_path / "jobs",
+        api_keys=[],   # no API keys configured at all
+    )
+    settings.jobs_base_dir.mkdir(parents=True, exist_ok=True)
+    # Default auth.bypass_vpc=True; this is what enables the bypass.
+    assert settings.auth.bypass_vpc is True
+
+    store = EnsembleJobStore(settings.jobs_base_dir)
+    orchestrator = Orchestrator(
+        registry=registry, store=store,
+        aggregators={TaskKind.FOLDING: aggregate_folding},
+    )
+    app.state.settings = settings
+    app.state.registry = registry
+    app.state.store = store
+    app.state.orchestrator = orchestrator
+
+    app.include_router(manifest_routes.router)
+    app.include_router(folding_routes.router)
+    app.include_router(jobs_routes.router)
+
+    client = TestClient(app)
+    # Send a request with Host header that LOOKS like VPC URL.
+    r = client.post(
+        "/v1/folding/ensemble",
+        headers={"Host": "fc-ensemble-x.cn-hangzhou-vpc.fcapp.run"},
+        json={
+            "input": {"sequences": [{"id": "A", "sequence": "MKQH"}], "msa_mode": "empty"},
+            "methods": ["fake_a"],
+        },
+    )
+    assert r.status_code == 202
+    body = r.json()
+    assert body["task_id"].startswith("ens_fold_")
+
+
+def test_jwt_auth_path_works_end_to_end(tmp_path):
+    """End-to-end JWT path: app configured with JWKS URL, signed token accepted."""
+    import hashlib
+    from datetime import datetime, timedelta, timezone
+    import jwt as pyjwt
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from server.settings import EnsembleSettings
+    from server.adapters.registry import MethodRegistry
+    from server.orchestrator.store import EnsembleJobStore
+    from server.orchestrator.orchestrator import Orchestrator
+    from server.folding.aggregator import aggregate_folding
+    from server.routes import folding as folding_routes
+    from server.routes import jobs as jobs_routes
+    from server.routes import manifest as manifest_routes
+    from server.task_kind import TaskKind
+    from server.auth import jwt_verifier as jv
+    from fastapi import FastAPI
+
+    # Build keypair + JWKS
+    priv = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pub_numbers = priv.public_key().public_numbers()
+
+    def _b64url_uint(n: int) -> str:
+        import base64
+        b = n.to_bytes((n.bit_length() + 7) // 8, "big")
+        return base64.urlsafe_b64encode(b).rstrip(b"=").decode("ascii")
+
+    jwks = {
+        "keys": [{
+            "kid": "e2e", "kty": "RSA", "alg": "RS256", "use": "sig",
+            "n": _b64url_uint(pub_numbers.n),
+            "e": _b64url_uint(pub_numbers.e),
+        }]
+    }
+    jwks_url = "https://fake.example/e2e-jwks.json"
+
+    # App config: VPC off (force JWT path), JWKS pointing at our fake URL
+    app = FastAPI(title="t", version="t")
+    registry = MethodRegistry()
+    fc_mock = _make_fc_mock("fake-server")
+    registry.register(_FakeFoldingAdapter("fake_a", fc_mock))
+
+    settings = EnsembleSettings(jobs_base_dir=tmp_path / "jobs", api_keys=[])
+    settings.jobs_base_dir.mkdir(parents=True, exist_ok=True)
+    settings.auth.bypass_vpc = False
+    settings.auth.jwt_jwks_url = jwks_url
+    settings.auth.jwt_audience = "ensemble-server"
+
+    store = EnsembleJobStore(settings.jobs_base_dir)
+    orchestrator = Orchestrator(
+        registry=registry, store=store,
+        aggregators={TaskKind.FOLDING: aggregate_folding},
+    )
+    app.state.settings = settings
+    app.state.registry = registry
+    app.state.store = store
+    app.state.orchestrator = orchestrator
+    app.include_router(manifest_routes.router)
+    app.include_router(folding_routes.router)
+    app.include_router(jobs_routes.router)
+
+    # Sign token
+    pem = priv.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    now = datetime.now(timezone.utc)
+    token = pyjwt.encode(
+        {"sub": "customer-acme", "iat": now, "exp": now + timedelta(hours=1),
+         "aud": "ensemble-server"},
+        pem, algorithm="RS256", headers={"kid": "e2e"},
+    )
+
+    # Mock JWKS fetch
+    class _Resp:
+        def raise_for_status(self): pass
+        def json(self): return jwks
+
+    from unittest.mock import patch
+    jv._clear_cache(jwks_url)
+    with patch("server.auth.jwt_verifier.httpx.get", lambda url, timeout: _Resp()):
+        client = TestClient(app)
+        r = client.post(
+            "/v1/folding/ensemble",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "input": {"sequences": [{"id": "A", "sequence": "MKQH"}], "msa_mode": "empty"},
+                "methods": ["fake_a"],
+            },
+        )
+    jv._clear_cache(jwks_url)
+
+    assert r.status_code == 202, r.text
+    task_id = r.json()["task_id"]
+
+    # Verify the job is attributed to customer-acme (the jwt sub)
+    job = app.state.orchestrator.store.get(task_id)
+    assert job is not None
+    assert job.customer_id == "customer-acme"

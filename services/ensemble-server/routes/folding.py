@@ -10,7 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from ..auth.deps import require_api_key
+from ..auth.deps import AuthIdentity, require_auth
 from ..folding.schemas import FoldingInput
 from ..task_kind import TaskKind
 
@@ -27,7 +27,7 @@ class FoldingEnsembleRequest(BaseModel):
 async def submit_folding_ensemble(
     request: Request,
     body: FoldingEnsembleRequest,
-    api_key=Depends(require_api_key),
+    auth: AuthIdentity = Depends(require_auth),
 ) -> dict:
     """Submit a folding ensemble job.  Returns 202 with the new task_id."""
     orchestrator = request.app.state.orchestrator
@@ -48,7 +48,7 @@ async def submit_folding_ensemble(
         input=body.input,
         methods=methods,
         method_options=body.method_options,
-        customer_id=api_key.customer_id,
+        customer_id=auth.customer_id,
     )
     return {
         "task_id": job.task_id,
