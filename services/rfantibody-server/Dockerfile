@@ -4,8 +4,13 @@
 # RFantibody source must be at opensource/RFantibody/ (weights baked into image).
 # Base: cudnn-runtime (not -devel). RFantibody installs entirely from prebuilt
 # wheels via `uv pip install`, no nvcc / CUDA headers needed at build or runtime.
-# Save ~5 GB vs the -devel variant on this CUDA 11.8 line.
-FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
+# Save ~5 GB vs the -devel variant.
+#
+# CUDA 12.1 (was 11.8): upstream RFantibody pyproject.toml pins torch/dgl to
+# cu118 wheels, whose cubins don't cover sm_89 (RTX 4090). We override with
+# services/rfantibody-server/rfantibody-pyproject.toml (cu121 wheels). 5090
+# (sm_120 / Blackwell) still unsupported — needs CUDA ≥ 12.8 + torch ≥ 2.6.
+FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -44,7 +49,10 @@ RUN uv venv .venv --python python3.10
 # ---------------------------------------------------------------------------
 COPY opensource/RFantibody/weights/ ./weights/
 
-COPY opensource/RFantibody/pyproject.toml opensource/RFantibody/README.md ./
+# pyproject.toml is the cu121-patched override from services/rfantibody-server/
+# (see rfantibody-pyproject.toml header for rationale).
+COPY services/rfantibody-server/rfantibody-pyproject.toml ./pyproject.toml
+COPY opensource/RFantibody/README.md ./
 COPY opensource/RFantibody/src/ ./src/
 COPY opensource/RFantibody/scripts/ ./scripts/
 COPY opensource/RFantibody/include/ ./include/

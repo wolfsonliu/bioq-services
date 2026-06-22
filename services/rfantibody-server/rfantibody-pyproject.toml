@@ -1,0 +1,100 @@
+# Override of opensource/RFantibody/pyproject.toml for the rfantibody-server image.
+#
+# Why an override:
+#   Upstream pins torch + dgl to CUDA 11.8 wheels. The cu118 wheel of torch 2.3
+#   ships cubins for arch list "5.0 6.0 7.0 7.5 8.0 8.6 9.0+PTX" — does not
+#   include sm_89 (RTX 4090) or sm_120 (RTX 5090). On those GPUs PTX JIT often
+#   fails with "no kernel image is available for execution on the device".
+#
+# This file is COPYed into the image as /opt/rfantibody/pyproject.toml in place
+# of the upstream version. Two changes vs upstream:
+#   1. torch index    cu118 → cu121  (cu121 cubins include sm_89, ensures 4090)
+#   2. dgl wheel URL  cu118 → cu121  (matching torch wheel CUDA version)
+#   3. cuda-python    11.8  → 12.1   (NVIDIA driver API binding tied to toolkit)
+#
+# Note: cu121 still doesn't support sm_120 (RTX 5090 / Blackwell). Blackwell
+# needs CUDA ≥ 12.8 and torch ≥ 2.6, which is a much larger upgrade (dgl 2.4 has
+# no cu128 wheel for torch 2.7). Deferred — track separately.
+
+[project]
+name = "rfantibody"
+version = "1.0.0"
+description = ""
+readme = "README.md"
+requires-python = "==3.10.*"
+authors = [
+    { name = "Nate Bennett", email = "nrbennett2@gmail.com" },
+    { name = "Joe Watchwell", email = "joe.watchwell@gmail.com" }
+]
+dependencies = [
+    "torch==2.3.*",
+    "torchaudio",
+    "torchvision",
+    "torch-utils",
+    "numpy>=1.0,<2.0",
+    "cuda-python==12.1",
+    "hydra-core",
+    "icecream",
+    "opt-einsum",
+    "biotite>=0.38.0",
+    "dgl",
+    "e3nn",
+    "pyrsistent",
+    "click>=8.0.0",
+    "pandas",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+    "isort>=5.13.2",
+]
+
+[project.scripts]
+# Quiver utilities
+qvls = "rfantibody.cli.quiver:qvls"
+qvextract = "rfantibody.cli.quiver:qvextract"
+qvextractspecific = "rfantibody.cli.quiver:qvextractspecific"
+qvscorefile = "rfantibody.cli.quiver:qvscorefile"
+qvsplit = "rfantibody.cli.quiver:qvsplit"
+qvslice = "rfantibody.cli.quiver:qvslice"
+qvrename = "rfantibody.cli.quiver:qvrename"
+qvfrompdbs = "rfantibody.cli.quiver:qvfrompdbs"
+# Inference commands
+rfdiffusion = "rfantibody.cli.inference:rfdiffusion"
+proteinmpnn = "rfantibody.cli.inference:proteinmpnn"
+rf2 = "rfantibody.cli.inference:rf2"
+
+[tool.uv.sources]
+torch = { index = "pytorch" }
+torchaudio = { index = "pytorch" }
+torchvision = { index = "pytorch" }
+dgl = { url = "https://data.dgl.ai/wheels/torch-2.3/cu121/dgl-2.4.0%2Bcu121-cp310-cp310-manylinux1_x86_64.whl" }
+
+[[tool.uv.index]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cu121"
+explicit = true
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "src/rfantibody",
+    "include/SE3Transformer/se3_transformer",
+    "test",
+]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+split_on_trailing_comma = true
+sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
+known_first_party = ["rfantibody"]

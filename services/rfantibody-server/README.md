@@ -192,7 +192,8 @@ uv run uvicorn server.app:app --host 0.0.0.0 --port 9000 --reload
 ## Docker 构建与运行
 
 ```bash
-# 项目根目录构建（CUDA 11.8 base，烘焙权重）
+# 项目根目录构建（CUDA 12.1 base + cu121 torch/dgl，烘焙权重）
+# 支持 sm_89 (RTX 4090) 及以下；sm_120 (RTX 5090 / Blackwell) 暂不支持
 docker build --platform linux/amd64 -t rfantibody-server -f services/rfantibody-server/Dockerfile .
 
 # 或通过 Makefile
