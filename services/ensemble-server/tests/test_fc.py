@@ -150,60 +150,121 @@ def test_submit_unknown_method_returns_422(client: httpx.Client) -> None:
 
 
 # =====================================================================
-# End-to-end fan-out + aggregation.  Submits a real folding ensemble
-# job and polls to terminal state.  Uses only `esmfold2` (no MSA, fast)
-# to keep runtime predictable.
+# End-to-end fan-out + aggregation.  Submits real folding ensemble jobs
+# and polls to terminal state.
+#
+# Default coverage: esmfold2 + boltz parametrized (each ~2-4 min), plus
+# one multi-method aggregation test that combines them.  AlphaFold is
+# excluded by default because its full MSA + 5-model pipeline takes
+# ~30 min, which is impractical for routine CI.  Set
+# ENSEMBLE_E2E_INCLUDE_ALPHAFOLD=1 to include it.
+#
+# Each test tolerates a `failed` terminal state by default so a
+# downstream config issue doesn't crash the suite; set
+# ENSEMBLE_E2E_REQUIRE_SUCCESS=1 to enforce real success.
 # =====================================================================
 
-def test_folding_ensemble_submit_and_terminal(client: httpx.Client) -> None:
-    """Submit a real folding ensemble job and poll to a terminal state.
+FAST_METHODS = ["esmfold2", "boltz"]
 
-    By default tolerates a `failed` terminal state (since downstream FC
-    services or platform creds may be misconfigured).  Set
-    ENSEMBLE_E2E_REQUIRE_SUCCESS=1 to require at least one method to succeed.
-    """
-    available = {
-        m["name"]
-        for m in client.get("/v1/methods", params={"task_kind": "folding"}).json()["methods"]
-    }
-    method = "esmfold2" if "esmfold2" in available else next(iter(available))
-    assert method, "no folding methods registered — cannot run e2e test"
 
+def _submit_ensemble(client: httpx.Client, methods: list[str]) -> str:
     payload = {
         "input": {
             "sequences": [{"id": "A", "sequence": SHORT_PROTEIN}],
             "msa_mode": "empty",
         },
-        "methods": [method],
+        "methods": methods,
     }
     r = client.post("/v1/folding/ensemble", json=payload)
     assert r.status_code == 202, f"submit failed: {r.status_code} {r.text!r}"
     body = r.json()
-    task_id = body["task_id"]
     assert body["status"] == "accepted"
-    assert body["requested_methods"] == [method]
+    assert sorted(body["requested_methods"]) == sorted(methods)
+    return body["task_id"]
 
-    final = _poll_ensemble_job(client, task_id, timeout_s=1800, interval_s=20)
 
-    # Basic schema assertions on the persisted ensemble job.
+def _assert_terminal_shape(final: dict, task_id: str, methods: list[str]) -> None:
+    """Assert structural invariants of a terminal EnsembleJob."""
     assert final["task_id"] == task_id
     assert final["task_kind"] == "folding"
-    assert final["customer_id"]                # set by auth layer; VPC bypass → "internal_vpc"
+    assert final["customer_id"]                # VPC bypass → "internal_vpc"
     assert final["completed_at"]               # set when all sub-tasks terminate
-    assert method in final["sub_tasks"]
+    for m in methods:
+        assert m in final["sub_tasks"], final["sub_tasks"]
+        assert final["sub_tasks"][m]["status"] in TERMINAL_SUB_STATUSES
 
-    sub = final["sub_tasks"][method]
-    assert sub["status"] in TERMINAL_SUB_STATUSES, sub
 
-    if os.environ.get("ENSEMBLE_E2E_REQUIRE_SUCCESS"):
-        assert sub["status"] in ("succeeded", "cached"), (
-            f"sub-task did not succeed: {sub.get('error_summary')!r}"
-        )
+def _assert_success_if_required(final: dict, methods: list[str]) -> None:
+    """If ENSEMBLE_E2E_REQUIRE_SUCCESS is set, enforce that every method succeeded
+    and the aggregator populated `aggregated_output`."""
+    require = bool(os.environ.get("ENSEMBLE_E2E_REQUIRE_SUCCESS"))
+    for m in methods:
+        sub = final["sub_tasks"][m]
+        if require:
+            assert sub["status"] in ("succeeded", "cached"), (
+                f"sub-task {m!r} did not succeed: {sub.get('error_summary')!r}"
+            )
+        elif sub["status"] == "failed":
+            print(
+                f"\n[ensemble e2e] sub-task {m!r} failed: "
+                f"{sub.get('error_summary')!r}"
+            )
+    if require:
         assert final["aggregated_output"] is not None
-    elif sub["status"] == "failed":
-        # Surface the failure context so the test output is useful for
-        # debugging downstream configuration issues without erroring.
-        print(
-            f"\n[ensemble e2e] sub-task {method!r} failed: "
-            f"{sub.get('error_summary')!r}"
+
+
+@pytest.mark.parametrize("method", FAST_METHODS)
+def test_folding_ensemble_single_method(
+    client: httpx.Client, method: str,
+) -> None:
+    """Submit a real folding job using one method, poll to a terminal state."""
+    available = {
+        m["name"]
+        for m in client.get("/v1/methods", params={"task_kind": "folding"}).json()["methods"]
+    }
+    if method not in available:
+        pytest.skip(f"method {method!r} not registered in deployed service")
+
+    task_id = _submit_ensemble(client, [method])
+    final = _poll_ensemble_job(client, task_id, timeout_s=1800, interval_s=20)
+    _assert_terminal_shape(final, task_id, [method])
+    _assert_success_if_required(final, [method])
+
+
+def test_folding_ensemble_multi_method_aggregation(client: httpx.Client) -> None:
+    """Submit an ensemble across multiple fast methods to exercise aggregation.
+
+    Cross-method ranking is the actual MVP use-case for ensemble-server, so
+    this verifies that:
+      1. fan-out to N methods all returns 202 from a single submit
+      2. polling sees them transition independently
+      3. the aggregator populates `aggregated_output` once all succeed
+    """
+    available = {
+        m["name"]
+        for m in client.get("/v1/methods", params={"task_kind": "folding"}).json()["methods"]
+    }
+    methods = [m for m in FAST_METHODS if m in available]
+    if os.environ.get("ENSEMBLE_E2E_INCLUDE_ALPHAFOLD") and "alphafold" in available:
+        methods.append("alphafold")
+    if len(methods) < 2:
+        pytest.skip(f"need ≥2 registered fast methods; have {methods!r}")
+
+    task_id = _submit_ensemble(client, methods)
+    # AlphaFold can take 30+ minutes, so widen the timeout when included.
+    timeout = 4200 if "alphafold" in methods else 1800
+    final = _poll_ensemble_job(client, task_id, timeout_s=timeout, interval_s=30)
+    _assert_terminal_shape(final, task_id, methods)
+    _assert_success_if_required(final, methods)
+
+    # When all sub-tasks succeed, aggregator must populate ensemble_ranking
+    # spanning all methods.  This is only enforced when REQUIRE_SUCCESS is on.
+    if os.environ.get("ENSEMBLE_E2E_REQUIRE_SUCCESS"):
+        agg = final["aggregated_output"]
+        ranking = agg.get("ensemble_ranking", [])
+        assert ranking, f"empty ensemble_ranking in aggregated_output: {agg!r}"
+        ranked_methods = {entry["method"] for entry in ranking}
+        assert ranked_methods == set(methods), (
+            f"ensemble_ranking missing methods: ranked={ranked_methods!r} "
+            f"expected={set(methods)!r}"
         )
