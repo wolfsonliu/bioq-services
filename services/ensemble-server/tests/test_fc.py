@@ -226,7 +226,7 @@ def test_submit_unknown_method_returns_422(client: httpx.Client) -> None:
 # ENSEMBLE_E2E_REQUIRE_SUCCESS=1 to enforce real success.
 # =====================================================================
 
-FAST_METHODS = ["esmfold2", "boltz"]
+FAST_METHODS = ["esmfold2", "boltz", "promera"]
 
 
 def _submit_ensemble(client: httpx.Client, methods: list[str]) -> str:

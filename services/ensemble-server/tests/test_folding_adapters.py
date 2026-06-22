@@ -16,6 +16,7 @@ import pytest
 from server.adapters.folding.alphafold import AlphaFoldFoldingAdapter, AlphaFoldOptions
 from server.adapters.folding.boltz import BoltzFoldingAdapter, BoltzOptions
 from server.adapters.folding.esmfold2 import ESMFold2FoldingAdapter, ESMFold2Options
+from server.adapters.folding.promera import PromeraFoldingAdapter, PromeraOptions
 from server.folding.aggregator import aggregate_folding
 from server.folding.schemas import FoldingInput, SequenceEntry
 from server.orchestrator.models import SubTaskRecord, SubTaskStatus
@@ -181,6 +182,85 @@ def test_boltz_normalize_output_pairs_cif_with_confidence(tmp_path):
     )
     assert result.confidence["complex_plddt"] == pytest.approx(0.81)
     assert result.confidence["confidence_score"] == pytest.approx(0.85)
+
+
+# ---------------------------------------------------------------------------
+# Promera
+# ---------------------------------------------------------------------------
+
+def test_promera_build_request_uploads_chain_keyed_schema(tmp_path):
+    """promera-server expects a JSON file keyed by chain_id (uploaded as
+    `input_schema`).  The adapter builds it from FoldingInput.sequences."""
+    adapter = PromeraFoldingAdapter(_fc_mock())
+    input = FoldingInput(
+        sequences=[
+            SequenceEntry(id="A", sequence="MKQH"),
+            SequenceEntry(id="B", sequence="LLLL"),
+        ],
+        msa_mode="empty",
+    )
+    endpoint, payload, files = adapter.build_request(
+        input, PromeraOptions(num_seeds=2, diffusion_samples=3),
+    )
+
+    assert endpoint == "/api/tasks/cofold"
+    assert payload["num_seeds"] == 2
+    assert payload["diffusion_samples"] == 3
+    assert payload["recycling_steps"] == 4  # default
+    assert "input_schema" in files
+    schema_path = files["input_schema"]
+    assert isinstance(schema_path, Path)
+    schema = json.loads(schema_path.read_text())
+    assert set(schema.keys()) == {"A", "B"}
+    assert schema["A"] == {"type": "protein", "sequence": "MKQH"}
+    assert schema["B"] == {"type": "protein", "sequence": "LLLL"}
+
+
+def test_promera_normalize_output_picks_cif_and_conf_json(tmp_path):
+    """promera writes ``cofold_seed<i>_samp<j>.cif`` + ``*_conf.json`` siblings."""
+    out_dir = tmp_path / "output" / "cofold"
+    out_dir.mkdir(parents=True)
+    (out_dir / "cofold_seed0_samp0.cif").write_bytes(b"data_pred\n")
+    (out_dir / "cofold_seed0_samp0_conf.json").write_text(
+        json.dumps({"plddt": 0.91, "ptm": 0.88, "iptm": 0.0})
+    )
+    (out_dir / "cofold_seed0_samp1.cif").write_bytes(b"data_pred\n")
+    (out_dir / "cofold_seed0_samp1_conf.json").write_text(
+        json.dumps({"plddt": 0.82, "ptm": 0.75})
+    )
+
+    adapter = PromeraFoldingAdapter(_fc_mock())
+    result = adapter.normalize_output("ens_fold_p__promera", tmp_path)
+
+    assert result.method == "promera"
+    assert len(result.structures) == 2
+    # Sorted by plddt desc — samp0 (0.91) ranks above samp1 (0.82).
+    assert result.structures[0].plddt == pytest.approx(0.91)
+    assert result.structures[0].rank == 0
+    assert result.structures[1].plddt == pytest.approx(0.82)
+    assert result.structures[1].rank == 1
+    # URLs use relative paths so the multi-segment download route can resolve them.
+    assert result.structures[0].url == (
+        "/v1/jobs/ens_fold_p/structures/promera/output/cofold/cofold_seed0_samp0.cif"
+    )
+    # Top-level confidence == rank-0 scores
+    assert result.confidence["plddt"] == pytest.approx(0.91)
+    assert result.confidence["ptm"] == pytest.approx(0.88)
+
+
+def test_promera_normalize_output_skips_trajectory_cif(tmp_path):
+    """``*_traj.cif`` are multi-frame diagnostic files, not predictions —
+    must not be surfaced as a structure result."""
+    out_dir = tmp_path / "output" / "cofold"
+    out_dir.mkdir(parents=True)
+    (out_dir / "cofold_seed0_samp0.cif").write_bytes(b"data_pred\n")
+    (out_dir / "cofold_seed0_samp0_conf.json").write_text(json.dumps({"plddt": 0.9}))
+    (out_dir / "cofold_seed0_samp0_traj.cif").write_bytes(b"data_pred\n")  # ignored
+
+    adapter = PromeraFoldingAdapter(_fc_mock())
+    result = adapter.normalize_output("ens_fold_p__promera", tmp_path)
+    assert len(result.structures) == 1
+    assert "traj" not in result.structures[0].url
 
 
 # ---------------------------------------------------------------------------

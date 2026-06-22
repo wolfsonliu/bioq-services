@@ -77,6 +77,11 @@ ENSEMBLE_FC_METHODS__ESMFOLD2__TASK_ENDPOINT=/api/tasks/fold
 ENSEMBLE_FC_METHODS__BOLTZ__FUNCTION=boltz-server
 ENSEMBLE_FC_METHODS__BOLTZ__HTTP_BASE_URL=https://fc-boltz-kbioniejif.cn-hangzhou-vpc.fcapp.run
 ENSEMBLE_FC_METHODS__BOLTZ__TASK_ENDPOINT=/api/tasks/predict_structure
+
+# promera (cofold endpoint — protein structure prediction; design endpoint not surfaced via ensemble)
+ENSEMBLE_FC_METHODS__PROMERA__FUNCTION=promera-server
+ENSEMBLE_FC_METHODS__PROMERA__HTTP_BASE_URL=https://fc-promera-adkrlhmlcq.cn-hangzhou-vpc.fcapp.run
+ENSEMBLE_FC_METHODS__PROMERA__TASK_ENDPOINT=/api/tasks/cofold
 ```
 
 可选字段：`__REGION`（默认 `cn-hangzhou`）、`__ENABLED`（默认 `true`，设 `false` 跳过注册）、

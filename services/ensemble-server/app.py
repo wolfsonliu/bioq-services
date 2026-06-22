@@ -17,6 +17,7 @@ from fastapi import FastAPI
 from .adapters.folding.alphafold import AlphaFoldFoldingAdapter
 from .adapters.folding.boltz import BoltzFoldingAdapter
 from .adapters.folding.esmfold2 import ESMFold2FoldingAdapter
+from .adapters.folding.promera import PromeraFoldingAdapter
 from .adapters.registry import registry
 from .dispatcher import HTTPDispatcher
 from .folding.aggregator import aggregate_folding
@@ -54,6 +55,7 @@ _FOLDING_ADAPTER_CLASSES = (
     AlphaFoldFoldingAdapter,
     ESMFold2FoldingAdapter,
     BoltzFoldingAdapter,
+    PromeraFoldingAdapter,
 )
 for adapter_cls in _FOLDING_ADAPTER_CLASSES:
     cfg = settings.fc_methods.get(adapter_cls.name)
