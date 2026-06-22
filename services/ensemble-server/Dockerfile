@@ -45,6 +45,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         "pydantic>=2.7" \
         "pydantic-settings>=2.4" \
         "httpx>=0.28" \
+        "pyjwt[crypto]>=2.8" \
         "alibabacloud_fc20230330>=4.0" \
         "alibabacloud_tea_openapi>=0.3" \
         "alibabacloud_tea_util>=0.3"

@@ -12,3 +12,4 @@ dockq-server: https://fc-dockq-tzqvjemokb.cn-hangzhou-vpc.fcapp.run
 deeprank-ab-server: https://fc-deeprank-ab-lxzlfasfol.cn-hangzhou-vpc.fcapp.run
 esmfold2-server: https://fc-esmfold-spayusioug.cn-hangzhou-vpc.fcapp.run
 promera-server: https://fc-promera-adkrlhmlcq.cn-hangzhou-vpc.fcapp.run
+ensemble-server: https://fc-ensemble-vnugpsiojy.cn-hangzhou-vpc.fcapp.run
