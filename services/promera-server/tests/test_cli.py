@@ -33,7 +33,7 @@ class _Off(PromeraSettings):
 def _cofold_build(req, inputs, job_dir, settings):
     input_dir = job_dir / "input"
     input_dir.mkdir(parents=True, exist_ok=True)
-    schema_path = input_dir / "input.json"
+    schema_path = input_dir / "cofold.json"
     shutil.copy2(inputs["input_schema"], schema_path)
     return cofold_argv(
         req, job_dir=job_dir, schema_path=schema_path, settings=settings

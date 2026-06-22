@@ -173,7 +173,7 @@ def test_cofold_argv_structure():
     with tempfile.TemporaryDirectory() as td:
         job_dir = Path(td) / "job"
         job_dir.mkdir()
-        schema_path = Path(td) / "input" / "input.json"
+        schema_path = Path(td) / "input" / "cofold.json"
         schema_path.parent.mkdir()
         schema_path.write_text("{}")
 

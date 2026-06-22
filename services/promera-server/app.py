@@ -52,8 +52,12 @@ def cofold(
     def _build(_job_id: str, job_dir: Path) -> list[str]:
         input_dir = job_dir / "input"
         input_dir.mkdir(parents=True, exist_ok=True)
+        # Filename stem becomes the output subdirectory in promera's cofold
+        # pipeline (see opensource/promera/promera/inference/cofolding.py:29
+        # → "{savedir}/{name}/{name}_seed*_samp*.cif", where name = stem).
+        # Keep "cofold.json" so outputs land in output/cofold/.
         schema_path = resolve_input(
-            input_schema, input_schema_uri, input_dir / "input.json", settings
+            input_schema, input_schema_uri, input_dir / "cofold.json", settings
         )
         return cofold_argv(
             params, job_dir=job_dir, schema_path=schema_path, settings=settings
@@ -127,8 +131,10 @@ if settings.task_endpoints_enabled:
         paths: dict[str, Path] = {}
 
         def _save(_req, input_dir: Path) -> None:
+            # See post_fold (above) — promera derives the output subdir from
+            # the schema filename's stem, so we name it "cofold.json".
             paths["schema"] = resolve_input(
-                input_schema, input_schema_uri, input_dir / "input.json", settings
+                input_schema, input_schema_uri, input_dir / "cofold.json", settings
             )
 
         def _build(req, _job_id: str, job_dir: Path) -> list[str]:

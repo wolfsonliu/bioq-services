@@ -22,7 +22,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-get update && apt-get install -y --no-install-recommends \
     python3.12 python3.12-venv python3.12-dev \
     ca-certificates curl git \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
+# build-essential is required at runtime by triton: the JIT path
+# (cuequivariance_ops_torch → triton.runtime.build._build) shells out to
+# the host C compiler to build the NVIDIA driver launcher .so the first
+# time a kernel runs.  cuda:*-runtime base images don't include gcc, so
+# without this the design endpoint crashes mid-inference with
+# "Failed to find C compiler".  See engineering/guides/promera-tinyprot-cache.md.
 
 COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
 
