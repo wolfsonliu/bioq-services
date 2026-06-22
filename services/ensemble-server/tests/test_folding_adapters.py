@@ -216,45 +216,59 @@ def test_promera_build_request_uploads_chain_keyed_schema(tmp_path):
     assert schema["B"] == {"type": "protein", "sequence": "LLLL"}
 
 
-def test_promera_normalize_output_picks_cif_and_conf_json(tmp_path):
-    """promera writes ``cofold_seed<i>_samp<j>.cif`` + ``*_conf.json`` siblings."""
-    out_dir = tmp_path / "output" / "cofold"
-    out_dir.mkdir(parents=True)
+def test_promera_normalize_output_reads_complex_plddt_and_chain_plddt(tmp_path):
+    """promera writes ``<stem>_conf.json`` with ``complex_plddt`` (NOT ``plddt``)
+    at the top level, plus a per-chain ``chain_plddt`` dict — verified against
+    a v0.0.8 FC run."""
+    # The orchestrator unzips into the downloaded_dir flat; in production the
+    # zip structure starts at `cofold/`.
+    out_dir = tmp_path / "cofold"
+    out_dir.mkdir()
     (out_dir / "cofold_seed0_samp0.cif").write_bytes(b"data_pred\n")
-    (out_dir / "cofold_seed0_samp0_conf.json").write_text(
-        json.dumps({"plddt": 0.91, "ptm": 0.88, "iptm": 0.0})
-    )
+    (out_dir / "cofold_seed0_samp0_conf.json").write_text(json.dumps({
+        "complex_plddt": 0.91,
+        "complex_ptm": 0.88,
+        "chain_plddt": {"A": 0.92, "B": 0.85},
+        "ptm": {"A": 0.88},      # per-chain dict — must NOT leak into confidence
+    }))
     (out_dir / "cofold_seed0_samp1.cif").write_bytes(b"data_pred\n")
-    (out_dir / "cofold_seed0_samp1_conf.json").write_text(
-        json.dumps({"plddt": 0.82, "ptm": 0.75})
-    )
+    (out_dir / "cofold_seed0_samp1_conf.json").write_text(json.dumps({
+        "complex_plddt": 0.82,
+        "complex_ptm": 0.75,
+        "chain_plddt": {"A": 0.83, "B": 0.76},
+    }))
 
     adapter = PromeraFoldingAdapter(_fc_mock())
     result = adapter.normalize_output("ens_fold_p__promera", tmp_path)
 
     assert result.method == "promera"
     assert len(result.structures) == 2
-    # Sorted by plddt desc — samp0 (0.91) ranks above samp1 (0.82).
+    # Sorted by complex_plddt desc — samp0 (0.91) above samp1 (0.82).
     assert result.structures[0].plddt == pytest.approx(0.91)
     assert result.structures[0].rank == 0
     assert result.structures[1].plddt == pytest.approx(0.82)
     assert result.structures[1].rank == 1
     # URLs use relative paths so the multi-segment download route can resolve them.
     assert result.structures[0].url == (
-        "/v1/jobs/ens_fold_p/structures/promera/output/cofold/cofold_seed0_samp0.cif"
+        "/v1/jobs/ens_fold_p/structures/promera/cofold/cofold_seed0_samp0.cif"
     )
-    # Top-level confidence == rank-0 scores
+    # Top-level confidence == rank-0 scalars only (no chain dict here)
     assert result.confidence["plddt"] == pytest.approx(0.91)
     assert result.confidence["ptm"] == pytest.approx(0.88)
+    assert all(isinstance(v, float) for v in result.confidence.values())
+    # Per-chain plddt goes in metadata (which is dict[str, Any])
+    assert result.metadata["chain_plddt"] == {"A": pytest.approx(0.92), "B": pytest.approx(0.85)}
 
 
 def test_promera_normalize_output_skips_trajectory_cif(tmp_path):
     """``*_traj.cif`` are multi-frame diagnostic files, not predictions —
     must not be surfaced as a structure result."""
-    out_dir = tmp_path / "output" / "cofold"
-    out_dir.mkdir(parents=True)
+    out_dir = tmp_path / "cofold"
+    out_dir.mkdir()
     (out_dir / "cofold_seed0_samp0.cif").write_bytes(b"data_pred\n")
-    (out_dir / "cofold_seed0_samp0_conf.json").write_text(json.dumps({"plddt": 0.9}))
+    (out_dir / "cofold_seed0_samp0_conf.json").write_text(
+        json.dumps({"complex_plddt": 0.9, "complex_ptm": 0.8})
+    )
     (out_dir / "cofold_seed0_samp0_traj.cif").write_bytes(b"data_pred\n")  # ignored
 
     adapter = PromeraFoldingAdapter(_fc_mock())

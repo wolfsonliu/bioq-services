@@ -73,40 +73,42 @@ class PromeraFoldingAdapter(MethodAdapter[FoldingInput, FoldingMethodResult]):
     def normalize_output(self, sub_task_id, downloaded_dir):
         ensemble_task_id = sub_task_id.split("__")[0]
 
-        # promera writes per-structure confidence as ``<stem>_conf.json``
-        # alongside ``<stem>.cif``.  Keys we care about: plddt, ptm, iptm.
-        # See services/promera-server/adapter.py for the documented schema.
-        structures: list[StructureFile] = []
         cif_files = sorted(
             cif for cif in downloaded_dir.rglob("*.cif")
-            # Skip trajectory CIFs (multi-frame, not the final prediction).
+            # Skip trajectory CIFs (multi-frame diagnostic, not the final prediction).
             if not cif.name.endswith("_traj.cif")
         )
-        for i, cif in enumerate(cif_files):
+
+        # Build a (cif, scalar_scores, chain_plddt) triple for each prediction.
+        per_cif: list[tuple[Path, dict[str, float], dict[str, float]]] = []
+        for cif in cif_files:
+            raw = _read_conf_raw(cif)
+            per_cif.append((cif, _extract_scalar_scores(raw), _extract_chain_plddt(raw)))
+
+        # Sort by complex_plddt desc; missing-plDDT structures land at the end.
+        per_cif.sort(
+            key=lambda t: (t[1].get("plddt", -1.0)),
+            reverse=True,
+        )
+
+        structures: list[StructureFile] = []
+        for idx, (cif, scores, _) in enumerate(per_cif):
             rel = cif.relative_to(downloaded_dir)
-            scores = _read_conf_json(cif)
             structures.append(StructureFile(
-                rank=i,
+                rank=idx,
                 format="cif",
                 url=f"/v1/jobs/{ensemble_task_id}/structures/{self.name}/{rel.as_posix()}",
                 plddt=scores.get("plddt"),
                 size_bytes=cif.stat().st_size,
             ))
 
-        # Sort by plddt desc when available, else preserve discovery order.
-        structures.sort(
-            key=lambda s: (s.plddt if s.plddt is not None else -1.0),
-            reverse=True,
-        )
-        # Re-assign ranks after sort so rank-0 is the best-scoring structure.
-        for idx, s in enumerate(structures):
-            s.rank = idx
-
         confidence: dict[str, float] = {}
-        if structures and cif_files:
-            top_scores = _read_conf_json(cif_files[0])
-            for k, v in top_scores.items():
-                confidence[k] = v
+        metadata: dict[str, Any] = {}
+        if per_cif:
+            _, top_scores, top_chain_plddt = per_cif[0]
+            confidence.update(top_scores)
+            if top_chain_plddt:
+                metadata["chain_plddt"] = top_chain_plddt
 
         return FoldingMethodResult(
             method=self.name,
@@ -115,7 +117,7 @@ class PromeraFoldingAdapter(MethodAdapter[FoldingInput, FoldingMethodResult]):
             fc_job_id=sub_task_id,
             structures=structures,
             confidence=confidence,
-            metadata={},
+            metadata=metadata,
         )
 
     def estimate_runtime_seconds(self, input):
@@ -124,8 +126,8 @@ class PromeraFoldingAdapter(MethodAdapter[FoldingInput, FoldingMethodResult]):
         return max(180, int(total * 3))
 
 
-def _read_conf_json(cif: Path) -> dict[str, float]:
-    """Read ``<stem>_conf.json`` next to a structure CIF; return float scores only."""
+def _read_conf_raw(cif: Path) -> dict[str, Any]:
+    """Read the raw ``<stem>_conf.json`` next to a structure CIF; ``{}`` if missing."""
     conf = cif.with_name(f"{cif.stem}_conf.json")
     if not conf.is_file():
         return {}
@@ -133,11 +135,44 @@ def _read_conf_json(cif: Path) -> dict[str, float]:
         data = json.loads(conf.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, ValueError):
         return {}
-    if not isinstance(data, dict):
-        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _extract_scalar_scores(raw: dict[str, Any]) -> dict[str, float]:
+    """Pull scalar confidence fields from a promera conf JSON.
+
+    Actual promera schema (verified against a v0.0.8 run, NOT the
+    single-`plddt` form that promera-server's adapter docstring suggests):
+
+      {
+        "complex_plddt": float,          # top-level mean plddt
+        "complex_ptm":   float,          # top-level mean ptm
+        "chain_plddt":   {chain: float}, # per-chain plddt  (returned separately)
+        "ptm":           {chain: float}, # per-chain ptm   (DICT, not scalar)
+        "iCS":           {...}
+      }
+
+    Mapping into our flat scalar dict:
+      - ``plddt``  := complex_plddt   (this is what StructureFile.plddt uses)
+      - ``ptm``    := complex_ptm
+      - ``iptm``   := iptm if present as scalar
+    """
     out: dict[str, float] = {}
-    for key in ("plddt", "ptm", "iptm"):
-        val = data.get(key)
-        if isinstance(val, (int, float)):
-            out[key] = float(val)
+    if isinstance(raw.get("complex_plddt"), (int, float)):
+        out["plddt"] = float(raw["complex_plddt"])
+    if isinstance(raw.get("complex_ptm"), (int, float)):
+        out["ptm"] = float(raw["complex_ptm"])
+    if isinstance(raw.get("iptm"), (int, float)):
+        out["iptm"] = float(raw["iptm"])
     return out
+
+
+def _extract_chain_plddt(raw: dict[str, Any]) -> dict[str, float]:
+    """Pull per-chain plddt from a promera conf JSON (empty if absent)."""
+    chain_plddt = raw.get("chain_plddt")
+    if not isinstance(chain_plddt, dict):
+        return {}
+    return {
+        str(k): float(v) for k, v in chain_plddt.items()
+        if isinstance(v, (int, float))
+    }
