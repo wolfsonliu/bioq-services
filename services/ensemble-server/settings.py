@@ -15,12 +15,18 @@ from bioagent_service import ServiceSettings
 
 
 class FCMethodConfig(BaseModel):
-    """Per-method connection to an underlying FC service."""
+    """Per-method connection to an underlying FC service.
 
-    function: str
-    region: str = "cn-hangzhou"
+    Only ``http_base_url`` is required at runtime — HTTPDispatcher invokes
+    the downstream service over its VPC HTTP trigger URL.  ``function`` /
+    ``region`` / ``task_endpoint`` remain for documentation + FC-OpenAPI
+    backfill compatibility but are not consumed by the dispatcher.
+    """
+
     http_base_url: str
-    task_endpoint: str
+    function: str = ""
+    region: str = "cn-hangzhou"
+    task_endpoint: str = ""
     enabled: bool = True
     timeout_seconds: int = 7200
 
@@ -65,9 +71,8 @@ class EnsembleSettings(ServiceSettings):
 
     service_name: str = "ensemble"
 
-    fc_access_key_id: str = ""
-    fc_access_key_secret: str = ""
-
+    # HTTPDispatcher invokes downstream services via VPC HTTP URLs — no
+    # Alibaba Cloud AK/SK needed.  See dispatcher/http.py.
     fc_methods: dict[str, FCMethodConfig] = Field(default_factory=dict)
 
     # Auth: VPC bypass + JWT + static API keys.  api_keys kept as a top-level

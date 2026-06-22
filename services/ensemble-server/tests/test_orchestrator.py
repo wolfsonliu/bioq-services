@@ -1,7 +1,7 @@
-"""Orchestrator unit tests with fake adapters + mocked FCDispatcher.
+"""Orchestrator unit tests with fake adapters + mocked HTTPDispatcher.
 
 Verifies the task-kind agnostic submit + refresh + aggregate flow without
-touching real FC or any real adapter implementation.
+touching the network or any real adapter implementation.
 """
 
 from __future__ import annotations
@@ -16,12 +16,11 @@ from pydantic import BaseModel
 
 from server.adapters.base import MethodAdapter
 from server.adapters.registry import MethodRegistry
+from server.dispatcher import DispatchHandle, TaskStatus
 from server.orchestrator.models import SubTaskStatus
 from server.orchestrator.orchestrator import Orchestrator
 from server.orchestrator.store import EnsembleJobStore
 from server.task_kind import TaskKind
-
-from pipelines.framework.dispatcher import DispatchHandle, TaskStatus
 
 
 # Restrict anyio backend to asyncio (we don't need trio).
@@ -65,9 +64,10 @@ class _FakeFoldingAdapter(MethodAdapter[_FakeInput, _FakeOutput]):
 def _make_fc_mock(function_name: str = "fake-server") -> MagicMock:
     m = MagicMock()
     m.function = function_name
+    m.backend_name = "http"
     # submit returns a DispatchHandle
     m.submit.return_value = DispatchHandle(
-        backend="fc",
+        backend="http",
         task_id="<set-per-call>",
         backend_ref={"invocation_id": "fake-inv-id", "function": function_name},
     )

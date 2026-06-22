@@ -19,10 +19,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
-from pipelines.framework.dispatcher import DispatchHandle, TaskStatus
-
 from server.adapters.base import MethodAdapter
 from server.adapters.registry import MethodRegistry
+from server.dispatcher import DispatchHandle, TaskStatus
 from server.folding.aggregator import aggregate_folding
 from server.folding.schemas import FoldingMethodResult, StructureFile
 from server.orchestrator.orchestrator import Orchestrator
@@ -69,8 +68,9 @@ class _FakeFoldingAdapter(MethodAdapter):
 def _make_fc_mock(function_name: str) -> MagicMock:
     m = MagicMock()
     m.function = function_name
+    m.backend_name = "http"
     m.submit.return_value = DispatchHandle(
-        backend="fc", task_id="<set-per-call>",
+        backend="http", task_id="<set-per-call>",
         backend_ref={"invocation_id": "fake-inv-id", "function": function_name},
     )
     return m

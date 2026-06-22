@@ -15,9 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from pipelines.framework.dispatcher import DispatchHandle, TaskStatus
-
 from ..adapters.registry import MethodRegistry
+from ..dispatcher import DispatchHandle, TaskStatus
 from ..task_kind import TaskKind
 from .models import EnsembleJob, SubTaskRecord, SubTaskStatus
 from .store import EnsembleJobStore
@@ -129,7 +128,7 @@ class Orchestrator:
                 continue
             adapter = self.registry.get(task_kind, m)
             handle = DispatchHandle(
-                backend="fc",
+                backend=adapter.fc.backend_name,
                 task_id=sub.sub_task_id,
                 backend_ref={
                     "function": adapter.fc.function,

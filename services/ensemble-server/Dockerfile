@@ -3,7 +3,9 @@
 #
 # ensemble-server — multi-method biomolecular task aggregator (CPU only).
 # Unlike most bioagent services, this image does NOT bundle a GPU model;
-# it orchestrates remote FC calls via pipelines.framework.FCDispatcher.
+# it orchestrates remote calls to downstream services via the in-tree
+# HTTPDispatcher (services/ensemble-server/dispatcher/), which uses plain
+# httpx + FC's HTTP async-invocation header — no Alibaba Cloud SDK / AK/SK.
 #
 # Base: uv's pre-built python3.12 bookworm slim image (project convention,
 # saves a `COPY --from=ghcr.io/astral-sh/uv` step vs `python:3.12-slim`).
@@ -15,13 +17,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
     # Huawei Cloud pip mirror (~10× faster from China than pypi.org).
     UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/ \
     UV_HTTP_TIMEOUT=600 \
-    # PYTHONPATH lets `import server.app` (via /opt/ensemble) and
-    # `import pipelines.framework.fc_dispatcher` (via /opt) work without
-    # an editable install of the project root.
+    # PYTHONPATH lets `import server.app` resolve /opt/ensemble/server.
     PYTHONPATH=/opt:/opt/ensemble
 
 # curl is needed for FC healthz probes; ca-certificates for HTTPS calls
-# the FCDispatcher makes to underlying GPU services.
+# the HTTPDispatcher makes to downstream GPU services.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
@@ -36,8 +36,7 @@ COPY services/_framework /opt/_framework
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/.venv/bin/python /opt/_framework
 
-# Runtime deps for the aggregator: FastAPI stack + Alibaba Cloud FC OpenAPI
-# (used by FCDispatcher to invoke underlying GPU services in async-task mode).
+# Runtime deps for the aggregator: FastAPI stack + httpx + PyJWT.
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/.venv/bin/python \
         "fastapi>=0.115" \
@@ -45,16 +44,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         "pydantic>=2.7" \
         "pydantic-settings>=2.4" \
         "httpx>=0.28" \
-        "pyjwt[crypto]>=2.8" \
-        "alibabacloud_fc20230330>=4.0" \
-        "alibabacloud_tea_openapi>=0.3" \
-        "alibabacloud_tea_util>=0.3"
-
-# pipelines.framework.fc_dispatcher — imported by server.app.  Pure-Python,
-# no install needed (sits on PYTHONPATH).  Only the framework subdir is needed;
-# everything else under pipelines/ is excluded via .dockerignore.
-COPY pipelines/__init__.py /opt/pipelines/__init__.py
-COPY pipelines/framework /opt/pipelines/framework
+        "pyjwt[crypto]>=2.8"
 
 # Server source — copied last so iterating on routes/adapters doesn't bust
 # the heavier framework / deps layers above.

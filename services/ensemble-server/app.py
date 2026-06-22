@@ -1,8 +1,9 @@
 """ensemble-server FastAPI app — multi-method aggregator.
 
 Unlike most bioagent services, ensemble-server does NOT run subprocess
-jobs.  It orchestrates remote FC calls via FCDispatcher, so we use
-bioagent_service.ServiceSettings (for jobs_base_dir / NAS conventions)
+jobs.  It orchestrates remote calls to downstream services via
+HTTPDispatcher (plain httpx + FC's HTTP async-invocation header), so we
+use bioagent_service.ServiceSettings (for jobs_base_dir / NAS conventions)
 but not the framework's JobRunner.
 """
 
@@ -13,12 +14,11 @@ import logging
 from bioagent_service import read_version_file
 from fastapi import FastAPI
 
-from pipelines.framework.fc_dispatcher import FCDispatcher
-
 from .adapters.folding.alphafold import AlphaFoldFoldingAdapter
 from .adapters.folding.boltz import BoltzFoldingAdapter
 from .adapters.folding.esmfold2 import ESMFold2FoldingAdapter
 from .adapters.registry import registry
+from .dispatcher import HTTPDispatcher
 from .folding.aggregator import aggregate_folding
 from .orchestrator.orchestrator import Orchestrator
 from .orchestrator.store import EnsembleJobStore
@@ -42,13 +42,10 @@ app = FastAPI(
 )
 
 
-def _build_dispatcher(method_name: str, cfg) -> FCDispatcher:
-    return FCDispatcher(
-        region=cfg.region,
-        function=cfg.function,
-        access_key_id=settings.fc_access_key_id,
-        access_key_secret=settings.fc_access_key_secret,
+def _build_dispatcher(cfg) -> HTTPDispatcher:
+    return HTTPDispatcher(
         http_base_url=cfg.http_base_url,
+        function=cfg.function,
     )
 
 
@@ -61,7 +58,7 @@ _FOLDING_ADAPTER_CLASSES = (
 for adapter_cls in _FOLDING_ADAPTER_CLASSES:
     cfg = settings.fc_methods.get(adapter_cls.name)
     if cfg is not None and cfg.enabled:
-        dispatcher = _build_dispatcher(adapter_cls.name, cfg)
+        dispatcher = _build_dispatcher(cfg)
         registry.register(adapter_cls(dispatcher))
         logger.info("registered adapter: folding/%s", adapter_cls.name)
     else:
