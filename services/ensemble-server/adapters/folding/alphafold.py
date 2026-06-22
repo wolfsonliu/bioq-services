@@ -7,6 +7,7 @@ files become StructureFile list ordered by AlphaFold's own ranking.
 
 from __future__ import annotations
 
+import json
 import tempfile
 from pathlib import Path
 from typing import Literal
@@ -50,27 +51,58 @@ class AlphaFoldFoldingAdapter(MethodAdapter[FoldingInput, FoldingMethodResult]):
         return "/api/tasks/fold", payload, files
 
     def normalize_output(self, sub_task_id, downloaded_dir):
-        # alphafold output: ranked_0.pdb..ranked_4.pdb (+ ranking_debug.json with plddt).
-        # task_id pattern: <ensemble_task_id>__<method>.  Use the ensemble task_id
-        # to build URLs that route through ensemble-server's download endpoint.
+        # alphafold-server's pipeline writes outputs into ``output/input/``
+        # (the dir name is the FASTA stem, which is fixed to ``input`` by the
+        # service; see services/alphafold-server/app.py:62).  The orchestrator
+        # unzips into our downloaded_dir, stripping the ``output/`` root, so
+        # files end up at ``<downloaded_dir>/input/ranked_<N>.pdb``.  The URL
+        # must encode this relative path or the download route 404s — same
+        # convention as boltz/promera adapters.
         ensemble_task_id = sub_task_id.split("__")[0]
+
+        # Parse ranking_debug.json once so we can attach per-model plDDT to
+        # the right ranked_<N>.pdb.  Schema:
+        #   {"order": [model_name, ...],          # sorted best→worst
+        #    "plddts": {model_name: float, ...}}
+        per_rank_plddt: dict[int, float] = {}
+        for rd in downloaded_dir.rglob("ranking_debug.json"):
+            try:
+                data = json.loads(rd.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError, ValueError):
+                continue
+            if not isinstance(data, dict):
+                continue
+            order = data.get("order") or []
+            plddts = data.get("plddts") or {}
+            for rank_idx, model_name in enumerate(order):
+                val = plddts.get(model_name)
+                if isinstance(val, (int, float)):
+                    per_rank_plddt[rank_idx] = float(val)
+            break
+
         structures: list[StructureFile] = []
         ranked = sorted(downloaded_dir.rglob("ranked_*.pdb"))
         for i, pdb in enumerate(ranked):
+            rel = pdb.relative_to(downloaded_dir)
             structures.append(StructureFile(
                 rank=i,
                 format="pdb",
-                url=f"/v1/jobs/{ensemble_task_id}/structures/{self.name}/{pdb.name}",
-                plddt=None,  # Phase-1 simplification; Phase-2 parse from ranking_debug.json
+                url=f"/v1/jobs/{ensemble_task_id}/structures/{self.name}/{rel.as_posix()}",
+                plddt=per_rank_plddt.get(i),
                 size_bytes=pdb.stat().st_size,
             ))
+
+        confidence: dict[str, float] = {}
+        if structures and structures[0].plddt is not None:
+            confidence["plddt"] = structures[0].plddt
+
         return FoldingMethodResult(
             method=self.name,
             status="completed",
             runtime_seconds=None,  # filled by orchestrator
             fc_job_id=sub_task_id,
             structures=structures,
-            confidence={},
+            confidence=confidence,
             metadata={"model_preset": "monomer_ptm"},
         )
 

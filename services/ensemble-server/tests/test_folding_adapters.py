@@ -51,15 +51,26 @@ def test_alphafold_build_request_has_fasta_upload_and_form_fields():
     assert ">A" in content and "MKQH" in content
 
 
-def test_alphafold_normalize_output_picks_ranked_pdbs(tmp_path):
-    # Simulate alphafold output dir with 3 ranked PDBs
+def test_alphafold_normalize_output_uses_relative_urls_and_extracts_plddt(tmp_path):
+    """alphafold-server emits ``output/input/ranked_<N>.pdb`` (the orchestrator
+    strips the ``output/`` root) plus ``output/input/ranking_debug.json`` with
+    per-model plDDT.  URLs must use the relative path under outputs/<method>/
+    or the download route 404s (verified in v0.0.9 production)."""
+    nested = tmp_path / "input"
+    nested.mkdir()
     for i in range(3):
-        (tmp_path / f"ranked_{i}.pdb").write_bytes(b"REMARK fake pdb\nATOM\nEND\n")
+        (nested / f"ranked_{i}.pdb").write_bytes(b"REMARK fake pdb\nATOM\nEND\n")
+    (nested / "ranking_debug.json").write_text(json.dumps({
+        "order": ["model_3_ptm_pred_0", "model_1_ptm_pred_0", "model_5_ptm_pred_0"],
+        "plddts": {
+            "model_3_ptm_pred_0": 84.2,
+            "model_1_ptm_pred_0": 79.5,
+            "model_5_ptm_pred_0": 71.1,
+        },
+    }))
 
     adapter = AlphaFoldFoldingAdapter(_fc_mock())
-    result = adapter.normalize_output(
-        "ens_fold_xyz__alphafold", tmp_path,
-    )
+    result = adapter.normalize_output("ens_fold_xyz__alphafold", tmp_path)
     assert result.method == "alphafold"
     assert result.status == "completed"
     assert result.fc_job_id == "ens_fold_xyz__alphafold"
@@ -67,7 +78,14 @@ def test_alphafold_normalize_output_picks_ranked_pdbs(tmp_path):
     for i, s in enumerate(result.structures):
         assert s.format == "pdb"
         assert s.rank == i
-        assert s.url == f"/v1/jobs/ens_fold_xyz/structures/alphafold/ranked_{i}.pdb"
+        # Crucially: URL carries the ``input/`` subdir so download_structure
+        # can resolve it under outputs/alphafold/.
+        assert s.url == f"/v1/jobs/ens_fold_xyz/structures/alphafold/input/ranked_{i}.pdb"
+    # plDDT pulled from ranking_debug.json — rank-0 best model.
+    assert result.structures[0].plddt == pytest.approx(84.2)
+    assert result.structures[1].plddt == pytest.approx(79.5)
+    assert result.structures[2].plddt == pytest.approx(71.1)
+    assert result.confidence["plddt"] == pytest.approx(84.2)
 
 
 # ---------------------------------------------------------------------------
