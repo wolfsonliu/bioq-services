@@ -90,17 +90,47 @@ def test_esmfold2_build_request_sequences_json():
 
 
 def test_esmfold2_normalize_output_with_metrics(tmp_path):
+    """esmfold2's metrics.json is `{"samples": [{plddt_mean, ptm, iptm, output_file}, ...]}`
+    — each sample row keys by `output_file` to pair with its CIF."""
     (tmp_path / "prediction_0.cif").write_bytes(b"loop_\nfake cif\n")
-    (tmp_path / "metrics.json").write_text(json.dumps({"mean_plddt": 0.87, "ptm": 0.92}))
+    (tmp_path / "prediction_1.cif").write_bytes(b"loop_\nfake cif\n")
+    (tmp_path / "metrics.json").write_text(json.dumps({
+        "samples": [
+            {"sample_index": 0, "output_file": "prediction_0.cif",
+             "plddt_mean": 0.87, "ptm": 0.92, "iptm": 0.0},
+            {"sample_index": 1, "output_file": "prediction_1.cif",
+             "plddt_mean": 0.81, "ptm": 0.88, "iptm": 0.0},
+        ],
+        "inference_time_s": 12.3,
+    }))
 
     adapter = ESMFold2FoldingAdapter(_fc_mock())
     result = adapter.normalize_output("ens_fold_abc__esmfold2", tmp_path)
     assert result.method == "esmfold2"
-    assert len(result.structures) == 1
-    assert result.structures[0].format == "cif"
+    assert len(result.structures) == 2
+    # Rank 0 paired with sample 0
+    assert result.structures[0].rank == 0
     assert result.structures[0].plddt == pytest.approx(0.87)
+    # Rank 1 paired with sample 1
+    assert result.structures[1].rank == 1
+    assert result.structures[1].plddt == pytest.approx(0.81)
+    # Top-level confidence = rank-0 scores (plus mean_plddt alias)
+    assert result.confidence["plddt_mean"] == pytest.approx(0.87)
     assert result.confidence["mean_plddt"] == pytest.approx(0.87)
     assert result.confidence["ptm"] == pytest.approx(0.92)
+
+
+def test_esmfold2_normalize_output_uses_relative_url(tmp_path):
+    """URL path is relative to outputs/<method>/ so multi-segment layouts work."""
+    nested = tmp_path / "output"
+    nested.mkdir()
+    (nested / "prediction_0.cif").write_bytes(b"loop_\n")
+
+    adapter = ESMFold2FoldingAdapter(_fc_mock())
+    result = adapter.normalize_output("ens_fold_q__esmfold2", tmp_path)
+    assert result.structures[0].url == (
+        "/v1/jobs/ens_fold_q/structures/esmfold2/output/prediction_0.cif"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -120,21 +150,37 @@ def test_boltz_build_request_passes_msa_mode_and_empty_msa_uri():
     assert seqs[0]["msa_uri"] == "empty"  # boltz needs this when msa_mode=empty
     assert payload["msa_mode"] == "empty"
     assert payload["recycling_steps"] == 2
+    # `name` is not exposed because boltz-server hardcodes the YAML stem to
+    # `input` (services/boltz-server/tools.py), so any value here would be
+    # silently ignored.
+    assert "name" not in payload
     assert files == {}
 
 
-def test_boltz_normalize_output_picks_cif_files(tmp_path):
-    (tmp_path / "predictions").mkdir()
-    (tmp_path / "predictions" / "model_0.cif").write_bytes(b"loop_\n")
-    (tmp_path / "predictions" / "confidence_0.json").write_text(json.dumps({"plddt": 0.81, "ptm": 0.79}))
+def test_boltz_normalize_output_pairs_cif_with_confidence(tmp_path):
+    """Boltz nests outputs under predictions/<stem>/; URL must use the
+    relative path so the download route can resolve it.  complex_plddt is
+    Boltz's per-structure plDDT key (not `plddt`)."""
+    pred_dir = tmp_path / "predictions" / "input"
+    pred_dir.mkdir(parents=True)
+    (pred_dir / "input_model_0.cif").write_bytes(b"loop_\n")
+    (pred_dir / "confidence_input_model_0.json").write_text(json.dumps({
+        "complex_plddt": 0.81, "ptm": 0.79, "iptm": 0.0,
+        "confidence_score": 0.85,
+    }))
 
     adapter = BoltzFoldingAdapter(_fc_mock())
     result = adapter.normalize_output("ens_fold_q__boltz", tmp_path)
     assert result.method == "boltz"
     assert len(result.structures) == 1
     assert result.structures[0].format == "cif"
-    assert result.confidence.get("plddt") == pytest.approx(0.81)
+    assert result.structures[0].rank == 0
     assert result.structures[0].plddt == pytest.approx(0.81)
+    assert result.structures[0].url == (
+        "/v1/jobs/ens_fold_q/structures/boltz/predictions/input/input_model_0.cif"
+    )
+    assert result.confidence["complex_plddt"] == pytest.approx(0.81)
+    assert result.confidence["confidence_score"] == pytest.approx(0.85)
 
 
 # ---------------------------------------------------------------------------

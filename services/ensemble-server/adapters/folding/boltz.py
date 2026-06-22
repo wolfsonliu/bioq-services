@@ -8,14 +8,47 @@ Phase-1 MVP does not pass MSA files or templates; those are TODO.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
 from ...folding.schemas import FoldingInput, FoldingMethodResult, StructureFile
 from ...task_kind import TaskKind
 from ..base import MethodAdapter
+
+
+def _safe_load_json(path: Path) -> dict[str, Any]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError, ValueError):
+        return {}
+
+
+def _find_confidence_json(cif: Path) -> Optional[Path]:
+    """Locate ``confidence_<stem>_model_<N>.json`` sibling for a given CIF.
+
+    Boltz writes it next to the structure file; fall back to any
+    ``confidence_*.json`` in the same directory when the strict pairing
+    doesn't match (defensive against minor boltz version differences).
+    """
+    sibling = cif.with_name(f"confidence_{cif.stem}.json")
+    if sibling.is_file():
+        return sibling
+    for candidate in cif.parent.glob("confidence_*.json"):
+        return candidate
+    return None
+
+
+def _read_complex_plddt(cif: Path) -> Optional[float]:
+    """Extract ``complex_plddt`` from the per-structure confidence JSON."""
+    conf_json = _find_confidence_json(cif)
+    if conf_json is None:
+        return None
+    val = _safe_load_json(conf_json).get("complex_plddt")
+    return float(val) if isinstance(val, (int, float)) else None
 
 
 class BoltzOptions(BaseModel):
@@ -25,7 +58,12 @@ class BoltzOptions(BaseModel):
     sampling_steps: int = Field(default=200, ge=10, le=1000)
     diffusion_samples: int = Field(default=1, ge=1, le=100)
     seed: Optional[int] = None
-    name: str = "ensemble"
+
+
+# Match `predictions/<stem>/<stem>_model_<N>.cif` (the only well-defined output
+# filename in boltz-server — see services/boltz-server/tools.py:7).  Capturing
+# the model index lets us pair each CIF with its sibling `confidence_<stem>_model_<N>.json`.
+_BOLTZ_MODEL_RE = re.compile(r"^(?P<stem>.+)_model_(?P<idx>\d+)\.cif$")
 
 
 class BoltzFoldingAdapter(MethodAdapter[FoldingInput, FoldingMethodResult]):
@@ -45,7 +83,6 @@ class BoltzFoldingAdapter(MethodAdapter[FoldingInput, FoldingMethodResult]):
             sequences.append(entry)
 
         payload = {
-            "name": options.name,
             "msa_mode": input.msa_mode,
             "sequences": json.dumps(sequences),
             "recycling_steps": options.recycling_steps,
@@ -59,32 +96,40 @@ class BoltzFoldingAdapter(MethodAdapter[FoldingInput, FoldingMethodResult]):
     def normalize_output(self, sub_task_id, downloaded_dir):
         ensemble_task_id = sub_task_id.split("__")[0]
 
-        # Boltz output structure: predictions/<name>/<seed>_model_*.cif + confidence.json
+        # Boltz output: predictions/<stem>/<stem>_model_<N>.cif plus
+        # confidence_<stem>_model_<N>.json alongside.
         structures: list[StructureFile] = []
         cif_files = sorted(downloaded_dir.rglob("*.cif"))
-        for i, cif in enumerate(cif_files):
+        for cif in cif_files:
+            rel = cif.relative_to(downloaded_dir)
+            m = _BOLTZ_MODEL_RE.match(cif.name)
+            idx = int(m.group("idx")) if m else 0
+            plddt = _read_complex_plddt(cif)
             structures.append(StructureFile(
-                rank=i,
+                rank=idx,
                 format="cif",
-                url=f"/v1/jobs/{ensemble_task_id}/structures/{self.name}/{cif.name}",
-                plddt=None,
+                url=f"/v1/jobs/{ensemble_task_id}/structures/{self.name}/{rel.as_posix()}",
+                plddt=plddt,
                 size_bytes=cif.stat().st_size,
             ))
+        structures.sort(key=lambda s: s.rank)
 
-        # Try to extract confidence from any *confidence*.json file.
+        # Top-level confidence (rank-0 model's scores), exposed for clients
+        # that want to inspect ptm/iptm/confidence_score in addition to plddt.
         confidence: dict[str, float] = {}
-        for cj in downloaded_dir.rglob("*confidence*.json"):
-            try:
-                data = json.loads(cj.read_text())
-                if isinstance(data, dict):
-                    for key in ("plddt", "ptm", "iptm", "confidence_score"):
-                        if key in data and isinstance(data[key], (int, float)):
+        if structures:
+            top = next(
+                (c for c in cif_files if _BOLTZ_MODEL_RE.match(c.name) and
+                 int(_BOLTZ_MODEL_RE.match(c.name).group("idx")) == structures[0].rank),
+                cif_files[0] if cif_files else None,
+            )
+            if top is not None:
+                conf_json = _find_confidence_json(top)
+                if conf_json is not None:
+                    data = _safe_load_json(conf_json)
+                    for key in ("complex_plddt", "ptm", "iptm", "confidence_score"):
+                        if isinstance(data.get(key), (int, float)):
                             confidence[key] = float(data[key])
-                    if "plddt" in confidence and structures:
-                        structures[0].plddt = confidence["plddt"]
-                    break
-            except (json.JSONDecodeError, ValueError):
-                continue
 
         return FoldingMethodResult(
             method=self.name,

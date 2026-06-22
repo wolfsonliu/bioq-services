@@ -50,32 +50,63 @@ class ESMFold2FoldingAdapter(MethodAdapter[FoldingInput, FoldingMethodResult]):
 
     def normalize_output(self, sub_task_id, downloaded_dir):
         ensemble_task_id = sub_task_id.split("__")[0]
+
+        # esmfold2-server writes metrics.json with shape
+        # {"samples": [{"sample_index": i, "output_file": "prediction_i.cif",
+        #               "plddt_mean": ..., "ptm": ..., "iptm": ...}, ...]}
+        # — see services/esmfold2-server/inference.py.
+        per_file_scores: dict[str, dict[str, float]] = {}
+        for mj in downloaded_dir.rglob("metrics.json"):
+            try:
+                metrics = json.loads(mj.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError, ValueError):
+                continue
+            if not isinstance(metrics, dict):
+                continue
+            for sample in metrics.get("samples", []):
+                if not isinstance(sample, dict):
+                    continue
+                output_file = sample.get("output_file")
+                if not output_file:
+                    continue
+                scores: dict[str, float] = {}
+                for key in ("plddt_mean", "ptm", "iptm"):
+                    val = sample.get(key)
+                    if isinstance(val, (int, float)):
+                        scores[key] = float(val)
+                if scores:
+                    per_file_scores[output_file] = scores
+            break  # first metrics.json wins
+
         structures: list[StructureFile] = []
         for cif in sorted(downloaded_dir.rglob("prediction_*.cif")):
+            rel = cif.relative_to(downloaded_dir)
+            scores = per_file_scores.get(cif.name, {})
             structures.append(StructureFile(
                 rank=int(cif.stem.split("_")[-1]),
                 format="cif",
-                url=f"/v1/jobs/{ensemble_task_id}/structures/{self.name}/{cif.name}",
-                plddt=None,
+                url=f"/v1/jobs/{ensemble_task_id}/structures/{self.name}/{rel.as_posix()}",
+                plddt=scores.get("plddt_mean"),
                 size_bytes=cif.stat().st_size,
             ))
         structures.sort(key=lambda s: s.rank)
 
-        # Try to extract plddt from metrics.json if available.
+        # Top-level confidence = rank-0 sample's scores.
         confidence: dict[str, float] = {}
-        metrics_files = list(downloaded_dir.rglob("metrics.json"))
-        if metrics_files:
-            try:
-                metrics = json.loads(metrics_files[0].read_text())
-                if isinstance(metrics, dict):
-                    if "mean_plddt" in metrics:
-                        confidence["mean_plddt"] = float(metrics["mean_plddt"])
-                        if structures:
-                            structures[0].plddt = confidence["mean_plddt"]
-                    if "ptm" in metrics:
-                        confidence["ptm"] = float(metrics["ptm"])
-            except (json.JSONDecodeError, ValueError, TypeError):
-                pass
+        if structures:
+            top_scores = per_file_scores.get(structures[0].url.rsplit("/", 1)[-1])
+            # The URL now carries a possibly multi-segment path; fall back to
+            # the rank-0 sample we just used.
+            if not top_scores:
+                for cif in sorted(downloaded_dir.rglob("prediction_*.cif")):
+                    if int(cif.stem.split("_")[-1]) == structures[0].rank:
+                        top_scores = per_file_scores.get(cif.name, {})
+                        break
+            for k, v in (top_scores or {}).items():
+                confidence[k] = v
+            if "plddt_mean" in confidence:
+                # Convenience alias preferred by aggregator + clients.
+                confidence.setdefault("mean_plddt", confidence["plddt_mean"])
 
         return FoldingMethodResult(
             method=self.name,

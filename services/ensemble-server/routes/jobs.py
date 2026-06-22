@@ -24,7 +24,7 @@ async def get_job(
     return job.model_dump(mode="json")
 
 
-@router.get("/v1/jobs/{task_id}/structures/{method}/{filename}")
+@router.get("/v1/jobs/{task_id}/structures/{method}/{filename:path}")
 async def download_structure(
     request: Request,
     task_id: str,
@@ -34,9 +34,13 @@ async def download_structure(
 ) -> FileResponse:
     """Stream one structure file from a completed sub-task.
 
-    Path traversal protection: filename can only be a basename (no '/' or '..').
+    Accepts multi-segment ``filename`` (e.g. ``predictions/input/input_model_0.cif``
+    for boltz's nested output layout).  Path-traversal safety is enforced by
+    resolving the target and checking it stays under
+    ``<jobs_base_dir>/<task_id>/outputs/<method>/`` — symlinks pointing
+    outside that root are rejected.
     """
-    if "/" in filename or ".." in filename or filename.startswith("."):
+    if not filename or filename.startswith("/") or ".." in filename.split("/"):
         raise HTTPException(400, "invalid filename")
 
     orchestrator = request.app.state.orchestrator
@@ -45,11 +49,16 @@ async def download_structure(
         raise HTTPException(404, "job not found")
 
     settings = request.app.state.settings
-    target = settings.jobs_base_dir / task_id / "outputs" / method / filename
+    method_root = (settings.jobs_base_dir / task_id / "outputs" / method).resolve()
+    target = (method_root / filename).resolve()
+    try:
+        target.relative_to(method_root)
+    except ValueError:
+        raise HTTPException(400, "invalid filename")
     if not target.is_file():
         raise HTTPException(404, "file not found")
     return FileResponse(
         target,
         media_type="application/octet-stream",
-        filename=filename,
+        filename=target.name,
     )

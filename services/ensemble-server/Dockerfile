@@ -50,6 +50,14 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # the heavier framework / deps layers above.
 COPY services/ensemble-server /opt/ensemble/server
 
+# NAS-mountable job root.  FC console mounts the project NAS to this path so
+# EnsembleJob sidecars (job.json) + downloaded sub-task outputs survive
+# instance reclamation and are visible to whichever instance services the
+# next poll/download request.  Without NAS, results vanish ~5 min after the
+# task finishes (FC idle timeout).  Convention matches rfantibody-server.
+ENV ENSEMBLE_JOBS_BASE_DIR=/data/ensemble_jobs
+RUN mkdir -p /data/ensemble_jobs
+
 ENV PORT=9000
 EXPOSE 9000
 

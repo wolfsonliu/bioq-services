@@ -296,6 +296,48 @@ def test_download_structure_rejects_path_traversal(client: TestClient, app):
     # FastAPI may normalize the path before route matching; either 400 or 404 is acceptable
     assert bad.status_code in (400, 404)
 
+    # Multi-segment path with `..` segment in the middle is explicitly rejected
+    # by the route validator (defense in depth — covers raw `..` paths even
+    # if FastAPI's normalizer doesn't strip them).
+    direct = client.get(
+        f"/v1/jobs/{task_id}/structures/fake_a/sub/../passwd",
+        headers=API_KEY_HEADER,
+    )
+    assert direct.status_code in (400, 404)
+
+
+def test_download_structure_supports_nested_filename(tmp_path: Path, app, client: TestClient):
+    """Boltz-style nested output (predictions/<stem>/file.cif) must be reachable."""
+    # Set up a fake completed job's outputs on disk
+    settings = app.state.settings
+    task_id = "ens_fold_test_nested"
+    nested_dir = settings.jobs_base_dir / task_id / "outputs" / "fake_a" / "predictions" / "x"
+    nested_dir.mkdir(parents=True)
+    nested_file = nested_dir / "x_model_0.cif"
+    nested_file.write_text("data_pred\nfake-cif-content\n")
+
+    # Plant a minimal EnsembleJob sidecar so refresh() returns truthy
+    from server.orchestrator.models import EnsembleJob
+    from datetime import datetime, timezone
+    sidecar = settings.jobs_base_dir / task_id / "job.json"
+    job = EnsembleJob(
+        task_id=task_id,
+        task_kind="folding",
+        customer_id="customer_a",            # must match API_KEY_HEADER's customer
+        submitted_at=datetime.now(timezone.utc),
+        completed_at=datetime.now(timezone.utc),
+        input={"sequences": [], "msa_mode": "empty"},
+        requested_methods=["fake_a"],
+    )
+    sidecar.write_text(job.model_dump_json())
+
+    r = client.get(
+        f"/v1/jobs/{task_id}/structures/fake_a/predictions/x/x_model_0.cif",
+        headers=API_KEY_HEADER,
+    )
+    assert r.status_code == 200, r.text
+    assert r.content == nested_file.read_bytes()
+
 
 # ---------------------------------------------------------------------------
 # Multi-auth tests: VPC bypass + JWT
