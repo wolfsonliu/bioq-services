@@ -23,11 +23,19 @@ endpoint.
 After long polling runs FC's HTTP gateway sometimes returns 429 on follow-up
 GETs (see project memory `project_fc_http_polling_unreliable_at_concurrency`),
 so auxiliary status/files/download requests go through `_get_with_retry`.
+
+After each `*_task` fixture polls to terminal status, the JobInfo JSON +
+subprocess log + raw zip + extracted output files are downloaded to
+``tests/fc_outputs/run-<timestamp>/<label>/`` (see ``local_output_dir`` in
+conftest.py).  This happens BEFORE the ``status == completed`` assertion so
+the artifacts are available even when the subprocess failed — useful for
+diagnosing the next dependency bug after one is fixed.
 """
 
 from __future__ import annotations
 
 import io
+import json
 import time
 import uuid
 import zipfile
@@ -119,6 +127,47 @@ def _async_submit(
         )
 
 
+def _save_job_artifacts(
+    client: httpx.Client,
+    task_id: str,
+    job_info: dict,
+    dst_dir: Path,
+) -> None:
+    """Download JobInfo / log / zip / extracted output into ``dst_dir``.
+
+    Uses ``_get_with_retry`` because long async runs trigger FC HTTP
+    gateway 429 throttling on follow-up GETs.  Best-effort: any individual
+    step's failure is logged but does NOT raise — the test's own assertions
+    remain the source of truth.  Call this *before* the completion
+    assertion so artifacts persist even on subprocess failure.
+    """
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    (dst_dir / "jobinfo.json").write_text(json.dumps(job_info, indent=2))
+
+    try:
+        r = _get_with_retry(client, f"/api/jobs/{task_id}/log")
+        if r.status_code == 200:
+            body = r.json()
+            (dst_dir / "subprocess.log").write_text(
+                body.get("log") or body.get("text") or ""
+            )
+    except Exception as exc:  # noqa: BLE001
+        print(f"[fc_outputs] log download failed for {task_id}: {exc!r}")
+
+    try:
+        r = _get_with_retry(client, f"/api/jobs/{task_id}/download")
+        if r.status_code == 200 and r.content:
+            (dst_dir / f"{task_id}.zip").write_bytes(r.content)
+            extract_to = dst_dir / "extracted"
+            extract_to.mkdir(exist_ok=True)
+            with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+                zf.extractall(extract_to)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[fc_outputs] zip download failed for {task_id}: {exc!r}")
+
+    print(f"[fc_outputs] saved {task_id} → {dst_dir}")
+
+
 def _get_with_retry(
     client: httpx.Client,
     path: str,
@@ -170,6 +219,7 @@ def cofold_task(
     client: httpx.Client,
     cofold_task_id: str,
     cofold_submit_response: httpx.Response,
+    local_output_dir: Path,
 ) -> dict:
     assert cofold_submit_response.status_code == 202, (
         f"cofold async submit returned {cofold_submit_response.status_code}: "
@@ -183,6 +233,7 @@ def cofold_task(
         timeout_s=POLL_TIMEOUT_S,
         interval_s=POLL_INTERVAL_S,
     )
+    _save_job_artifacts(client, cofold_task_id, final, local_output_dir / "cofold")
     assert final["status"] == "completed", f"cofold did not complete: {final}"
     return final
 
@@ -204,6 +255,7 @@ def design_task(
     client: httpx.Client,
     design_task_id: str,
     design_submit_response: httpx.Response,
+    local_output_dir: Path,
 ) -> dict:
     assert design_submit_response.status_code == 202, (
         f"design async submit returned {design_submit_response.status_code}: "
@@ -217,6 +269,7 @@ def design_task(
         timeout_s=POLL_TIMEOUT_S,
         interval_s=POLL_INTERVAL_S,
     )
+    _save_job_artifacts(client, design_task_id, final, local_output_dir / "design")
     assert final["status"] == "completed", f"design did not complete: {final}"
     return final
 

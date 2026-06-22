@@ -17,12 +17,18 @@ boltz).  By default it uses only `esmfold2` (fastest, no MSA) and tolerates a
 `failed` terminal state, just asserting that the orchestration pipeline runs
 to completion (NAS persistence + sub-task lifecycle).  Set
 `ENSEMBLE_E2E_REQUIRE_SUCCESS=1` to require at least one method to succeed.
+
+E2E tests download every successful sub-task's structure files under
+``experiments/ensemble-fc-smoke/<timestamp>/<task_id>/`` for offline
+inspection (overridable via ``ENSEMBLE_E2E_ARTIFACT_DIR``).
 """
 
 from __future__ import annotations
 
+import json
 import os
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -48,6 +54,62 @@ def base_url() -> str:
 def client(base_url: str):
     with httpx.Client(base_url=base_url, timeout=httpx.Timeout(60.0)) as c:
         yield c
+
+
+@pytest.fixture(scope="session")
+def artifact_dir() -> Path:
+    """One artifact root per pytest session — downloaded structures land here.
+
+    Override with ``ENSEMBLE_E2E_ARTIFACT_DIR=/some/path``.  Defaults to
+    ``<repo>/experiments/ensemble-fc-smoke/<UTC-timestamp>/`` (gitignored).
+    """
+    override = os.environ.get("ENSEMBLE_E2E_ARTIFACT_DIR")
+    if override:
+        root = Path(override)
+    else:
+        repo_root = Path(__file__).resolve().parents[3]
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        root = repo_root / "experiments" / "ensemble-fc-smoke" / stamp
+    root.mkdir(parents=True, exist_ok=True)
+    print(f"\n[ensemble e2e] artifact root: {root}")
+    return root
+
+
+def _save_job_metadata(final: dict, dest: Path) -> None:
+    """Write the full EnsembleJob JSON to disk for offline inspection."""
+    dest.mkdir(parents=True, exist_ok=True)
+    (dest / "job.json").write_text(json.dumps(final, indent=2), encoding="utf-8")
+
+
+def _download_artifacts(
+    client: httpx.Client, final: dict, dest: Path,
+) -> dict[str, list[Path]]:
+    """Download every structure file from a terminal EnsembleJob.
+
+    Returns ``{method: [local_path, ...]}`` for assertions in the caller.
+    The URLs in ``sub_tasks.<m>.output.structures`` are paths under the
+    same base_url; we re-fetch them with the client (carries session
+    affinity since httpx-Client is bound to base_url).
+    """
+    saved: dict[str, list[Path]] = {}
+    for method, sub in final.get("sub_tasks", {}).items():
+        out = sub.get("output") or {}
+        for s in out.get("structures", []):
+            url = s.get("url")
+            if not url:
+                continue
+            # URL is something like /v1/jobs/<task_id>/structures/<method>/<rel>
+            # We mirror the "<method>/<rel>" tail into dest/<method>/<rel>.
+            marker = f"/structures/{method}/"
+            tail = url.split(marker, 1)[1] if marker in url else Path(url).name
+            target = dest / method / tail
+            target.parent.mkdir(parents=True, exist_ok=True)
+            resp = client.get(url, timeout=120.0)
+            resp.raise_for_status()
+            target.write_bytes(resp.content)
+            saved.setdefault(method, []).append(target)
+            print(f"  saved {target.relative_to(dest)} ({len(resp.content)} bytes)")
+    return saved
 
 
 def _is_terminal(job: dict) -> bool:
@@ -215,7 +277,7 @@ def _assert_success_if_required(final: dict, methods: list[str]) -> None:
 
 @pytest.mark.parametrize("method", FAST_METHODS)
 def test_folding_ensemble_single_method(
-    client: httpx.Client, method: str,
+    client: httpx.Client, method: str, artifact_dir: Path,
 ) -> None:
     """Submit a real folding job using one method, poll to a terminal state."""
     available = {
@@ -230,8 +292,27 @@ def test_folding_ensemble_single_method(
     _assert_terminal_shape(final, task_id, [method])
     _assert_success_if_required(final, [method])
 
+    dest = artifact_dir / task_id
+    _save_job_metadata(final, dest)
+    saved = _download_artifacts(client, final, dest)
+    if final["sub_tasks"][method]["status"] in ("succeeded", "cached"):
+        assert saved.get(method), (
+            f"sub-task {method!r} succeeded but no structures downloaded; "
+            f"check the URLs in {dest / 'job.json'}"
+        )
+        # plDDT should now be populated (Bug B fix).  Only enforce when
+        # REQUIRE_SUCCESS is set so the test still surfaces config issues
+        # without crashing on legitimate "missing scores" cases.
+        if os.environ.get("ENSEMBLE_E2E_REQUIRE_SUCCESS"):
+            structures = final["sub_tasks"][method]["output"]["structures"]
+            assert any(s.get("plddt") is not None for s in structures), (
+                f"no plddt populated in {method!r} structures: {structures!r}"
+            )
 
-def test_folding_ensemble_multi_method_aggregation(client: httpx.Client) -> None:
+
+def test_folding_ensemble_multi_method_aggregation(
+    client: httpx.Client, artifact_dir: Path,
+) -> None:
     """Submit an ensemble across multiple fast methods to exercise aggregation.
 
     Cross-method ranking is the actual MVP use-case for ensemble-server, so
@@ -239,6 +320,7 @@ def test_folding_ensemble_multi_method_aggregation(client: httpx.Client) -> None
       1. fan-out to N methods all returns 202 from a single submit
       2. polling sees them transition independently
       3. the aggregator populates `aggregated_output` once all succeed
+      4. (REQUIRE_SUCCESS) ensemble_ranking has real non-zero plDDT scores
     """
     available = {
         m["name"]
@@ -257,8 +339,15 @@ def test_folding_ensemble_multi_method_aggregation(client: httpx.Client) -> None
     _assert_terminal_shape(final, task_id, methods)
     _assert_success_if_required(final, methods)
 
+    dest = artifact_dir / task_id
+    _save_job_metadata(final, dest)
+    saved = _download_artifacts(client, final, dest)
+    for m in methods:
+        if final["sub_tasks"][m]["status"] in ("succeeded", "cached"):
+            assert saved.get(m), f"sub-task {m!r} succeeded but no structures downloaded"
+
     # When all sub-tasks succeed, aggregator must populate ensemble_ranking
-    # spanning all methods.  This is only enforced when REQUIRE_SUCCESS is on.
+    # spanning all methods with non-zero plDDT scores (Bug B fix).
     if os.environ.get("ENSEMBLE_E2E_REQUIRE_SUCCESS"):
         agg = final["aggregated_output"]
         ranking = agg.get("ensemble_ranking", [])
@@ -267,4 +356,13 @@ def test_folding_ensemble_multi_method_aggregation(client: httpx.Client) -> None
         assert ranked_methods == set(methods), (
             f"ensemble_ranking missing methods: ranked={ranked_methods!r} "
             f"expected={set(methods)!r}"
+        )
+        scores = [entry["score"] for entry in ranking]
+        assert any(s > 0 for s in scores), (
+            f"all ensemble_ranking scores are zero — plDDT plumbing broken: "
+            f"ranking={ranking!r}"
+        )
+        # Ranking must be descending by score
+        assert scores == sorted(scores, reverse=True), (
+            f"ensemble_ranking not sorted by score desc: {scores!r}"
         )
