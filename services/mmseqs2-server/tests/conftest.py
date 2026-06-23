@@ -3,7 +3,7 @@
 Mirrors the pattern used by every bioagent service — at runtime the Dockerfile
 copies `services/mmseqs2-server/` to `/opt/mmseqs2/server/` so app code
 references modules via `from server.*`. Tests recreate that by registering
-`services/mmseqs2-server/server/__init__.py` as the `server` module.
+the service root dir as the `server` module.
 """
 
 from __future__ import annotations
@@ -13,13 +13,12 @@ import sys
 from pathlib import Path
 
 SERVICE_DIR = Path(__file__).resolve().parent.parent
-SERVER_PKG_DIR = SERVICE_DIR / "server"
 
 if "server" not in sys.modules:
     spec = importlib.util.spec_from_file_location(
         "server",
-        SERVER_PKG_DIR / "__init__.py",
-        submodule_search_locations=[str(SERVER_PKG_DIR)],
+        SERVICE_DIR / "__init__.py",
+        submodule_search_locations=[str(SERVICE_DIR)],
     )
     if spec is not None and spec.loader is not None:
         module = importlib.util.module_from_spec(spec)
