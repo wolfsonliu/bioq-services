@@ -50,6 +50,7 @@ From `colabfold/input.py`:
 | `--af3-json` / `--af3-msa-as-path` + `AF3Utils` | Out of scope — this service emits a3m only.                                                       |
 | `--use-templates` / `--db2` / template path   | Phase 2 will add a separate templates service.                                                     |
 | `--use-env-pairing` / `--db4` / SPIRE         | Not exposed in our CLI contract; can be re-added later by surfacing `mmseqs_search_pair(pair_env=True)`. |
+| `--pair-mode unpaired_paired` (3rd mode)      | Phase 1 callers always run monomer (`unpaired`) **or** multimer pairing (`paired`) but never combine them in one invocation; `services/ensemble-server`'s `BoltzFoldingAdapter` sets exactly one mode per request. Phase 2 can re-add by extending `pair_mode` choices in `main()` and adding a third dispatch branch that runs both pipelines. |
 | Multi-query batching in upstream `main()`     | One query per orchestrator invocation (HTTP / CLI front-end issues one job per request).           |
 | CSV / TSV / A3M / PDB / CIF query parsers     | Avoids pulling `pandas` + `alphafold` dependencies; `tools.py` is responsible for FASTA conversion. |
 | `colabfold.utils.MolType` / `classify_molecules` | Tied to AF3 JSON output, which we don't produce.                                                |

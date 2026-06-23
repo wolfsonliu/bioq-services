@@ -118,6 +118,10 @@ def run_mmseqs(mmseqs: Path, params: List[Union[str, Path]]) -> None:
     params_log = " ".join(str(i) for i in params)
     logger.info(f"Running {mmseqs} {params_log}")
     os.environ["MMSEQS_CALL_DEPTH"] = "1"
+    # Diverges from upstream: coerce mmseqs + each param to str so callers
+    # can pass Path objects without subprocess raising TypeError on Python
+    # versions where check_call's argv only accepts str/bytes (upstream uses
+    # [mmseqs] + params raw, which relies on Path being str-compatible).
     subprocess.check_call([str(mmseqs)] + [str(p) for p in params])
 
 
@@ -187,6 +191,10 @@ def mmseqs_search_monomer(
     # missing DB.  Also pick the right suffix layout (indexed vs raw)
     # depending on whether the DB has a ``.idx`` index.
     # Upstream reference: colabfold/mmseqs/search.py:92-110
+    # Diverges from upstream: hoisted dbSuffix1/dbSuffix2 = ".idx" defaults
+    # out of the for-loop (dropping the else-branch); semantically equivalent
+    # because the indexed case sets both to ".idx" anyway, and we don't carry
+    # dbSuffix3 (templates dropped).
     dbSuffix1 = ".idx"
     dbSuffix2 = ".idx"
     for db in used_dbs:
@@ -616,6 +624,9 @@ def mmseqs_search_pair(
     prefilter_mode: int = 0,
     s: float = 8,
     threads: int = 64,
+    # Diverges from upstream: gpu/gpu_server typed as int (0/1) instead of
+    # bool to match our CLI's int-style flags (and so the value can be
+    # forwarded into --gpu / --gpu-server argv unchanged).
     gpu: int = 0,
     gpu_server: int = 0,
     db_load_mode: int = 2,
@@ -644,6 +655,9 @@ def mmseqs_search_pair(
     if not dbbase.joinpath(f"{uniref_db}.dbtype").is_file():
         raise FileNotFoundError(f"Database {uniref_db} does not exist")
 
+    # Diverges from upstream: hoisted dbSuffix1/dbSuffix2 = ".idx" defaults
+    # out of the if/else; semantically equivalent because the indexed branch
+    # in upstream sets both to ".idx" anyway.
     dbSuffix1 = ".idx"
     dbSuffix2 = ".idx"
     if (
@@ -902,7 +916,6 @@ def mmseqs_search_pair(
 
 def _build_query_db(
     mmseqs: Path,
-    query_file: Path,
     base: Path,
     queries_unique: list,
 ) -> None:
@@ -1097,7 +1110,7 @@ def main() -> None:
     queries_unique = _dedupe_queries(queries)
 
     # Build qdb + lookup ----------------------------------------------
-    _build_query_db(args.mmseqs, args.query, args.output_dir, queries_unique)
+    _build_query_db(args.mmseqs, args.output_dir, queries_unique)
 
     keep_paired = args.pair_mode == "paired"
     keep_unpaired = args.pair_mode == "unpaired"
@@ -1155,11 +1168,6 @@ def main() -> None:
     if args.unpack:
         for job_number, (raw_jobname, _qs, _qsc, _other) in enumerate(queries_unique):
             src = args.output_dir.joinpath(f"{job_number}.a3m")
-            if not src.exists() and not is_complex:
-                # monomer mode writes ``<id>.a3m`` directly (id == job_number
-                # when there is one sequence per job, which is the case for
-                # dedupe-1 monomers).
-                src = args.output_dir.joinpath(f"{job_number}.a3m")
             dst = args.output_dir.joinpath(f"{safe_filename(raw_jobname)}.a3m")
             if src.exists() and src != dst:
                 os.rename(src, dst)

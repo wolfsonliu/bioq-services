@@ -165,6 +165,10 @@ def pair_msa(
     Three cases: only unpaired (pad), both (paired then padded unpaired
     appended), only paired (pair sequences).
     """
+    # Diverges from upstream: rewritten from upstream's if/elif/else +
+    # ``a3m_lines = ...`` assignment pattern to early returns (functionally
+    # equivalent); error message reworded from "Invalid pairing" to spell
+    # out which inputs were None for easier debugging.
     if paired_msa is None and unpaired_msa is not None:
         return pad_sequences(unpaired_msa, query_seqs_unique, query_seqs_cardinality)
     if paired_msa is not None and unpaired_msa is not None:
@@ -244,6 +248,9 @@ def get_queries(
         )
 
     sequences, headers = parse_fasta(input_path.read_text())
+    # Diverges from upstream: defensive guard — upstream silently produces an
+    # empty queries list, which causes a downstream IndexError in
+    # _build_query_db; fail fast at parse time instead.
     if len(sequences) == 0:
         raise ValueError(f"{input_path} is empty")
 
