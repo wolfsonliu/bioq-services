@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from ...folding.schemas import FoldingInput, FoldingMethodResult, StructureFile
 from ...task_kind import TaskKind
+from .._canonical import publish_canonical
 from ..base import MethodAdapter
 
 
@@ -55,9 +56,9 @@ class AlphaFoldFoldingAdapter(MethodAdapter[FoldingInput, FoldingMethodResult]):
         # (the dir name is the FASTA stem, which is fixed to ``input`` by the
         # service; see services/alphafold-server/app.py:62).  The orchestrator
         # unzips into our downloaded_dir, stripping the ``output/`` root, so
-        # files end up at ``<downloaded_dir>/input/ranked_<N>.pdb``.  The URL
-        # must encode this relative path or the download route 404s — same
-        # convention as boltz/promera adapters.
+        # files end up at ``<downloaded_dir>/input/ranked_<N>.pdb``.  We
+        # republish each via publish_canonical so the public URL is
+        # ``<method>/rank_<i>.pdb`` regardless of upstream layout.
         ensemble_task_id = sub_task_id.split("__")[0]
 
         # Parse ranking_debug.json once so we can attach per-model plDDT to
@@ -89,13 +90,18 @@ class AlphaFoldFoldingAdapter(MethodAdapter[FoldingInput, FoldingMethodResult]):
         structures: list[StructureFile] = []
         ranked = sorted(downloaded_dir.rglob("ranked_*.pdb"))
         for i, pdb in enumerate(ranked):
-            rel = pdb.relative_to(downloaded_dir)
+            url, original_filename = publish_canonical(
+                src=pdb, downloaded_dir=downloaded_dir,
+                ensemble_task_id=ensemble_task_id, method=self.name,
+                rank=i, format="pdb",
+            )
             structures.append(StructureFile(
                 rank=i,
                 format="pdb",
-                url=f"/v1/jobs/{ensemble_task_id}/structures/{self.name}/{rel.as_posix()}",
+                url=url,
                 plddt=per_rank_plddt.get(i),
                 size_bytes=pdb.stat().st_size,
+                original_filename=original_filename,
             ))
 
         confidence: dict[str, float] = {}

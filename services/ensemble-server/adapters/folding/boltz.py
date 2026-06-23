@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from ...folding.schemas import FoldingInput, FoldingMethodResult, StructureFile
 from ...task_kind import TaskKind
+from .._canonical import publish_canonical
 from ..base import MethodAdapter
 
 
@@ -97,39 +98,42 @@ class BoltzFoldingAdapter(MethodAdapter[FoldingInput, FoldingMethodResult]):
         ensemble_task_id = sub_task_id.split("__")[0]
 
         # Boltz output: predictions/<stem>/<stem>_model_<N>.cif plus
-        # confidence_<stem>_model_<N>.json alongside.
+        # confidence_<stem>_model_<N>.json alongside.  Pair them, sort by
+        # model index, then republish each as <method>/rank_<i>.cif.
+        raw_cifs = sorted(downloaded_dir.rglob("*.cif"))
+
+        def _model_idx(p: Path) -> int:
+            m = _BOLTZ_MODEL_RE.match(p.name)
+            return int(m.group("idx")) if m else 0
+
+        raw_cifs.sort(key=_model_idx)
+
         structures: list[StructureFile] = []
-        cif_files = sorted(downloaded_dir.rglob("*.cif"))
-        for cif in cif_files:
-            rel = cif.relative_to(downloaded_dir)
-            m = _BOLTZ_MODEL_RE.match(cif.name)
-            idx = int(m.group("idx")) if m else 0
-            plddt = _read_complex_plddt(cif)
+        for i, cif in enumerate(raw_cifs):
+            url, original_filename = publish_canonical(
+                src=cif, downloaded_dir=downloaded_dir,
+                ensemble_task_id=ensemble_task_id, method=self.name,
+                rank=i, format="cif",
+            )
             structures.append(StructureFile(
-                rank=idx,
+                rank=i,
                 format="cif",
-                url=f"/v1/jobs/{ensemble_task_id}/structures/{self.name}/{rel.as_posix()}",
-                plddt=plddt,
+                url=url,
+                plddt=_read_complex_plddt(cif),
                 size_bytes=cif.stat().st_size,
+                original_filename=original_filename,
             ))
-        structures.sort(key=lambda s: s.rank)
 
         # Top-level confidence (rank-0 model's scores), exposed for clients
         # that want to inspect ptm/iptm/confidence_score in addition to plddt.
         confidence: dict[str, float] = {}
-        if structures:
-            top = next(
-                (c for c in cif_files if _BOLTZ_MODEL_RE.match(c.name) and
-                 int(_BOLTZ_MODEL_RE.match(c.name).group("idx")) == structures[0].rank),
-                cif_files[0] if cif_files else None,
-            )
-            if top is not None:
-                conf_json = _find_confidence_json(top)
-                if conf_json is not None:
-                    data = _safe_load_json(conf_json)
-                    for key in ("complex_plddt", "ptm", "iptm", "confidence_score"):
-                        if isinstance(data.get(key), (int, float)):
-                            confidence[key] = float(data[key])
+        if raw_cifs:
+            conf_json = _find_confidence_json(raw_cifs[0])
+            if conf_json is not None:
+                data = _safe_load_json(conf_json)
+                for key in ("complex_plddt", "ptm", "iptm", "confidence_score"):
+                    if isinstance(data.get(key), (int, float)):
+                        confidence[key] = float(data[key])
 
         return FoldingMethodResult(
             method=self.name,

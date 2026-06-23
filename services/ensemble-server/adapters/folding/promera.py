@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from ...folding.schemas import FoldingInput, FoldingMethodResult, StructureFile
 from ...task_kind import TaskKind
+from .._canonical import publish_canonical
 from ..base import MethodAdapter
 
 
@@ -93,13 +94,18 @@ class PromeraFoldingAdapter(MethodAdapter[FoldingInput, FoldingMethodResult]):
 
         structures: list[StructureFile] = []
         for idx, (cif, scores, _) in enumerate(per_cif):
-            rel = cif.relative_to(downloaded_dir)
+            url, original_filename = publish_canonical(
+                src=cif, downloaded_dir=downloaded_dir,
+                ensemble_task_id=ensemble_task_id, method=self.name,
+                rank=idx, format="cif",
+            )
             structures.append(StructureFile(
                 rank=idx,
                 format="cif",
-                url=f"/v1/jobs/{ensemble_task_id}/structures/{self.name}/{rel.as_posix()}",
+                url=url,
                 plddt=scores.get("plddt"),
                 size_bytes=cif.stat().st_size,
+                original_filename=original_filename,
             ))
 
         confidence: dict[str, float] = {}

@@ -51,13 +51,14 @@ def test_alphafold_build_request_has_fasta_upload_and_form_fields():
     assert ">A" in content and "MKQH" in content
 
 
-def test_alphafold_normalize_output_uses_relative_urls_and_extracts_plddt(tmp_path):
+def test_alphafold_normalize_output_publishes_canonical_paths_and_plddt(tmp_path):
     """alphafold-server emits ``output/input/ranked_<N>.pdb`` (the orchestrator
-    strips the ``output/`` root) plus ``output/input/ranking_debug.json`` with
-    per-model plDDT on the **0-100 scale**.  URLs must use the relative path
-    under outputs/<method>/ or the download route 404s (verified v0.0.9 prod).
-    plDDT is normalized to 0-1 to align with the other folding methods so the
-    aggregator ranks meaningfully across methods."""
+    strips ``output/``) + ``ranking_debug.json`` with per-model plDDT on the
+    **0-100 scale**.  The adapter rescales plDDT to 0-1 and republishes each
+    PDB as ``<method>/rank_<i>.pdb`` so the public URL is independent of
+    AlphaFold's internal layout.  The original filename is preserved on
+    ``StructureFile.original_filename`` for clients that need to cross-reference
+    upstream logs."""
     nested = tmp_path / "input"
     nested.mkdir()
     for i in range(3):
@@ -65,7 +66,7 @@ def test_alphafold_normalize_output_uses_relative_urls_and_extracts_plddt(tmp_pa
     (nested / "ranking_debug.json").write_text(json.dumps({
         "order": ["model_3_ptm_pred_0", "model_1_ptm_pred_0", "model_5_ptm_pred_0"],
         "plddts": {
-            "model_3_ptm_pred_0": 84.2,   # 0-100 input
+            "model_3_ptm_pred_0": 84.2,
             "model_1_ptm_pred_0": 79.5,
             "model_5_ptm_pred_0": 71.1,
         },
@@ -80,9 +81,15 @@ def test_alphafold_normalize_output_uses_relative_urls_and_extracts_plddt(tmp_pa
     for i, s in enumerate(result.structures):
         assert s.format == "pdb"
         assert s.rank == i
-        # Crucially: URL carries the ``input/`` subdir so download_structure
-        # can resolve it under outputs/alphafold/.
-        assert s.url == f"/v1/jobs/ens_fold_xyz/structures/alphafold/input/ranked_{i}.pdb"
+        # Canonical URL — same shape regardless of upstream layout.
+        assert s.url == f"/v1/jobs/ens_fold_xyz/structures/alphafold/rank_{i}.pdb"
+        # Raw upstream filename preserved.
+        assert s.original_filename == f"ranked_{i}.pdb"
+        # Canonical file actually exists on disk
+        assert (tmp_path / f"rank_{i}.pdb").is_file()
+    # Originals are NOT deleted — still available for debugging/audit.
+    for i in range(3):
+        assert (tmp_path / "input" / f"ranked_{i}.pdb").is_file()
     # plDDT rescaled to 0-1 to match esmfold2 / boltz / promera convention.
     assert result.structures[0].plddt == pytest.approx(0.842)
     assert result.structures[1].plddt == pytest.approx(0.795)
@@ -133,17 +140,26 @@ def test_esmfold2_normalize_output_with_metrics(tmp_path):
     # Rank 0 paired with sample 0
     assert result.structures[0].rank == 0
     assert result.structures[0].plddt == pytest.approx(0.87)
+    assert result.structures[0].original_filename == "prediction_0.cif"
+    assert result.structures[0].url == (
+        "/v1/jobs/ens_fold_abc/structures/esmfold2/rank_0.cif"
+    )
     # Rank 1 paired with sample 1
     assert result.structures[1].rank == 1
     assert result.structures[1].plddt == pytest.approx(0.81)
+    assert result.structures[1].original_filename == "prediction_1.cif"
+    # Canonical files exist on disk
+    assert (tmp_path / "rank_0.cif").is_file()
+    assert (tmp_path / "rank_1.cif").is_file()
     # Top-level confidence = rank-0 scores (plus mean_plddt alias)
     assert result.confidence["plddt_mean"] == pytest.approx(0.87)
     assert result.confidence["mean_plddt"] == pytest.approx(0.87)
     assert result.confidence["ptm"] == pytest.approx(0.92)
 
 
-def test_esmfold2_normalize_output_uses_relative_url(tmp_path):
-    """URL path is relative to outputs/<method>/ so multi-segment layouts work."""
+def test_esmfold2_normalize_output_canonical_url_independent_of_source_layout(tmp_path):
+    """Canonical URL is ``<method>/rank_<i>.cif`` regardless of where the raw
+    prediction CIF lives in the unzipped tree."""
     nested = tmp_path / "output"
     nested.mkdir()
     (nested / "prediction_0.cif").write_bytes(b"loop_\n")
@@ -151,8 +167,12 @@ def test_esmfold2_normalize_output_uses_relative_url(tmp_path):
     adapter = ESMFold2FoldingAdapter(_fc_mock())
     result = adapter.normalize_output("ens_fold_q__esmfold2", tmp_path)
     assert result.structures[0].url == (
-        "/v1/jobs/ens_fold_q/structures/esmfold2/output/prediction_0.cif"
+        "/v1/jobs/ens_fold_q/structures/esmfold2/rank_0.cif"
     )
+    assert result.structures[0].original_filename == "prediction_0.cif"
+    assert (tmp_path / "rank_0.cif").is_file()
+    # Source preserved
+    assert (nested / "prediction_0.cif").is_file()
 
 
 # ---------------------------------------------------------------------------
@@ -180,9 +200,9 @@ def test_boltz_build_request_passes_msa_mode_and_empty_msa_uri():
 
 
 def test_boltz_normalize_output_pairs_cif_with_confidence(tmp_path):
-    """Boltz nests outputs under predictions/<stem>/; URL must use the
-    relative path so the download route can resolve it.  complex_plddt is
-    Boltz's per-structure plDDT key (not `plddt`)."""
+    """Boltz nests outputs under predictions/<stem>/; canonical layout
+    flattens this to ``<method>/rank_<i>.cif``.  complex_plddt is Boltz's
+    per-structure plDDT key (not `plddt`)."""
     pred_dir = tmp_path / "predictions" / "input"
     pred_dir.mkdir(parents=True)
     (pred_dir / "input_model_0.cif").write_bytes(b"loop_\n")
@@ -198,9 +218,14 @@ def test_boltz_normalize_output_pairs_cif_with_confidence(tmp_path):
     assert result.structures[0].format == "cif"
     assert result.structures[0].rank == 0
     assert result.structures[0].plddt == pytest.approx(0.81)
+    # Canonical, upstream-stable URL — no `boltz_results_input/predictions/...`
     assert result.structures[0].url == (
-        "/v1/jobs/ens_fold_q/structures/boltz/predictions/input/input_model_0.cif"
+        "/v1/jobs/ens_fold_q/structures/boltz/rank_0.cif"
     )
+    assert result.structures[0].original_filename == "input_model_0.cif"
+    assert (tmp_path / "rank_0.cif").is_file()
+    # Raw upstream tree untouched
+    assert (pred_dir / "input_model_0.cif").is_file()
     assert result.confidence["complex_plddt"] == pytest.approx(0.81)
     assert result.confidence["confidence_score"] == pytest.approx(0.85)
 
@@ -269,10 +294,17 @@ def test_promera_normalize_output_reads_complex_plddt_and_chain_plddt(tmp_path):
     assert result.structures[0].rank == 0
     assert result.structures[1].plddt == pytest.approx(0.82)
     assert result.structures[1].rank == 1
-    # URLs use relative paths so the multi-segment download route can resolve them.
+    # Canonical, upstream-stable URLs — no `cofold/cofold_seed0_samp0`
     assert result.structures[0].url == (
-        "/v1/jobs/ens_fold_p/structures/promera/cofold/cofold_seed0_samp0.cif"
+        "/v1/jobs/ens_fold_p/structures/promera/rank_0.cif"
     )
+    assert result.structures[0].original_filename == "cofold_seed0_samp0.cif"
+    assert result.structures[1].url == (
+        "/v1/jobs/ens_fold_p/structures/promera/rank_1.cif"
+    )
+    assert result.structures[1].original_filename == "cofold_seed0_samp1.cif"
+    assert (tmp_path / "rank_0.cif").is_file()
+    assert (tmp_path / "rank_1.cif").is_file()
     # Top-level confidence == rank-0 scalars only (no chain dict here)
     assert result.confidence["plddt"] == pytest.approx(0.91)
     assert result.confidence["ptm"] == pytest.approx(0.88)

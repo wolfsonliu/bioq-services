@@ -32,13 +32,22 @@ class FoldingInput(BaseModel):
 
 
 class StructureFile(BaseModel):
-    """One predicted structure from a single method."""
+    """One predicted structure from a single method.
+
+    URLs use a canonical, upstream-version-stable layout
+    (``rank_<i>.<ext>``).  The raw upstream filename — which leaks
+    implementation details like AlphaFold's ``ranked_<N>.pdb`` ranking or
+    Boltz's ``input_model_<N>.cif`` — is preserved in
+    ``original_filename`` for clients that need to cross-reference upstream
+    logs/metadata.
+    """
 
     rank: int                            # 0 = best for this method
-    url: str                             # /v1/jobs/<task_id>/structures/<method>/<file>
+    url: str                             # /v1/jobs/<task_id>/structures/<method>/rank_<i>.<ext>
     format: Literal["cif", "pdb"]
     plddt: Optional[float] = None
     size_bytes: Optional[int] = None
+    original_filename: Optional[str] = None
 
 
 class FoldingMethodResult(BaseModel):

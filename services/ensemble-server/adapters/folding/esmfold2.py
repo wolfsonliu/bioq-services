@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from ...folding.schemas import FoldingInput, FoldingMethodResult, StructureFile
 from ...task_kind import TaskKind
+from .._canonical import publish_canonical
 from ..base import MethodAdapter
 
 
@@ -78,31 +79,34 @@ class ESMFold2FoldingAdapter(MethodAdapter[FoldingInput, FoldingMethodResult]):
                     per_file_scores[output_file] = scores
             break  # first metrics.json wins
 
+        # Sort by the prediction index first so rank assignment is stable, then
+        # publish each to <method>/rank_<i>.cif before constructing StructureFile.
+        ranked_cifs = sorted(
+            downloaded_dir.rglob("prediction_*.cif"),
+            key=lambda p: int(p.stem.split("_")[-1]),
+        )
         structures: list[StructureFile] = []
-        for cif in sorted(downloaded_dir.rglob("prediction_*.cif")):
-            rel = cif.relative_to(downloaded_dir)
+        for i, cif in enumerate(ranked_cifs):
             scores = per_file_scores.get(cif.name, {})
+            url, original_filename = publish_canonical(
+                src=cif, downloaded_dir=downloaded_dir,
+                ensemble_task_id=ensemble_task_id, method=self.name,
+                rank=i, format="cif",
+            )
             structures.append(StructureFile(
-                rank=int(cif.stem.split("_")[-1]),
+                rank=i,
                 format="cif",
-                url=f"/v1/jobs/{ensemble_task_id}/structures/{self.name}/{rel.as_posix()}",
+                url=url,
                 plddt=scores.get("plddt_mean"),
                 size_bytes=cif.stat().st_size,
+                original_filename=original_filename,
             ))
-        structures.sort(key=lambda s: s.rank)
 
-        # Top-level confidence = rank-0 sample's scores.
+        # Top-level confidence = rank-0 sample's scores (looked up by the
+        # raw upstream filename, since URL paths are now canonicalized).
         confidence: dict[str, float] = {}
-        if structures:
-            top_scores = per_file_scores.get(structures[0].url.rsplit("/", 1)[-1])
-            # The URL now carries a possibly multi-segment path; fall back to
-            # the rank-0 sample we just used.
-            if not top_scores:
-                for cif in sorted(downloaded_dir.rglob("prediction_*.cif")):
-                    if int(cif.stem.split("_")[-1]) == structures[0].rank:
-                        top_scores = per_file_scores.get(cif.name, {})
-                        break
-            for k, v in (top_scores or {}).items():
+        if ranked_cifs:
+            for k, v in per_file_scores.get(ranked_cifs[0].name, {}).items():
                 confidence[k] = v
             if "plddt_mean" in confidence:
                 # Convenience alias preferred by aggregator + clients.
