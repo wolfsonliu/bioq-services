@@ -54,8 +54,10 @@ def test_alphafold_build_request_has_fasta_upload_and_form_fields():
 def test_alphafold_normalize_output_uses_relative_urls_and_extracts_plddt(tmp_path):
     """alphafold-server emits ``output/input/ranked_<N>.pdb`` (the orchestrator
     strips the ``output/`` root) plus ``output/input/ranking_debug.json`` with
-    per-model plDDT.  URLs must use the relative path under outputs/<method>/
-    or the download route 404s (verified in v0.0.9 production)."""
+    per-model plDDT on the **0-100 scale**.  URLs must use the relative path
+    under outputs/<method>/ or the download route 404s (verified v0.0.9 prod).
+    plDDT is normalized to 0-1 to align with the other folding methods so the
+    aggregator ranks meaningfully across methods."""
     nested = tmp_path / "input"
     nested.mkdir()
     for i in range(3):
@@ -63,7 +65,7 @@ def test_alphafold_normalize_output_uses_relative_urls_and_extracts_plddt(tmp_pa
     (nested / "ranking_debug.json").write_text(json.dumps({
         "order": ["model_3_ptm_pred_0", "model_1_ptm_pred_0", "model_5_ptm_pred_0"],
         "plddts": {
-            "model_3_ptm_pred_0": 84.2,
+            "model_3_ptm_pred_0": 84.2,   # 0-100 input
             "model_1_ptm_pred_0": 79.5,
             "model_5_ptm_pred_0": 71.1,
         },
@@ -81,11 +83,12 @@ def test_alphafold_normalize_output_uses_relative_urls_and_extracts_plddt(tmp_pa
         # Crucially: URL carries the ``input/`` subdir so download_structure
         # can resolve it under outputs/alphafold/.
         assert s.url == f"/v1/jobs/ens_fold_xyz/structures/alphafold/input/ranked_{i}.pdb"
-    # plDDT pulled from ranking_debug.json — rank-0 best model.
-    assert result.structures[0].plddt == pytest.approx(84.2)
-    assert result.structures[1].plddt == pytest.approx(79.5)
-    assert result.structures[2].plddt == pytest.approx(71.1)
-    assert result.confidence["plddt"] == pytest.approx(84.2)
+    # plDDT rescaled to 0-1 to match esmfold2 / boltz / promera convention.
+    assert result.structures[0].plddt == pytest.approx(0.842)
+    assert result.structures[1].plddt == pytest.approx(0.795)
+    assert result.structures[2].plddt == pytest.approx(0.711)
+    assert result.confidence["plddt"] == pytest.approx(0.842)
+    assert 0.0 <= result.structures[0].plddt <= 1.0
 
 
 # ---------------------------------------------------------------------------

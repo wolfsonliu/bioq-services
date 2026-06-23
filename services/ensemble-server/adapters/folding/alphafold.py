@@ -64,6 +64,12 @@ class AlphaFoldFoldingAdapter(MethodAdapter[FoldingInput, FoldingMethodResult]):
         # the right ranked_<N>.pdb.  Schema:
         #   {"order": [model_name, ...],          # sorted best→worst
         #    "plddts": {model_name: float, ...}}
+        #
+        # AlphaFold reports plDDT on the **0-100 scale** (e.g. 75.62) while
+        # esmfold2 / boltz / promera all report **0-1** (e.g. 0.76).  The
+        # ensemble aggregator ranks by raw score, so without normalization
+        # alphafold would always dominate purely by units.  We rescale to
+        # 0-1 here so cross-method ranking is meaningful.
         per_rank_plddt: dict[int, float] = {}
         for rd in downloaded_dir.rglob("ranking_debug.json"):
             try:
@@ -77,7 +83,7 @@ class AlphaFoldFoldingAdapter(MethodAdapter[FoldingInput, FoldingMethodResult]):
             for rank_idx, model_name in enumerate(order):
                 val = plddts.get(model_name)
                 if isinstance(val, (int, float)):
-                    per_rank_plddt[rank_idx] = float(val)
+                    per_rank_plddt[rank_idx] = float(val) / 100.0
             break
 
         structures: list[StructureFile] = []

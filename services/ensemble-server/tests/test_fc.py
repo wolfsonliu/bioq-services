@@ -52,7 +52,11 @@ def base_url() -> str:
 
 @pytest.fixture(scope="module")
 def client(base_url: str):
-    with httpx.Client(base_url=base_url, timeout=httpx.Timeout(60.0)) as c:
+    # 300s read timeout so a single poll can absorb a downstream cold-start.
+    # orchestrator.refresh() makes N sequential downstream get_status calls
+    # (one per registered method), so a 4-method ensemble poll could otherwise
+    # exceed a 60s ceiling if any downstream instance is cold-starting.
+    with httpx.Client(base_url=base_url, timeout=httpx.Timeout(300.0)) as c:
         yield c
 
 
