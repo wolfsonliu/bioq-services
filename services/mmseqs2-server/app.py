@@ -30,7 +30,7 @@ from fastapi import Form, Request
 from fastapi.responses import StreamingResponse
 
 from .adapter import MMseqs2JobAdapter
-from .models import TicketStatusResponse, TicketSubmitResponse
+from .models import TicketStatusResponse
 from .settings import MMseqs2Settings
 from .tools import (
     ParsedSequence,
@@ -39,10 +39,6 @@ from .tools import (
     parse_query_fasta,
 )
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(name)s %(levelname)s %(message)s",
-)
 logger = logging.getLogger(__name__)
 
 
@@ -119,6 +115,30 @@ app = create_app(
     version=read_version_file(__file__, default="0.0.1"),
 )
 
+# Remove framework's generic /healthz/detail so we can override it with
+# mmseqs2-specific signals (db_loaded, gpu_free_mb, ...). FastAPI uses
+# first-match routing, so without this our handler below would be shadowed.
+#
+# Since FastAPI 0.115+, `app.include_router(...)` wraps each router in an
+# `_IncludedRouter` object that owns the actual routes via `.original_router`.
+# We have to descend into those wrappers to drop the framework's `/healthz/detail`.
+def _strip_route(router, path: str, method: str) -> None:
+    router.routes = [
+        r
+        for r in router.routes
+        if not (
+            getattr(r, "path", None) == path
+            and method in getattr(r, "methods", set())
+        )
+    ]
+    for r in router.routes:
+        inner = getattr(r, "original_router", None)
+        if inner is not None:
+            _strip_route(inner, path, method)
+
+
+_strip_route(app.router, "/healthz/detail", "GET")
+
 
 # ---------------------------------------------------------------------------
 # ColabFold-protocol endpoints
@@ -185,7 +205,7 @@ def _submit_msa_job(
     # well past the subprocess lifetime. Sequence length + count is enough for
     # operational debugging.
     try:
-        job = app.state.runner.submit(
+        job = request.app.state.runner.submit(
             build_argv=_build,
             label=label,
             input_params={
@@ -201,21 +221,21 @@ def _submit_msa_job(
     return {"id": job.job_id, "job_id": job.job_id, "status": "PENDING"}
 
 
-@app.post("/ticket/msa", response_model=TicketSubmitResponse)
+@app.post("/ticket/msa")
 def post_ticket_msa(
     request: Request,
-    q: str = Form(...),
-    mode: str = Form(...),
+    q: str = Form(default=""),
+    mode: str = Form(default=""),
 ) -> dict:
     """Submit a monomer (unpaired) MSA job. ColabFold protocol."""
     return _submit_msa_job(request, q=q, mode=mode, label="msa", require_paired=False)
 
 
-@app.post("/ticket/pair", response_model=TicketSubmitResponse)
+@app.post("/ticket/pair")
 def post_ticket_pair(
     request: Request,
-    q: str = Form(...),
-    mode: str = Form(...),
+    q: str = Form(default=""),
+    mode: str = Form(default=""),
 ) -> dict:
     """Submit a multimer (paired) MSA job. ColabFold protocol."""
     return _submit_msa_job(request, q=q, mode=mode, label="pair", require_paired=True)
