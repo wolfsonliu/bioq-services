@@ -1,0 +1,132 @@
+# Docker Swarm stack for ensemble-server.
+#
+# Use case: run ensemble-server on an in-VPC server alongside the existing FC
+# deployment (kept as warm backup).  Both point at the same NAS so jobs
+# submitted via one URL can be polled via either — this is what makes "FC as
+# backup" actually work.
+#
+# ---- Deploy ----
+#   1. Build & push image (from repo root):
+#        docker build --platform linux/amd64 \
+#            -t harbor.ruosheng.bio/aliyun_fc/ensemble-server:v0.0.12 \
+#            -f services/ensemble-server/Dockerfile .
+#        docker push harbor.ruosheng.bio/aliyun_fc/ensemble-server:v0.0.12
+#
+#   2. On a swarm manager node, prepare:
+#        cp services/ensemble-server/ensemble-server.env.example \
+#           services/ensemble-server/ensemble-server.env
+#        # fill in ENSEMBLE_FC_METHODS__*, ENSEMBLE_API_KEYS__*, JWT_* values
+#        export NAS_HOST_PATH=/mnt/nas        # host-side NAS mount, must exist
+#        export IMAGE_TAG=v0.0.12
+#
+#   3. Deploy:
+#        docker stack deploy \
+#            -c services/ensemble-server/compose.swarm.yml \
+#            --with-registry-auth \
+#            ensemble
+#
+#   4. Verify:
+#        docker stack services ensemble
+#        docker service logs -f ensemble_server
+#        curl http://<swarm-node-ip>:9000/v1/healthz
+#
+# ---- Tear down ----
+#   docker stack rm ensemble
+#
+# ---- Notes ----
+# - VPC bypass auth (Host: *-vpc.fcapp.run) WON'T match this deployment's
+#   hostname.  Internal scripts must switch to X-API-Key or Bearer JWT.  See
+#   services/ensemble-server/README.md → "认证配置" for credential setup.
+# - jobs_base_dir defaults to /data/ensemble_jobs (set by the Dockerfile) —
+#   matches the FC deployment so a job submitted to either side is visible to
+#   both.  Override via ENSEMBLE_JOBS_BASE_DIR in ensemble-server.env if you
+#   want to isolate the two deployments during initial bake-in.
+
+services:
+  server:
+    image: harbor.ruosheng.bio/aliyun_fc/ensemble-server:${IMAGE_TAG:-v0.0.12}
+
+    env_file:
+      # ENSEMBLE_FC_METHODS__*, ENSEMBLE_API_KEYS__*, ENSEMBLE_AUTH__JWT_*.
+      # NOT committed; see ensemble-server.env.example for the template.
+      # Read on the swarm CLI host at `docker stack deploy` time, baked into
+      # the service spec on the raft store (acceptable for internal-only; move
+      # to docker secrets when external customers come on).
+      - ./ensemble-server.env
+
+    environment:
+      # Non-sensitive, kept inline so the file shape stays stable across deploys.
+      ENSEMBLE_AUTH__BYPASS_VPC: "true"
+      ENSEMBLE_AUTH__VPC_CUSTOMER_ID: internal_vpc
+      TZ: Asia/Shanghai
+
+    volumes:
+      # NAS shared with FC GPU downstream services (alphafold/boltz/...).  Must
+      # be mounted on every swarm node that could run this task — pin via
+      # placement.constraints below if NAS is only on some nodes.
+      - type: bind
+        source: ${NAS_HOST_PATH:-/mnt/nas}
+        target: /data
+        bind:
+          # Safety: refuse to start if the NAS mount is missing rather than
+          # silently creating an empty dir on the local disk.
+          create_host_path: false
+
+    ports:
+      # Routing-mesh exposure: hits any swarm node's :9000 → load-balanced to a
+      # healthy task.  Put nginx / Traefik in front for TLS termination (the
+      # app itself speaks plain HTTP).
+      - target: 9000
+        published: ${HOST_PORT:-9000}
+        protocol: tcp
+        mode: ingress
+
+    networks:
+      - ensemble-net
+
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/v1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # First boot warms uv venv + module imports; give it room.
+      start_period: 30s
+
+    deploy:
+      # One replica during co-deploy testing.  EnsembleJobStore is write-last-
+      # wins on the per-task sidecar and publish_canonical is idempotent, so
+      # multi-replica is technically safe (no leader needed) — but two
+      # replicas would double-poll FC GetAsyncTask for the same sub-tasks
+      # without benefit until traffic grows.  Bump REPLICAS for HA later.
+      replicas: ${REPLICAS:-1}
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 0       # keep retrying forever — we want it back up
+        window: 60s
+      update_config:
+        parallelism: 1
+        delay: 10s
+        # New task must report healthy before old one stops → no downtime
+        # during image upgrades.
+        order: start-first
+        failure_action: rollback
+      rollback_config:
+        parallelism: 1
+        order: stop-first
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+      # Uncomment + adjust if NAS is only mounted on a subset of nodes:
+      # placement:
+      #   constraints:
+      #     - node.labels.has_nas == true
+
+networks:
+  ensemble-net:
+    driver: overlay
+    attachable: true

@@ -446,6 +446,102 @@ curl -H "X-API-Key: $SECRET" -OJ \
 
 部署成功后请把 ensemble-server URL 追加到 [`services/aliyun_fc_url.md`](../aliyun_fc_url.md)。
 
+## Docker Swarm 部署（VPC 内自有服务器）
+
+ensemble-server 是 CPU + 长闲置 + 频繁调用的工作负载，FC 上 cold start（60-90s）+ 按调用计费都是反向收益。
+搬到 VPC 内自有服务器跑能消掉 cold start、简化调试、并为 Phase 3 的 cache / webhook / 后台 worker 留空间。
+迁移代码 0 改动，部署层动作而已 —— 现 stack 文件就在仓内：
+
+- [`compose.swarm.yml`](compose.swarm.yml) — Swarm stack 定义
+- [`ensemble-server.env.example`](ensemble-server.env.example) — env 模板（拷成 `ensemble-server.env` 填值，已被根 `.gitignore` 覆盖）
+
+推荐与 FC 并行运行一段时间（FC 作为热备）—— 两边挂同一个 NAS，env 里配同样的 API Key SHA256，就能任一 URL 都能服务。
+
+### 部署步骤
+
+```bash
+# 1. 构建 + 推镜像（从仓库根，与 FC 一样）
+docker build --platform linux/amd64 \
+    -t harbor.ruosheng.bio/aliyun_fc/ensemble-server:v0.0.12 \
+    -f services/ensemble-server/Dockerfile .
+docker push harbor.ruosheng.bio/aliyun_fc/ensemble-server:v0.0.12
+
+# 2. 在 swarm manager 节点上准备 env 文件 + NAS 路径
+cd services/ensemble-server
+cp ensemble-server.env.example ensemble-server.env
+# 编辑 ensemble-server.env：填 ENSEMBLE_FC_METHODS__*（下游 GPU 服务的 VPC URL）
+#                          + ENSEMBLE_API_KEYS__0__SECRET_HASH（与 FC 一致！）
+#                          + 可选 ENSEMBLE_AUTH__JWT_JWKS_URL
+
+export NAS_HOST_PATH=/mnt/nas      # host-side NAS 挂载点，必须已挂好
+export IMAGE_TAG=v0.0.12
+
+# 3. 部署
+docker stack deploy \
+    -c compose.swarm.yml \
+    --with-registry-auth \
+    ensemble
+
+# 4. 验证
+docker stack services ensemble
+docker service logs -f ensemble_server
+curl http://<swarm-node-ip>:9000/v1/healthz
+# {"status":"ok","service":"ensemble","version":"0.0.12"}
+```
+
+冒烟测试同 [FC 部署后冒烟](#部署后冒烟) 一节，把 `TEST_URL` 换成 `http://<swarm-node-ip>:9000`（或 nginx 前端）即可。
+
+### 拆除
+
+```bash
+docker stack rm ensemble
+```
+
+NAS 上 `/data/ensemble_jobs/` 内容不会被删（按设计），如需清理另行 `rm -rf`。
+
+### 迁移注意事项
+
+1. **VPC bypass 失效**：bypass 检测 `Host: *-vpc.fcapp.run`，新部署的 hostname 不匹配。原本依赖 bypass 的内部脚本必须改成 `X-API-Key` 或 JWT 调用。FC URL 仍可继续走 bypass。
+2. **共享 NAS = 共享 job 可见性**：默认 `ENSEMBLE_JOBS_BASE_DIR=/data/ensemble_jobs` 与 FC 一致，jobs 互通（同一 task_id 在两边都能查）。如要在 bake-in 期间隔离两边，在 `ensemble-server.env` 设 `ENSEMBLE_JOBS_BASE_DIR=/data/ensemble_jobs_swarm`。
+3. **API Key 双写**：两边 env 必须配同一组 `ENSEMBLE_API_KEYS__*__SECRET_HASH`，否则同一客户用 FC URL 行、用 swarm URL 401。JWT 同理（共用 JWKS）。
+4. **下游 FC URL 用 VPC 版**（`*-vpc.fcapp.run`），不要走公网 URL —— 同 VPC 内调用更快、不消耗公网带宽、不暴露面。
+5. **HA**：默认 `replicas=1`，是 SPOF。需 HA 时把 `REPLICAS=2` 并加 nginx / Traefik 反代 + 健康检查；EnsembleJobStore 写 NAS sidecar 是 idempotent、GetAsyncTask 是只读，多副本安全。
+6. **不要同时配 FC 控制台的 JWT 平台层验证 + 又把流量切给 swarm** —— swarm 没有 FC 网关层，应用层 JWT 验证已经做完整套，不会有歧义；这条只是提醒别去 FC 控制台改 JWT 配置以为对 swarm 也生效。
+
+### 监控
+
+```bash
+# 实时日志
+docker service logs -f ensemble_server
+
+# 副本健康 + 启动错误
+docker service ps ensemble_server --no-trunc
+
+# NAS 上 sidecar
+ls -la /mnt/nas/ensemble_jobs/      # 注意：是 host 路径，不是容器内 /data/...
+```
+
+### 升级镜像
+
+```bash
+docker build --platform linux/amd64 \
+    -t harbor.ruosheng.bio/aliyun_fc/ensemble-server:v0.0.13 \
+    -f services/ensemble-server/Dockerfile .
+docker push harbor.ruosheng.bio/aliyun_fc/ensemble-server:v0.0.13
+
+IMAGE_TAG=v0.0.13 docker stack deploy \
+    -c services/ensemble-server/compose.swarm.yml \
+    --with-registry-auth \
+    ensemble
+# compose.swarm.yml 里 update_config.order=start-first，新 task healthy 之后才停旧的，无停机
+```
+
+回滚：
+
+```bash
+docker service rollback ensemble_server
+```
+
 ## API 参考（快速）
 
 ### `POST /v1/folding/ensemble`

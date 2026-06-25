@@ -28,6 +28,15 @@ EXAMPLE_FASTA = """\
 MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG
 """
 
+# Small heterodimer (ubiquitin + a short helical peptide).  Total ~130
+# residues keeps multimer MSA + inference inside FC's instance lifetime.
+MULTIMER_FASTA = """\
+>chainA
+MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG
+>chainB
+GSHMGSAEYELDPKQIDDLEKEIATLEKERLALEKERLALEKERLALEKERLALEK
+"""
+
 TIMEOUT = httpx.Timeout(connect=30, read=600, write=60, pool=30)
 
 
@@ -112,6 +121,45 @@ def fold_job(client, session_headers):
         timeout_s=5400,
         interval_s=30,
         extra_headers=session_headers,
+    )
+    _assert_completed(result)
+    return result
+
+
+@pytest.fixture(scope="module")
+def multimer_session_headers():
+    """Distinct session id so multimer + monomer fixtures don't share an instance."""
+    import uuid
+
+    return {SESSION_HEADER: f"test-mm-{uuid.uuid4().hex[:12]}"}
+
+
+@pytest.fixture(scope="module")
+def multimer_fold_job(client, multimer_session_headers):
+    """Submit a multimer fold job (small heterodimer) and poll until completion.
+
+    Requires the `uniprot.fasta` Jackhmmer DB on NAS — multimer pipelines run
+    an extra Jackhmmer pass against UniProt for paired MSAs that monomer
+    presets skip.  The test will fail with a clear "Could not find Jackhmmer
+    database" message if that DB is missing.
+    """
+    body = _submit_fold(
+        client,
+        fasta=MULTIMER_FASTA,
+        model_preset="multimer",
+        db_preset="reduced_dbs",
+        models_to_relax="best",
+        num_multimer_predictions_per_model="1",
+    )
+    job_id = _assert_submitted(body)
+
+    result = poll_job(
+        client,
+        "",
+        job_id,
+        timeout_s=7200,
+        interval_s=30,
+        extra_headers=multimer_session_headers,
     )
     _assert_completed(result)
     return result
@@ -259,6 +307,47 @@ class TestFoldMonomer:
         d = fold_job["duration_seconds"]
         assert d > 30, "AlphaFold should take at least 30s"
         assert d < 7200, "AlphaFold should finish within 2h"
+
+
+@pytest.mark.fc
+class TestFoldMultimer:
+    def test_job_completed(self, multimer_fold_job):
+        assert multimer_fold_job["status"] == "completed"
+
+    def test_input_params_echo(self, multimer_fold_job):
+        params = multimer_fold_job.get("input_params", {})
+        assert params.get("model_preset") == "multimer"
+        assert params.get("db_preset") == "reduced_dbs"
+        assert params.get("num_multimer_predictions_per_model") == 1
+
+    def test_duration_reasonable(self, multimer_fold_job):
+        d = multimer_fold_job["duration_seconds"]
+        assert d > 30, "AlphaFold-Multimer should take at least 30s"
+        assert d < 7200, "AlphaFold-Multimer should finish within 2h"
+
+    def test_output_contains_ranked_pdb(self, client, multimer_fold_job):
+        job_id = multimer_fold_job["job_id"]
+        files = client.get(f"/api/jobs/{job_id}/files").json()["files"]
+        assert any("ranked_0.pdb" in n for n in files), (
+            f"Expected ranked_0.pdb in multimer output files: {files}"
+        )
+
+    def test_ranked_pdb_has_two_chains(self, client, multimer_fold_job):
+        """A multimer ranked PDB must contain ATOM records for both chains."""
+        job_id = multimer_fold_job["job_id"]
+        files = client.get(f"/api/jobs/{job_id}/files").json()["files"]
+        ranked = [f for f in files if "ranked_0.pdb" in f]
+        assert ranked, "ranked_0.pdb not found"
+        data = _download_bytes(client, job_id, ranked[0])
+        text = data.decode("utf-8", errors="replace")
+        chains = {
+            line[21]
+            for line in text.splitlines()
+            if line.startswith("ATOM") and len(line) > 21
+        }
+        assert len(chains) >= 2, (
+            f"Multimer PDB should contain >=2 chains, got: {chains}"
+        )
 
 
 # ===================================================================

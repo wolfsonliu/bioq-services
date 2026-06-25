@@ -36,11 +36,22 @@ from bioagent_service.fc_testing import fc_url, poll_job
 SERVICE = "alphafold-server"
 
 # Smallest viable AlphaFold input: 76aa ubiquitin monomer_ptm + reduced_dbs.
-# Multimer pipeline would double the cost; we only need to prove the task
-# endpoint and async mode wiring work end-to-end.
+# Multimer pipeline is exercised separately by MULTIMER_FASTA below; the
+# monomer fixture keeps the bulk of the task-mode wiring assertions cheap.
 EXAMPLE_FASTA = """\
 >test_ubiquitin
 MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG
+"""
+
+# Small heterodimer (ubiquitin + a short helical peptide).  Total ~130
+# residues keeps multimer MSA + inference inside FC's instance lifetime.
+# Requires the `uniprot.fasta` Jackhmmer DB on NAS — see the multimer
+# fixture's docstring.
+MULTIMER_FASTA = """\
+>chainA
+MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG
+>chainB
+GSHMGSAEYELDPKQIDDLEKEIATLEKERLALEKERLALEKERLALEKERLALEK
 """
 
 # AlphaFold MSA + inference can take a long time inside FC; give it 90 min.
@@ -70,8 +81,14 @@ def client(base_url: str):
 
 @pytest.fixture(scope="module")
 def task_id() -> str:
-    """One task_id shared by all assertions in this module."""
+    """One task_id shared by all monomer assertions in this module."""
     return f"fc-async-fold-{int(time.time())}-{uuid.uuid4().hex[:6]}"
+
+
+@pytest.fixture(scope="module")
+def multimer_task_id() -> str:
+    """Distinct task_id for the multimer fixture so FC dedup doesn't collide."""
+    return f"fc-async-fold-mm-{int(time.time())}-{uuid.uuid4().hex[:6]}"
 
 
 # ---------------------------------------------------------------------------
@@ -167,6 +184,51 @@ def fold_task(client: httpx.Client, base_url: str, task_id: str, submit_response
         interval_s=POLL_INTERVAL_S,
     )
     assert final["status"] == "completed", f"task did not complete: {final}"
+    return final
+
+
+@pytest.fixture(scope="module")
+def multimer_submit_response(client: httpx.Client, multimer_task_id: str) -> httpx.Response:
+    """Raw async submit response for the multimer task fixture."""
+    return _async_submit(
+        client,
+        "/api/tasks/fold",
+        task_id=multimer_task_id,
+        fasta=MULTIMER_FASTA,
+        model_preset="multimer",
+        db_preset="reduced_dbs",
+        models_to_relax="best",
+        num_multimer_predictions_per_model="1",
+    )
+
+
+@pytest.fixture(scope="module")
+def multimer_fold_task(
+    client: httpx.Client,
+    base_url: str,
+    multimer_task_id: str,
+    multimer_submit_response: httpx.Response,
+) -> dict:
+    """Final JobInfo after async submit + poll to terminal status (multimer).
+
+    Requires the `uniprot.fasta` Jackhmmer DB on NAS — multimer pipelines
+    run an extra Jackhmmer pass against UniProt for paired MSAs that monomer
+    presets skip.  Without that DB the subprocess fails fast with a
+    "Could not find Jackhmmer database" error.
+    """
+    assert multimer_submit_response.status_code == 202, (
+        f"async submit returned {multimer_submit_response.status_code}: "
+        f"{multimer_submit_response.text!r}.  Async task mode must be enabled "
+        f"in the FC console for this function."
+    )
+    final = poll_job(
+        client,
+        "",
+        multimer_task_id,
+        timeout_s=POLL_TIMEOUT_S,
+        interval_s=POLL_INTERVAL_S,
+    )
+    assert final["status"] == "completed", f"multimer task did not complete: {final}"
     return final
 
 
@@ -283,6 +345,76 @@ class TestAsyncOutputs:
         names = zf.namelist()
         assert any("ranked_0.pdb" in n for n in names), (
             f"ranked_0.pdb missing from zip: {names}"
+        )
+
+
+# ===================================================================
+# Section 4b: Multimer pipeline — model_preset=multimer end-to-end.
+# ===================================================================
+
+
+@pytest.mark.fc
+class TestAsyncMultimer:
+    """Async task mode with the multimer preset.
+
+    Exercises the extra Jackhmmer pass against UniProt + the multimer
+    inference head + relaxation, all inside one FC async invocation.
+    """
+
+    def test_submit_returns_202(self, multimer_submit_response):
+        assert multimer_submit_response.status_code == 202, (
+            f"expected 202; got {multimer_submit_response.status_code} "
+            f"body={multimer_submit_response.text!r}"
+        )
+
+    def test_completed_status(self, multimer_fold_task):
+        assert multimer_fold_task["status"] == "completed"
+
+    def test_duration_recorded(self, multimer_fold_task):
+        d = multimer_fold_task.get("duration_seconds")
+        assert d is not None and d > 30, (
+            f"duration {d}s too short for real multimer work"
+        )
+
+    def test_input_params_echoed(self, multimer_fold_task):
+        params = multimer_fold_task.get("input_params") or {}
+        assert params.get("model_preset") == "multimer"
+        assert params.get("db_preset") == "reduced_dbs"
+        assert params.get("num_multimer_predictions_per_model") == 1
+
+    def test_job_id_matches_task_id(self, multimer_fold_task, multimer_task_id):
+        assert multimer_fold_task["job_id"] == multimer_task_id
+
+    def test_files_listing_includes_ranked_pdb(
+        self, client, multimer_task_id, multimer_fold_task
+    ):
+        r = _get_with_retry(client, f"/api/jobs/{multimer_task_id}/files")
+        assert r.status_code == 200, f"files GET failed: {r.status_code} {r.text!r}"
+        files = r.json()["files"]
+        assert any("ranked_0.pdb" in n for n in files), (
+            f"ranked_0.pdb missing from multimer outputs: {files}"
+        )
+
+    def test_ranked_pdb_has_two_chains(
+        self, client, multimer_task_id, multimer_fold_task
+    ):
+        """A multimer ranked PDB must contain ATOM records for both chains."""
+        r = _get_with_retry(client, f"/api/jobs/{multimer_task_id}/files")
+        files = r.json()["files"]
+        ranked = [f for f in files if "ranked_0.pdb" in f]
+        assert ranked, "ranked_0.pdb not found"
+        download = _get_with_retry(
+            client, f"/api/jobs/{multimer_task_id}/file/{ranked[0]}"
+        )
+        assert download.status_code == 200
+        text = download.content.decode("utf-8", errors="replace")
+        chains = {
+            line[21]
+            for line in text.splitlines()
+            if line.startswith("ATOM") and len(line) > 21
+        }
+        assert len(chains) >= 2, (
+            f"Multimer PDB should contain >=2 chains, got: {chains}"
         )
 
 
