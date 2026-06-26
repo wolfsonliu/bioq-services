@@ -98,10 +98,21 @@ def test_healthz_detail(client: httpx.Client) -> None:
 
 
 def test_manifest_lists_three_endpoints(client: httpx.Client) -> None:
+    """Manifest must list the 3 core endpoints.  The deployed service may
+    additionally expose `/api/tasks/<name>` async-task variants (FC async
+    task mode, enabled per-service in settings) — those are accepted but
+    not required."""
     r = client.get("/api/manifest")
     r.raise_for_status()
     paths = {e["path"] for e in r.json()["endpoints"]}
-    assert paths == {"/api/design", "/api/score", "/api/probs"}
+    sync_endpoints = {"/api/design", "/api/score", "/api/probs"}
+    assert sync_endpoints <= paths, (
+        f"expected sync endpoints {sync_endpoints} ⊆ paths, got {paths}"
+    )
+    extras = paths - sync_endpoints
+    assert extras <= {"/api/tasks/design", "/api/tasks/score", "/api/tasks/probs"}, (
+        f"unexpected non-task endpoints: {extras}"
+    )
 
 
 def test_manifest_model_variants(client: httpx.Client) -> None:

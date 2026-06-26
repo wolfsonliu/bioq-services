@@ -25,11 +25,13 @@
 # paths that run at inference time, so the runtime base saves ~3-4 GB vs `-devel`.
 ARG BASE_IMAGE=nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
-# Pinned RFdiffusion upstream.  Bump SHA to upgrade; build verifies the
-# checkout.  Weights (models/) are NOT included — they are pre-staged at
-# opensource/RFdiffusion/models/ and COPYed separately into the runtime.
-ARG RFDIFFUSION_REPO=https://github.com/RosettaCommons/RFdiffusion.git
-ARG RFDIFFUSION_SHA=9535f1938203a24937d7dadf0cb831d02cb5fc0e
+# Pre-build (once; re-run to bump pinned upstream commit):
+#   ./services/rfdiffusion-server/scripts/vendor.sh
+#
+# RFdiffusion source lives at services/rfdiffusion-server/upstream/ (vendored
+# at pinned SHA via scripts/vendor.sh).  Weights (models/) are NOT in the
+# upstream repo — pre-staged at services/rfdiffusion-server/models/ and
+# COPYed separately into the runtime.
 
 
 # ===========================================================================
@@ -133,25 +135,15 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # output to services/rfdiffusion-server/models/.
 COPY services/rfdiffusion-server/models /opt/rfdiffusion/models
 
-# Upstream source — clone at pinned SHA, then materialize only the runtime
-# subtrees (skip img/, docker/, tests/).
-ARG RFDIFFUSION_REPO
-ARG RFDIFFUSION_SHA
-RUN set -eux; \
-    git clone --filter=blob:none --no-checkout "$RFDIFFUSION_REPO" /tmp/rfd-src; \
-    cd /tmp/rfd-src; \
-    git checkout "$RFDIFFUSION_SHA"; \
-    test "$(git rev-parse HEAD)" = "$RFDIFFUSION_SHA"; \
-    rm -rf .git; \
-    mkdir -p /opt/rfdiffusion/examples; \
-    cp -r rfdiffusion /opt/rfdiffusion/rfdiffusion; \
-    cp -r env /opt/rfdiffusion/env; \
-    cp -r config /opt/rfdiffusion/config; \
-    cp -r scripts /opt/rfdiffusion/scripts; \
-    cp -r helper_scripts /opt/rfdiffusion/helper_scripts; \
-    cp -r examples/input_pdbs /opt/rfdiffusion/examples/input_pdbs; \
-    cp setup.py /opt/rfdiffusion/setup.py; \
-    rm -rf /tmp/rfd-src
+# Upstream source — cherry-pick from vendored upstream/ (see scripts/vendor.sh).
+# Skip img/, docker/, tests/ — only runtime subtrees needed.
+COPY services/rfdiffusion-server/upstream/rfdiffusion          /opt/rfdiffusion/rfdiffusion
+COPY services/rfdiffusion-server/upstream/env                  /opt/rfdiffusion/env
+COPY services/rfdiffusion-server/upstream/config               /opt/rfdiffusion/config
+COPY services/rfdiffusion-server/upstream/scripts              /opt/rfdiffusion/scripts
+COPY services/rfdiffusion-server/upstream/helper_scripts       /opt/rfdiffusion/helper_scripts
+COPY services/rfdiffusion-server/upstream/examples/input_pdbs  /opt/rfdiffusion/examples/input_pdbs
+COPY services/rfdiffusion-server/upstream/setup.py             /opt/rfdiffusion/setup.py
 
 # ---------------------------------------------------------------------------
 # Editable / wheel-from-source installs + cleanup.

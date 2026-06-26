@@ -1,10 +1,16 @@
 # Build from bioagent project root:
 #   docker build --platform linux/amd64 -t boltz-server -f services/boltz-server/Dockerfile .
 #
-# Boltz source is fetched from GitHub at a pinned SHA (see BOLTZ_SHA below).
-# Boltz-2 weights are NOT in the upstream repo — they must be pre-staged at
-# services/boltz-server/weights/ before building (see the COPY block below for
-# the python one-liner that downloads them).
+# Pre-build (once; re-run to bump pinned upstream commit):
+#   ./services/boltz-server/scripts/vendor.sh   # vendor upstream/
+# Pre-stage Boltz-2 weights (HuggingFace download) before build:
+#   python -c "from pathlib import Path; from boltz.main import download_boltz2; \
+#       download_boltz2(Path('services/boltz-server/weights'))"
+#   rm -f services/boltz-server/weights/mols.tar
+#
+# Boltz upstream source lives at services/boltz-server/upstream/ (vendored at
+# pinned SHA; see scripts/vendor.sh).  Weights are pre-staged at
+# services/boltz-server/weights/ (HuggingFace; not in upstream repo).
 # Final image ~11.1 GB — code stack ~5 GB + Boltz-2 weights/cache ~6 GB.
 #
 # Base: uv's pre-built python3.12 slim image (Debian bookworm + uv pre-installed).
@@ -15,11 +21,6 @@
 # engineering/decisions/2026-05-19-boltz-server-design.md "Docker" section
 # for the trade-off analysis and the rollback path if FC's GPU driver is too
 # old to support the bundled CUDA 12.x runtime.
-# Pinned Boltz upstream. Bump SHA to upgrade; the build verifies the remote
-# actually checked out the requested commit so a moved-tag can't silently
-# change image contents.
-ARG BOLTZ_REPO=https://github.com/jwohlwend/boltz.git
-ARG BOLTZ_SHA=cb04aeccdd480fd4db707f0bbafde538397fa2ac
 
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
@@ -32,7 +33,7 @@ ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
 ENV UV_HTTP_TIMEOUT=600
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates wget git \
+    ca-certificates wget \
     && rm -rf /var/lib/apt/lists/*
 
 # Create the venv up front so subsequent COPYs do not overlay it. uv image
@@ -47,19 +48,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
         "torch>=2.2" "numpy<2.0"
 
-# Boltz source — clone at pinned SHA (treeless clone) + editable install.
-# `.[cuda]` extras pull cuequivariance kernels (NVIDIA equivariant ops; cu12
-# wheels, no nvcc needed).
-ARG BOLTZ_REPO
-ARG BOLTZ_SHA
-RUN set -eux; \
-    git clone --filter=blob:none --no-checkout "$BOLTZ_REPO" /tmp/boltz-src; \
-    cd /tmp/boltz-src; \
-    git checkout "$BOLTZ_SHA"; \
-    test "$(git rev-parse HEAD)" = "$BOLTZ_SHA"; \
-    cp pyproject.toml README.md /opt/boltz/; \
-    cp -r src /opt/boltz/src; \
-    rm -rf /tmp/boltz-src
+# Boltz source — from vendored upstream/ (see scripts/vendor.sh) + editable
+# install.  `.[cuda]` extras pull cuequivariance kernels (NVIDIA equivariant
+# ops; cu12 wheels, no nvcc needed).
+COPY services/boltz-server/upstream/pyproject.toml /opt/boltz/pyproject.toml
+COPY services/boltz-server/upstream/README.md      /opt/boltz/README.md
+COPY services/boltz-server/upstream/src            /opt/boltz/src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python -e ".[cuda]"
 

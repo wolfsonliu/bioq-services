@@ -2,20 +2,14 @@
 #   docker build --platform linux/amd64 -t promera-server -f services/promera-server/Dockerfile .
 #
 # Prerequisites:
-#   1. ./services/promera-server/scripts/fetch_weights.sh   (Promera + tinyprot + LigandMPNN weights)
+#   1. ./services/promera-server/scripts/vendor.sh         (tinyprot + promera + LigandMPNN sources)
+#   2. ./services/promera-server/scripts/fetch_weights.sh  (Promera + tinyprot + LigandMPNN weights)
 #
-# Promera, tinyprot, and LigandMPNN sources are fetched from GitHub at pinned
-# SHAs (see *_SHA ARGs below).  Promera: Python 3.12 + torch 2.9 + CUDA 12
-# (cuequivariance-ops-torch-cu12).  All deps available as PyPI wheels — uv
-# venv skeleton, no conda needed.
-
-# Pinned upstream commits — bump SHAs to upgrade individual components.
-ARG TINYPROT_REPO=https://github.com/bjing2016/tinyprot.git
-ARG TINYPROT_SHA=e33866bc474c64a9cfc324e0cbb7f9f82ad1e855
-ARG PROMERA_REPO=https://github.com/bjing2016/promera.git
-ARG PROMERA_SHA=5c7d6a88bbf7f13906274fdc7c7f84e7a666017d
-ARG LIGANDMPNN_REPO=https://github.com/dauparas/LigandMPNN
-ARG LIGANDMPNN_SHA=26ec57ac976ade5379920dbd43c7f97a91cf82de
+# tinyprot, promera, and LigandMPNN sources live at
+# services/promera-server/upstream/{tinyprot,promera,LigandMPNN}/ (vendored
+# at pinned SHAs via scripts/vendor.sh).  Promera: Python 3.12 + torch 2.9 +
+# CUDA 12 (cuequivariance-ops-torch-cu12).  All deps available as PyPI
+# wheels — uv venv skeleton, no conda needed.
 
 FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 
@@ -31,7 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     add-apt-repository -y ppa:deadsnakes/ppa && \
     apt-get update && apt-get install -y --no-install-recommends \
     python3.12 python3.12-venv python3.12-dev \
-    ca-certificates curl git \
+    ca-certificates curl \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 # build-essential is required at runtime by triton: the JIT path
@@ -51,29 +45,15 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
     torch==2.9.0 triton==3.5.0 numpy
 
-# tinyprot — clone at pinned SHA + pip install.
-ARG TINYPROT_REPO
-ARG TINYPROT_SHA
-RUN set -eux; \
-    git clone --filter=blob:none --no-checkout "$TINYPROT_REPO" /tmp/tinyprot; \
-    cd /tmp/tinyprot; \
-    git checkout "$TINYPROT_SHA"; \
-    test "$(git rev-parse HEAD)" = "$TINYPROT_SHA"; \
-    rm -rf .git
+# tinyprot — from vendored upstream/tinyprot/ (see scripts/vendor.sh).
+COPY services/promera-server/upstream/tinyprot /tmp/tinyprot
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python /tmp/tinyprot/ && \
     rm -rf /tmp/tinyprot
 
-# Promera source — clone at pinned SHA + editable install (so `python -m
-# promera` resolves).
-ARG PROMERA_REPO
-ARG PROMERA_SHA
-RUN set -eux; \
-    git clone --filter=blob:none --no-checkout "$PROMERA_REPO" /opt/promera/promera_src; \
-    cd /opt/promera/promera_src; \
-    git checkout "$PROMERA_SHA"; \
-    test "$(git rev-parse HEAD)" = "$PROMERA_SHA"; \
-    rm -rf .git
+# Promera source — from vendored upstream/promera/ + editable install (so
+# `python -m promera` resolves).
+COPY services/promera-server/upstream/promera /opt/promera/promera_src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python -e /opt/promera/promera_src/
 
@@ -86,21 +66,14 @@ COPY services/promera-server/weights/promera/ /opt/promera/weights/
 COPY services/promera-server/weights/tinyprot/ccd.lmdb/      /opt/promera/tinyprot_cache/ccd.lmdb/
 COPY services/promera-server/weights/tinyprot/taxonomy.lmdb/ /opt/promera/tinyprot_cache/taxonomy.lmdb/
 
-# LigandMPNN source — clone at pinned SHA, cherry-pick the 4 scripts and the
-# openfold/ subtree, drop the rest.  Weights are staged locally.
-ARG LIGANDMPNN_REPO
-ARG LIGANDMPNN_SHA
-RUN set -eux; \
-    git clone --filter=blob:none --no-checkout "$LIGANDMPNN_REPO" /tmp/ligandmpnn-src; \
-    cd /tmp/ligandmpnn-src; \
-    git checkout "$LIGANDMPNN_SHA"; \
-    test "$(git rev-parse HEAD)" = "$LIGANDMPNN_SHA"; \
-    rm -rf .git; \
-    mkdir -p /opt/promera/LigandMPNN; \
-    cp run.py model_utils.py data_utils.py score.py /opt/promera/LigandMPNN/; \
-    cp -r openfold /opt/promera/LigandMPNN/openfold; \
-    rm -rf /tmp/ligandmpnn-src
-COPY services/promera-server/weights/ligandmpnn/ /opt/promera/LigandMPNN/model_params/
+# LigandMPNN source — cherry-pick from vendored upstream/LigandMPNN/.
+# Only the 4 scripts and the openfold/ subtree are needed; weights staged locally.
+COPY services/promera-server/upstream/LigandMPNN/run.py         /opt/promera/LigandMPNN/run.py
+COPY services/promera-server/upstream/LigandMPNN/model_utils.py /opt/promera/LigandMPNN/model_utils.py
+COPY services/promera-server/upstream/LigandMPNN/data_utils.py  /opt/promera/LigandMPNN/data_utils.py
+COPY services/promera-server/upstream/LigandMPNN/score.py       /opt/promera/LigandMPNN/score.py
+COPY services/promera-server/upstream/LigandMPNN/openfold       /opt/promera/LigandMPNN/openfold
+COPY services/promera-server/weights/ligandmpnn/                /opt/promera/LigandMPNN/model_params/
 
 # Shared bioagent service framework + remote-fetch deps.
 RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \

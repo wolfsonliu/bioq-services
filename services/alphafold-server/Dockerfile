@@ -1,15 +1,17 @@
 # Build from bioagent project root:
 #   docker build --platform linux/amd64 -t alphafold-server -f services/alphafold-server/Dockerfile .
 #
-# AlphaFold source is fetched from GitHub at a pinned SHA (see ALPHAFOLD_SHA
-# below) — no opensource/ checkout required.  Databases and weights are NOT
+# Pre-build (once; re-run to bump pinned upstream commit):
+#   ./services/alphafold-server/scripts/vendor.sh
+#
+# AlphaFold source lives at services/alphafold-server/upstream/ (vendored
+# at pinned SHA via scripts/vendor.sh).  Databases and weights are NOT
 # bundled — mount NAS at /data/models/alphafold/.
 #
 # Multistage layout
 # -----------------
 #   builder = micromamba env (Python + openmm/pdbfixer via conda-forge) +
-#             uv pip extras (tensorflow, jax, framework) + AlphaFold source
-#             cloned to /opt/alphafold-src.
+#             uv pip extras (tensorflow, jax, framework).
 #   runtime = minimal apt + conda env from builder + AlphaFold source +
 #             server code.
 #
@@ -17,12 +19,6 @@
 ARG CUDA=12.2.2
 ARG BASE_IMAGE=nvidia/cuda:${CUDA}-cudnn8-runtime-ubuntu20.04
 ARG MICROMAMBA_IMAGE=mambaorg/micromamba:2.6.2
-
-# Pinned AlphaFold upstream. Bump SHA to upgrade; the build verifies that the
-# remote actually checked out the requested commit so a moved-tag scenario
-# can't silently change the image contents.
-ARG ALPHAFOLD_REPO=https://github.com/google-deepmind/alphafold.git
-ARG ALPHAFOLD_SHA=c77e5d2a8961d1a353632c462914ff0a32a950f6
 
 
 # ===========================================================================
@@ -91,18 +87,11 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
         pdbfixer=1.12.0
 
 # ---------------------------------------------------------------------------
-# AlphaFold source — clone at pinned SHA (treeless clone, then drop .git).
-# Doing it inside the builder stage means git is already installed (above)
-# and the runtime stage stays slim.
+# AlphaFold source — from vendored upstream/ (see scripts/vendor.sh).  We
+# COPY into the builder stage so the runtime can pick it up via
+# `COPY --from=builder` below.
 # ---------------------------------------------------------------------------
-ARG ALPHAFOLD_REPO
-ARG ALPHAFOLD_SHA
-RUN set -eux; \
-    git clone --filter=blob:none --no-checkout "$ALPHAFOLD_REPO" /opt/alphafold-src; \
-    cd /opt/alphafold-src; \
-    git checkout "$ALPHAFOLD_SHA"; \
-    test "$(git rev-parse HEAD)" = "$ALPHAFOLD_SHA"; \
-    rm -rf .git
+COPY services/alphafold-server/upstream /opt/alphafold-src
 
 # ---------------------------------------------------------------------------
 # Pip deps via uv: AlphaFold requirements (minus openmm/pdbfixer) + JAX CUDA.

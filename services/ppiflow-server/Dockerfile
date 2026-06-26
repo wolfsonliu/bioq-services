@@ -1,9 +1,10 @@
 # Build from bioagent project root:
 #   docker build --platform linux/amd64 -t ppiflow-server -f services/ppiflow-server/Dockerfile .
 #
-# PPIFlow source is fetched from GitHub at a pinned SHA (see PPIFLOW_SHA
-# below).  Weights are pre-staged at services/ppiflow-server/checkpoint/ — not in
-# the upstream repo — and baked into the image.
+# PPIFlow source lives at services/ppiflow-server/upstream/ (vendored at
+# pinned SHA via scripts/vendor.sh).  Weights are pre-staged at
+# services/ppiflow-server/checkpoint/ — not in the upstream repo — and
+# baked into the image.
 # This image only supports structure generation (sample_*.py). Sequence design,
 # scoring, packing, and Rosetta steps are NOT included — they belong in
 # separate bioagent services.
@@ -36,9 +37,8 @@
 #
 # Size cost: devel = 6.7 GB vs runtime = 3.1 GB (~3.6 GB extra). Total image
 # stays well under the FC 15 GB limit.
-# Pinned PPIFlow upstream. Bump SHA to upgrade; build verifies the checkout.
-ARG PPIFLOW_REPO=https://github.com/Mingchenchen/PPIFlow.git
-ARG PPIFLOW_SHA=697411f0686f6b26280d3801fee7ac96e4247bac
+# Pre-build (once; re-run to bump pinned upstream commit):
+#   ./services/ppiflow-server/scripts/vendor.sh
 
 FROM mambaorg/micromamba:2.6.2 AS micromamba
 FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
@@ -80,7 +80,7 @@ ENV CUDA_PATH=/usr/local/cuda
 # uv is brought in for the final framework-install layer only.
 # ---------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git wget ca-certificates build-essential \
+    wget ca-certificates build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=micromamba /bin/micromamba /bin/micromamba
@@ -181,17 +181,10 @@ EOF
 WORKDIR /opt/ppiflow
 
 # ---------------------------------------------------------------------------
-# Clone PPIFlow source at pinned SHA — env.yml below + the tool/PPIFlow tree
-# are both consumed from the clone. Checkpoints stay pre-staged locally.
+# PPIFlow source — from vendored upstream/ (see scripts/vendor.sh).  env.yml
+# and the tool/PPIFlow tree are both consumed from this tree.
 # ---------------------------------------------------------------------------
-ARG PPIFLOW_REPO
-ARG PPIFLOW_SHA
-RUN set -eux; \
-    git clone --filter=blob:none --no-checkout "$PPIFLOW_REPO" /opt/ppiflow-src; \
-    cd /opt/ppiflow-src; \
-    git checkout "$PPIFLOW_SHA"; \
-    test "$(git rev-parse HEAD)" = "$PPIFLOW_SHA"; \
-    rm -rf .git
+COPY services/ppiflow-server/upstream /opt/ppiflow-src
 
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     --mount=type=cache,target=/root/.cache/pip,sharing=locked \

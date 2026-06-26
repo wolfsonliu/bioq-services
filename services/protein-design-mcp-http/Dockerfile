@@ -2,16 +2,14 @@
 #
 # Inlines the upstream Dockerfile stages instead of FROM'ing a prebuilt
 # protein-design-mcp:latest, then layers the SSE + Streamable-HTTP wrapper
-# on top.  The protein-design-mcp upstream source is fetched from GitHub at
-# a pinned SHA (see PROTEIN_DESIGN_MCP_SHA below); the wrapper code lives in
-# this directory.
-
-# Pinned protein-design-mcp upstream.
-ARG PROTEIN_DESIGN_MCP_REPO=https://github.com/jasonkim8652/protein-design-mcp.git
-ARG PROTEIN_DESIGN_MCP_SHA=7a45f13d5c7667513f4b3cfc47e472f3209b1be1
+# on top.  The protein-design-mcp upstream source lives at
+# services/protein-design-mcp-http/upstream/ (vendored at pinned SHA via
+# scripts/vendor.sh).  Wrapper code lives in this directory.
 #
-# Build context MUST be the bioagent project root (so both opensource/ and
-# services/ are reachable):
+# Pre-build (once; re-run to bump pinned upstream commit):
+#   ./services/protein-design-mcp-http/scripts/vendor.sh
+#
+# Build context MUST be the bioagent project root (so services/ is reachable):
 #
 #   docker build --platform linux/amd64 \
 #       -f services/protein-design-mcp-http/Dockerfile \
@@ -136,20 +134,11 @@ FROM tools AS app
 
 WORKDIR /app
 
-# Upstream protein-design-mcp source — clone at pinned SHA + lay out the
-# files /app expects (pyproject.toml, src/, docker/).
-ARG PROTEIN_DESIGN_MCP_REPO
-ARG PROTEIN_DESIGN_MCP_SHA
-RUN set -eux; \
-    git clone --filter=blob:none --no-checkout "$PROTEIN_DESIGN_MCP_REPO" /tmp/pdm-src; \
-    cd /tmp/pdm-src; \
-    git checkout "$PROTEIN_DESIGN_MCP_SHA"; \
-    test "$(git rev-parse HEAD)" = "$PROTEIN_DESIGN_MCP_SHA"; \
-    rm -rf .git; \
-    cp pyproject.toml /app/; \
-    cp -r src /app/src; \
-    cp -r docker /app/docker; \
-    rm -rf /tmp/pdm-src
+# Upstream protein-design-mcp source — from vendored upstream/ (see
+# scripts/vendor.sh).
+COPY services/protein-design-mcp-http/upstream/pyproject.toml /app/pyproject.toml
+COPY services/protein-design-mcp-http/upstream/src            /app/src
+COPY services/protein-design-mcp-http/upstream/docker         /app/docker
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install -e ".[dev]"

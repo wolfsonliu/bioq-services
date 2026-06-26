@@ -25,12 +25,14 @@
 ARG BASE_IMAGE=nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 ARG MICROMAMBA_IMAGE=mambaorg/micromamba:2.6.2
 
-# Pinned ImmuneBuilder upstream. Bump SHA to upgrade; the build verifies the
-# remote actually checked out the requested commit.  Trained model weights
-# are NOT in the upstream repo (placeholders only) — they are pre-staged at
-# services/immunebuilder-server/trained_model/ and COPYed separately.
-ARG IMMUNEBUILDER_REPO=https://github.com/brennanaba/ImmuneBuilder.git
-ARG IMMUNEBUILDER_SHA=0df4e2ad82a1aa60f37ea9dae335d1198159ef78
+# Pre-build (once; re-run to bump pinned upstream commit):
+#   ./services/immunebuilder-server/scripts/vendor.sh         # vendor upstream/
+#   ./services/immunebuilder-server/scripts/fetch_weights.sh  # trained_model/
+#
+# ImmuneBuilder source lives at services/immunebuilder-server/upstream/
+# (vendored at pinned SHA via scripts/vendor.sh).  Trained model weights
+# are NOT in the upstream repo (placeholders only) — they are pre-staged
+# at services/immunebuilder-server/trained_model/ and COPYed separately.
 
 
 # ===== Stage 1: builder — conda env only =====
@@ -95,18 +97,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         torch==2.7.1
 
 # ---------------------------------------------------------------------------
-# ImmuneBuilder source — clone at pinned SHA, then overlay the pre-staged
-# trained model weights (upstream ships only placeholders).
+# ImmuneBuilder source — from vendored upstream/ (see scripts/vendor.sh).
+# Then overlay the pre-staged trained model weights (upstream ships only
+# placeholders).
 # ---------------------------------------------------------------------------
-ARG IMMUNEBUILDER_REPO
-ARG IMMUNEBUILDER_SHA
-RUN set -eux; \
-    git clone --filter=blob:none --no-checkout "$IMMUNEBUILDER_REPO" \
-        /opt/immunebuilder/ImmuneBuilder; \
-    cd /opt/immunebuilder/ImmuneBuilder; \
-    git checkout "$IMMUNEBUILDER_SHA"; \
-    test "$(git rev-parse HEAD)" = "$IMMUNEBUILDER_SHA"; \
-    rm -rf .git
+COPY services/immunebuilder-server/upstream \
+     /opt/immunebuilder/ImmuneBuilder
 COPY services/immunebuilder-server/trained_model \
      /opt/immunebuilder/ImmuneBuilder/ImmuneBuilder/trained_model
 
