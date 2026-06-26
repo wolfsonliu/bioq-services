@@ -4,7 +4,8 @@
 # Prerequisites (run once before build):
 #   ./services/boltzgen-server/scripts/fetch_weights.sh
 #
-# BoltzGen source must be at opensource/boltzgen/ (GPU-required, no nvcc needed).
+# BoltzGen source is fetched from GitHub at a pinned SHA (see BOLTZGEN_SHA
+# below) — no opensource/ checkout required (GPU-required, no nvcc needed).
 # Weights in services/boltzgen-server/weights/ (~10 GB, 5 checkpoints).
 # Molecule data in services/boltzgen-server/moldir/ (~6 GB, CCD .pkl files).
 #
@@ -13,6 +14,12 @@
 # slim base let pip resolve nvidia-*-cu12 wheels whose versions could drift to
 # CUDA 12.5/12.6 runtimes, triggering "NVIDIA driver too old" on HPC.  The
 # CUDA base image guarantees a consistent, validated 12.4 runtime baseline.
+# Pinned BoltzGen upstream. Bump SHA to upgrade; the build verifies the remote
+# actually checked out the requested commit so a moved-tag can't silently
+# change image contents.
+ARG BOLTZGEN_REPO=https://github.com/HannesStark/boltzgen.git
+ARG BOLTZGEN_SHA=31d9d9b9c72245b4ed6fe8742d6fbf4e1a3552a0
+
 FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -26,8 +33,9 @@ ENV UV_HTTP_TIMEOUT=600
 # code via triton.runtime.build, which shells out to `cc`. Blackwell (compute
 # capability ≥ 12) has no pre-built cuequivariance kernel so JIT is the only
 # path. Without gcc the design step fails with "Failed to find C compiler".
+# git: needed to clone the upstream BoltzGen source at $BOLTZGEN_SHA below.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates wget curl gcc g++ \
+    ca-certificates wget curl gcc g++ git \
     && rm -rf /var/lib/apt/lists/*
 
 # uv binary + uv-managed Python 3.12 (avoids deadsnakes PPA — Ubuntu 22.04
@@ -57,10 +65,19 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         --index-url "$TORCH_INDEX_URL" \
         --extra-index-url "$UV_INDEX_URL"
 
-# BoltzGen source + editable install. cuequivariance deps (cu12 wheels, no nvcc
-# needed) are listed as direct dependencies in pyproject.toml.
-COPY opensource/boltzgen/pyproject.toml opensource/boltzgen/PYPI_DESCRIPTION.md /opt/boltzgen/
-COPY opensource/boltzgen/src /opt/boltzgen/src
+# BoltzGen source — clone at pinned SHA (treeless clone) + editable install.
+# cuequivariance deps (cu12 wheels, no nvcc needed) are listed as direct
+# dependencies in pyproject.toml.
+ARG BOLTZGEN_REPO
+ARG BOLTZGEN_SHA
+RUN set -eux; \
+    git clone --filter=blob:none --no-checkout "$BOLTZGEN_REPO" /tmp/boltzgen-src; \
+    cd /tmp/boltzgen-src; \
+    git checkout "$BOLTZGEN_SHA"; \
+    test "$(git rev-parse HEAD)" = "$BOLTZGEN_SHA"; \
+    cp pyproject.toml PYPI_DESCRIPTION.md /opt/boltzgen/; \
+    cp -r src /opt/boltzgen/src; \
+    rm -rf /tmp/boltzgen-src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python -e .
 

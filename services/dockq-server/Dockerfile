@@ -1,8 +1,15 @@
 # Build from bioagent project root:
 #   docker build --platform linux/amd64 -t dockq-server -f services/dockq-server/Dockerfile .
 #
-# DockQ source must be at opensource/DockQ/ (CPU-only Python + Cython extension).
+# DockQ source is fetched from GitHub at a pinned SHA (see DOCKQ_SHA below).
+# CPU-only Python + Cython extension.
 # Final image ~350 MB — DockQ + bioagent-service-framework + numpy/biopython wheels.
+
+# Pinned DockQ upstream. Bump SHA to upgrade; the build verifies the remote
+# actually checked out the requested commit so a moved tag can't silently
+# change image contents.
+ARG DOCKQ_REPO=https://github.com/wallnerlab/DockQ.git
+ARG DOCKQ_SHA=75db7ab4f6b824c70d120c5f620582e164ed5479
 #
 # Base: uv's pre-built python3.11 slim image (Debian bookworm + uv pre-installed).
 # Chosen over python:3.11-slim to skip the `COPY --from=ghcr.io/astral-sh/uv` step,
@@ -21,8 +28,9 @@ ENV UV_HTTP_TIMEOUT=600
 # build-essential is needed only for DockQ's Cython compile during install.
 # We keep it for now (~150 MB); a future optimization could do a multistage
 # build and drop it from the runtime stage.
+# git: needed to clone the upstream DockQ source at $DOCKQ_SHA below.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential ca-certificates \
+    build-essential ca-certificates git \
     && rm -rf /var/lib/apt/lists/*
 
 # Create the venv up front so subsequent COPYs do not overlay it.
@@ -34,8 +42,19 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
         "numpy<2.0" biopython networkx parallelbar cython
 
-# DockQ source + editable install. COPY overlays files but preserves .venv/.
-COPY opensource/DockQ /opt/dockq
+# DockQ source — clone at pinned SHA (treeless clone) + editable install.
+# Cloning into a temp dir then copying contents preserves /opt/dockq/.venv,
+# which `git clone` would refuse to overwrite into a non-empty dir.
+ARG DOCKQ_REPO
+ARG DOCKQ_SHA
+RUN set -eux; \
+    git clone --filter=blob:none --no-checkout "$DOCKQ_REPO" /tmp/dockq-src; \
+    cd /tmp/dockq-src; \
+    git checkout "$DOCKQ_SHA"; \
+    test "$(git rev-parse HEAD)" = "$DOCKQ_SHA"; \
+    rm -rf .git; \
+    cp -r /tmp/dockq-src/. /opt/dockq/; \
+    rm -rf /tmp/dockq-src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python -e .
 

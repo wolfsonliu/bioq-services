@@ -34,11 +34,9 @@ for url in "${CKPTS[@]}"; do
     wget -q --show-progress -O "$dest" "$url" || curl -L -# -o "$dest" "$url"
 done
 
-# grnade.h5 is committed to the ODesign repo
-GRNADE_SRC="$(dirname "$0")/../../../../opensource/ODesign/ckpt/grnade.h5"
-if [[ -f "$GRNADE_SRC" && ! -f "$DST/grnade.h5" ]]; then
-    echo "  copying: grnade.h5 from repo"
-    cp "$GRNADE_SRC" "$DST/grnade.h5"
-fi
+# grnade.h5 is committed to the upstream ODesign repo at the SHA pinned in
+# services/odesign-server/Dockerfile (ARG ODESIGN_SHA), so it is supplied
+# automatically by the Docker build via `cp /opt/odesign/ODesign/ckpt/grnade.h5
+# /opt/odesign/ckpt/grnade.h5` and does NOT need to be pre-staged here.
 
 echo "Done. Weights in: $DST"

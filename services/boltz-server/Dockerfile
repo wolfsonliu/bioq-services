@@ -1,7 +1,10 @@
 # Build from bioagent project root:
 #   docker build --platform linux/amd64 -t boltz-server -f services/boltz-server/Dockerfile .
 #
-# Boltz source must be at opensource/boltz/ (GPU-required, but built without nvcc).
+# Boltz source is fetched from GitHub at a pinned SHA (see BOLTZ_SHA below).
+# Boltz-2 weights are NOT in the upstream repo — they must be pre-staged at
+# services/boltz-server/weights/ before building (see the COPY block below for
+# the python one-liner that downloads them).
 # Final image ~11.1 GB — code stack ~5 GB + Boltz-2 weights/cache ~6 GB.
 #
 # Base: uv's pre-built python3.12 slim image (Debian bookworm + uv pre-installed).
@@ -12,6 +15,12 @@
 # engineering/decisions/2026-05-19-boltz-server-design.md "Docker" section
 # for the trade-off analysis and the rollback path if FC's GPU driver is too
 # old to support the bundled CUDA 12.x runtime.
+# Pinned Boltz upstream. Bump SHA to upgrade; the build verifies the remote
+# actually checked out the requested commit so a moved-tag can't silently
+# change image contents.
+ARG BOLTZ_REPO=https://github.com/jwohlwend/boltz.git
+ARG BOLTZ_SHA=cb04aeccdd480fd4db707f0bbafde538397fa2ac
+
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -23,7 +32,7 @@ ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
 ENV UV_HTTP_TIMEOUT=600
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates wget \
+    ca-certificates wget git \
     && rm -rf /var/lib/apt/lists/*
 
 # Create the venv up front so subsequent COPYs do not overlay it. uv image
@@ -38,33 +47,40 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
         "torch>=2.2" "numpy<2.0"
 
-# Boltz source + editable install. `.[cuda]` extras pull cuequivariance kernels
-# (NVIDIA equivariant ops; cu12 wheels, no nvcc needed). Only the files needed
-# for `pip install -e` are copied here — pyproject references README.md, and
-# the `boltz` package lives under src/.
-COPY opensource/boltz/pyproject.toml opensource/boltz/README.md /opt/boltz/
-COPY opensource/boltz/src /opt/boltz/src
+# Boltz source — clone at pinned SHA (treeless clone) + editable install.
+# `.[cuda]` extras pull cuequivariance kernels (NVIDIA equivariant ops; cu12
+# wheels, no nvcc needed).
+ARG BOLTZ_REPO
+ARG BOLTZ_SHA
+RUN set -eux; \
+    git clone --filter=blob:none --no-checkout "$BOLTZ_REPO" /tmp/boltz-src; \
+    cd /tmp/boltz-src; \
+    git checkout "$BOLTZ_SHA"; \
+    test "$(git rev-parse HEAD)" = "$BOLTZ_SHA"; \
+    cp pyproject.toml README.md /opt/boltz/; \
+    cp -r src /opt/boltz/src; \
+    rm -rf /tmp/boltz-src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python -e ".[cuda]"
 
-# Pre-staged Boltz-2 weights, copied directly from `opensource/boltz/weights/`
-# so `docker build` does no network download (HuggingFace can be slow/blocked
-# from CN build hosts). Pre-stage once with:
+# Pre-staged Boltz-2 weights, copied directly from `services/boltz-server/
+# weights/` so `docker build` does no network download (HuggingFace can be
+# slow/blocked from CN build hosts). Pre-stage once with:
 #   python -c "from pathlib import Path; from boltz.main import download_boltz2; \
-#       download_boltz2(Path('opensource/boltz/weights'))"
-#   rm -f opensource/boltz/weights/mols.tar
+#       download_boltz2(Path('services/boltz-server/weights'))"
+#   rm -f services/boltz-server/weights/mols.tar
 #
 # Only Boltz-2 files are COPYed — `boltz1_conf.ckpt` and `ccd.pkl` are
 # deliberately not pulled in (boltz-server is Boltz-2 only, and the boltz2
 # codepath loads CCD via `mols/`+`load_canonicals()`, not `ccd.pkl` — see
-# opensource/boltz/src/boltz/main.py:765). Listing each path explicitly here
+# the boltz2 codepath at boltz/main.py:765). Listing each path explicitly here
 # (instead of `COPY weights /opt/boltz/weights`) is what enforces the
 # exclusion; an empty `mols.tar` marker is created in the same RUN so that
 # `download_boltz2` (called by every `boltz predict`) skips its existence
 # check and doesn't re-download 1.5 GB.
-COPY opensource/boltz/weights/boltz2_conf.ckpt /opt/boltz/weights/boltz2_conf.ckpt
-COPY opensource/boltz/weights/boltz2_aff.ckpt /opt/boltz/weights/boltz2_aff.ckpt
-COPY opensource/boltz/weights/mols /opt/boltz/weights/mols
+COPY services/boltz-server/weights/boltz2_conf.ckpt /opt/boltz/weights/boltz2_conf.ckpt
+COPY services/boltz-server/weights/boltz2_aff.ckpt /opt/boltz/weights/boltz2_aff.ckpt
+COPY services/boltz-server/weights/mols /opt/boltz/weights/mols
 RUN touch /opt/boltz/weights/mols.tar
 
 # Build-time import smoke — catches torch / cuequivariance ABI mismatches at

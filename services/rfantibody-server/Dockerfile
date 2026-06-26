@@ -1,10 +1,16 @@
 # Build from bioagent project root:
 #   docker build --platform linux/amd64 -t rfantibody-server -f services/rfantibody-server/Dockerfile .
 #
-# RFantibody source must be at opensource/RFantibody/ (weights baked into image).
+# RFantibody source is fetched from GitHub at a pinned SHA (see
+# RFANTIBODY_SHA below).  Weights/ is NOT in the upstream repo — must be
+# pre-staged at services/rfantibody-server/weights/ before building.
 # Base: cudnn-runtime (not -devel). RFantibody installs entirely from prebuilt
 # wheels via `uv pip install`, no nvcc / CUDA headers needed at build or runtime.
 # Save ~5 GB vs the -devel variant.
+
+# Pinned RFantibody upstream.
+ARG RFANTIBODY_REPO=https://github.com/RosettaCommons/RFantibody.git
+ARG RFANTIBODY_SHA=8fe311415754e0276d1a39c87c57e69c88927a2d
 #
 # CUDA 12.1 (was 11.8): upstream RFantibody pyproject.toml pins torch/dgl to
 # cu118 wheels, whose cubins don't cover sm_89 (RTX 4090). We override with
@@ -23,7 +29,7 @@ ENV UV_HTTP_TIMEOUT=600
 ENV UV_CONCURRENT_DOWNLOADS=4
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.10 python3-pip python3.10-venv wget curl ca-certificates \
+    python3.10 python3-pip python3.10-venv wget curl ca-certificates git \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
@@ -47,15 +53,26 @@ RUN uv venv .venv --python python3.10
 # reproducibility lost; acceptable because the alternative (build failures
 # behind a flaky CN→pypi link) is strictly worse.
 # ---------------------------------------------------------------------------
-COPY opensource/RFantibody/weights/ ./weights/
+COPY services/rfantibody-server/weights/ ./weights/
 
+# RFantibody source — clone at pinned SHA and lay out README/src/scripts/include.
 # pyproject.toml is the cu121-patched override from services/rfantibody-server/
-# (see rfantibody-pyproject.toml header for rationale).
+# (see rfantibody-pyproject.toml header for rationale) and is COPYed *after*
+# the clone so it wins.
+ARG RFANTIBODY_REPO
+ARG RFANTIBODY_SHA
+RUN set -eux; \
+    git clone --filter=blob:none --no-checkout "$RFANTIBODY_REPO" /tmp/rfantibody-src; \
+    cd /tmp/rfantibody-src; \
+    git checkout "$RFANTIBODY_SHA"; \
+    test "$(git rev-parse HEAD)" = "$RFANTIBODY_SHA"; \
+    rm -rf .git; \
+    cp README.md /opt/rfantibody/README.md; \
+    cp -r src /opt/rfantibody/src; \
+    cp -r scripts /opt/rfantibody/scripts; \
+    cp -r include /opt/rfantibody/include; \
+    rm -rf /tmp/rfantibody-src
 COPY services/rfantibody-server/rfantibody-pyproject.toml ./pyproject.toml
-COPY opensource/RFantibody/README.md ./
-COPY opensource/RFantibody/src/ ./src/
-COPY opensource/RFantibody/scripts/ ./scripts/
-COPY opensource/RFantibody/include/ ./include/
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python -e .

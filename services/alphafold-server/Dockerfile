@@ -1,13 +1,15 @@
 # Build from bioagent project root:
 #   docker build --platform linux/amd64 -t alphafold-server -f services/alphafold-server/Dockerfile .
 #
-# AlphaFold source must be at opensource/alphafold/.
-# Databases and weights are NOT bundled — mount NAS at /data/models/alphafold/.
+# AlphaFold source is fetched from GitHub at a pinned SHA (see ALPHAFOLD_SHA
+# below) — no opensource/ checkout required.  Databases and weights are NOT
+# bundled — mount NAS at /data/models/alphafold/.
 #
 # Multistage layout
 # -----------------
 #   builder = micromamba env (Python + openmm/pdbfixer via conda-forge) +
-#             uv pip extras (tensorflow, jax, framework) + cleanup.
+#             uv pip extras (tensorflow, jax, framework) + AlphaFold source
+#             cloned to /opt/alphafold-src.
 #   runtime = minimal apt + conda env from builder + AlphaFold source +
 #             server code.
 #
@@ -15,6 +17,12 @@
 ARG CUDA=12.2.2
 ARG BASE_IMAGE=nvidia/cuda:${CUDA}-cudnn8-runtime-ubuntu20.04
 ARG MICROMAMBA_IMAGE=mambaorg/micromamba:2.6.2
+
+# Pinned AlphaFold upstream. Bump SHA to upgrade; the build verifies that the
+# remote actually checked out the requested commit so a moved-tag scenario
+# can't silently change the image contents.
+ARG ALPHAFOLD_REPO=https://github.com/google-deepmind/alphafold.git
+ARG ALPHAFOLD_SHA=c77e5d2a8961d1a353632c462914ff0a32a950f6
 
 
 # ===========================================================================
@@ -83,10 +91,24 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
         pdbfixer=1.12.0
 
 # ---------------------------------------------------------------------------
-# Pip deps via uv: AlphaFold requirements (minus openmm/pdbfixer) + JAX CUDA.
+# AlphaFold source — clone at pinned SHA (treeless clone, then drop .git).
+# Doing it inside the builder stage means git is already installed (above)
+# and the runtime stage stays slim.
 # ---------------------------------------------------------------------------
-COPY opensource/alphafold/requirements.txt /tmp/requirements.txt
+ARG ALPHAFOLD_REPO
+ARG ALPHAFOLD_SHA
+RUN set -eux; \
+    git clone --filter=blob:none --no-checkout "$ALPHAFOLD_REPO" /opt/alphafold-src; \
+    cd /opt/alphafold-src; \
+    git checkout "$ALPHAFOLD_SHA"; \
+    test "$(git rev-parse HEAD)" = "$ALPHAFOLD_SHA"; \
+    rm -rf .git
 
+# ---------------------------------------------------------------------------
+# Pip deps via uv: AlphaFold requirements (minus openmm/pdbfixer) + JAX CUDA.
+# Versions are hardcoded below (not read from requirements.txt) — kept in sync
+# with /opt/alphafold-src/requirements.txt when bumping ALPHAFOLD_SHA.
+# ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/af2/bin/python \
         absl-py==1.0.0 \
@@ -153,8 +175,8 @@ RUN ln -s /opt/hhsuite/bin/* /usr/bin
 # Conda env from builder.
 COPY --from=builder /opt/conda/envs/af2 /opt/conda/envs/af2
 
-# AlphaFold source.
-COPY opensource/alphafold/ /opt/alphafold/
+# AlphaFold source — copied from the builder stage's clone.
+COPY --from=builder /opt/alphafold-src /opt/alphafold
 RUN wget -q -P /opt/alphafold/alphafold/common/ \
   https://git.scicore.unibas.ch/schwede/openstructure/-/raw/7102c63615b64735c4941278d92b554ec94415f8/modules/mol/alg/src/stereo_chemical_props.txt
 

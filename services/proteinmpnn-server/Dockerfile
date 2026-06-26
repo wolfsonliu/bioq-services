@@ -1,9 +1,16 @@
 # Build from bioagent project root:
 #   docker build --platform linux/amd64 -t proteinmpnn-server -f services/proteinmpnn-server/Dockerfile .
 #
-# ProteinMPNN source must be at opensource/ProteinMPNN/ with the 4 weight folders
-# (vanilla_model_weights, soluble_model_weights, ca_model_weights, AbMPNN_model_weights)
-# populated. Total weight bake-in ~1 GB.
+# ProteinMPNN source + 3 of the 4 weight folders (vanilla / soluble / ca) are
+# fetched from GitHub at a pinned SHA (see PROTEINMPNN_SHA below).
+# AbMPNN_model_weights/ is NOT in the upstream repo — it must be pre-staged
+# at services/proteinmpnn-server/AbMPNN_model_weights/ before building via:
+#   ./services/proteinmpnn-server/scripts/fetch_weights.sh
+# Total weight bake-in ~1 GB.
+
+# Pinned ProteinMPNN upstream.
+ARG PROTEINMPNN_REPO=https://github.com/dauparas/ProteinMPNN
+ARG PROTEINMPNN_SHA=8907e6671bfbfc92303b5f79c4b5e6ce47cdef57
 #
 # Base: same nvidia/cuda 12.4.1 image as ppiflow-server / genie3-server to share CI
 # layer cache. CUDA 12.x runtime is forward-compatible with the torch wheels we install.
@@ -20,7 +27,7 @@ ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
 ENV UV_HTTP_TIMEOUT=600
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.10 python3.10-venv ca-certificates curl \
+    python3.10 python3.10-venv ca-certificates curl git \
     && rm -rf /var/lib/apt/lists/*
 
 # uv binary (matches rfantibody-server's version pin).
@@ -37,18 +44,27 @@ RUN uv venv .venv --python python3.10
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python torch==2.4.1 numpy
 
-# ProteinMPNN source — selective COPY to skip non-runtime dirs (training/,
-# inputs/, outputs/, colab_notebooks/, examples/) and improve cache isolation.
-# Weights (stable, ~94 MB) as a separate layer from code (volatile, ~200 KB).
-# COPY overlays files but preserves the existing .venv dir.
-COPY opensource/ProteinMPNN/vanilla_model_weights/ ./vanilla_model_weights/
-COPY opensource/ProteinMPNN/soluble_model_weights/ ./soluble_model_weights/
-COPY opensource/ProteinMPNN/ca_model_weights/      ./ca_model_weights/
-COPY opensource/ProteinMPNN/AbMPNN_model_weights/  ./AbMPNN_model_weights/
+# ProteinMPNN source — clone at pinned SHA and selectively materialize the
+# runtime-required pieces (skip training/, inputs/, outputs/, colab_notebooks/,
+# examples/).  Weights tracked in upstream git: vanilla / soluble / ca.
+# AbMPNN_model_weights/ is upstream-untracked → pre-staged COPY below.
+ARG PROTEINMPNN_REPO
+ARG PROTEINMPNN_SHA
+RUN set -eux; \
+    git clone --filter=blob:none --no-checkout "$PROTEINMPNN_REPO" /tmp/pmpnn-src; \
+    cd /tmp/pmpnn-src; \
+    git checkout "$PROTEINMPNN_SHA"; \
+    test "$(git rev-parse HEAD)" = "$PROTEINMPNN_SHA"; \
+    rm -rf .git; \
+    cp -r vanilla_model_weights /opt/proteinmpnn/vanilla_model_weights; \
+    cp -r soluble_model_weights /opt/proteinmpnn/soluble_model_weights; \
+    cp -r ca_model_weights      /opt/proteinmpnn/ca_model_weights; \
+    cp    protein_mpnn_run.py   /opt/proteinmpnn/protein_mpnn_run.py; \
+    cp    protein_mpnn_utils.py /opt/proteinmpnn/protein_mpnn_utils.py; \
+    cp -r helper_scripts        /opt/proteinmpnn/helper_scripts; \
+    rm -rf /tmp/pmpnn-src
 
-COPY opensource/ProteinMPNN/protein_mpnn_run.py   ./protein_mpnn_run.py
-COPY opensource/ProteinMPNN/protein_mpnn_utils.py ./protein_mpnn_utils.py
-COPY opensource/ProteinMPNN/helper_scripts/       ./helper_scripts/
+COPY services/proteinmpnn-server/AbMPNN_model_weights/  ./AbMPNN_model_weights/
 
 # Shared bioagent service framework + remote-fetch deps (late layer).
 RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \

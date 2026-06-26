@@ -1,12 +1,18 @@
 # Build from bioagent project root:
 #   docker build --platform linux/amd64 -t esmfold2-server -f services/esmfold2-server/Dockerfile .
 #
-# ESM source must be at opensource/esm/ (GPU-required, but built without nvcc).
+# ESM source is fetched from GitHub at a pinned SHA (see ESM_SHA below) —
+# no opensource/ checkout required.  GPU-required, but built without nvcc.
 # Pre-download weights before building:
 #   ./services/esmfold2-server/scripts/fetch_weights.sh
 #
 # Base: uv's pre-built python3.12 slim image (Debian bookworm + uv pre-installed).
 # PyTorch wheel bundles CUDA runtime libs, so nvidia base is not needed.
+
+# Pinned ESM (Biohub fork) upstream. Bump SHA to upgrade.
+ARG ESM_REPO=https://github.com/Biohub/esm.git
+ARG ESM_SHA=af8ef5cead4388c4d7af04168157c98898c78805
+
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -27,10 +33,20 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
         "torch>=2.2"
 
-# ESM package source + editable install.
+# ESM package source — clone at pinned SHA + editable install.
 # This pulls in the custom Transformers fork, einops, biotite, rdkit, etc.
-COPY opensource/esm/pyproject.toml opensource/esm/README.md /opt/esmfold2/esm/
-COPY opensource/esm/esm /opt/esmfold2/esm/esm
+ARG ESM_REPO
+ARG ESM_SHA
+RUN set -eux; \
+    git clone --filter=blob:none --no-checkout "$ESM_REPO" /tmp/esm-src; \
+    cd /tmp/esm-src; \
+    git checkout "$ESM_SHA"; \
+    test "$(git rev-parse HEAD)" = "$ESM_SHA"; \
+    rm -rf .git; \
+    mkdir -p /opt/esmfold2/esm; \
+    cp pyproject.toml README.md /opt/esmfold2/esm/; \
+    cp -r esm /opt/esmfold2/esm/esm; \
+    rm -rf /tmp/esm-src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python -e ./esm
 

@@ -1,7 +1,9 @@
 # Build from bioagent project root:
 #   docker build --platform linux/amd64 -t ppiflow-server -f services/ppiflow-server/Dockerfile .
 #
-# PPIFlow source must be at opensource/PPIFlow/ (weights baked into image).
+# PPIFlow source is fetched from GitHub at a pinned SHA (see PPIFLOW_SHA
+# below).  Weights are pre-staged at services/ppiflow-server/checkpoint/ — not in
+# the upstream repo — and baked into the image.
 # This image only supports structure generation (sample_*.py). Sequence design,
 # scoring, packing, and Rosetta steps are NOT included — they belong in
 # separate bioagent services.
@@ -34,6 +36,10 @@
 #
 # Size cost: devel = 6.7 GB vs runtime = 3.1 GB (~3.6 GB extra). Total image
 # stays well under the FC 15 GB limit.
+# Pinned PPIFlow upstream. Bump SHA to upgrade; build verifies the checkout.
+ARG PPIFLOW_REPO=https://github.com/Mingchenchen/PPIFlow.git
+ARG PPIFLOW_SHA=697411f0686f6b26280d3801fee7ac96e4247bac
+
 FROM mambaorg/micromamba:2.6.2 AS micromamba
 FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 
@@ -174,18 +180,32 @@ EOF
 # ---------------------------------------------------------------------------
 WORKDIR /opt/ppiflow
 
-RUN --mount=type=bind,source=opensource/PPIFlow/tool/PPIFlow/environment.yml,target=/tmp/ppiflow-env.yml \
-    --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
+# ---------------------------------------------------------------------------
+# Clone PPIFlow source at pinned SHA — env.yml below + the tool/PPIFlow tree
+# are both consumed from the clone. Checkpoints stay pre-staged locally.
+# ---------------------------------------------------------------------------
+ARG PPIFLOW_REPO
+ARG PPIFLOW_SHA
+RUN set -eux; \
+    git clone --filter=blob:none --no-checkout "$PPIFLOW_REPO" /opt/ppiflow-src; \
+    cd /opt/ppiflow-src; \
+    git checkout "$PPIFLOW_SHA"; \
+    test "$(git rev-parse HEAD)" = "$PPIFLOW_SHA"; \
+    rm -rf .git
+
+RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    micromamba env create -y -n ppiflow -f /tmp/ppiflow-env.yml
+    micromamba env create -y -n ppiflow \
+        -f /opt/ppiflow-src/tool/PPIFlow/environment.yml
 
 # ---------------------------------------------------------------------------
-# Copy the PPIFlow tool source + pretrained checkpoints.
+# Move the PPIFlow tool source into place + COPY pretrained checkpoints.
 # The four .ckpt files baked into the image are heavy (~100s MB each); make
-# sure opensource/PPIFlow/checkpoint/ is populated before building.
+# sure services/ppiflow-server/checkpoint/ is populated before building.
 # ---------------------------------------------------------------------------
-COPY opensource/PPIFlow/tool/PPIFlow /opt/ppiflow
-COPY opensource/PPIFlow/checkpoint /opt/ppiflow/checkpoint
+RUN cp -a /opt/ppiflow-src/tool/PPIFlow/. /opt/ppiflow/ \
+    && rm -rf /opt/ppiflow-src
+COPY services/ppiflow-server/checkpoint /opt/ppiflow/checkpoint
 
 # ---------------------------------------------------------------------------
 # Pre-compile the fastfold_layer_norm_cuda extension during image build.

@@ -2,8 +2,8 @@
 # Cross-modality biomolecular interaction design (protein/DNA/RNA/ligand/ion).
 #
 # Pre-build:
-#   Place model weights in opensource/ODesign/ckpt/ (see scripts/fetch_weights.sh)
-#   Place CCD data in opensource/ODesign/data/   (see scripts/fetch_ccd_data.sh)
+#   Place model weights in services/odesign-server/weights/ckpt/ (see scripts/fetch_weights.sh)
+#   Place CCD data in services/odesign-server/weights/data/      (see scripts/fetch_ccd_data.sh)
 #
 # Build (from bioagent project root):
 #   docker build --platform linux/amd64 -t odesign-server \
@@ -23,6 +23,14 @@
 
 ARG BASE_IMAGE=nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 ARG MICROMAMBA_IMAGE=mambaorg/micromamba:2.6.2
+
+# Pinned ODesign upstream. Bump SHA to upgrade; build verifies the checkout.
+# HF model checkpoints (services/odesign-server/weights/ckpt/) and CCD data
+# (services/odesign-server/weights/data/) are NOT in the upstream repo and
+# are COPYed from local pre-staged dirs.  grnade.h5 IS in upstream git, so
+# it comes via the clone — no separate pre-stage needed.
+ARG ODESIGN_REPO=https://github.com/OTeam-AI4S/ODesign.git
+ARG ODESIGN_SHA=cc95c2f8f915af4d87b1db3f44c4db2df8566a41
 
 
 # ===== Stage 1: builder — conda env only =====
@@ -77,13 +85,26 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     micromamba create -y -n odesign -c conda-forge python=3.10
 
 # ---------------------------------------------------------------------------
+# ODesign source — clone at pinned SHA in the builder stage so the runtime
+# stage can COPY --from=builder later.  The clone is also the source of the
+# requirements.txt consumed below.
+# ---------------------------------------------------------------------------
+ARG ODESIGN_REPO
+ARG ODESIGN_SHA
+RUN set -eux; \
+    git clone --filter=blob:none --no-checkout "$ODESIGN_REPO" /opt/odesign-src; \
+    cd /opt/odesign-src; \
+    git checkout "$ODESIGN_SHA"; \
+    test "$(git rev-parse HEAD)" = "$ODESIGN_SHA"; \
+    rm -rf .git
+
+# ---------------------------------------------------------------------------
 # ODesign dependencies (uv pip — ~10× faster than pip, uses Huawei mirror).
 # PyG wheels need the find-links URL for the torch-2.3.1+cu121 index.
 # ---------------------------------------------------------------------------
-RUN --mount=type=bind,source=opensource/ODesign/requirements.txt,target=/tmp/requirements.txt \
-    --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/odesign/bin/python \
-        -r /tmp/requirements.txt \
+        -r /opt/odesign-src/requirements.txt \
         --find-links https://data.pyg.org/whl/torch-2.3.1+cu121.html
 
 # ---------------------------------------------------------------------------
@@ -137,14 +158,20 @@ COPY --from=builder /opt/conda /opt/conda
 # bloating the builder conda env cache layer.
 RUN git clone --depth 1 -b v3.5.1 https://github.com/NVIDIA/cutlass.git /kernels/cutlass
 
-# --- ODesign source ---
-COPY opensource/ODesign /opt/odesign/ODesign
+# --- ODesign source — from the builder stage's clone ---
+COPY --from=builder /opt/odesign-src /opt/odesign/ODesign
 
-# --- Model weights (pre-placed in opensource/ODesign/ckpt/ before build) ---
-COPY opensource/ODesign/ckpt/ /opt/odesign/ckpt/
+# --- Model weights ---
+# HF-downloaded model checkpoints (pre-staged via
+# services/odesign-server/scripts/fetch_weights.sh).
+COPY services/odesign-server/weights/ckpt/ /opt/odesign/ckpt/
+# grnade.h5 is tracked in the upstream ODesign repo, so it ships with the
+# clone above — copy it into the runtime ckpt dir alongside the HF weights.
+RUN cp /opt/odesign/ODesign/ckpt/grnade.h5 /opt/odesign/ckpt/grnade.h5
 
-# --- CCD data (pre-placed in opensource/ODesign/data/ before build) ---
-COPY opensource/ODesign/data/ /opt/odesign/data/
+# --- CCD data (pre-placed in services/odesign-server/weights/data/ before build,
+# downloaded manually from Google Drive) ---
+COPY services/odesign-server/weights/data/ /opt/odesign/data/
 
 # Server code last — explicit file list so test/doc changes don't bust cache.
 COPY services/odesign-server/__init__.py \

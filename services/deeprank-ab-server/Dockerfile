@@ -25,6 +25,12 @@
 ARG BASE_IMAGE=nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
 ARG MICROMAMBA_IMAGE=mambaorg/micromamba:2.6.2
 
+# Pinned DeepRank-Ab upstream. Bump SHA to upgrade; the build verifies the
+# remote actually checked out the requested commit so a moved tag can't
+# silently change image contents.
+ARG DEEPRANK_AB_REPO=https://github.com/haddocking/DeepRank-Ab.git
+ARG DEEPRANK_AB_SHA=5204621bacc7df62e9b0b8fe28acbd3bca5fbacf
+
 
 # ===========================================================================
 # Stage 1: builder — conda env only (no upstream source or weights).
@@ -120,6 +126,19 @@ RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
     uv pip install --python /opt/conda/envs/deeprank-ab/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
+# ---------------------------------------------------------------------------
+# Upstream source — clone at pinned SHA inside the builder stage so the
+# runtime image doesn't need git installed.
+# ---------------------------------------------------------------------------
+ARG DEEPRANK_AB_REPO
+ARG DEEPRANK_AB_SHA
+RUN set -eux; \
+    git clone --filter=blob:none --no-checkout "$DEEPRANK_AB_REPO" /opt/DeepRank-Ab; \
+    cd /opt/DeepRank-Ab; \
+    git checkout "$DEEPRANK_AB_SHA"; \
+    test "$(git rev-parse HEAD)" = "$DEEPRANK_AB_SHA"; \
+    rm -rf .git
+
 
 # ===========================================================================
 # Stage 2: runtime — conda env + upstream source + weights + server code.
@@ -145,7 +164,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder /opt/conda /opt/conda
 
-COPY opensource/DeepRank-Ab /opt/deeprank-ab/DeepRank-Ab
+COPY --from=builder /opt/DeepRank-Ab /opt/deeprank-ab/DeepRank-Ab
 COPY services/deeprank-ab-server/weights/esm /opt/deeprank-ab/esm_weights
 
 WORKDIR /opt/deeprank-ab

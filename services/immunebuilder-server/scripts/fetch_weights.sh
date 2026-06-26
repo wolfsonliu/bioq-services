@@ -4,10 +4,10 @@
 #   ./services/immunebuilder-server/scripts/fetch_weights.sh
 #
 # Downloads 16 model files (~600 MB total) into
-# opensource/ImmuneBuilder/ImmuneBuilder/trained_model/
+# services/immunebuilder-server/trained_model/
 set -euo pipefail
 
-DST="$(cd "$(dirname "$0")/../../.." && pwd)/opensource/ImmuneBuilder/ImmuneBuilder/trained_model"
+DST="$(cd "$(dirname "$0")/.." && pwd)/trained_model"
 mkdir -p "$DST"
 
 ZENODO_V1="https://zenodo.org/record/7258553/files"

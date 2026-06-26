@@ -1,7 +1,11 @@
 # Build from bioagent project root:
 #   docker build --platform linux/amd64 -t genie3-server -f services/genie3-server/Dockerfile .
 #
-# Genie3 source must be at opensource/genie3/ (pretrained v1 weights baked into image).
+# Genie3 source is fetched from GitHub at a pinned SHA (see GENIE3_SHA below)
+# and the local patch under services/genie3-server/patches/ is reapplied
+# during build.  Pretrained v1 weights are pre-staged at
+# services/genie3-server/pretrained/v1/ (not in the upstream repo, ~331 MB
+# checkpoints).
 # This image only supports `genie3 generate` — evaluation deps (ColabFold/ESMFold/FoldSeek/
 # ProteinMPNN/TMscore/DSSP/IPSAE) are intentionally excluded to keep the image small.
 #
@@ -22,6 +26,10 @@
 # wheel compilation, not CUDA — that works fine on -runtime too.
 # Save ~3.6 GB vs the -devel variant.
 ARG BASE_IMAGE=nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+
+# Pinned Genie3 upstream. Bump SHA to upgrade; build verifies the checkout.
+ARG GENIE3_REPO=https://github.com/aqlaboratory/genie3.git
+ARG GENIE3_SHA=5214459c42e69b01fadfc7d7ebda09d8e5082115
 
 
 # ===========================================================================
@@ -74,10 +82,21 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         wandb tensorboard \
         PyYAML
 
-# Copy genie3 source + pretrained v1 weights (drop training data / examples to slim the image)
-COPY opensource/genie3/setup.py /opt/genie3/setup.py
-COPY opensource/genie3/src /opt/genie3/src
-COPY opensource/genie3/pretrained/v1 /opt/genie3/pretrained/v1
+# Genie3 source — clone at pinned SHA (treeless clone).  Pretrained v1
+# weights are NOT in the upstream repo so they are still COPYed from the
+# locally-staged services/genie3-server/pretrained/v1/ tree.
+ARG GENIE3_REPO
+ARG GENIE3_SHA
+RUN set -eux; \
+    git clone --filter=blob:none --no-checkout "$GENIE3_REPO" /tmp/genie3-src; \
+    cd /tmp/genie3-src; \
+    git checkout "$GENIE3_SHA"; \
+    test "$(git rev-parse HEAD)" = "$GENIE3_SHA"; \
+    rm -rf .git; \
+    cp setup.py /opt/genie3/setup.py; \
+    cp -r src /opt/genie3/src; \
+    rm -rf /tmp/genie3-src
+COPY services/genie3-server/pretrained/v1 /opt/genie3/pretrained/v1
 
 # Apply local patches to upstream genie3. See services/genie3-server/patches/README.md.
 COPY services/genie3-server/patches /tmp/genie3-patches

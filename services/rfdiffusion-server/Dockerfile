@@ -1,9 +1,11 @@
 # Build from bioagent project root:
 #   docker build --platform linux/amd64 -t rfdiffusion-server -f services/rfdiffusion-server/Dockerfile .
 #
-# RFdiffusion source must be at opensource/RFdiffusion/ (weights baked into image,
-# ~3.9 GB of .pt files; ensure opensource/RFdiffusion/models/ is populated via
-# `bash opensource/RFdiffusion/scripts/download_models.sh ...` before building).
+# RFdiffusion source is fetched from GitHub at a pinned SHA (see
+# RFDIFFUSION_SHA below).  Model weights (~3.9 GB of .pt files) are NOT in
+# the upstream repo — ensure services/rfdiffusion-server/models/ is populated
+# before building (upstream ships a download_models.sh under its scripts/;
+# point its output to services/rfdiffusion-server/models/).
 #
 # Multistage layout
 # -----------------
@@ -22,6 +24,12 @@
 # + hydra-core); the source tree has no `cpp_extension.load` / `CUDAExtension`
 # paths that run at inference time, so the runtime base saves ~3-4 GB vs `-devel`.
 ARG BASE_IMAGE=nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
+
+# Pinned RFdiffusion upstream.  Bump SHA to upgrade; build verifies the
+# checkout.  Weights (models/) are NOT included — they are pre-staged at
+# opensource/RFdiffusion/models/ and COPYed separately into the runtime.
+ARG RFDIFFUSION_REPO=https://github.com/RosettaCommons/RFdiffusion.git
+ARG RFDIFFUSION_SHA=9535f1938203a24937d7dadf0cb831d02cb5fc0e
 
 
 # ===========================================================================
@@ -120,14 +128,30 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # at sampler init if this directory is missing. The rest of `examples/`
 # (shell scripts / output PDBs) is not on any code path → skipped.
 # ---------------------------------------------------------------------------
-COPY opensource/RFdiffusion/models /opt/rfdiffusion/models
-COPY opensource/RFdiffusion/rfdiffusion /opt/rfdiffusion/rfdiffusion
-COPY opensource/RFdiffusion/env /opt/rfdiffusion/env
-COPY opensource/RFdiffusion/config /opt/rfdiffusion/config
-COPY opensource/RFdiffusion/scripts /opt/rfdiffusion/scripts
-COPY opensource/RFdiffusion/helper_scripts /opt/rfdiffusion/helper_scripts
-COPY opensource/RFdiffusion/examples/input_pdbs /opt/rfdiffusion/examples/input_pdbs
-COPY opensource/RFdiffusion/setup.py /opt/rfdiffusion/setup.py
+# Pre-staged weights — not in the upstream repo.  Use upstream's
+# scripts/download_models.sh (or any other downloader) but redirect its
+# output to services/rfdiffusion-server/models/.
+COPY services/rfdiffusion-server/models /opt/rfdiffusion/models
+
+# Upstream source — clone at pinned SHA, then materialize only the runtime
+# subtrees (skip img/, docker/, tests/).
+ARG RFDIFFUSION_REPO
+ARG RFDIFFUSION_SHA
+RUN set -eux; \
+    git clone --filter=blob:none --no-checkout "$RFDIFFUSION_REPO" /tmp/rfd-src; \
+    cd /tmp/rfd-src; \
+    git checkout "$RFDIFFUSION_SHA"; \
+    test "$(git rev-parse HEAD)" = "$RFDIFFUSION_SHA"; \
+    rm -rf .git; \
+    mkdir -p /opt/rfdiffusion/examples; \
+    cp -r rfdiffusion /opt/rfdiffusion/rfdiffusion; \
+    cp -r env /opt/rfdiffusion/env; \
+    cp -r config /opt/rfdiffusion/config; \
+    cp -r scripts /opt/rfdiffusion/scripts; \
+    cp -r helper_scripts /opt/rfdiffusion/helper_scripts; \
+    cp -r examples/input_pdbs /opt/rfdiffusion/examples/input_pdbs; \
+    cp setup.py /opt/rfdiffusion/setup.py; \
+    rm -rf /tmp/rfd-src
 
 # ---------------------------------------------------------------------------
 # Editable / wheel-from-source installs + cleanup.
