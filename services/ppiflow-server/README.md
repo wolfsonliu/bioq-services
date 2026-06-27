@@ -154,7 +154,7 @@ manifest 的 `service_specific` 段含：
 |---|---|---|
 | `PPIFLOW_JOBS_BASE_DIR` | `/data/ppiflow_jobs` | NAS 上的 job 根目录 |
 | `PPIFLOW_ROOT` | `/opt/ppiflow` | PPIFlow `tool/PPIFlow` 源码根（subprocess cwd） |
-| `PPIFLOW_CKPT_DIR` | `/opt/ppiflow/checkpoint` | 权重目录（4 个 .ckpt 烘焙到镜像） |
+| `PPIFLOW_CKPT_DIR` | `/data/models/ppiflow/checkpoint` | 权重目录（v0.0.11 起 NAS 挂载，~1.1 GB 外置）|
 | `PPIFLOW_CONFIG_DIR` | `/opt/ppiflow/configs` | 推理 YAML 目录 |
 | `PPIFLOW_PORT` | `9000` | uvicorn 端口（FC CAPort） |
 | `PPIFLOW_KEEP_ALIVE_SEC` | `900` | uvicorn `--timeout-keep-alive` |
@@ -191,21 +191,72 @@ export PPIFLOW_JOBS_BASE_DIR=/tmp/ppiflow_jobs
 uvicorn server.app:app --host 0.0.0.0 --port 9000 --reload
 ```
 
+## Weights
+
+v0.0.11 起 4 个 `.ckpt` 权重（~1.1 GB）**不再 baked 到镜像**，从 NAS 加载。
+期望布局：
+
+```
+/data/models/ppiflow/
+└── checkpoint/
+    ├── binder.ckpt
+    ├── antibody.ckpt
+    ├── nanobody.ckpt
+    └── monomer.ckpt
+```
+
+### Pre-stage（一次性）
+
+把上游下好的 4 个 `.ckpt` 放到本地 stage 目录或直接上传到 NAS：
+
+```bash
+# 1. 准备：手动下载 4 个 .ckpt 到 services/ppiflow-server/checkpoint/
+#    （上游 PPIFlow 没有公开下载脚本，权重需从作者处获取）
+
+# 2. 上传到 NAS
+rsync -av services/ppiflow-server/checkpoint/ \
+    <NAS-mount>:/data/models/ppiflow/checkpoint/
+```
+
+### FC
+
+NAS 自动挂载到 `/data/models/ppiflow/`。验证：
+
+```bash
+curl https://fc-ppiflow-lufflhmlaw.cn-hangzhou-vpc.fcapp.run/healthz/detail
+# 期望：{"status":"ok","weights_loaded":true,"ckpts_found":4}
+```
+
+### SIF / HPC
+
+```bash
+apptainer run --nv \
+    --bind /scratch/models/ppiflow:/data/models/ppiflow \
+    ppiflow-server.sif python -m server sample binder ...
+```
+
+详见 [weights externalization design](../../engineering/decisions/2026-06-26-service-weights-externalization.md)。
+
 ## Docker 构建与运行
 
 ```bash
-# 构建（要求 opensource/PPIFlow/ + checkpoint/*.ckpt 已就绪）
+# 1. Vendor 上游源（一次性，重跑可升级 SHA）
+./services/ppiflow-server/scripts/vendor.sh
+
+# 2. 构建（~5.5 GB 镜像，无权重）
 docker build --platform linux/amd64 -t ppiflow-server -f services/ppiflow-server/Dockerfile .
 
 # 或通过 Makefile（用 services/ppiflow-server/VERSION 里的 tag）
 make build-ppiflow-server
 
-# 本地运行（需 GPU）
-docker run --gpus all -p 9000:9000 --memory 16g ppiflow-server
+# 本地运行（需 GPU + NAS / 本地 --bind 注入权重）
+docker run --gpus all -p 9000:9000 --memory 16g \
+    -v $(pwd)/checkpoint:/data/models/ppiflow/checkpoint \
+    ppiflow-server
 ```
 
-构建上下文必须是项目根目录，因为 Dockerfile 同时 `COPY services/_framework` 安装框架包 +
-`COPY opensource/PPIFlow/...` 取源码 + 权重。
+构建上下文必须是项目根目录，因为 Dockerfile 同时 `COPY services/_framework`
+安装框架包 + `COPY services/ppiflow-server/upstream/` 取 vendored 源码。
 
 ## 阿里云函数计算部署
 

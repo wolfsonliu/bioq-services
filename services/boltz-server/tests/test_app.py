@@ -128,7 +128,9 @@ def test_settings_defaults():
     assert s.jobs_base_dir == Path("/data/boltz_jobs")
     assert s.root == Path("/opt/boltz")
     assert s.binary == "/opt/boltz/.venv/bin/boltz"
-    assert s.cache_dir == Path("/opt/boltz/weights")
+    # Weights externalized to NAS — default points at the FC mount path.
+    # See engineering/decisions/2026-06-26-service-weights-externalization.md.
+    assert s.cache_dir == Path("/data/models/boltz")
     assert s.max_concurrent_jobs == 1
     assert s.oss_region == "cn-hangzhou"
 

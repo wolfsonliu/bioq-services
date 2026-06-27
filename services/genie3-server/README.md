@@ -191,6 +191,7 @@ job 失败时 `JobInfo` 自动填充：
 | `GENIE3_JOBS_BASE_DIR` | `/data/genie3_jobs` | NAS 上的 job 根目录 |
 | `GENIE3_ROOT` | `/opt/genie3` | genie3 源码根（subprocess cwd，让 `pretrained/v1/...` 相对路径解析） |
 | `GENIE3_BIN` | `genie3` | CLI 入口（`pip install -e .` 后注册的命令） |
+| `GENIE3_PRETRAINED_DIR` | `/data/models/genie3/pretrained/v1` | 预训练权重目录（v0.0.17 起 NAS 挂载，~512 MB 外置）|
 | `GENIE3_PORT` | `9000` | uvicorn 端口（FC CAPort） |
 | `GENIE3_KEEP_ALIVE_SEC` | `900` | uvicorn `--timeout-keep-alive` |
 | `GENIE3_MAX_CONCURRENT_JOBS` | `1` | 单实例并发（单卡保持 1） |
@@ -248,21 +249,74 @@ cd $GENIE3_ROOT
 uvicorn server.app:app --host 0.0.0.0 --port 9000 --reload
 ```
 
+## Weights
+
+v0.0.17 起预训练 v1 权重（~512 MB）**不再 baked 到镜像**，从 NAS 加载。
+genie3 CLI 用相对路径 `<cwd>/pretrained/<version>/...` 查找权重，所以镜像里
+`/opt/genie3/pretrained` 是个**软链**指向 NAS 挂载点。
+
+期望布局：
+
+```
+/data/models/genie3/
+└── pretrained/
+    └── v1/
+        ├── config.yaml
+        └── checkpoints/
+            └── step=600000.ckpt   ← 关键 checkpoint
+```
+
+### Pre-stage（一次性）
+
+```bash
+# 1. 下载到本地 stage 目录（手动下载，没有 fetch 脚本）
+mkdir -p services/genie3-server/pretrained/v1
+# <下载 config.yaml + checkpoints/step=600000.ckpt 到该目录>
+
+# 2. 上传到 NAS
+rsync -av services/genie3-server/pretrained/ \
+    <NAS-mount>:/data/models/genie3/pretrained/
+```
+
+### FC
+
+NAS 自动挂载到 `/data/models/genie3/`。验证：
+
+```bash
+curl https://fc-genie-icjpnieeiz.cn-hangzhou-vpc.fcapp.run/healthz/detail
+# 期望：{"status":"ok","weights_loaded":true,"files_found":N}
+```
+
+### SIF / HPC
+
+```bash
+apptainer run --nv \
+    --bind /scratch/models/genie3:/data/models/genie3 \
+    genie3-server.sif python -m server generate unconditional ...
+```
+
+详见 [weights externalization design](../../engineering/decisions/2026-06-26-service-weights-externalization.md)。
+
 ## Docker 构建与运行
 
 ```bash
-# 项目根目录构建（要求 opensource/genie3/ + pretrained/v1/ 权重已就绪）
+# 1. Vendor 上游源（一次性，重跑可升级 SHA）
+./services/genie3-server/scripts/vendor.sh
+
+# 2. 构建（~2.5 GB 镜像，无权重）
 docker build --platform linux/amd64 -t genie3-server -f services/genie3-server/Dockerfile .
 
 # 或通过 Makefile
 make build-genie3-server
 
-# 本地运行（需要 GPU）
-docker run --gpus all -p 9000:9000 --memory 16g genie3-server
+# 本地运行（需要 GPU + NAS / 本地 --bind 注入权重）
+docker run --gpus all -p 9000:9000 --memory 16g \
+    -v $(pwd)/pretrained:/data/models/genie3/pretrained \
+    genie3-server
 ```
 
-构建上下文必须是项目根目录，因为 Dockerfile 同时 `COPY services/_framework` 安装框架包，
-并 `COPY services/genie3-server/patches` 应用上游补丁。
+构建上下文必须是项目根目录，因为 Dockerfile 同时 `COPY services/_framework`
+安装框架包，并 `COPY services/genie3-server/patches` 应用上游补丁。
 
 ## 阿里云函数计算部署
 

@@ -192,7 +192,7 @@ ProteinMPNN server 接受 `input_uri=job://<rfdiffusion_job_id>/design_0.pdb`，
 |---|---|---|
 | `RFDIFFUSION_JOBS_BASE_DIR` | `/data/rfdiffusion_jobs` | NAS 上的 job 根目录 |
 | `RFDIFFUSION_ROOT` | `/opt/rfdiffusion` | RFdiffusion 源码根（subprocess cwd）|
-| `RFDIFFUSION_MODELS_DIR` | `/opt/rfdiffusion/models` | 权重目录（`inference.model_directory_path` 从这里来）|
+| `RFDIFFUSION_MODELS_DIR` | `/data/models/rfdiffusion/models` | 权重目录（NAS 挂载；v0.0.9 起从镜像外置，~3.9 GB） |
 | `RFDIFFUSION_INFERENCE_SCRIPT` | `/opt/rfdiffusion/scripts/run_inference.py` | Hydra 驱动的入口 |
 | `RFDIFFUSION_PYTHON` | `/opt/rfdiffusion/.venv/bin/python` | venv 解释器 |
 | `RFDIFFUSION_PORT` | `9000` | uvicorn 监听端口（FC CAPort）|
@@ -227,25 +227,77 @@ export RFDIFFUSION_JOBS_BASE_DIR=/tmp/rfdiffusion_jobs
 uvicorn server.app:app --host 0.0.0.0 --port 9000 --reload
 ```
 
+## Weights
+
+v0.0.9 起 RFdiffusion checkpoints（~3.9 GB，8 个 .pt）**不再 baked 到镜像**，
+而是从 NAS 加载。期望布局：
+
+```
+/data/models/rfdiffusion/
+└── models/
+    ├── Base_ckpt.pt
+    ├── Complex_base_ckpt.pt
+    ├── Complex_beta_ckpt.pt
+    ├── Complex_Fold_base_ckpt.pt
+    ├── InpaintSeq_ckpt.pt
+    ├── InpaintSeq_Fold_ckpt.pt
+    ├── ActiveSite_ckpt.pt
+    └── Base_epoch8_ckpt.pt
+```
+
+### 下载（一次性）
+
+```bash
+# 先 vendor 上游源（含 download_models.sh）
+./services/rfdiffusion-server/scripts/vendor.sh
+
+# 用 upstream 下载脚本，输出到本地 stage 目录
+bash services/rfdiffusion-server/upstream/scripts/download_models.sh \
+    services/rfdiffusion-server/models
+
+# 上传到 NAS
+rsync -av services/rfdiffusion-server/models/ \
+    <NAS-mount>:/data/models/rfdiffusion/models/
+```
+
+### FC
+
+NAS 自动挂载到 `/data/models/rfdiffusion/`。验证：
+
+```bash
+curl https://fc-rfdiffusion-cdskxiqtnk.cn-hangzhou-vpc.fcapp.run/healthz/detail
+# 期望：{"status":"ok","weights_loaded":true,"ckpts_found":8}
+```
+
+### SIF / HPC (apptainer)
+
+```bash
+apptainer run --nv \
+    --bind /scratch/models/rfdiffusion:/data/models/rfdiffusion \
+    rfdiffusion-server.sif python -m server unconditional ...
+```
+
+详见 [weights externalization design](../../engineering/decisions/2026-06-26-service-weights-externalization.md)。
+
 ## Docker 构建与运行
 
 ```bash
-# 项目根目录构建（CUDA 11.8 base，烘焙 ~4 GB 权重）
+# 1. Vendor 上游源码（一次性，重跑可升级 SHA）
+./services/rfdiffusion-server/scripts/vendor.sh
+
+# 2. 构建（CUDA 11.8 base，~3 GB 镜像，无权重）
 docker build --platform linux/amd64 -t rfdiffusion-server -f services/rfdiffusion-server/Dockerfile .
 
 # 或通过 Makefile
 make build-rfdiffusion-server
 
-# 本地运行（需 GPU）
-docker run --gpus all -p 9000:9000 --memory 16g rfdiffusion-server
+# 本地运行（需 GPU + NAS / 本地 --bind 注入权重）
+docker run --gpus all -p 9000:9000 --memory 16g \
+    -v $(pwd)/models:/data/models/rfdiffusion/models \
+    rfdiffusion-server
 ```
 
 构建上下文必须是项目根目录（Dockerfile 同时 `COPY services/_framework`）。
-**构建前**确保 `opensource/RFdiffusion/models/` 已下好（约 4 GB，8 个 .pt）：
-
-```bash
-cd opensource/RFdiffusion && bash scripts/download_models.sh models
-```
 
 ## 阿里云函数计算部署
 

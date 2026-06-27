@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-DST="${1:-$(dirname "$0")/../weights/data}"
+DST="${1:-${WEIGHTS_DST:-$(dirname "$0")/../weights/data}}"
 mkdir -p "$DST"
 
 echo "CCD data must be downloaded manually from Google Drive:"

@@ -146,12 +146,12 @@ plus URI variants on common endpoints):
 | `PROMERA_JOBS_BASE_DIR` | `/data/promera_jobs` | NAS path for job state + outputs |
 | `PROMERA_ROOT` | `/opt/promera` | Promera install root (subprocess cwd) |
 | `PROMERA_PYTHON` | `/opt/promera/.venv/bin/python` | venv interpreter |
-| `PROMERA_WEIGHTS` | `/opt/promera/weights/promera_2606.ckpt` | pre-staged checkpoint |
-| `PROMERA_LIGANDMPNN_DIR` | `/opt/promera/LigandMPNN` | for `inverse_folder_type` ≠ `none` |
+| `PROMERA_WEIGHTS` | `/data/models/promera/promera/promera_2606.ckpt` | Promera ckpt (v0.0.4 起 NAS 挂载，外置) |
+| `PROMERA_LIGANDMPNN_DIR` | `/opt/promera/LigandMPNN` | LigandMPNN 源码 + 权重 symlink |
 | `PROMERA_TEMPLATES_DIR` | `/opt/promera/promera_src/examples/templates` | upstream-provided templates |
 | `PROMERA_MAX_CONCURRENT_JOBS` | `1` | single-GPU FC instances → serial |
 | `PROMERA_OSS_REGION` | `cn-hangzhou` | for `oss://` URIs |
-| `TINYPROT_CACHE` | `/opt/promera/tinyprot_cache` | LMDB caches baked into image (see Docker build) |
+| `TINYPROT_CACHE` | `/data/models/promera/tinyprot` | LMDB caches on NAS (v0.0.4 起外置) |
 
 Framework env vars (`SERVICE_DISK_LIMIT_MB`, `SERVICE_ERROR_TAIL_CHARS`,
 `SERVICE_TASK_ENDPOINTS_ENABLED`, ...) behave as documented in
@@ -197,20 +197,64 @@ includes:
   on first kernel run via host `gcc`; runtime-flavor CUDA bases don't ship
   it. See [promera-tinyprot-cache.md](../../engineering/guides/promera-tinyprot-cache.md).
 
-### Pre-staging weights and LMDB caches
+## Weights
 
-```bash
-./services/promera-server/scripts/fetch_weights.sh
+v0.0.4 起 3 个权重源（~5 GB 总）**不再 baked 到镜像**，从 NAS 加载。
+LigandMPNN model_params 路径在镜像里是 symlink → NAS。
+
+期望布局：
+
+```
+/data/models/promera/
+├── promera/
+│   └── promera_2606.ckpt           ← ~2 GB
+├── ligandmpnn/                     ← LigandMPNN model_params
+│   └── *.pt                        ← 6 small files
+└── tinyprot/                       ← TINYPROT_CACHE
+    ├── ccd.lmdb/data.mdb
+    └── taxonomy.lmdb/data.mdb
 ```
 
-Downloads to `services/promera-server/weights/` (gitignored):
+⚠️ `tinyprot.msa` 在 **import** 时打开 `taxonomy.lmdb`，缺权重时服务会在
+启动阶段 crash 而不是在第一次推理时——务必确保 NAS 已挂。
 
-- `promera/promera_2606.ckpt` — ~2 GB
-- `ligandmpnn/*.pt` — 6 small files
-- `tinyprot/ccd.lmdb/data.mdb`, `tinyprot/taxonomy.lmdb/data.mdb` — ~2-5 GB
+### Pre-staging（一次性）
 
-The Dockerfile then `COPY`s each into the image; no network access is
-needed during `docker build`.
+```bash
+# 默认下载到本地 stage 目录
+./services/promera-server/scripts/fetch_weights.sh
+# → services/promera-server/weights/{promera,ligandmpnn,tinyprot}/
+
+# 上传到 NAS
+rsync -av services/promera-server/weights/ \
+    <NAS-mount>:/data/models/promera/
+```
+
+或直接下到 NAS：
+
+```bash
+WEIGHTS_DST=/mnt/nas/data/models/promera \
+    ./services/promera-server/scripts/fetch_weights.sh
+```
+
+### FC
+
+NAS 自动挂载到 `/data/models/promera/`。验证：
+
+```bash
+curl https://fc-promera-adkrlhmlcq.cn-hangzhou-vpc.fcapp.run/healthz/detail
+# 期望：{"status":"ok","weights_loaded":true,"weights_missing":{}}
+```
+
+### SIF / HPC
+
+```bash
+apptainer run --nv \
+    --bind /scratch/models/promera:/data/models/promera \
+    promera-server.sif python -m server cofold ...
+```
+
+详见 [weights externalization design](../../engineering/decisions/2026-06-26-service-weights-externalization.md)。
 
 ## FC deployment
 

@@ -34,6 +34,18 @@ class Genie3Settings(ServiceSettings):
     # Env: GENIE3_BIN
     bin: str = Field(default="genie3")
 
+    # Pretrained checkpoints — externalized to NAS at
+    # /data/models/genie3/pretrained/v1/ (FC mount; SIF / HPC bind via
+    # apptainer).  The Docker image contains a symlink at
+    # /opt/genie3/pretrained → /data/models/genie3/pretrained so the genie3
+    # CLI (which looks up `<cwd>/pretrained/<version>/`) resolves them
+    # transparently.  Env: GENIE3_PRETRAINED_DIR
+    # See engineering/decisions/2026-06-26-service-weights-externalization.md.
+    pretrained_dir: Path = Field(
+        default=Path("/data/models/genie3/pretrained/v1"),
+        description="Genie3 pretrained v1 checkpoints + config.yaml (~512 MB).",
+    )
+
     # OSS download region — only consulted by `oss://` URI resolution.
     # Env: GENIE3_OSS_REGION
     oss_region: str = Field(default="cn-hangzhou")

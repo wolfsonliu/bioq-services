@@ -45,6 +45,53 @@ app = create_app(
 )
 
 
+# Remove framework's generic /healthz/detail so our odesign-specific weights
+# probe takes over. FastAPI >=0.115 wraps included routers in
+# `_IncludedRouter`; descend to find the framework route.
+def _strip_route(router, path: str, method: str) -> None:
+    router.routes = [
+        r for r in router.routes
+        if not (getattr(r, "path", None) == path
+                and method in getattr(r, "methods", set()))
+    ]
+    for r in router.routes:
+        inner = getattr(r, "original_router", None)
+        if inner is not None:
+            _strip_route(inner, path, method)
+
+
+_strip_route(app.router, "/healthz/detail", "GET")
+
+
+@app.get("/healthz/detail")
+def healthz_detail(request: Request) -> dict:
+    """Extended health: report whether NAS-mounted weights + CCD data are reachable.
+
+    Both ckpt_root_dir and data_root_dir live on NAS (default
+    `/data/models/odesign/{ckpt,data}/`).  Probes for the directories and
+    representative files; `weights_loaded=false` lets the agent detect a
+    misconfigured FC mount / unbound SIF without crashing the service.
+    """
+    expected = {
+        "ckpt_dir": settings.ckpt_root_dir,
+        "data_dir": settings.data_root_dir,
+        "grnade.h5": settings.ckpt_root_dir / "grnade.h5",
+        "components.cif": settings.data_root_dir / "components.v20240608.cif",
+    }
+    missing = {k: str(p) for k, p in expected.items() if not p.exists()}
+    return {
+        "status": "ok",
+        "service": adapter.name,
+        "version": request.app.version,
+        "ckpt_root_dir": str(settings.ckpt_root_dir),
+        "data_root_dir": str(settings.data_root_dir),
+        "weights_loaded": not missing,
+        "weights_missing": missing,
+        "active_jobs": request.app.state.runner.active_job_count,
+        "max_concurrent_jobs": settings.max_concurrent_jobs,
+    }
+
+
 def _save_inputs(
     input_json: Optional[UploadFile],
     input_json_uri: Optional[str],

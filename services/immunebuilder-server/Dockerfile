@@ -27,12 +27,19 @@ ARG MICROMAMBA_IMAGE=mambaorg/micromamba:2.6.2
 
 # Pre-build (once; re-run to bump pinned upstream commit):
 #   ./services/immunebuilder-server/scripts/vendor.sh         # vendor upstream/
-#   ./services/immunebuilder-server/scripts/fetch_weights.sh  # trained_model/
 #
 # ImmuneBuilder source lives at services/immunebuilder-server/upstream/
-# (vendored at pinned SHA via scripts/vendor.sh).  Trained model weights
-# are NOT in the upstream repo (placeholders only) — they are pre-staged
-# at services/immunebuilder-server/trained_model/ and COPYed separately.
+# (vendored at pinned SHA via scripts/vendor.sh).  Trained model weights live
+# on NAS at /data/models/immunebuilder/trained_model/ — the image only
+# contains a symlink at the upstream package's expected path; weights are
+# resolved at run time via the FC NAS mount (SIF / HPC users bind via
+# `apptainer --bind`).
+#
+# Pre-stage / upload weights once:
+#   ./services/immunebuilder-server/scripts/fetch_weights.sh
+#   rsync -a services/immunebuilder-server/trained_model/ \
+#       <NAS>:/data/models/immunebuilder/trained_model/
+# (Or set WEIGHTS_DST in fetch_weights.sh to download directly to NAS.)
 
 
 # ===== Stage 1: builder — conda env only =====
@@ -98,13 +105,20 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # ---------------------------------------------------------------------------
 # ImmuneBuilder source — from vendored upstream/ (see scripts/vendor.sh).
-# Then overlay the pre-staged trained model weights (upstream ships only
-# placeholders).
+# Trained model weights live on NAS at /data/models/immunebuilder/trained_model/
+# (FC mount; SIF / HPC bind via apptainer); we symlink the upstream-expected
+# package path to that mount so the ImmuneBuilder Python package finds them
+# transparently — no upstream code change required.
+# Pre-stage / upload weights:
+#   ./services/immunebuilder-server/scripts/fetch_weights.sh   # → ./trained_model/
+#   rsync -a services/immunebuilder-server/trained_model/ <NAS>:/data/models/immunebuilder/trained_model/
+# See engineering/decisions/2026-06-26-service-weights-externalization.md.
 # ---------------------------------------------------------------------------
 COPY services/immunebuilder-server/upstream \
      /opt/immunebuilder/ImmuneBuilder
-COPY services/immunebuilder-server/trained_model \
-     /opt/immunebuilder/ImmuneBuilder/ImmuneBuilder/trained_model
+RUN rm -rf /opt/immunebuilder/ImmuneBuilder/ImmuneBuilder/trained_model && \
+    ln -s /data/models/immunebuilder/trained_model \
+          /opt/immunebuilder/ImmuneBuilder/ImmuneBuilder/trained_model
 
 # ---------------------------------------------------------------------------
 # ImmuneBuilder editable install + ANARCI (CDR numbering).
@@ -179,6 +193,7 @@ COPY services/immunebuilder-server/__init__.py \
 ENV PYTHONPATH=/opt/immunebuilder
 ENV IMMUNEBUILDER_JOBS_BASE_DIR=/data/immunebuilder_jobs
 ENV IMMUNEBUILDER_VENV_BIN=/opt/conda/envs/immunebuilder/bin
+ENV IMMUNEBUILDER_WEIGHTS_DIR=/data/models/immunebuilder/trained_model
 RUN mkdir -p /data/immunebuilder_jobs
 
 

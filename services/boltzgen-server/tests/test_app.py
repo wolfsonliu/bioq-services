@@ -98,8 +98,10 @@ def test_settings_defaults():
     assert s.root == Path("/opt/boltzgen")
     assert s.python == "/opt/conda/envs/boltzgen/bin/python"
     assert s.cli == "/opt/conda/envs/boltzgen/bin/boltzgen"
-    assert s.weights_dir == Path("/opt/boltzgen/weights")
-    assert s.moldir == Path("/opt/boltzgen/moldir")
+    # Weights are externalized to NAS — defaults point at the FC mount path.
+    # See engineering/decisions/2026-06-26-service-weights-externalization.md.
+    assert s.weights_dir == Path("/data/models/boltzgen/weights")
+    assert s.moldir == Path("/data/models/boltzgen/moldir")
     assert s.oss_region == "cn-hangzhou"
 
 

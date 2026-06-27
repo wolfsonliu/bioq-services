@@ -64,6 +64,52 @@ app = create_app(
 )
 
 
+# Remove framework's generic /healthz/detail so our rfdiffusion-specific
+# weights probe takes over. FastAPI >=0.115 wraps included routers in
+# `_IncludedRouter`; descend to find the framework route.
+def _strip_route(router, path: str, method: str) -> None:
+    router.routes = [
+        r for r in router.routes
+        if not (getattr(r, "path", None) == path
+                and method in getattr(r, "methods", set()))
+    ]
+    for r in router.routes:
+        inner = getattr(r, "original_router", None)
+        if inner is not None:
+            _strip_route(inner, path, method)
+
+
+_strip_route(app.router, "/healthz/detail", "GET")
+
+
+@app.get("/healthz/detail")
+def healthz_detail(request: Request) -> dict:
+    """Extended health: report whether NAS-mounted weights are reachable.
+
+    RFdiffusion checkpoints live on NAS at `RFDIFFUSION_MODELS_DIR` (default
+    `/data/models/rfdiffusion/models/`).  We probe for the directory and any
+    *.pt files; `weights_loaded=false` lets the agent detect a misconfigured
+    FC mount / unbound SIF without crashing the service.
+    """
+    models_dir = settings.models_dir
+    if not models_dir.exists():
+        weights_loaded = False
+        ckpts_found = 0
+    else:
+        ckpts_found = sum(1 for _ in models_dir.glob("*.pt"))
+        weights_loaded = ckpts_found > 0
+    return {
+        "status": "ok",
+        "service": adapter.name,
+        "version": request.app.version,
+        "weights_dir": str(models_dir),
+        "weights_loaded": weights_loaded,
+        "ckpts_found": ckpts_found,
+        "active_jobs": request.app.state.runner.active_job_count,
+        "max_concurrent_jobs": settings.max_concurrent_jobs,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Service-specific endpoints
 # ---------------------------------------------------------------------------

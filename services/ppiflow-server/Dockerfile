@@ -198,7 +198,12 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
 # ---------------------------------------------------------------------------
 RUN cp -a /opt/ppiflow-src/tool/PPIFlow/. /opt/ppiflow/ \
     && rm -rf /opt/ppiflow-src
-COPY services/ppiflow-server/checkpoint /opt/ppiflow/checkpoint
+# Checkpoints live on NAS at /data/models/ppiflow/checkpoint/ — NOT baked
+# into the image (~1.1 GB savings).  FC mounts the NAS; SIF / HPC bind:
+#   apptainer run --bind /scratch/models/ppiflow:/data/models/ppiflow \
+#       ppiflow-server.sif python -m server sample ...
+# Pre-stage to local, then rsync to NAS / HPC.
+# See engineering/decisions/2026-06-26-service-weights-externalization.md.
 
 # ---------------------------------------------------------------------------
 # Pre-compile the fastfold_layer_norm_cuda extension during image build.
@@ -256,7 +261,7 @@ COPY services/ppiflow-server/__init__.py \
 # Settings via env (see services/ppiflow-server/settings.py).
 ENV PYTHONPATH=/opt/ppiflow
 ENV PPIFLOW_ROOT=/opt/ppiflow
-ENV PPIFLOW_CKPT_DIR=/opt/ppiflow/checkpoint
+ENV PPIFLOW_CKPT_DIR=/data/models/ppiflow/checkpoint
 ENV PPIFLOW_CONFIG_DIR=/opt/ppiflow/configs
 ENV PPIFLOW_JOBS_BASE_DIR=/data/ppiflow_jobs
 RUN mkdir -p /data/ppiflow_jobs

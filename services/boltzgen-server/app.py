@@ -45,6 +45,56 @@ app = create_app(
 )
 
 
+# Remove framework's generic /healthz/detail so we can override it with
+# boltzgen-specific signals (weights/moldir presence on NAS).  FastAPI uses
+# first-match routing, so without this our handler below would be shadowed.
+# FastAPI >=0.115 wraps included routers in `_IncludedRouter`; descend into
+# them to find the framework's route.
+def _strip_route(router, path: str, method: str) -> None:
+    router.routes = [
+        r
+        for r in router.routes
+        if not (
+            getattr(r, "path", None) == path
+            and method in getattr(r, "methods", set())
+        )
+    ]
+    for r in router.routes:
+        inner = getattr(r, "original_router", None)
+        if inner is not None:
+            _strip_route(inner, path, method)
+
+
+_strip_route(app.router, "/healthz/detail", "GET")
+
+
+@app.get("/healthz/detail")
+def healthz_detail(request: Request) -> dict:
+    """Extended health: surface whether NAS-mounted weights are reachable.
+
+    Weights live on NAS at `BOLTZGEN_WEIGHTS_DIR` + `BOLTZGEN_MOLDIR`
+    (default `/data/models/boltzgen/{weights,moldir}/`).  Reports missing
+    paths via `weights_missing` so the agent can detect a misconfigured FC
+    mount / unbound SIF without crashing the service.
+    """
+    expected = {
+        "weights_dir": settings.weights_dir,
+        "moldir": settings.moldir,
+    }
+    missing = {k: str(p) for k, p in expected.items() if not p.exists()}
+    return {
+        "status": "ok",
+        "service": adapter.name,
+        "version": request.app.version,
+        "weights_dir": str(settings.weights_dir),
+        "moldir": str(settings.moldir),
+        "weights_loaded": not missing,
+        "weights_missing": missing,
+        "active_jobs": request.app.state.runner.active_job_count,
+        "max_concurrent_jobs": settings.max_concurrent_jobs,
+    }
+
+
 def _save_inputs(
     design_yaml: Optional[UploadFile],
     design_yaml_uri: Optional[str],

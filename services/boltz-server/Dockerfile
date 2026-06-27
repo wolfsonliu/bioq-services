@@ -57,25 +57,23 @@ COPY services/boltz-server/upstream/src            /opt/boltz/src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python -e ".[cuda]"
 
-# Pre-staged Boltz-2 weights, copied directly from `services/boltz-server/
-# weights/` so `docker build` does no network download (HuggingFace can be
-# slow/blocked from CN build hosts). Pre-stage once with:
+# Boltz-2 weights are NOT bundled — they live on NAS at /data/models/boltz/
+# (FC mount).  For SIF / HPC, bind the dir at run time:
+#   apptainer run --bind /scratch/models/boltz:/data/models/boltz \
+#       boltz-server.sif python -m server cofold ...
+#
+# Pre-stage weights (HuggingFace download) into either the local stage dir or
+# directly into the NAS target:
 #   python -c "from pathlib import Path; from boltz.main import download_boltz2; \
 #       download_boltz2(Path('services/boltz-server/weights'))"
 #   rm -f services/boltz-server/weights/mols.tar
+#   rsync -a services/boltz-server/weights/ <NAS>:/data/models/boltz/
 #
-# Only Boltz-2 files are COPYed — `boltz1_conf.ckpt` and `ccd.pkl` are
-# deliberately not pulled in (boltz-server is Boltz-2 only, and the boltz2
-# codepath loads CCD via `mols/`+`load_canonicals()`, not `ccd.pkl` — see
-# the boltz2 codepath at boltz/main.py:765). Listing each path explicitly here
-# (instead of `COPY weights /opt/boltz/weights`) is what enforces the
-# exclusion; an empty `mols.tar` marker is created in the same RUN so that
-# `download_boltz2` (called by every `boltz predict`) skips its existence
-# check and doesn't re-download 1.5 GB.
-COPY services/boltz-server/weights/boltz2_conf.ckpt /opt/boltz/weights/boltz2_conf.ckpt
-COPY services/boltz-server/weights/boltz2_aff.ckpt /opt/boltz/weights/boltz2_aff.ckpt
-COPY services/boltz-server/weights/mols /opt/boltz/weights/mols
-RUN touch /opt/boltz/weights/mols.tar
+# Only Boltz-2 files are needed at /data/models/boltz/:
+#   boltz2_conf.ckpt, boltz2_aff.ckpt, mols/
+# (`boltz1_conf.ckpt` and `ccd.pkl` deliberately omitted — boltz2 codepath
+# loads CCD via `mols/`+`load_canonicals()`, not `ccd.pkl`.)
+# See engineering/decisions/2026-06-26-service-weights-externalization.md.
 
 # Build-time import smoke — catches torch / cuequivariance ABI mismatches at
 # build, not at FC deploy time. Note buildx doesn't expose GPUs, so we can only
@@ -108,7 +106,7 @@ COPY services/boltz-server/__init__.py \
 ENV PYTHONPATH=/opt/boltz
 ENV BOLTZ_ROOT=/opt/boltz
 ENV BOLTZ_BINARY=/opt/boltz/.venv/bin/boltz
-ENV BOLTZ_CACHE_DIR=/opt/boltz/weights
+ENV BOLTZ_CACHE_DIR=/data/models/boltz
 ENV BOLTZ_JOBS_BASE_DIR=/data/boltz_jobs
 RUN mkdir -p /data/boltz_jobs
 

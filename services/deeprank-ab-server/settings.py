@@ -35,4 +35,16 @@ class DeepRankAbSettings(ServiceSettings):
         description="Wrapper that patches and runs upstream inference.py.",
     )
 
+    # ESM-2 weights — externalized to NAS at /data/models/deeprank-ab/esm/
+    # (FC mount; SIF / HPC bind via apptainer).  Per-service path (NOT shared
+    # with other ESM-2 consumers; deeprank-ab has its own copy fetched via
+    # scripts/fetch_esm_weights.sh).  The model + contact-regression files
+    # are read by `inference.py` via WEIGHT_PATH / REG_WEIGHT_PATH env vars
+    # (kept for back-compat) or via the `<weights_dir>/<file>` defaults.
+    # See engineering/decisions/2026-06-26-service-weights-externalization.md.
+    weights_dir: Path = Field(
+        default=Path("/data/models/deeprank-ab/esm"),
+        description="ESM-2 weights root (esm2_t33_650M_UR50D.pt + contact-regression.pt).",
+    )
+
     oss_region: str = Field(default="cn-hangzhou")

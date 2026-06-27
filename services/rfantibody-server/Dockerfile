@@ -53,7 +53,13 @@ RUN uv venv .venv --python python3.10
 # reproducibility lost; acceptable because the alternative (build failures
 # behind a flaky CN→pypi link) is strictly worse.
 # ---------------------------------------------------------------------------
-COPY services/rfantibody-server/weights/ ./weights/
+# Weights live on NAS at /data/models/rfantibody/weights/ — NOT baked into
+# the image (~1.6 GB savings).  FC mounts the NAS; SIF / HPC bind via:
+#   apptainer run --bind /scratch/models/rfantibody:/data/models/rfantibody \
+#       rfantibody-server.sif python -m server design ...
+# Pre-stage to local: ./services/rfantibody-server/scripts/fetch_weights.sh
+# (or set WEIGHTS_DST to download directly to the NAS / HPC target).
+# See engineering/decisions/2026-06-26-service-weights-externalization.md.
 
 # RFantibody source — from vendored upstream/ (see scripts/vendor.sh).
 # pyproject.toml is the cu121-patched override from services/rfantibody-server/
@@ -91,7 +97,7 @@ COPY services/rfantibody-server/__init__.py \
 # The RFANTIBODY_ prefix is read by pydantic-settings; defaults match the image layout.
 ENV PYTHONPATH=/opt/rfantibody
 ENV RFANTIBODY_ROOT=/opt/rfantibody
-ENV RFANTIBODY_WEIGHTS_DIR=/opt/rfantibody/weights
+ENV RFANTIBODY_WEIGHTS_DIR=/data/models/rfantibody/weights
 ENV RFANTIBODY_SCRIPTS_DIR=/opt/rfantibody/scripts
 ENV RFANTIBODY_JOBS_BASE_DIR=/data/rfantibody_jobs
 RUN mkdir -p /data/rfantibody_jobs

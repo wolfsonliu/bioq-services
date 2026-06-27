@@ -29,9 +29,9 @@ ARG BASE_IMAGE=nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 #   ./services/rfdiffusion-server/scripts/vendor.sh
 #
 # RFdiffusion source lives at services/rfdiffusion-server/upstream/ (vendored
-# at pinned SHA via scripts/vendor.sh).  Weights (models/) are NOT in the
-# upstream repo — pre-staged at services/rfdiffusion-server/models/ and
-# COPYed separately into the runtime.
+# at pinned SHA via scripts/vendor.sh).  Weights (models/) live on NAS at
+# /data/models/rfdiffusion/models/ — externalized from the image since v0.0.8.
+# See engineering/decisions/2026-06-26-service-weights-externalization.md.
 
 
 # ===========================================================================
@@ -130,10 +130,14 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # at sampler init if this directory is missing. The rest of `examples/`
 # (shell scripts / output PDBs) is not on any code path → skipped.
 # ---------------------------------------------------------------------------
-# Pre-staged weights — not in the upstream repo.  Use upstream's
-# scripts/download_models.sh (or any other downloader) but redirect its
-# output to services/rfdiffusion-server/models/.
-COPY services/rfdiffusion-server/models /opt/rfdiffusion/models
+# Pre-staged weights — not in the upstream repo, NOT baked into the image.
+# Live on NAS at /data/models/rfdiffusion/models/ (FC mount); SIF / HPC bind:
+#   apptainer run --bind /scratch/models/rfdiffusion:/data/models/rfdiffusion \
+#       rfdiffusion-server.sif python -m server design ...
+# Pre-stage once via upstream's scripts/download_models.sh, redirected:
+#   services/rfdiffusion-server/upstream/scripts/download_models.sh <dest>
+# then rsync to NAS / HPC scratch.
+# See engineering/decisions/2026-06-26-service-weights-externalization.md.
 
 # Upstream source — cherry-pick from vendored upstream/ (see scripts/vendor.sh).
 # Skip img/, docker/, tests/ — only runtime subtrees needed.
@@ -217,7 +221,7 @@ COPY services/rfdiffusion-server/__init__.py \
 # Settings (env-driven; see services/rfdiffusion-server/settings.py).
 ENV PYTHONPATH=/opt/rfdiffusion
 ENV RFDIFFUSION_ROOT=/opt/rfdiffusion
-ENV RFDIFFUSION_MODELS_DIR=/opt/rfdiffusion/models
+ENV RFDIFFUSION_MODELS_DIR=/data/models/rfdiffusion/models
 ENV RFDIFFUSION_INFERENCE_SCRIPT=/opt/rfdiffusion/scripts/run_inference.py
 ENV RFDIFFUSION_PYTHON=/opt/rfdiffusion/.venv/bin/python
 ENV RFDIFFUSION_JOBS_BASE_DIR=/data/rfdiffusion_jobs

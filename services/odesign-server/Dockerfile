@@ -159,17 +159,21 @@ RUN git clone --depth 1 -b v3.5.1 https://github.com/NVIDIA/cutlass.git /kernels
 # --- ODesign source — from the builder stage's clone ---
 COPY --from=builder /opt/odesign-src /opt/odesign/ODesign
 
-# --- Model weights ---
-# HF-downloaded model checkpoints (pre-staged via
-# services/odesign-server/scripts/fetch_weights.sh).
-COPY services/odesign-server/weights/ckpt/ /opt/odesign/ckpt/
-# grnade.h5 is tracked in the upstream ODesign repo, so it ships with the
-# clone above — copy it into the runtime ckpt dir alongside the HF weights.
-RUN cp /opt/odesign/ODesign/ckpt/grnade.h5 /opt/odesign/ckpt/grnade.h5
-
-# --- CCD data (pre-placed in services/odesign-server/weights/data/ before build,
-# downloaded manually from Google Drive) ---
-COPY services/odesign-server/weights/data/ /opt/odesign/data/
+# Weights + CCD data live on NAS at /data/models/odesign/{ckpt,data}/ — NOT
+# baked into the image (~537 MB savings).  FC mounts the NAS; SIF / HPC bind:
+#   apptainer run --bind /scratch/models/odesign:/data/models/odesign \
+#       odesign-server.sif python -m server design ...
+#
+# `/data/models/odesign/ckpt/` must contain BOTH the HF-downloaded checkpoints
+# AND `grnade.h5` (grnade.h5 ships in the upstream repo at upstream/ckpt/ but
+# is no longer copied into the image; fetch_weights.sh handles both for you).
+#
+# Pre-stage / upload once:
+#   ./services/odesign-server/scripts/fetch_weights.sh   # HF ckpts + grnade.h5
+#   ./services/odesign-server/scripts/fetch_ccd_data.sh  # CCD data
+#   rsync -a services/odesign-server/weights/{ckpt,data}/ \
+#       <NAS>:/data/models/odesign/{ckpt,data}/
+# See engineering/decisions/2026-06-26-service-weights-externalization.md.
 
 # Server code last — explicit file list so test/doc changes don't bust cache.
 COPY services/odesign-server/__init__.py \
@@ -192,8 +196,8 @@ ENV ODESIGN_ROOT=/opt/odesign/ODesign
 ENV ODESIGN_PYTHON=/opt/conda/envs/odesign/bin/python
 ENV ODESIGN_INFERENCE_SCRIPT=/opt/odesign/ODesign/scripts/inference.py
 ENV ODESIGN_JOBS_BASE_DIR=/data/odesign_jobs
-ENV ODESIGN_CKPT_ROOT_DIR=/opt/odesign/ckpt
-ENV ODESIGN_DATA_ROOT_DIR=/opt/odesign/data
+ENV ODESIGN_CKPT_ROOT_DIR=/data/models/odesign/ckpt
+ENV ODESIGN_DATA_ROOT_DIR=/data/models/odesign/data
 RUN mkdir -p /data/odesign_jobs
 
 WORKDIR /opt/odesign

@@ -92,8 +92,10 @@ def test_settings_defaults():
     assert s.root == Path("/opt/odesign/ODesign")
     assert s.python == "/opt/conda/envs/odesign/bin/python"
     assert s.inference_script == "/opt/odesign/ODesign/scripts/inference.py"
-    assert s.ckpt_root_dir == Path("/opt/odesign/ckpt")
-    assert s.data_root_dir == Path("/opt/odesign/data")
+    # Weights externalized to NAS — defaults point at the FC mount path.
+    # See engineering/decisions/2026-06-26-service-weights-externalization.md.
+    assert s.ckpt_root_dir == Path("/data/models/odesign/ckpt")
+    assert s.data_root_dir == Path("/data/models/odesign/data")
     assert s.oss_region == "cn-hangzhou"
 
 

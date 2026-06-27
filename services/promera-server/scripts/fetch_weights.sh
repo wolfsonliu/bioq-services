@@ -1,19 +1,28 @@
 #!/usr/bin/env bash
-# Download Promera + LigandMPNN weights and tinyprot LMDB caches before Docker build.
+# Download Promera + LigandMPNN weights and tinyprot LMDB caches.
 #
-# Usage:
+# Weights are NOT baked into the Docker image since v0.0.4 — they live on
+# NAS (FC) or get bound via apptainer (SIF).  This script fetches into a
+# stage dir; upload to NAS / HPC scratch afterward.
+#
+# Default (local stage dir):
 #   ./services/promera-server/scripts/fetch_weights.sh
+#       → services/promera-server/weights/
+#         {promera/promera_2606.ckpt, ligandmpnn/*.pt, tinyprot/{ccd,taxonomy}.lmdb/}
 #
-# Weights are saved to services/promera-server/weights/ (gitignored).
+# Direct download to NAS / HPC scratch:
+#   WEIGHTS_DST=/mnt/nas/data/models/promera \
+#     ./services/promera-server/scripts/fetch_weights.sh
 #
 # The tinyprot caches (ccd.lmdb, taxonomy.lmdb) are required because
 # tinyprot.msa opens taxonomy.lmdb at module import time — without them
-# baked into the image the FC instance crashes before the cofold/design
-# pipelines can start.  See engineering/guides/promera-tinyprot-cache.md.
+# reachable at TINYPROT_CACHE (default /data/models/promera/tinyprot) the
+# FC instance crashes before the cofold/design pipelines can start.  See
+# engineering/guides/promera-tinyprot-cache.md.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-WEIGHTS_DIR="$SCRIPT_DIR/../weights"
+WEIGHTS_DIR="${WEIGHTS_DST:-$SCRIPT_DIR/../weights}"
 
 # --- Promera checkpoint ---
 PROMERA_DIR="$WEIGHTS_DIR/promera"

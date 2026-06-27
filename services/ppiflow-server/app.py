@@ -63,6 +63,52 @@ app = create_app(
 )
 
 
+# Remove framework's generic /healthz/detail so our ppiflow-specific weights
+# probe takes over. FastAPI >=0.115 wraps included routers in
+# `_IncludedRouter`; descend to find the framework route.
+def _strip_route(router, path: str, method: str) -> None:
+    router.routes = [
+        r for r in router.routes
+        if not (getattr(r, "path", None) == path
+                and method in getattr(r, "methods", set()))
+    ]
+    for r in router.routes:
+        inner = getattr(r, "original_router", None)
+        if inner is not None:
+            _strip_route(inner, path, method)
+
+
+_strip_route(app.router, "/healthz/detail", "GET")
+
+
+@app.get("/healthz/detail")
+def healthz_detail(request: Request) -> dict:
+    """Extended health: report whether NAS-mounted checkpoints are reachable.
+
+    Checkpoints live on NAS at `PPIFLOW_CKPT_DIR` (default
+    `/data/models/ppiflow/checkpoint/`).  Probes for the 4 expected .ckpt
+    files; `weights_loaded=false` lets the agent detect a misconfigured FC
+    mount / unbound SIF without crashing the service.
+    """
+    ckpt_dir = settings.ckpt_dir
+    if not ckpt_dir.exists():
+        weights_loaded = False
+        ckpts_found = 0
+    else:
+        ckpts_found = sum(1 for _ in ckpt_dir.glob("*.ckpt"))
+        weights_loaded = ckpts_found > 0
+    return {
+        "status": "ok",
+        "service": adapter.name,
+        "version": request.app.version,
+        "weights_dir": str(ckpt_dir),
+        "weights_loaded": weights_loaded,
+        "ckpts_found": ckpts_found,
+        "active_jobs": request.app.state.runner.active_job_count,
+        "max_concurrent_jobs": settings.max_concurrent_jobs,
+    }
+
+
 @app.post("/api/sample/binder", response_model=JobInfo)
 def sample_binder(
     params: BinderRequest = Depends(model_form_depends(BinderRequest)),

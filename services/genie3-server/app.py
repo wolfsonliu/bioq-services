@@ -61,6 +61,53 @@ app = create_app(
 )
 
 
+# Remove framework's generic /healthz/detail so our genie3-specific weights
+# probe takes over. FastAPI >=0.115 wraps included routers in
+# `_IncludedRouter`; descend to find the framework route.
+def _strip_route(router, path: str, method: str) -> None:
+    router.routes = [
+        r for r in router.routes
+        if not (getattr(r, "path", None) == path
+                and method in getattr(r, "methods", set()))
+    ]
+    for r in router.routes:
+        inner = getattr(r, "original_router", None)
+        if inner is not None:
+            _strip_route(inner, path, method)
+
+
+_strip_route(app.router, "/healthz/detail", "GET")
+
+
+@app.get("/healthz/detail")
+def healthz_detail(request: Request) -> dict:
+    """Extended health: report whether NAS-mounted weights are reachable.
+
+    Pretrained checkpoints live on NAS at `GENIE3_PRETRAINED_DIR` (default
+    `/data/models/genie3/pretrained/v1/`).  The image contains a symlink at
+    /opt/genie3/pretrained → /data/models/genie3/pretrained so the genie3
+    CLI's relative lookup succeeds; if NAS is unmounted the symlink target
+    is missing.  `weights_loaded=false` lets the agent detect that early.
+    """
+    pdir = settings.pretrained_dir
+    if not pdir.exists():
+        weights_loaded = False
+        files_found = 0
+    else:
+        files_found = sum(1 for p in pdir.rglob("*") if p.is_file())
+        weights_loaded = files_found > 0
+    return {
+        "status": "ok",
+        "service": adapter.name,
+        "version": request.app.version,
+        "pretrained_dir": str(pdir),
+        "weights_loaded": weights_loaded,
+        "files_found": files_found,
+        "active_jobs": request.app.state.runner.active_job_count,
+        "max_concurrent_jobs": settings.max_concurrent_jobs,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

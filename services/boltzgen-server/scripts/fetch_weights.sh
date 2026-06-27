@@ -1,12 +1,19 @@
 #!/usr/bin/env bash
 # Download BoltzGen model weights + molecule data from HuggingFace.
 #
-# Run before Docker build:
-#   ./services/boltzgen-server/scripts/fetch_weights.sh
+# Weights are NOT baked into the Docker image — they live on NAS (FC) or get
+# bound via apptainer (SIF).  This script's job is just to fetch them; you
+# then upload the result to wherever your deployment expects them.
 #
-# Outputs (all gitignored):
-#   services/boltzgen-server/weights/   — 5 model checkpoints (~10 GB)
-#   services/boltzgen-server/moldir/    — CCD molecule .pkl files (~6 GB)
+# Default (local stage dir for dev / inspection):
+#   ./services/boltzgen-server/scripts/fetch_weights.sh
+#       → services/boltzgen-server/weights/  (~10 GB, 5 checkpoints)
+#       → services/boltzgen-server/moldir/   (~6 GB, CCD .pkl)
+#
+# Direct download to NAS / HPC scratch (skip the upload step):
+#   WEIGHTS_DST=/mnt/nas/data/models/boltzgen/weights \
+#   MOLDIR_DST=/mnt/nas/data/models/boltzgen/moldir \
+#     ./services/boltzgen-server/scripts/fetch_weights.sh
 #
 # Uses wget -c for resumable downloads.
 #
@@ -23,8 +30,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
-WEIGHTS_DIR="$SCRIPT_DIR/../weights"
-MOLDIR="$SCRIPT_DIR/../moldir"
+WEIGHTS_DIR="${WEIGHTS_DST:-$SCRIPT_DIR/../weights}"
+MOLDIR="${MOLDIR_DST:-$SCRIPT_DIR/../moldir}"
 
 MODEL_REPO="boltzgen/boltzgen-1"
 MODEL_BASE_URL="https://huggingface.co/${MODEL_REPO}/resolve/main"

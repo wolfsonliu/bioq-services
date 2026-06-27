@@ -158,7 +158,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /opt/conda /opt/conda
 
 COPY --from=builder /opt/DeepRank-Ab /opt/deeprank-ab/DeepRank-Ab
-COPY services/deeprank-ab-server/weights/esm /opt/deeprank-ab/esm_weights
+# ESM-2 weights live on NAS at /data/models/deeprank-ab/esm/ — NOT baked
+# into the image (~2.6 GB savings).  FC mounts the NAS; SIF / HPC bind:
+#   apptainer run --bind /scratch/models/deeprank-ab:/data/models/deeprank-ab \
+#       deeprank-ab-server.sif python -m server score ...
+# Pre-stage: ./services/deeprank-ab-server/scripts/fetch_esm_weights.sh
+# (or set WEIGHTS_DST for direct NAS / HPC download).
+# See engineering/decisions/2026-06-26-service-weights-externalization.md.
 
 WORKDIR /opt/deeprank-ab
 
@@ -186,8 +192,9 @@ ENV DEEPRANK_AB_NUM_WORKERS=4
 # ESM-2 weight paths — read by run_inference.py's patched fetch_weights()
 # and by load_model_and_alphabet_local() which derives the regression
 # path from the model path.
-ENV WEIGHT_PATH=/opt/deeprank-ab/esm_weights/esm2_t33_650M_UR50D.pt
-ENV REG_WEIGHT_PATH=/opt/deeprank-ab/esm_weights/esm2_t33_650M_UR50D-contact-regression.pt
+ENV DEEPRANK_AB_WEIGHTS_DIR=/data/models/deeprank-ab/esm
+ENV WEIGHT_PATH=/data/models/deeprank-ab/esm/esm2_t33_650M_UR50D.pt
+ENV REG_WEIGHT_PATH=/data/models/deeprank-ab/esm/esm2_t33_650M_UR50D-contact-regression.pt
 
 # PYTHONPATH: project root for `from src.*` imports; src/ for upstream bare
 # imports (`from tools.FocalLoss`, `from DataSet`, `from Metrics`, etc.).

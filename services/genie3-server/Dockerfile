@@ -82,11 +82,19 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         PyYAML
 
 # Genie3 source — from vendored upstream/ (see scripts/vendor.sh).  Pretrained
-# v1 weights are NOT in the upstream repo and stay COPYed from the locally
-# pre-staged services/genie3-server/pretrained/v1/ tree.
+# v1 weights live on NAS at /data/models/genie3/pretrained/v1/ — NOT baked
+# into the image (~512 MB savings).  The genie3 CLI looks up weights via
+# `<cwd>/pretrained/<version>/`, so we symlink the expected path to the NAS
+# mount.  FC mounts the NAS; SIF / HPC bind via:
+#   apptainer run --bind /scratch/models/genie3:/data/models/genie3 \
+#       genie3-server.sif python -m server generate ...
+# Pre-stage / upload weights:
+#   <download to services/genie3-server/pretrained/v1/>
+#   rsync -a services/genie3-server/pretrained/ <NAS>:/data/models/genie3/pretrained/
+# See engineering/decisions/2026-06-26-service-weights-externalization.md.
 COPY services/genie3-server/upstream/setup.py     /opt/genie3/setup.py
 COPY services/genie3-server/upstream/src          /opt/genie3/src
-COPY services/genie3-server/pretrained/v1         /opt/genie3/pretrained/v1
+RUN ln -s /data/models/genie3/pretrained /opt/genie3/pretrained
 
 # Apply local patches to upstream genie3. See services/genie3-server/patches/README.md.
 COPY services/genie3-server/patches /tmp/genie3-patches
@@ -155,6 +163,7 @@ COPY services/genie3-server/__init__.py \
 ENV PYTHONPATH=/opt/genie3
 ENV GENIE3_ROOT=/opt/genie3
 ENV GENIE3_BIN=/opt/genie3/.venv/bin/genie3
+ENV GENIE3_PRETRAINED_DIR=/data/models/genie3/pretrained/v1
 ENV GENIE3_JOBS_BASE_DIR=/data/genie3_jobs
 RUN mkdir -p /data/genie3_jobs
 

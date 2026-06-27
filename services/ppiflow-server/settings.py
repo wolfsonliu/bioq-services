@@ -34,10 +34,11 @@ class PPIFlowSettings(ServiceSettings):
     # upstream's README documents the usage.
     root: Path = Field(default=Path("/opt/ppiflow"))
 
-    # Checkpoints baked into the image at build time (~hundreds of MB each).
-    # The four .ckpt files are looked up by name: binder / antibody /
-    # nanobody / monomer.
-    ckpt_dir: Path = Field(default=Path("/opt/ppiflow/checkpoint"))
+    # Checkpoints — externalized to NAS at /data/models/ppiflow/checkpoint/
+    # (FC mount; SIF / HPC bind via apptainer).  4 .ckpt files (binder /
+    # antibody / nanobody / monomer) ~1.1 GB total.
+    # See engineering/decisions/2026-06-26-service-weights-externalization.md.
+    ckpt_dir: Path = Field(default=Path("/data/models/ppiflow/checkpoint"))
 
     # Default inference configs shipped with upstream PPIFlow. Endpoints can
     # override on a per-request basis if you need a custom YAML.

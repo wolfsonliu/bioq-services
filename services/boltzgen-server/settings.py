@@ -36,13 +36,20 @@ class BoltzGenSettings(ServiceSettings):
     )
 
     weights_dir: Path = Field(
-        default=Path("/opt/boltzgen/weights"),
-        description="Directory containing model checkpoint files.",
+        default=Path("/data/models/boltzgen/weights"),
+        description=(
+            "Directory containing model checkpoint files.  Externalized to "
+            "NAS — must be mounted at /data/models/boltzgen/weights/ (FC) or "
+            "bound via `apptainer --bind` (SIF).  See "
+            "engineering/decisions/2026-06-26-service-weights-externalization.md."
+        ),
     )
 
     moldir: Path = Field(
-        default=Path("/opt/boltzgen/moldir"),
-        description="CCD molecule directory (unpacked mols.zip).",
+        default=Path("/data/models/boltzgen/moldir"),
+        description=(
+            "CCD molecule directory (unpacked mols.zip).  Externalized to NAS."
+        ),
     )
 
     oss_region: str = Field(default="cn-hangzhou")

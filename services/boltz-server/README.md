@@ -20,7 +20,11 @@ client ──▶ FastAPI (this service)
 
 Boltz-2 only (Boltz-1 intentionally out of scope; see
 [design doc](../../engineering/decisions/2026-05-19-boltz-server-design.md)).
-Image ~11.1 GB with weights + `mols/` CCD data baked in.
+
+**v0.0.10 起**：image ~5 GB（仅代码栈 + cuequivariance）。Boltz-2 权重
+（`boltz2_conf.ckpt` / `boltz2_aff.ckpt` / `mols/` ~6 GB）从镜像中外置到 NAS
+`/data/models/boltz/`，由 FC NAS 挂载注入，SIF / HPC 走 `apptainer --bind`。
+详见 [weights externalization](../../engineering/decisions/2026-06-26-service-weights-externalization.md)。
 
 ## Endpoints
 
@@ -131,7 +135,7 @@ All env-driven via `pydantic-settings`; `BOLTZ_` prefix.
 | `BOLTZ_JOBS_BASE_DIR` | `/data/boltz_jobs` | NAS path for job state + outputs |
 | `BOLTZ_ROOT` | `/opt/boltz` | Boltz install root (subprocess cwd) |
 | `BOLTZ_BINARY` | `/opt/boltz/.venv/bin/boltz` | `boltz` CLI entrypoint (click group) |
-| `BOLTZ_CACHE_DIR` | `/opt/boltz/weights` | Pre-staged weights + `mols/` CCD data (copied from `opensource/boltz/weights/`) |
+| `BOLTZ_CACHE_DIR` | `/data/models/boltz` | Boltz-2 weights + `mols/` CCD data (NAS mount; SIF `--bind`) |
 | `BOLTZ_MAX_CONCURRENT_JOBS` | `1` | single-GPU FC instances → serial |
 | `BOLTZ_OSS_REGION` | `cn-hangzhou` | for `oss://` URIs |
 
@@ -167,10 +171,70 @@ To pre-download weights for local dev (one-time, ~6 GB):
 rm $HOME/.boltz/mols.tar  # save 1.5 GB after extraction
 ```
 
+## Weights
+
+Boltz-2 weights are **not** baked into the image.  Expected NAS layout at
+`/data/models/boltz/`:
+
+```
+/data/models/boltz/
+├── boltz2_conf.ckpt
+├── boltz2_aff.ckpt
+└── mols/                ← extracted from upstream mols.tar
+```
+
+`boltz1_conf.ckpt` and `ccd.pkl` are deliberately **not** required — boltz2
+loads CCD via `mols/` + `load_canonicals()`.
+
+### Pre-stage (one-time)
+
+```bash
+# 1. Download into a local stage dir
+.venv/bin/python -c "from pathlib import Path; \
+    from boltz.main import download_boltz2; \
+    download_boltz2(Path('services/boltz-server/weights'))"
+rm -f services/boltz-server/weights/mols.tar     # keep extracted mols/ only
+
+# 2. Upload to NAS
+rsync -av services/boltz-server/weights/{boltz2_conf.ckpt,boltz2_aff.ckpt,mols} \
+    <NAS-mount>:/data/models/boltz/
+```
+
+### Use in FC
+
+NAS auto-mounted at `/data/models/boltz/` by the FC function config.
+
+### Use in SIF / HPC (apptainer)
+
+```bash
+apptainer run --nv \
+    --bind /scratch/models/boltz:/data/models/boltz \
+    boltz-server.sif python -m server cofold input.yaml output_dir/
+```
+
+Or override via env var without `--bind`:
+
+```bash
+apptainer run --nv \
+    --env BOLTZ_CACHE_DIR=/scratch/aidd/models/boltz \
+    --bind /scratch:/scratch \
+    boltz-server.sif python -m server cofold ...
+```
+
+### Verify
+
+```bash
+curl https://fc-boltz-kbioniejif.cn-hangzhou-vpc.fcapp.run/healthz/detail
+# expect: {"status":"ok", "weights_loaded": true, "weights_missing": {}}
+```
+
+See [weights externalization design](../../engineering/decisions/2026-06-26-service-weights-externalization.md) for rationale.
+
 ## Docker build
 
 ```bash
-make build-boltz-server                       # local image
+./services/boltz-server/scripts/vendor.sh     # vendor upstream/ (once, also bumps SHA)
+make build-boltz-server                       # local image (~5 GB, no weights)
 make push-boltz-server                        # build + tag + push to harbor
 make push-boltz-server TAG=v0.0.2             # override tag
 ```
@@ -178,25 +242,13 @@ make push-boltz-server TAG=v0.0.2             # override tag
 Image base: `ghcr.io/astral-sh/uv:python3.12-bookworm-slim`. Modern PyTorch
 ships its CUDA / cuDNN runtime libs as PyPI `nvidia-*` sub-packages, so
 `nvidia/cuda` base images would just duplicate those libs without speedup —
-slim base is ~3 GB smaller. Final image ~11.1 GB (code stack ~5 GB + Boltz-2
-weights/cache ~6 GB).
+slim base is ~3 GB smaller. Final image **~5 GB** since v0.0.10 (was ~11 GB
+before weight externalization).
 
-The Dockerfile assumes Boltz-2 weights are pre-staged at
-`opensource/boltz/weights/` (`boltz2_conf.ckpt`, `boltz2_aff.ckpt`, extracted
-`mols/`) and copies them in as the runtime cache — no network download during
-`docker build`. To pre-stage, run `download_boltz2` once into that directory:
-
-```bash
-.venv/bin/python -c "from pathlib import Path; \
-    from boltz.main import download_boltz2; \
-    download_boltz2(Path('opensource/boltz/weights'))"
-rm -f opensource/boltz/weights/mols.tar  # keep image small; extracted mols/ is enough
-```
-
-The Dockerfile `COPY`s each Boltz-2 file explicitly
-(`boltz2_conf.ckpt`, `boltz2_aff.ckpt`, `mols/`) instead of the whole
-`weights/` tree, so Boltz-1 artifacts (`boltz1_conf.ckpt`, `ccd.pkl`) never
-enter the image even if you ran `download_boltz1` into the same directory.
+Boltz upstream source is **vendored** at a pinned SHA via `scripts/vendor.sh`
+into `services/boltz-server/upstream/`; build does no network access to
+github. To bump the upstream commit, edit `BOLTZ_SHA` in `vendor.sh` then
+re-run it.
 The Boltz-2 codepath loads CCD via `mols/` (`load_canonicals()`), not
 `ccd.pkl`.
 

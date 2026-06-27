@@ -3,10 +3,18 @@
 #
 # Prerequisites (run once before build):
 #   ./services/boltzgen-server/scripts/vendor.sh           # vendor upstream/
-#   ./services/boltzgen-server/scripts/fetch_weights.sh    # weights
 #
 # BoltzGen source lives at services/boltzgen-server/upstream/ (vendored at
-# pinned SHA via scripts/vendor.sh) — Dockerfile does no network access.
+# pinned SHA via scripts/vendor.sh).  Model weights (5 checkpoints, ~10 GB)
+# and CCD moldir (~6 GB) are NOT baked into the image — they live on NAS
+# at /data/models/boltzgen/{weights,moldir}/ (FC NAS mount; SIF / HPC users
+# `apptainer run --bind` to inject).
+#
+# Pre-stage / upload to NAS once:
+#   ./services/boltzgen-server/scripts/fetch_weights.sh    # → ./weights/
+#   rsync -a services/boltzgen-server/weights/ <NAS>:/data/models/boltzgen/weights/
+#   rsync -a services/boltzgen-server/moldir/  <NAS>:/data/models/boltzgen/moldir/
+# (Or run fetch_weights.sh with WEIGHTS_DST pointing at the final dir.)
 # Weights in services/boltzgen-server/weights/ (~10 GB, 5 checkpoints).
 # Molecule data in services/boltzgen-server/moldir/ (~6 GB, CCD .pkl files).
 #
@@ -68,15 +76,16 @@ COPY services/boltzgen-server/upstream/src                    /opt/boltzgen/src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python -e .
 
-# Pre-staged model weights (5 checkpoints, ~10 GB total). Pre-stage once with:
+# Weights + moldir are NOT bundled — they live on a NAS volume mounted by FC
+# at /data/models/boltzgen/{weights,moldir}/.  For SIF / HPC, bind the dirs
+# at run time:
+#   apptainer run --bind /scratch/models/boltzgen:/data/models/boltzgen \
+#       boltzgen-server.sif python -m server design ...
+# Local download to a stage dir (~16 GB; default ./services/boltzgen-server/
+# weights+moldir) is via:
 #   ./services/boltzgen-server/scripts/fetch_weights.sh
-COPY services/boltzgen-server/weights/ /opt/boltzgen/weights/
-
-# Pre-staged CCD molecule library (.pkl files, ~6 GB extracted from mols.zip).
-# Required: load_canonicals() is called unconditionally at pipeline start.
-# For protein-only protocols only the 20 canonical amino acid .pkl files are
-# needed; the full moldir is required for protein-small_molecule protocol.
-COPY services/boltzgen-server/moldir/ /opt/boltzgen/moldir/
+# After download, rsync the contents to the NAS / HPC target.
+# See engineering/decisions/2026-06-26-service-weights-externalization.md.
 
 # Build-time import smoke — catches torch / cuequivariance ABI mismatches at
 # build, not at FC deploy time.
@@ -107,8 +116,8 @@ ENV PYTHONPATH=/opt/boltzgen
 ENV BOLTZGEN_ROOT=/opt/boltzgen
 ENV BOLTZGEN_CLI=/opt/boltzgen/.venv/bin/boltzgen
 ENV BOLTZGEN_PYTHON=/opt/boltzgen/.venv/bin/python
-ENV BOLTZGEN_WEIGHTS_DIR=/opt/boltzgen/weights
-ENV BOLTZGEN_MOLDIR=/opt/boltzgen/moldir
+ENV BOLTZGEN_WEIGHTS_DIR=/data/models/boltzgen/weights
+ENV BOLTZGEN_MOLDIR=/data/models/boltzgen/moldir
 ENV BOLTZGEN_JOBS_BASE_DIR=/data/boltzgen_jobs
 RUN mkdir -p /data/boltzgen_jobs
 

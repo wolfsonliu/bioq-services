@@ -45,6 +45,52 @@ app = create_app(
 )
 
 
+# Remove framework's generic /healthz/detail so our boltz-specific weights
+# probe takes over. FastAPI uses first-match routing and >=0.115 wraps
+# included routers in `_IncludedRouter`; descend into them to find the
+# framework route.
+def _strip_route(router, path: str, method: str) -> None:
+    router.routes = [
+        r for r in router.routes
+        if not (getattr(r, "path", None) == path
+                and method in getattr(r, "methods", set()))
+    ]
+    for r in router.routes:
+        inner = getattr(r, "original_router", None)
+        if inner is not None:
+            _strip_route(inner, path, method)
+
+
+_strip_route(app.router, "/healthz/detail", "GET")
+
+
+@app.get("/healthz/detail")
+def healthz_detail(request: Request) -> dict:
+    """Extended health: report whether NAS-mounted weights are reachable.
+
+    Boltz-2 weights live on NAS at `BOLTZ_CACHE_DIR` (default
+    `/data/models/boltz/`).  We probe the 3 paths boltz expects;
+    `weights_loaded=false` lets the agent surface a misconfigured FC mount
+    / unbound SIF without crashing the service.
+    """
+    expected = {
+        "boltz2_conf.ckpt": settings.cache_dir / "boltz2_conf.ckpt",
+        "boltz2_aff.ckpt": settings.cache_dir / "boltz2_aff.ckpt",
+        "mols": settings.cache_dir / "mols",
+    }
+    missing = {k: str(p) for k, p in expected.items() if not p.exists()}
+    return {
+        "status": "ok",
+        "service": adapter.name,
+        "version": request.app.version,
+        "weights_dir": str(settings.cache_dir),
+        "weights_loaded": not missing,
+        "weights_missing": missing,
+        "active_jobs": request.app.state.runner.active_job_count,
+        "max_concurrent_jobs": settings.max_concurrent_jobs,
+    }
+
+
 def _save_msa_uploads(
     msa_files: Optional[list[UploadFile]], input_dir: Path
 ) -> dict[str, Path]:

@@ -41,6 +41,63 @@ app = create_app(
 )
 
 
+# Remove framework's generic /healthz/detail so our promera-specific weights
+# probe takes over. FastAPI >=0.115 wraps included routers in
+# `_IncludedRouter`; descend to find the framework route.
+def _strip_route(router, path: str, method: str) -> None:
+    router.routes = [
+        r for r in router.routes
+        if not (getattr(r, "path", None) == path
+                and method in getattr(r, "methods", set()))
+    ]
+    for r in router.routes:
+        inner = getattr(r, "original_router", None)
+        if inner is not None:
+            _strip_route(inner, path, method)
+
+
+_strip_route(app.router, "/healthz/detail", "GET")
+
+
+@app.get("/healthz/detail")
+def healthz_detail(request: Request) -> dict:
+    """Extended health: report whether NAS-mounted weights are reachable.
+
+    Three weight sources live on NAS at /data/models/promera/{promera,
+    tinyprot,ligandmpnn}/:
+      - promera_2606.ckpt        (Promera checkpoint)
+      - tinyprot/{ccd,taxonomy}.lmdb/  (tinyprot LMDB caches)
+      - ligandmpnn/*.pt          (LigandMPNN model_params)
+    `weights_loaded=false` lets the agent detect a misconfigured FC mount /
+    unbound SIF without crashing the service.
+    """
+    from pathlib import Path
+    promera_ckpt = Path(settings.weights)
+    tinyprot_cache = settings.tinyprot_cache
+    ligandmpnn_params = Path("/opt/promera/LigandMPNN/model_params")
+    expected = {
+        "promera_2606.ckpt": promera_ckpt,
+        "tinyprot/ccd.lmdb": tinyprot_cache / "ccd.lmdb",
+        "tinyprot/taxonomy.lmdb": tinyprot_cache / "taxonomy.lmdb",
+        # ligandmpnn_params is a symlink in the image → NAS dir.  exists()
+        # follows the link, so failure here also implies NAS missing.
+        "ligandmpnn/model_params": ligandmpnn_params,
+    }
+    missing = {k: str(p) for k, p in expected.items() if not p.exists()}
+    return {
+        "status": "ok",
+        "service": adapter.name,
+        "version": request.app.version,
+        "promera_ckpt": str(promera_ckpt),
+        "tinyprot_cache": str(tinyprot_cache),
+        "ligandmpnn_params": str(ligandmpnn_params),
+        "weights_loaded": not missing,
+        "weights_missing": missing,
+        "active_jobs": request.app.state.runner.active_job_count,
+        "max_concurrent_jobs": settings.max_concurrent_jobs,
+    }
+
+
 @app.post("/api/cofold", response_model=JobInfo)
 def cofold(
     params: CofoldRequest = Depends(model_form_depends(CofoldRequest)),

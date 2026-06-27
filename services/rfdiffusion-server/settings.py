@@ -30,11 +30,14 @@ class RFdiffusionSettings(ServiceSettings):
     # Env: RFDIFFUSION_ROOT
     root: Path = Field(default=Path("/opt/rfdiffusion"))
 
-    # Pretrained checkpoints (Base / Complex_base / ActiveSite / ...) baked into
-    # the image at build time. `inference.model_directory_path` is set from this
-    # so the auto-checkpoint-selector inside run_inference.py finds them.
+    # Pretrained checkpoints (Base / Complex_base / ActiveSite / ...) live on
+    # NAS — externalized from the image at v0.0.8.  FC mounts the NAS at
+    # /data/models/rfdiffusion/models/; SIF / HPC users bind via apptainer.
+    # `inference.model_directory_path` is set from this so the auto-checkpoint
+    # selector inside run_inference.py finds them.
     # Env: RFDIFFUSION_MODELS_DIR
-    models_dir: Path = Field(default=Path("/opt/rfdiffusion/models"))
+    # See engineering/decisions/2026-06-26-service-weights-externalization.md.
+    models_dir: Path = Field(default=Path("/data/models/rfdiffusion/models"))
 
     # `scripts/run_inference.py` — Hydra-driven entry point that handles every
     # generation mode (unconditional / motif / binder / symmetry / ...).

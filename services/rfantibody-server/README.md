@@ -148,7 +148,7 @@ job 失败时 `JobInfo` 自动填充：
 |---|---|---|
 | `RFANTIBODY_JOBS_BASE_DIR` | `/data/rfantibody_jobs` | NAS 上的 job 根目录；多实例共享时所有实例指向同一路径 |
 | `RFANTIBODY_ROOT` | `/opt/rfantibody` | RFantibody 源码根（subprocess cwd） |
-| `RFANTIBODY_WEIGHTS_DIR` | `/opt/rfantibody/weights` | 权重目录（缺权重时 fall back 到脚本默认） |
+| `RFANTIBODY_WEIGHTS_DIR` | `/data/models/rfantibody/weights` | 权重目录（v0.0.17 起 NAS 挂载，~1.6 GB 外置）|
 | `RFANTIBODY_SCRIPTS_DIR` | `/opt/rfantibody/scripts` | 三个工具的 entry point 脚本 |
 | `RFANTIBODY_PORT` | `9000` | uvicorn 监听端口（FC CAPort） |
 | `RFANTIBODY_KEEP_ALIVE_SEC` | `900` | uvicorn `--timeout-keep-alive` |
@@ -189,18 +189,71 @@ export RFANTIBODY_JOBS_BASE_DIR=/tmp/rfantibody_jobs
 uv run uvicorn server.app:app --host 0.0.0.0 --port 9000 --reload
 ```
 
+## Weights
+
+v0.0.17 起权重（~1.6 GB）**不再 baked 到镜像**，从 NAS 加载。期望布局：
+
+```
+/data/models/rfantibody/
+└── weights/
+    ├── RFdiffusion_Ab.pt    ← 抗体专用 RFdiffusion 检查点
+    ├── ...
+```
+
+### 下载（一次性）
+
+```bash
+# Stage 到本地
+./services/rfantibody-server/scripts/fetch_weights.sh    # → ./weights/
+
+# 上传到 NAS
+rsync -av services/rfantibody-server/weights/ \
+    <NAS-mount>:/data/models/rfantibody/weights/
+```
+
+或直接下到 NAS（如果本地能挂）：
+
+```bash
+WEIGHTS_DST=/mnt/nas/data/models/rfantibody/weights \
+    ./services/rfantibody-server/scripts/fetch_weights.sh
+```
+
+### FC
+
+NAS 自动挂载到 `/data/models/rfantibody/`。验证：
+
+```bash
+curl https://fc-rfantibody-guekbpucdo.cn-hangzhou-vpc.fcapp.run/healthz/detail
+# 期望：{"status":"ok","weights_loaded":true,"files_found":N}
+```
+
+### SIF / HPC
+
+```bash
+apptainer run --nv \
+    --bind /scratch/models/rfantibody:/data/models/rfantibody \
+    rfantibody-server.sif python -m server design ...
+```
+
+详见 [weights externalization design](../../engineering/decisions/2026-06-26-service-weights-externalization.md)。
+
 ## Docker 构建与运行
 
 ```bash
-# 项目根目录构建（CUDA 12.1 base + cu121 torch/dgl，烘焙权重）
+# 1. Vendor 上游源（一次性，重跑可升级 SHA）
+./services/rfantibody-server/scripts/vendor.sh
+
+# 2. 构建（CUDA 12.1 base + cu121 torch/dgl，~3.5 GB 镜像）
 # 支持 sm_89 (RTX 4090) 及以下；sm_120 (RTX 5090 / Blackwell) 暂不支持
 docker build --platform linux/amd64 -t rfantibody-server -f services/rfantibody-server/Dockerfile .
 
 # 或通过 Makefile
 make build-rfantibody-server
 
-# 本地运行（需 GPU）
-docker run --gpus all -p 9000:9000 --memory 16g rfantibody-server
+# 本地运行（需 GPU + NAS / 本地 --bind 注入权重）
+docker run --gpus all -p 9000:9000 --memory 16g \
+    -v $(pwd)/weights:/data/models/rfantibody/weights \
+    rfantibody-server
 ```
 
 构建上下文必须是项目根目录，因为 Dockerfile 同时 `COPY services/_framework` 安装框架包。

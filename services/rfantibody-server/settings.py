@@ -32,10 +32,13 @@ class RFantibodySettings(ServiceSettings):
     # under env_prefix="RFANTIBODY_".
     root: Path = Field(default=Path("/opt/rfantibody"))
 
-    # Pretrained weights for the three tools. Empty / missing files are tolerated
-    # at startup; per-tool calls log a warning and fall back to whatever the
-    # script's default checkpoint resolution produces. Env: RFANTIBODY_WEIGHTS_DIR
-    weights_dir: Path = Field(default=Path("/opt/rfantibody/weights"))
+    # Pretrained weights for the three tools — externalized to NAS at
+    # /data/models/rfantibody/weights/ (FC mount); SIF / HPC bind via apptainer.
+    # Empty / missing files are tolerated at startup; per-tool calls log a
+    # warning and fall back to whatever the script's default checkpoint
+    # resolution produces.  Env: RFANTIBODY_WEIGHTS_DIR
+    # See engineering/decisions/2026-06-26-service-weights-externalization.md.
+    weights_dir: Path = Field(default=Path("/data/models/rfantibody/weights"))
 
     # CLI entry points that wrap each of the three tools. Env: RFANTIBODY_SCRIPTS_DIR
     scripts_dir: Path = Field(default=Path("/opt/rfantibody/scripts"))

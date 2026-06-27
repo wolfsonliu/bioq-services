@@ -34,10 +34,11 @@ class BoltzSettings(ServiceSettings):
     # venv-installed binary; settable to `boltz` if PATH resolution is desired.
     binary: str = Field(default="/opt/boltz/.venv/bin/boltz")
 
-    # Pre-staged weights + `mols/` CCD directory (copied into the Docker image
-    # from `opensource/boltz/weights/`). Passed to `boltz predict --cache` so the
-    # CLI doesn't try to download at runtime.
-    cache_dir: Path = Field(default=Path("/opt/boltz/weights"))
+    # Weights + `mols/` CCD directory.  Externalized to NAS —
+    # FC mounts /data/models/boltz/ here; SIF / HPC users bind via apptainer.
+    # Passed to `boltz predict --cache` so the CLI doesn't try to download.
+    # See engineering/decisions/2026-06-26-service-weights-externalization.md.
+    cache_dir: Path = Field(default=Path("/data/models/boltz"))
 
     # Single-GPU FC instances run jobs serially. Higher values would require
     # multi-GPU scheduling that boltz doesn't currently support out of the box.

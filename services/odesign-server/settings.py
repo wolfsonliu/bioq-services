@@ -35,13 +35,17 @@ class ODesignSettings(ServiceSettings):
         description="Path to the ODesign inference.py Hydra entry point.",
     )
 
+    # Externalized to NAS at /data/models/odesign/{ckpt,data}/ since v0.0.5
+    # (FC mount; SIF / HPC bind via apptainer).  ckpt/ holds HF checkpoints
+    # + grnade.h5; data/ holds CCD components.cif + rdkit_mol.pkl.
+    # See engineering/decisions/2026-06-26-service-weights-externalization.md.
     ckpt_root_dir: Path = Field(
-        default=Path("/opt/odesign/ckpt"),
+        default=Path("/data/models/odesign/ckpt"),
         description="Directory containing model checkpoint files.",
     )
 
     data_root_dir: Path = Field(
-        default=Path("/opt/odesign/data"),
+        default=Path("/data/models/odesign/data"),
         description="Directory containing CCD data (components.cif + rdkit_mol.pkl).",
     )
 
