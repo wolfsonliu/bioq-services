@@ -58,15 +58,23 @@ RUN mkdir -p /root/.config/pip \
 channels:
   - defaults
 show_channel_urls: true
+# Strict priority: resolver stops at first match, dramatically faster on
+# big channels like conda-forge.  Without this, the old pytorch 1.13.1 +
+# cu117 + pyg 2.2 + Py3.10 resolve takes 2+ hours and risks timing out.
+channel_priority: strict
 default_channels:
   - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
   - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r
   - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/msys2
+# custom_channels: only map channels that TUNA actually hosts.
+# IMPORTANT: do NOT map `pyg` or `nvidia` here — TUNA returns 404 for those
+# channels (verified 2026-06-28).  They fall through to the upstream
+# https://conda.anaconda.org/{pyg,nvidia}/ which works fine.
 custom_channels:
   conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
   bioconda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
   pytorch: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
-  pyg: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+  rdkit: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
 EOF
 
 # ---------------------------------------------------------------------------
