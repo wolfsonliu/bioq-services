@@ -20,7 +20,7 @@ ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
 ENV UV_HTTP_TIMEOUT=600
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates wget \
+    ca-certificates wget git \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/esmfold2
