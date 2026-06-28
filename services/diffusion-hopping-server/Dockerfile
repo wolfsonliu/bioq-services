@@ -1,0 +1,197 @@
+# Build from bioagent project root:
+#   docker build --platform linux/amd64 -t diffusion-hopping-server \
+#       -f services/diffusion-hopping-server/Dockerfile .
+#
+# Pre-build (once; re-run to bump pinned upstream commit / refresh weights):
+#   ./services/diffusion-hopping-server/scripts/vendor.sh         # → upstream/
+#   ./services/diffusion-hopping-server/scripts/fetch_weights.sh  # → weights/
+#
+# DiffHopp source lives at services/diffusion-hopping-server/upstream/
+# (vendored at pinned SHA via scripts/vendor.sh).  4 .ckpt weights (~189 MB)
+# live on NAS at /data/models/diffusion-hopping/checkpoints/ — NOT baked into
+# the image (FC NAS mount; SIF / HPC `apptainer run --bind`).
+# See engineering/decisions/2026-06-26-service-weights-externalization.md.
+#
+# Multistage layout
+# -----------------
+#   builder = conda env (Python 3.10 + pytorch 1.13 + cu117 + PyG 2.2 +
+#             rdkit + openbabel + reduce) + framework + cleanup.
+#   runtime = lean: conda env from builder + DiffHopp source + server code.
+#
+# Base: nvidia/cuda 11.8 -runtime (forward-compatible with conda's
+# pytorch-cuda=11.7; DiffHopp pins pytorch 1.13.1 which has no >11.8 wheels).
+
+ARG BASE_IMAGE=nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
+ARG MICROMAMBA_IMAGE=mambaorg/micromamba:2.6.2
+
+
+# ===========================================================================
+# Stage 1: builder — conda env + framework.
+# ===========================================================================
+FROM ${MICROMAMBA_IMAGE} AS micromamba
+FROM ${BASE_IMAGE} AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
+ENV UV_HTTP_TIMEOUT=600
+
+# NB: no `git` in apt — vendor.sh ran on the host; the image never clones.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential wget ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=micromamba /bin/micromamba /bin/micromamba
+COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
+ENV MAMBA_EXE=/bin/micromamba
+ENV MAMBA_ROOT_PREFIX=/opt/conda
+ENV PATH=/opt/conda/envs/diffusion_hopping/bin:$PATH
+
+# ---------------------------------------------------------------------------
+# Mirror configuration (Huawei pip + TUNA conda) for CN-friendly builds.
+# ---------------------------------------------------------------------------
+RUN mkdir -p /root/.config/pip \
+    && printf '[global]\nindex-url = https://repo.huaweicloud.com/repository/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
+       > /root/.config/pip/pip.conf \
+    && cat > /root/.condarc <<'EOF'
+channels:
+  - defaults
+show_channel_urls: true
+default_channels:
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/msys2
+custom_channels:
+  conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+  bioconda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+  pytorch: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+  pyg: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+EOF
+
+# ---------------------------------------------------------------------------
+# Conda env — based on upstream's environment.yml (Python 3.10 + pytorch
+# 1.13.1 + cu117 + PyG 2.2 + scatter + rdkit + openbabel) PLUS `reduce`
+# (Duke biochemistry tool; bioconda). Removed wandb (not needed at inference).
+# ---------------------------------------------------------------------------
+RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
+    micromamba create -y -n diffusion_hopping \
+        -c pyg -c nvidia -c pytorch -c rdkit -c conda-forge -c bioconda \
+        python=3.10 \
+        pytorch::pytorch=1.13.1 \
+        pytorch-cuda=11.7 \
+        torchvision=0.14.1 \
+        pyg::pyg=2.2.0 \
+        pyg::pytorch-scatter=2.1.0 \
+        pytorch-lightning=1.8.1 \
+        python-lmdb=1.4.0 \
+        numpy=1.24.1 \
+        pandas=1.5.2 \
+        biopandas=0.4.1 \
+        biopython=1.80 \
+        rdkit=2022.09.3 \
+        openbabel=3.1.1 \
+        tqdm=4.64.1 \
+        bioconda::reduce
+
+# ---------------------------------------------------------------------------
+# DiffHopp source — from vendored upstream/ (see scripts/vendor.sh).
+# We install it editable so `from diffusion_hopping import ...` resolves.
+# Upstream has no setup.py / pyproject — we use pip's PEP 660 "src as
+# package" via a tiny shim by adding the dir to PYTHONPATH at runtime.
+# ---------------------------------------------------------------------------
+COPY services/diffusion-hopping-server/upstream /opt/diffusion-hopping
+RUN /opt/conda/envs/diffusion_hopping/bin/python -c \
+    "import sys; sys.path.insert(0, '/opt/diffusion-hopping'); \
+     import diffusion_hopping; print('diffusion_hopping OK')"
+
+# ---------------------------------------------------------------------------
+# Cleanup dead weight from the conda env.
+# ---------------------------------------------------------------------------
+RUN /opt/conda/envs/diffusion_hopping/bin/pip uninstall -y \
+        jupyterlab jupyter_server jupyterlab_server jupyter_client \
+        ipywidgets ipykernel notebook nbconvert nbformat || true \
+    && find /opt/conda/envs/diffusion_hopping/lib -name '*.a' -delete \
+    && rm -rf \
+        /opt/conda/envs/diffusion_hopping/share/doc \
+        /opt/conda/envs/diffusion_hopping/share/man \
+        /opt/conda/envs/diffusion_hopping/share/locale \
+    && find /opt/conda/envs/diffusion_hopping/lib/python3.10/site-packages \
+        -depth -type d \( -name 'tests' -o -name 'test' \) \
+        -exec rm -rf {} + \
+    && find /opt/conda/envs/diffusion_hopping -depth -type d \
+        -name '__pycache__' -exec rm -rf {} + \
+    && find /opt/conda/envs/diffusion_hopping -name '*.pyc' -delete
+
+# ---------------------------------------------------------------------------
+# Shared service framework — independent layer so framework bumps don't
+# invalidate the conda env layer above.
+# ---------------------------------------------------------------------------
+RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
+    --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python /opt/conda/envs/diffusion_hopping/bin/python \
+        "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
+
+
+# ===========================================================================
+# Stage 2: runtime — conda env + DiffHopp source + server code.
+# ===========================================================================
+FROM ${BASE_IMAGE}
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV MAMBA_ROOT_PREFIX=/opt/conda
+ENV PATH=/opt/conda/envs/diffusion_hopping/bin:$PATH
+
+# `reduce` (copied from conda env via the builder COPY below) writes its
+# own temp files; openbabel needs libgomp; ca-certificates for OSS / HTTP.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Conda env from builder.
+COPY --from=builder /opt/conda /opt/conda
+
+# DiffHopp source from builder (vendored upstream).
+COPY --from=builder /opt/diffusion-hopping /opt/diffusion-hopping
+
+# Server code as `server` package — uvicorn imports `server.app:app`.
+COPY services/diffusion-hopping-server/__init__.py \
+     services/diffusion-hopping-server/__main__.py \
+     services/diffusion-hopping-server/VERSION \
+     services/diffusion-hopping-server/app.py \
+     services/diffusion-hopping-server/adapter.py \
+     services/diffusion-hopping-server/models.py \
+     services/diffusion-hopping-server/settings.py \
+     services/diffusion-hopping-server/tools.py \
+     services/diffusion-hopping-server/uris.py \
+     services/diffusion-hopping-server/inference.py \
+     /opt/diffusion-hopping/server/
+
+WORKDIR /opt/diffusion-hopping
+
+# PYTHONPATH — root (`server` package) + upstream root (so `diffusion_hopping`
+# imports resolve without pip install).  Apptainer/SIF ignores WORKDIR, so
+# PYTHONPATH must contain /opt/diffusion-hopping explicitly.
+ENV PYTHONPATH=/opt/diffusion-hopping
+ENV DIFFUSION_HOPPING_ROOT=/opt/diffusion-hopping
+ENV DIFFUSION_HOPPING_PYTHON=/opt/conda/envs/diffusion_hopping/bin/python
+ENV DIFFUSION_HOPPING_INFERENCE_SCRIPT=/opt/diffusion-hopping/server/inference.py
+ENV DIFFUSION_HOPPING_JOBS_BASE_DIR=/data/diffusion_hopping_jobs
+
+# Weights externalized — NAS mount injected by FC config / SIF --bind.
+ENV DIFFUSION_HOPPING_WEIGHTS_DIR=/data/models/diffusion-hopping/checkpoints
+
+RUN mkdir -p /data/diffusion_hopping_jobs
+
+# FC session affinity: inject this header in POST responses so FC binds
+# follow-up requests to the same instance.
+ENV DIFFUSION_HOPPING_SESSION_HEADER_NAME=bioagent-session-id
+ENV DIFFUSION_HOPPING_MAX_CONCURRENT_JOBS=1
+
+ENV PORT=9000
+EXPOSE 9000
+CMD ["/opt/conda/envs/diffusion_hopping/bin/python", "-m", "uvicorn", \
+     "server.app:app", "--host", "0.0.0.0", "--port", "9000", \
+     "--timeout-keep-alive", "900"]
