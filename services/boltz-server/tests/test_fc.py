@@ -45,7 +45,7 @@ def base_url() -> str:
 
 @pytest.fixture(scope="module")
 def client(base_url: str):
-    with httpx.Client(base_url=base_url, timeout=httpx.Timeout(120.0)) as c:
+    with httpx.Client(base_url=base_url, timeout=httpx.Timeout(300.0)) as c:
         yield c
 
 

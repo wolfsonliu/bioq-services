@@ -320,3 +320,216 @@ def test_submit_does_not_leak_sequence_into_input_params(
     # checking absence of the seq specifically, not absence of everything).
     assert stub_submit[0]["input_params"]["sequence_count"] == 1
     assert stub_submit[0]["input_params"]["mode"] == "env"
+
+
+# ---------------------------------------------------------------------------
+# /api/tasks/{msa,pair} — synchronous task endpoints (FC Async Task Mode)
+#
+# Task endpoints share the argv builder with /ticket/* but execute via
+# `execute_task` (blocking, single thread). We patch `SubprocessRunner.run`
+# so the suite stays fast — without real mmseqs the subprocess would always
+# fail anyway, but mocking makes the COMPLETED path testable too. The
+# ticket-endpoint tests above continue to use `stub_submit` which intercepts
+# at a higher layer (`runner.submit`).
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def stub_task_subprocess(monkeypatch: pytest.MonkeyPatch) -> dict:
+    """Replace SubprocessRunner.run + adapter.detect_outputs so task endpoints
+    finalize as COMPLETED without invoking real mmseqs.
+
+    Returns a dict that lets tests configure ``rc`` / ``outputs_present``.
+    """
+    cfg: dict = {"rc": 0, "outputs_present": True, "calls": []}
+
+    def _fake_run(argv, log_path, env=None, cwd=None) -> int:
+        cfg["calls"].append({"argv": list(argv), "log_path": str(log_path)})
+        # Touch log so finalize_job's tail-read does not 500 on missing file.
+        Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(log_path).write_text("stubbed mmseqs run\n", encoding="utf-8")
+        return cfg["rc"]
+
+    monkeypatch.setattr(
+        "bioagent_service.task_endpoint.SubprocessRunner.run", staticmethod(_fake_run)
+    )
+
+    # `execute_task` ends with `finalize_job` which calls `adapter.detect_outputs`
+    # to decide COMPLETED vs FAILED on rc=0. Force it to True so we don't need
+    # to fabricate real .a3m files for every test.
+    from server import adapter as adapter_mod  # type: ignore
+
+    monkeypatch.setattr(
+        adapter_mod.MMseqs2JobAdapter,
+        "detect_outputs",
+        lambda self, job_dir: cfg["outputs_present"],
+    )
+    return cfg
+
+
+def test_post_tasks_msa_returns_completed(
+    client: TestClient, stub_task_subprocess: dict
+) -> None:
+    resp = client.post(
+        "/api/tasks/msa",
+        data={"q": _VALID_MONOMER_Q, "mode": "env"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "completed"
+    assert body["job_id"]
+    assert body["completed_at"] is not None
+    # Exactly one subprocess invocation.
+    assert len(stub_task_subprocess["calls"]) == 1
+    # input_params carries the summary, never the raw sequence.
+    assert body["input_params"]["mode"] == "env"
+    assert body["input_params"]["sequence_count"] == 1
+    serialized = json.dumps(body["input_params"])
+    assert "MKQHKAM" not in serialized  # raw query absent
+
+
+def test_post_tasks_msa_honors_x_bioagent_job_id(
+    client: TestClient, stub_task_subprocess: dict
+) -> None:
+    resp = client.post(
+        "/api/tasks/msa",
+        data={"q": _VALID_MONOMER_Q, "mode": "env"},
+        headers={"X-Bioagent-Job-Id": "task-msa-fixed-id"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["job_id"] == "task-msa-fixed-id"
+
+
+def test_post_tasks_msa_falls_back_to_x_fc_async_task_id(
+    client: TestClient, stub_task_subprocess: dict
+) -> None:
+    """X-Fc-Async-Task-Id is the secondary header when X-Bioagent-Job-Id absent."""
+    resp = client.post(
+        "/api/tasks/msa",
+        data={"q": _VALID_MONOMER_Q, "mode": "env"},
+        headers={"X-Fc-Async-Task-Id": "fc-async-id-001"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["job_id"] == "fc-async-id-001"
+
+
+def test_post_tasks_msa_duplicate_is_idempotent(
+    client: TestClient, stub_task_subprocess: dict
+) -> None:
+    """Same X-Bioagent-Job-Id twice → second call returns the existing JobInfo
+    without re-running the subprocess (framework-level dedup)."""
+    headers = {"X-Bioagent-Job-Id": "dup-task-1"}
+    first = client.post(
+        "/api/tasks/msa",
+        data={"q": _VALID_MONOMER_Q, "mode": "env"},
+        headers=headers,
+    )
+    assert first.status_code == 200
+    assert len(stub_task_subprocess["calls"]) == 1
+    first_created = first.json()["created_at"]
+
+    second = client.post(
+        "/api/tasks/msa",
+        data={"q": _VALID_MONOMER_Q, "mode": "all"},  # different mode — must be ignored
+        headers=headers,
+    )
+    assert second.status_code == 200
+    # Subprocess must NOT have been invoked a second time.
+    assert len(stub_task_subprocess["calls"]) == 1
+    assert second.json()["job_id"] == "dup-task-1"
+    assert second.json()["created_at"] == first_created
+
+
+@pytest.mark.parametrize(
+    "data,reason",
+    [
+        ({"q": "", "mode": "env"},                       "empty q"),
+        ({"q": _VALID_MONOMER_Q, "mode": "nonsense"},    "bad mode"),
+        ({"q": ">q1\nMKQHJZB\n", "mode": "env"},         "invalid AA"),
+        ({"q": _VALID_MONOMER_Q, "mode": "pairgreedy"},  "paired mode on /api/tasks/msa"),
+    ],
+)
+def test_post_tasks_msa_invalid_returns_422(
+    client: TestClient,
+    stub_task_subprocess: dict,
+    data: dict,
+    reason: str,
+) -> None:
+    """Task endpoints use HTTP 422 for input errors (not ColabFold's 200+ERROR)."""
+    resp = client.post("/api/tasks/msa", data=data)
+    assert resp.status_code == 422, reason
+    assert len(stub_task_subprocess["calls"]) == 0, reason
+
+
+def test_post_tasks_pair_returns_completed(
+    client: TestClient, stub_task_subprocess: dict
+) -> None:
+    resp = client.post(
+        "/api/tasks/pair",
+        data={"q": _VALID_PAIRED_Q, "mode": "pairgreedy"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "completed"
+    assert body["input_params"]["sequence_count"] == 2
+    assert body["input_params"]["mode"] == "pairgreedy"
+
+
+@pytest.mark.parametrize(
+    "data,reason",
+    [
+        ({"q": _VALID_MONOMER_Q, "mode": "pairgreedy"},  "single chain on /api/tasks/pair"),
+        ({"q": _VALID_PAIRED_Q, "mode": "env"},          "monomer mode on /api/tasks/pair"),
+    ],
+)
+def test_post_tasks_pair_invalid_returns_422(
+    client: TestClient,
+    stub_task_subprocess: dict,
+    data: dict,
+    reason: str,
+) -> None:
+    resp = client.post("/api/tasks/pair", data=data)
+    assert resp.status_code == 422, reason
+
+
+def test_post_tasks_msa_failed_subprocess_returns_200_with_failed_status(
+    client: TestClient, stub_task_subprocess: dict
+) -> None:
+    """Non-zero rc → 200 + JobInfo.status='failed' (not an HTTP error)."""
+    stub_task_subprocess["rc"] = 7
+    stub_task_subprocess["outputs_present"] = False
+
+    resp = client.post(
+        "/api/tasks/msa",
+        data={"q": _VALID_MONOMER_Q, "mode": "env"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "failed"
+    assert body["failure_kind"] == "subprocess_error"
+    # finalize_job writes "msa failed (rc=7)" into JobInfo.message.
+    assert "rc=7" in (body.get("message") or "")
+
+
+def test_task_endpoints_skipped_when_flag_false(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When task_endpoints_enabled=False the routes are not registered.
+
+    Reloads the server with the env override so the ``if
+    settings.task_endpoints_enabled:`` guard at module load time picks it up.
+    """
+    monkeypatch.setenv("MMSEQS2_JOBS_BASE_DIR", str(tmp_path / "jobs"))
+    monkeypatch.setenv("MMSEQS2_DB_DIR", str(tmp_path / "db"))
+    monkeypatch.setenv("MMSEQS2_KEEPALIVE_INTERVAL_S", "0")
+    monkeypatch.setenv("MMSEQS2_TASK_ENDPOINTS_ENABLED", "false")
+    (tmp_path / "db").mkdir(parents=True, exist_ok=True)
+
+    _reload_server_pkg()
+    server_app = importlib.import_module("server.app")
+    with TestClient(server_app.app) as tc:
+        # /ticket/* still there
+        assert tc.post("/ticket/msa", data={"q": "", "mode": "env"}).status_code == 200
+        # /api/tasks/* not registered → 404
+        assert tc.post("/api/tasks/msa", data={"q": "", "mode": "env"}).status_code == 404
+        assert tc.post("/api/tasks/pair", data={"q": "", "mode": "env"}).status_code == 404

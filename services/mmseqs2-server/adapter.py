@@ -88,10 +88,12 @@ class MMseqs2JobAdapter(JobAdapter):
                 ),
             },
             "endpoints_summary": {
-                "/ticket/msa":            "Submit a monomer (unpaired) MSA job.",
-                "/ticket/pair":           "Submit a multimer (paired) MSA job.",
+                "/ticket/msa":            "Submit a monomer (unpaired) MSA job (ColabFold protocol).",
+                "/ticket/pair":           "Submit a multimer (paired) MSA job (ColabFold protocol).",
                 "/ticket/{id}":           "Poll job status (PENDING/RUNNING/COMPLETE/ERROR).",
                 "/result/download/{id}":  "Download a tar.gz of *.a3m output files.",
+                "/api/tasks/msa":         "Monomer MSA as an atomic task; blocks until completion (FC async task mode).",
+                "/api/tasks/pair":        "Multimer paired MSA as an atomic task; blocks until completion (FC async task mode).",
                 "/healthz/detail":        "Extended health (db_loaded, gpu_free_mb, active_jobs).",
             },
             "limits": {
@@ -135,6 +137,47 @@ class MMseqs2JobAdapter(JobAdapter):
                         "Requires at least 2 FASTA records. Use pairgreedy / "
                         "paircomplete (strategy 0 / 1). The -env variants add "
                         "the ColabFoldDB environmental DB on top."
+                    ),
+                ),
+            ],
+            "/api/tasks/msa": [
+                EndpointExample(
+                    title="monomer MSA via FC async task mode",
+                    curl=(
+                        "curl -X POST $URL/api/tasks/msa "
+                        "-H 'X-Fc-Invocation-Type: Async' "
+                        "-H 'X-Bioagent-Job-Id: mmseqs-$(date +%s)' "
+                        "-H 'X-Fc-Async-Task-Id: mmseqs-$(date +%s)' "
+                        "-F 'q=>query1\\nMKQHKAMIVALIVICITAVVAAL...' "
+                        "-F mode=env"
+                    ),
+                    notes=(
+                        "Returns HTTP 202 immediately; FC enqueues the task and "
+                        "the function runs synchronously inside the instance. "
+                        "Poll JobInfo via the framework's GET /api/jobs/{id}, "
+                        "or use FCDispatcher.get_status for production "
+                        "(HTTP polling is rate-limit-prone — see "
+                        "engineering/decisions/2026-06-17-fc-async-task-mode.md)."
+                    ),
+                ),
+            ],
+            "/api/tasks/pair": [
+                EndpointExample(
+                    title="multimer paired MSA via FC async task mode",
+                    curl=(
+                        "curl -X POST $URL/api/tasks/pair "
+                        "-H 'X-Fc-Invocation-Type: Async' "
+                        "-H 'X-Bioagent-Job-Id: mmseqs-$(date +%s)' "
+                        "-H 'X-Fc-Async-Task-Id: mmseqs-$(date +%s)' "
+                        "-F 'q=>chainA\\nMKQHKAM...\\n>chainB\\nLLLLLLL...' "
+                        "-F mode=pairgreedy"
+                    ),
+                    notes=(
+                        "Same task-mode semantics as /api/tasks/msa, but for "
+                        "paired multimer modes. Returns JobInfo (200 + "
+                        "status=completed/failed) — distinct from the "
+                        "ColabFold-protocol 200 + {status: ERROR} convention "
+                        "of /ticket/*."
                     ),
                 ),
             ],

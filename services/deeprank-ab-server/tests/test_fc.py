@@ -1,19 +1,29 @@
-"""End-to-end tests against the deployed DeepRank-Ab Function Compute service.
+"""FC integration tests for deeprank-ab-server (opt-in, submit/poll path).
 
-Marked `@pytest.mark.fc`, skipped by default. Run with:
+Run only when FC tests are enabled::
 
-    pytest -m fc services/deeprank-ab-server/tests/test_fc.py
+    RUN_FC_TESTS=1 \
+    uv run python -m pytest -m fc services/deeprank-ab-server/tests/test_fc.py -v
 
-DeepRank-Ab has one endpoint:
-  * `/api/score` — score an antibody-antigen docking complex PDB
+DeepRank-Ab has one inference endpoint:
+  * ``/api/score`` — score an antibody-antigen docking complex PDB
 
-Test PDB ships in `tests/data/` (copied from upstream example/).
+The submit/poll path here is the legacy invocation mode.  For functional
+testing prefer ``test_fc_task.py`` (async task mode) — it keeps the FC
+function instance alive for the full pipeline, dedups by task id, and
+spawns fewer parallel instances under the test load.
+
+This file follows the same structure as alphafold-server/tests/test_fc.py:
+a single shared antibody fixture (``score_job``) is reused across every
+lifecycle assertion, and a second fixture (``nanobody_score_job``) backs the
+VHH-mode class.  At most two real inference jobs run per session.
 """
 
 from __future__ import annotations
 
 import csv
 import io
+import uuid
 import zipfile
 from pathlib import Path
 
@@ -22,12 +32,20 @@ import pytest
 
 from bioagent_service.fc_testing import fc_url, poll_job
 
+SERVICE = "deeprank-ab-server"
+SESSION_HEADER = "bioagent-session-id"
+
 DATA_DIR = Path(__file__).resolve().parent / "data"
 TEST_PDB = DATA_DIR / "test.pdb"
 
-pytestmark = pytest.mark.fc
+# Long read timeout for the submit POST itself (FC cold start + multipart
+# upload of a few MB PDB).  poll_job uses its own short reads.
+TIMEOUT = httpx.Timeout(connect=30, read=600, write=60, pool=30)
 
-SCORE_TIMEOUT_S = 3600
+# DeepRank-Ab is ~3-10 min including ESM-2 embedding; allow 30 min total to
+# absorb cold start + NAS contention.
+POLL_TIMEOUT_S = 1800
+POLL_INTERVAL_S = 15
 
 
 # ---------------------------------------------------------------------------
@@ -37,13 +55,25 @@ SCORE_TIMEOUT_S = 3600
 
 @pytest.fixture(scope="module")
 def base_url() -> str:
-    return fc_url("deeprank-ab-server", start=Path(__file__))
+    return fc_url(SERVICE, start=Path(__file__))
 
 
 @pytest.fixture(scope="module")
-def client(base_url: str) -> httpx.Client:
-    with httpx.Client(base_url=base_url, timeout=httpx.Timeout(180.0)) as c:
+def client(base_url: str):
+    with httpx.Client(base_url=base_url, timeout=TIMEOUT) as c:
         yield c
+
+
+@pytest.fixture(scope="module")
+def session_headers() -> dict[str, str]:
+    """Session-affinity header so the antibody fixture binds to one FC instance."""
+    return {SESSION_HEADER: f"test-{uuid.uuid4().hex[:12]}"}
+
+
+@pytest.fixture(scope="module")
+def nanobody_session_headers() -> dict[str, str]:
+    """Distinct session id so nanobody + antibody fixtures get separate instances."""
+    return {SESSION_HEADER: f"test-nb-{uuid.uuid4().hex[:12]}"}
 
 
 # ---------------------------------------------------------------------------
@@ -51,334 +81,348 @@ def client(base_url: str) -> httpx.Client:
 # ---------------------------------------------------------------------------
 
 
-def _assert_submitted(resp_json: dict) -> None:
-    assert "job_id" in resp_json
-    assert resp_json["status"] in ("pending", "running")
-    assert resp_json["created_at"] is not None
-    assert resp_json["input_params"] is not None
-    assert isinstance(resp_json["input_params"], dict)
+def _assert_submitted(body: dict) -> str:
+    assert "job_id" in body
+    assert body["status"] in ("pending", "running")
+    assert body.get("created_at") is not None
+    assert isinstance(body.get("input_params"), dict)
+    return body["job_id"]
 
 
-def _assert_completed(
-    client: httpx.Client, base_url: str, job_id: str, *, timeout_s: int = SCORE_TIMEOUT_S,
-) -> dict:
-    final = poll_job(client, base_url, job_id, timeout_s=timeout_s)
-    assert final["status"] == "completed", (
-        f"failed: kind={final.get('failure_kind')} summary={final.get('error_summary')!r}"
+def _assert_completed(body: dict) -> None:
+    assert body["status"] == "completed", (
+        f"failed: kind={body.get('failure_kind')} summary={body.get('error_summary')!r}"
     )
-
-    assert final["created_at"] is not None
-    assert final["started_at"] is not None
-    assert final["completed_at"] is not None
-    assert final["duration_seconds"] is not None
-    assert final["duration_seconds"] > 0
-    assert final["input_params"] is not None
-    assert isinstance(final["input_params"], dict)
-    assert final["output_count"] is not None
-    assert final["output_count"] > 0
-    assert final["output_total_bytes"] is not None
-    assert final["output_total_bytes"] > 0
-    return final
+    assert body.get("started_at") is not None
+    assert body.get("completed_at") is not None
+    assert body.get("duration_seconds") is not None
+    assert body["duration_seconds"] > 0
+    assert body.get("output_count", 0) > 0
+    assert body.get("output_total_bytes", 0) > 0
 
 
-def _submit_score(client: httpx.Client, **extra_data) -> dict:
-    with open(TEST_PDB, "rb") as fh:
+def _submit_score(
+    client: httpx.Client,
+    *,
+    headers: dict[str, str] | None = None,
+    pdb_path: Path = TEST_PDB,
+    **form_fields: str,
+) -> dict:
+    with open(pdb_path, "rb") as fh:
         r = client.post(
             "/api/score",
-            files={"input_pdb": (TEST_PDB.name, fh, "chemical/x-pdb")},
-            data={"heavy_chain_id": "H", "light_chain_id": "L", "antigen_chain_id": "A", **extra_data},
+            files={"input_pdb": (pdb_path.name, fh.read(), "chemical/x-pdb")},
+            data=form_fields,
+            headers=headers or {},
         )
-    r.raise_for_status()
+    assert r.status_code == 200, f"submit failed: {r.status_code} {r.text!r}"
     return r.json()
 
 
-def _download_text(client: httpx.Client, job_id: str, file_path: str) -> str:
-    r = client.get(f"/api/jobs/{job_id}/file/{file_path}")
-    r.raise_for_status()
-    return r.text
+def _download_bytes(client: httpx.Client, job_id: str, path: str) -> bytes:
+    r = client.get(f"/api/jobs/{job_id}/file/{path}")
+    assert r.status_code == 200, f"download {path} failed: {r.status_code} {r.text!r}"
+    return r.content
 
 
 # ---------------------------------------------------------------------------
-# Smoke (no inference compute)
+# Module-scoped inference jobs — submit once, reuse across lifecycle tests.
 # ---------------------------------------------------------------------------
 
 
-def test_healthz(client: httpx.Client) -> None:
-    r = client.get("/healthz")
-    r.raise_for_status()
-    body = r.json()
-    assert body["status"] == "ok"
-    assert body["service"] == "deeprank-ab"
-    assert "version" in body
+@pytest.fixture(scope="module")
+def score_job(client: httpx.Client, session_headers: dict[str, str]) -> dict:
+    """Submit the canonical H/L/A complex and poll until completion."""
+    body = _submit_score(
+        client,
+        headers=session_headers,
+        heavy_chain_id="H",
+        light_chain_id="L",
+        antigen_chain_id="A",
+    )
+    job_id = _assert_submitted(body)
+
+    result = poll_job(
+        client,
+        "",
+        job_id,
+        timeout_s=POLL_TIMEOUT_S,
+        interval_s=POLL_INTERVAL_S,
+        extra_headers=session_headers,
+    )
+    _assert_completed(result)
+    return result
 
 
-def test_healthz_detail(client: httpx.Client) -> None:
-    r = client.get("/healthz/detail")
-    r.raise_for_status()
-    body = r.json()
-    assert body["service"] == "deeprank-ab"
-    assert "version" in body
-    assert body["jobs_base_dir_exists"] is True
-    assert "disk_usage_mb" in body
-    assert "disk_limit_mb" in body
-    if "active_jobs" in body:
-        assert isinstance(body["active_jobs"], int)
-        assert "max_concurrent_jobs" in body
+@pytest.fixture(scope="module")
+def nanobody_score_job(
+    client: httpx.Client, nanobody_session_headers: dict[str, str]
+) -> dict:
+    """Submit the same PDB in nanobody mode (light_chain_id='-') and poll."""
+    body = _submit_score(
+        client,
+        headers=nanobody_session_headers,
+        heavy_chain_id="H",
+        light_chain_id="-",
+        antigen_chain_id="A",
+    )
+    job_id = _assert_submitted(body)
+
+    result = poll_job(
+        client,
+        "",
+        job_id,
+        timeout_s=POLL_TIMEOUT_S,
+        interval_s=POLL_INTERVAL_S,
+        extra_headers=nanobody_session_headers,
+    )
+    _assert_completed(result)
+    return result
 
 
-def test_manifest_lists_score_endpoint(client: httpx.Client) -> None:
-    r = client.get("/api/manifest")
-    r.raise_for_status()
-    paths = {e["path"] for e in r.json()["endpoints"]}
-    assert paths == {"/api/score"}
+# ===================================================================
+# Section 1: Smoke (no inference compute)
+# ===================================================================
 
 
-def test_manifest_service_specific(client: httpx.Client) -> None:
-    body = client.get("/api/manifest").json()
-    extras = body["service_specific"]
-    assert "tool_outputs" in extras
-    assert "score" in extras["tool_outputs"]
-    assert "scoring_legend" in extras
-    assert "predicted_dockq" in extras["scoring_legend"]
-    assert "quality_flag" in extras["scoring_legend"]
-    assert "input_uri_schemes" in extras
-    assert "config_tips" in extras
-    assert "model_info" in extras
-    assert "EGNN" in extras["model_info"]["architecture"]
-    assert "ESM-2" in extras["model_info"]["sequence_encoder"]
+@pytest.mark.fc
+class TestSmoke:
+    def test_healthz(self, client):
+        r = client.get("/healthz")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["status"] == "ok"
+        assert body["service"] == "deeprank-ab"
+        assert "version" in body
+
+    def test_healthz_detail(self, client):
+        """Custom /healthz/detail reports NAS-mounted ESM-2 weight presence."""
+        r = client.get("/healthz/detail")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["status"] == "ok"
+        assert body["service"] == "deeprank-ab"
+        # Weights externalized to NAS — verify both expected files.
+        # See engineering/decisions/2026-06-26-service-weights-externalization.md.
+        assert body["weights_loaded"] is True, (
+            f"NAS ESM-2 weights missing: {body.get('weights_missing')}"
+        )
+        assert body["weights_dir"] == "/data/models/deeprank-ab/esm"
+        assert body["weights_missing"] == {}
+        assert body["max_concurrent_jobs"] >= 1
+        assert isinstance(body.get("active_jobs"), int)
+
+    def test_openapi_served(self, client):
+        r = client.get("/openapi.json")
+        assert r.status_code == 200
+        spec = r.json()
+        assert "/api/score" in spec["paths"]
 
 
-def test_manifest_endpoint_examples(client: httpx.Client) -> None:
-    body = client.get("/api/manifest").json()
-    by_path = {e["path"]: e for e in body["endpoints"]}
-    assert by_path["/api/score"]["examples"]
-    assert len(by_path["/api/score"]["examples"]) >= 2
+# ===================================================================
+# Section 2: Manifest
+# ===================================================================
 
 
-def test_openapi_served(client: httpx.Client) -> None:
-    r = client.get("/openapi.json")
-    r.raise_for_status()
-    spec = r.json()
-    assert "paths" in spec
-    assert "/api/score" in spec["paths"]
-
-
-def test_unknown_job_returns_404(client: httpx.Client) -> None:
-    assert client.get("/api/jobs/missing-job-id").status_code == 404
-    assert client.get("/api/jobs/missing-job-id/files").status_code == 404
-    assert client.get("/api/jobs/missing-job-id/log").status_code == 404
-    assert client.get("/api/jobs/missing-job-id/download").status_code == 404
-    assert client.get("/api/jobs/missing-job-id/file/foo.csv").status_code == 404
-
-
-# ---------------------------------------------------------------------------
-# 422 Error inputs (fast, no inference compute)
-# ---------------------------------------------------------------------------
-
-
-def test_422_score_missing_input(client: httpx.Client) -> None:
-    """Neither upload nor URI → 422."""
-    r = client.post("/api/score", data={
-        "heavy_chain_id": "H", "light_chain_id": "L", "antigen_chain_id": "A",
-    })
-    assert r.status_code == 422
-
-
-# ---------------------------------------------------------------------------
-# Inference: score antibody-antigen complex
-# ---------------------------------------------------------------------------
-
-
-def test_score_antibody_antigen(client: httpx.Client, base_url: str) -> None:
-    """Score the example antibody-antigen complex (chains H, L, A)."""
-    submit = _submit_score(client)
-    _assert_submitted(submit)
-    assert submit["input_params"]["heavy_chain_id"] == "H"
-    assert submit["input_params"]["light_chain_id"] == "L"
-    assert submit["input_params"]["antigen_chain_id"] == "A"
-
-    final = _assert_completed(client, base_url, submit["job_id"])
-
-    files = client.get(f"/api/jobs/{final['job_id']}/files").json()["files"]
-    csv_files = [f for f in files if f.endswith("_predictions.csv")]
-    assert csv_files, f"no predictions CSV in output: {files}"
-
-
-def test_score_output_csv_content(client: httpx.Client, base_url: str) -> None:
-    """Validate predictions CSV has correct structure and plausible values."""
-    submit = _submit_score(client)
-    _assert_submitted(submit)
-
-    final = _assert_completed(client, base_url, submit["job_id"])
-
-    files = client.get(f"/api/jobs/{final['job_id']}/files").json()["files"]
-    csv_files = [f for f in files if f.endswith("_predictions.csv")]
-    assert csv_files, f"no predictions CSV: {files}"
-
-    csv_text = _download_text(client, final["job_id"], csv_files[0])
-    reader = csv.DictReader(io.StringIO(csv_text))
-    rows = list(reader)
-
-    assert len(rows) >= 1, "predictions CSV should have at least one row"
-    assert "predicted_dockq" in reader.fieldnames, f"missing predicted_dockq column: {reader.fieldnames}"
-    assert "quality_flag" in reader.fieldnames, f"missing quality_flag column: {reader.fieldnames}"
-
-    for row in rows:
-        dockq = float(row["predicted_dockq"])
-        assert 0.0 <= dockq <= 1.0, f"predicted_dockq={dockq} out of [0,1] range"
-        assert row["quality_flag"] in ("ok", "low_HL_contacts", "not_applicable"), (
-            f"unexpected quality_flag: {row['quality_flag']!r}"
+@pytest.mark.fc
+class TestManifest:
+    def test_score_endpoint_listed(self, client):
+        body = client.get("/api/manifest").json()
+        paths = {e["path"] for e in body["endpoints"]}
+        # Sync endpoint must always be there; task endpoint is optional.
+        assert "/api/score" in paths, (
+            f"expected /api/score in manifest, got {paths}"
+        )
+        extras = paths - {"/api/score"}
+        assert extras <= {"/api/tasks/score"}, (
+            f"unexpected manifest endpoints: {extras}"
         )
 
+    def test_service_specific_model_info(self, client):
+        extras = client.get("/api/manifest").json()["service_specific"]
+        info = extras["model_info"]
+        assert "EGNN" in info["architecture"]
+        assert "ESM-2" in info["sequence_encoder"]
 
-def test_score_output_has_hdf5(client: httpx.Client, base_url: str) -> None:
-    """Inference should also produce graph and prediction HDF5 files."""
-    submit = _submit_score(client)
-    final = _assert_completed(client, base_url, submit["job_id"])
+    def test_service_specific_scoring_legend(self, client):
+        extras = client.get("/api/manifest").json()["service_specific"]
+        legend = extras["scoring_legend"]
+        assert "predicted_dockq" in legend
+        assert "quality_flag" in legend
 
-    files = client.get(f"/api/jobs/{final['job_id']}/files").json()["files"]
-    hdf5_files = [f for f in files if f.endswith(".hdf5")]
-    assert hdf5_files, f"no HDF5 files in output: {files}"
+    def test_service_specific_tool_outputs(self, client):
+        extras = client.get("/api/manifest").json()["service_specific"]
+        assert "score" in extras["tool_outputs"]
+
+    def test_service_specific_uri_schemes(self, client):
+        extras = client.get("/api/manifest").json()["service_specific"]
+        schemes = extras["input_uri_schemes"]
+        assert "upload" in schemes
+        assert any("oss://" in k for k in schemes)
+
+    def test_endpoint_examples(self, client):
+        body = client.get("/api/manifest").json()
+        by_path = {e["path"]: e for e in body["endpoints"]}
+        examples = by_path["/api/score"]["examples"]
+        assert len(examples) >= 2
 
 
-def test_score_nanobody(client: httpx.Client, base_url: str) -> None:
-    """Score with light_chain_id='-' (nanobody / VHH mode)."""
-    with open(TEST_PDB, "rb") as fh:
+# ===================================================================
+# Section 3: Error cases (no real job, quick)
+# ===================================================================
+
+
+@pytest.mark.fc
+class TestErrors:
+    def test_unknown_job_status_404(self, client):
+        assert client.get("/api/jobs/missing-job-id").status_code == 404
+
+    def test_unknown_job_files_404(self, client):
+        assert client.get("/api/jobs/missing-job-id/files").status_code == 404
+
+    def test_unknown_job_log_404(self, client):
+        assert client.get("/api/jobs/missing-job-id/log").status_code == 404
+
+    def test_unknown_job_download_404(self, client):
+        assert client.get("/api/jobs/missing-job-id/download").status_code == 404
+
+    def test_unknown_job_file_404(self, client):
+        assert client.get("/api/jobs/missing-job-id/file/foo.csv").status_code == 404
+
+    def test_422_score_missing_input(self, client):
+        """Neither upload nor URI → 422."""
         r = client.post(
             "/api/score",
-            files={"input_pdb": (TEST_PDB.name, fh, "chemical/x-pdb")},
-            data={
-                "heavy_chain_id": "H",
-                "light_chain_id": "-",
-                "antigen_chain_id": "A",
-            },
+            data={"heavy_chain_id": "H", "light_chain_id": "L", "antigen_chain_id": "A"},
         )
-    r.raise_for_status()
-    submit = r.json()
-    _assert_submitted(submit)
-    assert submit["input_params"]["light_chain_id"] == "-"
+        assert r.status_code == 422
 
-    final = _assert_completed(client, base_url, submit["job_id"])
 
-    files = client.get(f"/api/jobs/{final['job_id']}/files").json()["files"]
-    csv_files = [f for f in files if f.endswith("_predictions.csv")]
-    assert csv_files, f"no predictions CSV in nanobody output: {files}"
+# ===================================================================
+# Section 4: Score inference (long-running, uses shared job fixture)
+# ===================================================================
 
-    csv_text = _download_text(client, final["job_id"], csv_files[0])
-    reader = csv.DictReader(io.StringIO(csv_text))
-    for row in reader:
-        assert row["quality_flag"] in ("ok", "not_applicable"), (
-            f"nanobody quality_flag should be 'ok' or 'not_applicable', got {row['quality_flag']!r}"
+
+@pytest.mark.fc
+class TestScoreAntibody:
+    def test_job_completed(self, score_job):
+        assert score_job["status"] == "completed"
+
+    def test_input_params_echo(self, score_job):
+        params = score_job.get("input_params") or {}
+        assert params.get("heavy_chain_id") == "H"
+        assert params.get("light_chain_id") == "L"
+        assert params.get("antigen_chain_id") == "A"
+
+    def test_duration_reasonable(self, score_job):
+        d = score_job["duration_seconds"]
+        # ESM-2 embedding + EGNN > 10s; should easily finish within 30 min.
+        assert d > 10, f"too fast for real DeepRank-Ab work: {d}s"
+        assert d < POLL_TIMEOUT_S
+
+
+@pytest.mark.fc
+class TestScoreNanobody:
+    """light_chain_id='-' path — quality_flag must skip 'low_HL_contacts'."""
+
+    def test_job_completed(self, nanobody_score_job):
+        assert nanobody_score_job["status"] == "completed"
+
+    def test_input_params_echo(self, nanobody_score_job):
+        params = nanobody_score_job.get("input_params") or {}
+        assert params.get("light_chain_id") == "-"
+
+    def test_quality_flag_skips_low_hl_contacts(self, client, nanobody_score_job):
+        job_id = nanobody_score_job["job_id"]
+        files = client.get(f"/api/jobs/{job_id}/files").json()["files"]
+        csv_files = [f for f in files if f.endswith("_predictions.csv")]
+        assert csv_files, f"no predictions CSV in nanobody output: {files}"
+
+        text = _download_bytes(client, job_id, csv_files[0]).decode()
+        for row in csv.DictReader(io.StringIO(text)):
+            assert row["quality_flag"] in ("ok", "not_applicable"), (
+                f"nanobody quality_flag must be 'ok' or 'not_applicable', "
+                f"got {row['quality_flag']!r}"
+            )
+
+
+# ===================================================================
+# Section 5: Job lifecycle (files, download, log, delete) — antibody only
+# ===================================================================
+
+
+@pytest.mark.fc
+class TestJobLifecycle:
+    def test_files_endpoint_lists_predictions(self, client, score_job):
+        job_id = score_job["job_id"]
+        r = client.get(f"/api/jobs/{job_id}/files")
+        assert r.status_code == 200
+        files = r.json()["files"]
+        assert any(f.endswith("_predictions.csv") for f in files), (
+            f"_predictions.csv missing from outputs: {files}"
         )
 
-
-def test_score_default_chain_ids(client: httpx.Client, base_url: str) -> None:
-    """Submit without explicit chain IDs — defaults should apply (H, L, A)."""
-    with open(TEST_PDB, "rb") as fh:
-        r = client.post(
-            "/api/score",
-            files={"input_pdb": (TEST_PDB.name, fh, "chemical/x-pdb")},
+    def test_files_endpoint_lists_hdf5(self, client, score_job):
+        job_id = score_job["job_id"]
+        files = client.get(f"/api/jobs/{job_id}/files").json()["files"]
+        assert any(f.endswith(".hdf5") for f in files), (
+            f"HDF5 (graph / predictions) missing from outputs: {files}"
         )
-    r.raise_for_status()
-    submit = r.json()
-    _assert_submitted(submit)
-    assert submit["input_params"]["heavy_chain_id"] == "H"
-    assert submit["input_params"]["light_chain_id"] == "L"
-    assert submit["input_params"]["antigen_chain_id"] == "A"
 
-    _assert_completed(client, base_url, submit["job_id"])
+    def test_predictions_csv_schema_and_values(self, client, score_job):
+        """CSV declares predicted_dockq + quality_flag; rows have plausible values."""
+        job_id = score_job["job_id"]
+        files = client.get(f"/api/jobs/{job_id}/files").json()["files"]
+        csv_path = next(f for f in files if f.endswith("_predictions.csv"))
+        text = _download_bytes(client, job_id, csv_path).decode()
+        reader = csv.DictReader(io.StringIO(text))
+        rows = list(reader)
 
+        assert rows, "predictions CSV should have at least one row"
+        assert "predicted_dockq" in reader.fieldnames, (
+            f"missing predicted_dockq column: {reader.fieldnames}"
+        )
+        assert "quality_flag" in reader.fieldnames, (
+            f"missing quality_flag column: {reader.fieldnames}"
+        )
+        for row in rows:
+            dockq = float(row["predicted_dockq"])
+            assert 0.0 <= dockq <= 1.0, f"predicted_dockq={dockq} out of [0,1]"
+            assert row["quality_flag"] in ("ok", "low_HL_contacts", "not_applicable"), (
+                f"unexpected quality_flag: {row['quality_flag']!r}"
+            )
 
-# ---------------------------------------------------------------------------
-# Job lifecycle endpoints
-# ---------------------------------------------------------------------------
+    def test_job_log_endpoint(self, client, score_job):
+        job_id = score_job["job_id"]
+        r = client.get(f"/api/jobs/{job_id}/log")
+        assert r.status_code == 200
+        body = r.json()
+        log_text = body.get("log") or body.get("text", "")
+        assert isinstance(log_text, str)
+        assert len(log_text) > 0, "log should be non-empty for a completed job"
 
+    def test_job_download_zip(self, client, score_job):
+        job_id = score_job["job_id"]
+        r = client.get(f"/api/jobs/{job_id}/download")
+        assert r.status_code == 200
+        assert "zip" in r.headers.get("content-type", "").lower() or len(r.content) > 100
+        zf = zipfile.ZipFile(io.BytesIO(r.content))
+        names = zf.namelist()
+        assert any(n.endswith("_predictions.csv") for n in names), (
+            f"predictions CSV missing from zip: {names}"
+        )
 
-def test_job_status_polling(client: httpx.Client, base_url: str) -> None:
-    """Job transitions from pending/running → completed; intermediate polls return valid JobInfo."""
-    submit = _submit_score(client)
-    job_id = submit["job_id"]
+    def test_job_file_not_found(self, client, score_job):
+        job_id = score_job["job_id"]
+        r = client.get(f"/api/jobs/{job_id}/file/nonexistent.xyz")
+        assert r.status_code == 404
 
-    r = client.get(f"/api/jobs/{job_id}")
-    r.raise_for_status()
-    info = r.json()
-    assert info["job_id"] == job_id
-    assert info["status"] in ("pending", "running", "completed")
+    def test_job_delete(self, client, score_job):
+        """DELETE last — kept at end so other lifecycle tests still see the job."""
+        job_id = score_job["job_id"]
+        r = client.delete(f"/api/jobs/{job_id}")
+        assert r.status_code == 200
+        assert r.json().get("status") == "deleted"
 
-    _assert_completed(client, base_url, job_id)
-
-
-def test_job_files_endpoint(client: httpx.Client, base_url: str) -> None:
-    """GET /api/jobs/{id}/files returns a list of output file paths."""
-    submit = _submit_score(client)
-    _assert_completed(client, base_url, submit["job_id"])
-
-    r = client.get(f"/api/jobs/{submit['job_id']}/files")
-    r.raise_for_status()
-    body = r.json()
-    assert body["job_id"] == submit["job_id"]
-    assert isinstance(body["files"], list)
-    assert len(body["files"]) > 0
-    assert any(f.endswith("_predictions.csv") for f in body["files"])
-
-
-def test_job_single_file_download(client: httpx.Client, base_url: str) -> None:
-    """GET /api/jobs/{id}/file/{path} returns the file content."""
-    submit = _submit_score(client)
-    _assert_completed(client, base_url, submit["job_id"])
-
-    files = client.get(f"/api/jobs/{submit['job_id']}/files").json()["files"]
-    csv_file = next(f for f in files if f.endswith("_predictions.csv"))
-
-    r = client.get(f"/api/jobs/{submit['job_id']}/file/{csv_file}")
-    r.raise_for_status()
-    assert "predicted_dockq" in r.text
-
-
-def test_job_log_endpoint(client: httpx.Client, base_url: str) -> None:
-    """GET /api/jobs/{id}/log returns log text."""
-    submit = _submit_score(client)
-    _assert_completed(client, base_url, submit["job_id"])
-
-    r = client.get(f"/api/jobs/{submit['job_id']}/log")
-    r.raise_for_status()
-    body = r.json()
-    assert body["job_id"] == submit["job_id"]
-    assert "log" in body
-    assert isinstance(body["log"], str)
-
-
-def test_job_download_zip(client: httpx.Client, base_url: str) -> None:
-    """GET /api/jobs/{id}/download returns a valid zip archive."""
-    submit = _submit_score(client)
-    _assert_completed(client, base_url, submit["job_id"])
-
-    r = client.get(f"/api/jobs/{submit['job_id']}/download")
-    r.raise_for_status()
-    assert "application/zip" in r.headers.get("content-type", "")
-
-    zf = zipfile.ZipFile(io.BytesIO(r.content))
-    names = zf.namelist()
-    assert len(names) > 0
-    assert any(n.endswith("_predictions.csv") for n in names)
-
-
-def test_job_file_not_found(client: httpx.Client, base_url: str) -> None:
-    """Requesting a non-existent file within a valid job → 404."""
-    submit = _submit_score(client)
-    _assert_completed(client, base_url, submit["job_id"])
-
-    r = client.get(f"/api/jobs/{submit['job_id']}/file/nonexistent.xyz")
-    assert r.status_code == 404
-
-
-def test_job_delete(client: httpx.Client, base_url: str) -> None:
-    """DELETE /api/jobs/{id} removes the job; subsequent GET returns 404."""
-    submit = _submit_score(client)
-    _assert_completed(client, base_url, submit["job_id"])
-
-    r = client.delete(f"/api/jobs/{submit['job_id']}")
-    r.raise_for_status()
-    assert r.json()["status"] == "deleted"
-
-    assert client.get(f"/api/jobs/{submit['job_id']}").status_code == 404
+        r = client.get(f"/api/jobs/{job_id}")
+        assert r.status_code == 404

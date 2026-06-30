@@ -49,14 +49,17 @@ class PPIFlowAdapter(JobAdapter):
     def manifest_extras(self) -> dict:
         return {
             "tool_outputs": {
-                "binder": "output/<name>/*.pdb",
+                # Verified end-to-end against the deployed FC service:
+                # binder writes flat with a name prefix, the other modes nest.
+                "binder": "output/<name>_<idx>.pdb (flat) + output/sample_metrics.csv",
                 "antibody": "output/<name>/*.pdb",
                 "nanobody": "output/<name>/*.pdb",
                 "monomer": "output/<name>/*.pdb",
                 "scaffolding": "output/<name>/*.pdb",
                 "note": (
-                    "Each endpoint nests PDB outputs under `output/<name>/` where "
-                    "`<name>` is the `name` field of the request. Use "
+                    "Binder outputs are flat under `output/` with files named "
+                    "`<name>_<idx>.pdb` plus `sample_metrics.csv`.  The other four "
+                    "modes nest under `output/<name>/`.  Use "
                     "GET /api/jobs/{id}/files to enumerate, or /file/{relpath} for one."
                 ),
             },

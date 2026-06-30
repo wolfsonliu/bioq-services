@@ -75,17 +75,18 @@ COPY services/mmseqs2-server /opt/mmseqs2/server
 ENV PYTHONPATH=/opt:/opt/mmseqs2
 
 # -----------------------------------------------------------------------------
-# NAS mount conventions (parallel to rfantibody-server / alphafold-server).
-# /data/mmseqs2     — pre-built DB dir, mounted from NAS in production.
-# /data/mmseqs2_jobs — per-job working directories (NAS-backed so jobs
-#                      survive instance reclamation).
+# NAS mount conventions — follows the `/data/models/<svc>/` externalization
+# pattern (engineering/decisions/2026-06-26-service-weights-externalization.md).
+# /data/models/mmseqs2 — pre-built ColabFold DB dir, mounted from NAS.
+# /data/mmseqs2_jobs   — per-job working directories (NAS-backed so jobs
+#                        survive instance reclamation).
 # -----------------------------------------------------------------------------
-ENV MMSEQS2_DATA_DIR=/data/mmseqs2
+ENV MMSEQS2_DB_DIR=/data/models/mmseqs2
 ENV MMSEQS2_JOBS_BASE_DIR=/data/mmseqs2_jobs
 # FC session affinity: inject this header in POST responses so FC binds
 # follow-up requests to the same instance. Requires FC console config too.
 ENV MMSEQS2_SESSION_HEADER_NAME=bioagent-session-id
-RUN mkdir -p /data/mmseqs2 /data/mmseqs2_jobs
+RUN mkdir -p /data/models/mmseqs2 /data/mmseqs2_jobs
 
 ENV PORT=9000
 EXPOSE 9000

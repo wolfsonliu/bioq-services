@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # Status vocabulary expected by the ColabFold client.
 #
@@ -54,8 +54,36 @@ class TicketStatusResponse(BaseModel):
     error: Optional[str] = None
 
 
+class MSAJobSummary(BaseModel):
+    """Privacy-safe summary persisted into ``JobInfo.input_params``.
+
+    Used as the ``params`` payload for ``execute_task`` on ``/api/tasks/msa``
+    and ``/api/tasks/pair``: the raw ``q`` (sequence content) is deliberately
+    excluded so it does not survive to NAS storage. The ticket endpoints'
+    ``input_params`` dict uses the same three fields.
+    """
+
+    mode: str
+    sequence_count: int
+    total_residues: int
+
+
+class MSARequest(BaseModel):
+    """CLI batch-mode request model for ``python -m server {msa,pair}``.
+
+    ``q`` is sourced from a FASTA file (``--input-fasta``) at the CLI layer
+    rather than passed as a string, so this model only carries ``mode``. The
+    HTTP layer keeps the original ColabFold-protocol form fields and does not
+    use this model.
+    """
+
+    mode: str = Field(description="ColabFold MSA mode (env / all / pairgreedy / ...)")
+
+
 __all__ = [
     "ColabFoldStatus",
+    "MSAJobSummary",
+    "MSARequest",
     "TicketStatusResponse",
     "TicketSubmitResponse",
 ]

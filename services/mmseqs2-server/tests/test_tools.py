@@ -67,7 +67,7 @@ def _settings(**overrides: object) -> MMseqs2Settings:
     base: dict[str, object] = {
         "jobs_base_dir": Path("/tmp/mmseqs2_jobs"),
         "mmseqs_binary": "/opt/mmseqs-gpu/bin/mmseqs",
-        "db_dir": Path("/data/mmseqs2"),
+        "db_dir": Path("/data/models/mmseqs2"),
         "default_db": "uniref30_subset_4090_gpu",
         "env_db": "colabfold_envdb_gpu",
         "gpu_enabled": True,

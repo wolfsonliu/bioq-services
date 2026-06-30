@@ -30,8 +30,10 @@ class MMseqs2Settings(ServiceSettings):
 
     # Root directory under which pre-built ColabFold-style MMseqs2 databases
     # live (UniRef30 GPU subset + ColabFoldDB env). Mounted from NAS at runtime
-    # so the image stays small; see scripts/prepare_databases.sh.
-    db_dir: Path = Field(default=Path("/data/mmseqs2"))
+    # so the image stays small; see scripts/prepare_databases.sh. Default
+    # follows the `/data/models/<svc>/` weights externalization convention
+    # (engineering/decisions/2026-06-26-service-weights-externalization.md).
+    db_dir: Path = Field(default=Path("/data/models/mmseqs2"))
 
     # UniRef30 GPU database name (relative to db_dir). The 4090 GPU subset is
     # the default — override via MMSEQS2_DEFAULT_DB at deploy time when a

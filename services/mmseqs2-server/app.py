@@ -24,15 +24,22 @@ import tarfile
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import create_app, read_version_file
+from bioagent_service import (
+    JobInfo,
+    create_app,
+    execute_task,
+    read_version_file,
+    resolve_task_id,
+)
 from bioagent_service.models import JobStatus
-from fastapi import Form, Request
+from fastapi import Form, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from .adapter import MMseqs2JobAdapter
-from .models import TicketStatusResponse
+from .models import MSAJobSummary, TicketStatusResponse
 from .settings import MMseqs2Settings
 from .tools import (
+    ModeConfig,
     ParsedSequence,
     colabfold_search_argv,
     parse_mode_flags,
@@ -145,6 +152,81 @@ _strip_route(app.router, "/healthz/detail", "GET")
 # ---------------------------------------------------------------------------
 
 
+def _validate_msa_request(
+    q: str,
+    mode: str,
+    *,
+    require_paired: bool,
+) -> tuple[list[ParsedSequence], ModeConfig]:
+    """Parse + cross-validate the ColabFold-protocol ``q`` and ``mode`` fields.
+
+    Returns the parsed FASTA records and the resolved mode config. Raises
+    ``ValueError`` on any input rejection — callers translate that to the
+    protocol-appropriate response (200 + ``{"status": "ERROR"}`` for ticket
+    endpoints, HTTP 422 for task endpoints).
+    """
+    parsed_sequences = parse_query_fasta(q)
+    mode_config = parse_mode_flags(mode)
+
+    is_paired_mode = mode_config.pair_mode == "paired"
+    if require_paired and not is_paired_mode:
+        raise ValueError(f"mode {mode!r} is not a paired mode")
+    if not require_paired and is_paired_mode:
+        raise ValueError(f"mode {mode!r} is paired; use /ticket/pair or /api/tasks/pair")
+    if require_paired and len(parsed_sequences) < 2:
+        raise ValueError(
+            f"paired mode needs >=2 sequences, got {len(parsed_sequences)}"
+        )
+
+    return parsed_sequences, mode_config
+
+
+def _make_search_build(
+    parsed_sequences: list[ParsedSequence],
+    mode_config: ModeConfig,
+):
+    """Return a ``build_argv`` closure shared by ticket + task endpoints.
+
+    The closure writes the query FASTA to ``<job_dir>/input/query.fasta`` and
+    returns the argv to invoke ``server.orchestrator``. The shape matches
+    both ``runner.submit``'s ``BuildArgv`` (``(job_id, job_dir) -> argv``)
+    and ``execute_task``'s ``BuildArgvForTask`` (``(params, job_id, job_dir)
+    -> argv``) by accepting both call signatures via ``*args``.
+    """
+
+    def _build(*args) -> list[str]:
+        job_dir: Path = args[-1]
+        input_dir = job_dir / "input"
+        output_dir = job_dir / "output"
+        input_dir.mkdir(parents=True, exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        fasta_path = input_dir / "query.fasta"
+        fasta_path.write_text(_serialize_fasta(parsed_sequences), encoding="utf-8")
+        return colabfold_search_argv(
+            query_path=fasta_path,
+            output_dir=output_dir,
+            mode_config=mode_config,
+            settings=settings,
+        )
+
+    return _build
+
+
+def _msa_summary(
+    mode: str,
+    parsed_sequences: list[ParsedSequence],
+) -> dict:
+    """input_params payload used by ticket endpoints (matches MSAJobSummary).
+
+    Privacy: deliberately omits ``q`` — JobInfo is persisted to NAS.
+    """
+    return {
+        "mode": mode,
+        "sequence_count": len(parsed_sequences),
+        "total_residues": sum(len(s.sequence) for s in parsed_sequences),
+    }
+
+
 def _submit_msa_job(
     request: Request,
     *,
@@ -161,58 +243,19 @@ def _submit_msa_job(
     too (under both `id` and `job_id` — `job_id` is what FC's HeaderField
     affinity middleware looks for, `id` is the ColabFold protocol field).
     """
-    # ------- Input validation -------
     try:
-        parsed_sequences = parse_query_fasta(q)
-        mode_config = parse_mode_flags(mode)
+        parsed_sequences, mode_config = _validate_msa_request(
+            q, mode, require_paired=require_paired,
+        )
     except ValueError as e:
         logger.info("rejecting %s request: %s", label, e)
         return {"status": "ERROR"}
 
-    is_paired_mode = mode_config.pair_mode == "paired"
-    if require_paired and not is_paired_mode:
-        logger.info("rejecting /ticket/pair: mode %r is not a paired mode", mode)
-        return {"status": "ERROR"}
-    if not require_paired and is_paired_mode:
-        logger.info("rejecting /ticket/msa: mode %r is paired", mode)
-        return {"status": "ERROR"}
-    if require_paired and len(parsed_sequences) < 2:
-        logger.info(
-            "rejecting /ticket/pair: only %d sequence(s) — paired needs >=2",
-            len(parsed_sequences),
-        )
-        return {"status": "ERROR"}
-
-    # ------- Build closure -------
-    def _build(_job_id: str, job_dir: Path) -> list[str]:
-        input_dir = job_dir / "input"
-        output_dir = job_dir / "output"
-        input_dir.mkdir(parents=True, exist_ok=True)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        fasta_path = input_dir / "query.fasta"
-        fasta_path.write_text(_serialize_fasta(parsed_sequences), encoding="utf-8")
-        return colabfold_search_argv(
-            query_path=fasta_path,
-            output_dir=output_dir,
-            mode_config=mode_config,
-            settings=settings,
-        )
-
-    # ------- Submit -------
-    #
-    # Privacy note: deliberately do NOT include `q` (the query sequence) in
-    # input_params. JobInfo is persisted to NAS, so anything we put here lives
-    # well past the subprocess lifetime. Sequence length + count is enough for
-    # operational debugging.
     try:
         job = request.app.state.runner.submit(
-            build_argv=_build,
+            build_argv=_make_search_build(parsed_sequences, mode_config),
             label=label,
-            input_params={
-                "mode": mode,
-                "sequence_count": len(parsed_sequences),
-                "total_residues": sum(len(s.sequence) for s in parsed_sequences),
-            },
+            input_params=_msa_summary(mode, parsed_sequences),
         )
     except Exception:
         logger.exception("submit failed for %s (mode=%s)", label, mode)
@@ -301,6 +344,92 @@ def get_result_download(request: Request, job_id: str):
         media_type="application/x-tar",
         headers={"Content-Disposition": f"attachment; filename={job_id}.tar.gz"},
     )
+
+
+# ---------------------------------------------------------------------------
+# Task endpoints — FC Async Task Mode (sibling to /ticket/* + /result/*)
+#
+# Same argv builder as the ticket path, but the HTTP request blocks until the
+# orchestrator subprocess completes. Designed to be invoked with
+# `X-Fc-Invocation-Type: Async` so FC's platform layer manages queueing and
+# the function instance stays alive for the full computation. ColabFold
+# clients keep using /ticket/* — these are for agents / boltz-server that
+# speak our JobInfo protocol.
+# ---------------------------------------------------------------------------
+
+
+def _task_msa_handler(
+    request: Request,
+    q: str,
+    mode: str,
+    label: str,
+    require_paired: bool,
+    x_bioagent_job_id: Optional[str],
+    x_fc_async_task_id: Optional[str],
+) -> JobInfo:
+    """Shared handler body for /api/tasks/msa and /api/tasks/pair.
+
+    Validation failures surface as HTTP 422 (ColabFold's 200-with-status-ERROR
+    convention is for browser-style clients; agent-style callers want the real
+    HTTP status). Subprocess failures still flow through `execute_task` and
+    return 200 + ``JobInfo.status="failed"``.
+    """
+    job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
+    try:
+        parsed_sequences, mode_config = _validate_msa_request(
+            q, mode, require_paired=require_paired,
+        )
+    except ValueError as e:
+        logger.info("rejecting task %s (job_id=%s): %s", label, job_id, e)
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+    summary = MSAJobSummary(
+        mode=mode,
+        sequence_count=len(parsed_sequences),
+        total_residues=sum(len(s.sequence) for s in parsed_sequences),
+    )
+    return execute_task(
+        request,
+        job_id=job_id,
+        label=label,
+        params=summary,
+        build_argv=_make_search_build(parsed_sequences, mode_config),
+    )
+
+
+if settings.task_endpoints_enabled:
+
+    @app.post("/api/tasks/msa", response_model=JobInfo)
+    def post_tasks_msa(
+        request: Request,
+        q: str = Form(default=""),
+        mode: str = Form(default=""),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+        x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+    ) -> JobInfo:
+        """Monomer MSA as a single atomic task (blocks until completion)."""
+        return _task_msa_handler(
+            request,
+            q=q, mode=mode, label="msa", require_paired=False,
+            x_bioagent_job_id=x_bioagent_job_id,
+            x_fc_async_task_id=x_fc_async_task_id,
+        )
+
+    @app.post("/api/tasks/pair", response_model=JobInfo)
+    def post_tasks_pair(
+        request: Request,
+        q: str = Form(default=""),
+        mode: str = Form(default=""),
+        x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
+        x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+    ) -> JobInfo:
+        """Multimer paired MSA as a single atomic task (blocks until completion)."""
+        return _task_msa_handler(
+            request,
+            q=q, mode=mode, label="pair", require_paired=True,
+            x_bioagent_job_id=x_bioagent_job_id,
+            x_fc_async_task_id=x_fc_async_task_id,
+        )
 
 
 @app.get("/healthz/detail")
