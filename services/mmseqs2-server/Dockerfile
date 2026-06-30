@@ -15,7 +15,7 @@
 # it is vendored into server/orchestrator.py — see VENDOR_INFO.md + the design
 # doc's "Vendor 约定" section. Keeps the image lean and decouples us from
 # ColabFold's research-grade release cadence.
-FROM nvidia/cuda:12.4.0-cudnn-runtime-ubuntu22.04 AS runtime
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04 AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
