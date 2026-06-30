@@ -44,10 +44,31 @@ ENV PATH=/opt/mmseqs2/.venv/bin:$PATH
 # -----------------------------------------------------------------------------
 # MMseqs2 GPU binary. Pinned by release tag; the upstream tarball already
 # bundles the static binary + the AVX2 dispatcher.
+#
+# Three-tier fallback (CN networks frequently TLS-reset mmseqs.com):
+#   1. https://mmseqs.com/...           — Wang lab canonical mirror
+#   2. https://github.com/...           — GitHub Releases mirror of (1)
+#   3. https://ghproxy.cn/<gh-url>      — CN-friendly GitHub proxy
+# Each tier gets up to 5 retries with linear backoff before the next is tried.
 # -----------------------------------------------------------------------------
 ARG MMSEQS_VERSION=15-6f452
-RUN curl -fsSL https://mmseqs.com/${MMSEQS_VERSION}/mmseqs-linux-gpu.tar.gz \
-    | tar xz -C /opt && mv /opt/mmseqs /opt/mmseqs-gpu
+RUN set -e; \
+    for url in \
+        "https://github.com/soedinglab/MMseqs2/releases/download/${MMSEQS_VERSION}/mmseqs-linux-gpu.tar.gz" \
+        "https://ghproxy.cn/https://github.com/soedinglab/MMseqs2/releases/download/${MMSEQS_VERSION}/mmseqs-linux-gpu.tar.gz"; do \
+        for i in 1 2 3 4 5; do \
+            echo "fetching mmseqs from $url (attempt $i)"; \
+            if curl -fsSL --retry 3 --retry-delay 5 --connect-timeout 30 \
+                    -o /tmp/mmseqs.tgz "$url"; then \
+                break 2; \
+            fi; \
+            sleep $((i*5)); \
+        done; \
+        echo "  source exhausted, trying next mirror..."; \
+    done; \
+    test -s /tmp/mmseqs.tgz || { echo "ERROR: all mmseqs mirrors failed" >&2; exit 1; }; \
+    tar xz -C /opt -f /tmp/mmseqs.tgz && rm /tmp/mmseqs.tgz && \
+    mv /opt/mmseqs /opt/mmseqs-gpu
 ENV PATH=/opt/mmseqs-gpu/bin:$PATH
 
 # DO NOT pip-install ColabFold — orchestrator is vendored (see Task 2.0).
