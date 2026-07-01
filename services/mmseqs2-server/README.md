@@ -94,6 +94,32 @@ Errors on `/ticket/*` follow the ColabFold convention (HTTP 200 + `{"status":
 `/api/tasks/*` use standard HTTP 4xx/5xx because the callers there speak
 JobInfo, not the ColabFold protocol.
 
+## Build
+
+Prerequisite: vendor the MMseqs2 GPU binary tarball on the host (once; re-run
+to bump the pinned release):
+
+```bash
+./services/mmseqs2-server/scripts/vendor.sh
+# → services/mmseqs2-server/upstream/mmseqs-linux-gpu.tar.gz  (gitignored)
+```
+
+Then:
+
+```bash
+make build-mmseqs2-server
+# or:
+docker build --platform linux/amd64 -t mmseqs2-server \
+    -f services/mmseqs2-server/Dockerfile .
+```
+
+`docker build` no longer touches the network for the mmseqs binary — the
+`vendor.sh` step retries GitHub Releases with backoff, so transient CN
+connection resets are absorbed there instead of failing a 3-GB image build.
+To pin a different release: `MMSEQS_VERSION=<tag> ./scripts/vendor.sh`. Only
+tags that publish a `mmseqs-linux-gpu.tar.gz` asset are valid (`18-8cc5c` is
+the current default; earlier tags like `15-6f452` do NOT have a GPU artifact).
+
 ## FC deployment
 
 | Env var | Default | Notes |

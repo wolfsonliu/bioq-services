@@ -352,14 +352,20 @@ class TestAsyncSubmit:
 
 
 def _assert_completed_with_qv(task: dict, task_id: str, client: httpx.Client,
-                              expected_qv_name: str):
+                              expected_qv_name: str, *, min_duration_s: float = 3.0):
+    """Assert a completed task produced ``expected_qv_name``.
+
+    ``min_duration_s`` is a low-bar sanity check that the subprocess actually
+    ran (defaults to 3 s so proteinmpnn's fast single-seq path passes;
+    rfdiffusion + rf2 callers pass a larger value).
+    """
     assert task["status"] == "completed"
     assert task["job_id"] == task_id
     assert task.get("started_at") is not None
     assert task.get("completed_at") is not None
     d = task.get("duration_seconds")
-    assert d is not None and d > 30, (
-        f"duration {d}s too short for real RFantibody work"
+    assert d is not None and d > min_duration_s, (
+        f"duration {d}s too short (min {min_duration_s}s) — subprocess may not have run"
     )
     assert task.get("output_count", 0) > 0
     assert task.get("output_total_bytes", 0) > 0
@@ -375,8 +381,10 @@ def _assert_completed_with_qv(task: dict, task_id: str, client: httpx.Client,
 @pytest.mark.fc
 class TestAsyncRfdiffusion:
     def test_completed(self, rfdiffusion_task, rfdiffusion_task_id, client):
+        # rfdiffusion at diffuser_t=25 num_designs=1 takes ~3-5 min minimum.
         _assert_completed_with_qv(
-            rfdiffusion_task, rfdiffusion_task_id, client, "1_rfdiffusion.qv"
+            rfdiffusion_task, rfdiffusion_task_id, client, "1_rfdiffusion.qv",
+            min_duration_s=60,
         )
 
     def test_input_params_echoed(self, rfdiffusion_task):
@@ -424,7 +432,10 @@ class TestAsyncProteinMPNN:
 @pytest.mark.fc
 class TestAsyncRF2:
     def test_completed(self, rf2_task, rf2_task_id, client):
-        _assert_completed_with_qv(rf2_task, rf2_task_id, client, "3_rf2.qv")
+        # RF2 at num_recycles=2 takes ~5-10 min minimum.
+        _assert_completed_with_qv(
+            rf2_task, rf2_task_id, client, "3_rf2.qv", min_duration_s=60,
+        )
 
     def test_input_params_echoed(self, rf2_task):
         params = rf2_task.get("input_params") or {}

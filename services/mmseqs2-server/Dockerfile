@@ -42,31 +42,21 @@ RUN uv venv /opt/mmseqs2/.venv --python python3.11
 ENV PATH=/opt/mmseqs2/.venv/bin:$PATH
 
 # -----------------------------------------------------------------------------
-# MMseqs2 GPU binary. Pinned by release tag; the upstream tarball already
-# bundles the static binary + the AVX2 dispatcher.
+# MMseqs2 GPU binary — vendored on host by scripts/vendor.sh.
 #
-# Downloaded from the GitHub Releases page (soedinglab/MMseqs2). Only recent
-# tags carry `mmseqs-linux-gpu.tar.gz` — verify the tag on
-# https://github.com/soedinglab/MMseqs2/releases before bumping (e.g.
-# `15-6f452` does not have the GPU artifact; `18-8cc5c` does).
+# Prerequisite (run once before `docker build`, re-run to bump version):
+#   ./services/mmseqs2-server/scripts/vendor.sh
 #
-# 5 retries with linear backoff to absorb transient GitHub connection resets.
+# The script drops the GPU tarball at
+# `services/mmseqs2-server/upstream/mmseqs-linux-gpu.tar.gz` (gitignored).
+# Docker build is now 0-network for this step, which avoids the CN-side
+# GitHub Releases connection resets we hit trying to download in-image.
+# The version is pinned in `scripts/vendor.sh` (default 18-8cc5c).
 # -----------------------------------------------------------------------------
-ARG MMSEQS_VERSION=18-8cc5c
-RUN set -e; \
-    url="https://github.com/soedinglab/MMseqs2/releases/download/${MMSEQS_VERSION}/mmseqs-linux-gpu.tar.gz"; \
-    for i in 1 2 3 4 5; do \
-        echo "fetching mmseqs from $url (attempt $i)"; \
-        if curl -fsSL --retry 3 --retry-delay 5 --connect-timeout 30 \
-                -o /tmp/mmseqs.tgz "$url"; then \
-            break; \
-        fi; \
-        [ "$i" = "5" ] && { echo "ERROR: giving up after 5 attempts" >&2; exit 1; }; \
-        sleep $((i*5)); \
-    done; \
-    test -s /tmp/mmseqs.tgz; \
-    tar xz -C /opt -f /tmp/mmseqs.tgz && rm /tmp/mmseqs.tgz && \
-    mv /opt/mmseqs /opt/mmseqs-gpu
+COPY services/mmseqs2-server/upstream/mmseqs-linux-gpu.tar.gz /tmp/mmseqs.tgz
+RUN tar xz -C /opt -f /tmp/mmseqs.tgz \
+    && rm /tmp/mmseqs.tgz \
+    && mv /opt/mmseqs /opt/mmseqs-gpu
 ENV PATH=/opt/mmseqs-gpu/bin:$PATH
 
 # DO NOT pip-install ColabFold — orchestrator is vendored (see Task 2.0).

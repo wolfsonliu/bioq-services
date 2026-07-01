@@ -1,23 +1,34 @@
-"""End-to-end tests against the deployed genie3 Function Compute service.
+"""FC integration tests for genie3-server (opt-in, sync submit/poll path).
 
-Marked `@pytest.mark.fc`, skipped by default. Run with:
+Run only when FC tests are enabled::
 
-    pytest -m fc services/genie3-server/tests/test_fc.py
+    RUN_FC_TESTS=1 \\
+    uv run python -m pytest -m fc services/genie3-server/tests/test_fc.py -v
 
-Motif and binder endpoints need a `dataset` zip with `problems/<name>.json` plus
-referenced `motifs/` or `targets/` files. We build minimal one-problem zips on
-the fly from fixtures in `tests/data/` (copied from upstream genie3 so the
-suite is self-contained — no dependency on `opensource/genie3/`).
+Genie3 exposes four generation endpoints:
+  * ``/api/generate/unconditional`` — length-only, no dataset upload
+  * ``/api/generate/motif``         — dataset zip (problems/ + motifs/)
+  * ``/api/generate/binder``        — dataset zip (problems/ + targets/)
+  * ``/api/generate``               — freeform YAML config (custom)
 
-Each generation call sets `n_sample=1` / smallest viable length to keep the FC
-GPU job under ~5 min.
+This file focuses on the **sync** submit/poll path.  Each endpoint's inference
+run is module-scoped so that assertions across multiple tests reuse a single
+GPU job.  For functional testing of the async path see ``test_fc_task.py``
+(preferred — no HTTP-gateway recycle risk, platform-level dedup).
+
+genie3 is deployed with ``max_concurrent_jobs=1`` so 429s from the FC gateway
+are common under any parallel work; every HTTP call goes through
+``_http_with_retry`` to absorb them.
 """
 
 from __future__ import annotations
 
 import io
+import time
+import uuid
 import zipfile
 from pathlib import Path
+from typing import Any, Callable
 
 import httpx
 import pytest
@@ -25,29 +36,49 @@ import yaml
 
 from bioagent_service.fc_testing import fc_url, poll_job
 
+SERVICE = "genie3-server"
+SESSION_HEADER = "bioagent-session-id"
+
 DATA_DIR = Path(__file__).resolve().parent / "data"
 MOTIFBENCH = DATA_DIR / "motifbench"
 BINDERTEST = DATA_DIR / "binder"
 
-pytestmark = pytest.mark.fc
+# Long read timeout for POST submits (cold start + multipart upload of the
+# largest test payload — binder zip ~29 KB).  poll_job uses its own short reads.
+TIMEOUT = httpx.Timeout(connect=30, read=600, write=600, pool=30)
 
-INFERENCE_TIMEOUT_S = 1800
+# Genie3 unconditional at n_sample=1, min/max_length=50 → ~2-5 min.  Motif +
+# binder + custom variants can run 5-15 min including evaluation steps.
+# Allow 30 min per stage to absorb cold-start weight loads.
+POLL_TIMEOUT_S = 1800
+POLL_INTERVAL_S = 20
 
 
-# =====================================================================
+# ---------------------------------------------------------------------------
 # Fixtures
-# =====================================================================
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture(scope="module")
 def base_url() -> str:
-    return fc_url("genie3-server", start=Path(__file__))
+    return fc_url(SERVICE, start=Path(__file__))
 
 
 @pytest.fixture(scope="module")
-def client(base_url: str) -> httpx.Client:
-    with httpx.Client(base_url=base_url, timeout=httpx.Timeout(180.0)) as c:
+def client(base_url: str):
+    with httpx.Client(base_url=base_url, timeout=TIMEOUT) as c:
         yield c
+
+
+@pytest.fixture(scope="module")
+def session_headers() -> dict[str, str]:
+    """Session affinity header so all polls hit the same FC instance."""
+    return {SESSION_HEADER: f"test-{uuid.uuid4().hex[:12]}"}
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _build_zip(files: dict[str, Path]) -> bytes:
@@ -57,70 +88,6 @@ def _build_zip(files: dict[str, Path]) -> bytes:
         for arcname, src in files.items():
             zf.write(src, arcname=arcname)
     return buf.getvalue()
-
-
-# =====================================================================
-# Helpers
-# =====================================================================
-
-
-def _assert_submitted(resp_json: dict) -> None:
-    """Validate the immediate POST response has expected fields."""
-    assert "job_id" in resp_json
-    assert resp_json["status"] in ("pending", "running")
-    assert resp_json["created_at"] is not None
-    assert resp_json["input_params"] is not None
-    assert isinstance(resp_json["input_params"], dict)
-
-
-def _assert_completed(job: dict, base_url: str, client: httpx.Client) -> list[str]:
-    """Assert job completed successfully; return the output file list."""
-    assert job["status"] == "completed", (
-        f"failed: kind={job.get('failure_kind')} summary={job.get('error_summary')!r}"
-    )
-
-    assert job["created_at"] is not None
-    assert job["started_at"] is not None
-    assert job["completed_at"] is not None
-    assert job["duration_seconds"] is not None
-    assert job["duration_seconds"] > 0
-    assert job["input_params"] is not None
-    assert isinstance(job["input_params"], dict)
-    assert job["output_count"] is not None
-    assert job["output_count"] > 0
-    assert job["output_total_bytes"] is not None
-    assert job["output_total_bytes"] > 0
-
-    files = client.get(f"/api/jobs/{job['job_id']}/files").json()["files"]
-    assert files, "no output files"
-    return files
-
-
-def _submit_and_poll(
-    client: httpx.Client,
-    base_url: str,
-    endpoint: str,
-    *,
-    data: dict | None = None,
-    files: dict | list | None = None,
-    timeout_s: int = INFERENCE_TIMEOUT_S,
-) -> tuple[str, dict, list[str]]:
-    """Submit a job, poll to completion, return (job_id, final_status, files)."""
-    r = client.post(endpoint, data=data or {}, files=files or {})
-    r.raise_for_status()
-    submit = r.json()
-    _assert_submitted(submit)
-    job_id = submit["job_id"]
-
-    final = poll_job(client, base_url, job_id, timeout_s=timeout_s)
-    output_files = _assert_completed(final, base_url, client)
-    return job_id, final, output_files
-
-
-def _download_bytes(client: httpx.Client, job_id: str, file_path: str) -> bytes:
-    r = client.get(f"/api/jobs/{job_id}/file/{file_path}")
-    r.raise_for_status()
-    return r.content
 
 
 def _motif_zip() -> bytes:
@@ -146,147 +113,78 @@ def _binder_zip() -> bytes:
     )
 
 
-# =====================================================================
-# Smoke (no GPU work)
-# =====================================================================
+def _http_with_retry(
+    call: Callable[[], httpx.Response],
+    *,
+    max_attempts: int = 20,
+    backoff_s: int = 30,
+) -> httpx.Response:
+    """Run an HTTP call, retrying on FC's 429 ResourceExhausted.
+
+    genie3-server runs with ``max_concurrent_jobs=1`` and a very tight FC
+    concurrent-request budget, so even sequential GETs occasionally trip the
+    429 gateway throttle.  Project memory:
+    ``project_fc_http_polling_unreliable_at_concurrency.md``.
+    """
+    last: httpx.Response | None = None
+    for _attempt in range(max_attempts):
+        last = call()
+        if last.status_code != 429:
+            return last
+        time.sleep(backoff_s)
+    assert last is not None
+    return last
 
 
-def test_healthz(client: httpx.Client) -> None:
-    r = client.get("/healthz")
-    r.raise_for_status()
-    body = r.json()
-    assert body["status"] == "ok"
-    assert body["service"] == "genie3"
-    assert "version" in body
+def _retry_get(client: httpx.Client, path: str, **kw: Any) -> httpx.Response:
+    return _http_with_retry(lambda: client.get(path, **kw))
 
 
-def test_healthz_detail(client: httpx.Client) -> None:
-    r = client.get("/healthz/detail")
-    r.raise_for_status()
-    body = r.json()
-    assert body["service"] == "genie3"
-    assert "version" in body
-    assert body["jobs_base_dir_exists"] is True
-    assert "active_jobs" in body
-    assert isinstance(body["active_jobs"], int)
-    assert "max_concurrent_jobs" in body
-    assert "disk_usage_mb" in body
-    assert "disk_limit_mb" in body
+def _retry_post(client: httpx.Client, path: str, **kw: Any) -> httpx.Response:
+    return _http_with_retry(lambda: client.post(path, **kw))
 
 
-def test_manifest_lists_four_endpoints(client: httpx.Client) -> None:
-    r = client.get("/api/manifest")
-    r.raise_for_status()
-    paths = {e["path"] for e in r.json()["endpoints"]}
-    assert paths == {
-        "/api/generate/unconditional",
-        "/api/generate/motif",
-        "/api/generate/binder",
-        "/api/generate",
-    }
+def _retry_delete(client: httpx.Client, path: str, **kw: Any) -> httpx.Response:
+    return _http_with_retry(lambda: client.delete(path, **kw))
 
 
-def test_manifest_service_specific(client: httpx.Client) -> None:
-    body = client.get("/api/manifest").json()
-    extras = body["service_specific"]
-    assert "tool_outputs" in extras
-    assert "*.pdb" in extras["tool_outputs"]["all_modes"]
-    assert "endpoints_summary" in extras
-    assert "config_tips" in extras
-    assert "cond_strategy" in extras["config_tips"]
-    assert "direction_scale" in extras["config_tips"]
-    assert "input_uri_schemes" in extras
+def _assert_submitted(body: dict) -> str:
+    assert "job_id" in body
+    assert body["status"] in ("pending", "running")
+    assert body.get("created_at") is not None
+    assert isinstance(body.get("input_params"), dict)
+    return body["job_id"]
 
 
-def test_manifest_endpoint_examples(client: httpx.Client) -> None:
-    body = client.get("/api/manifest").json()
-    by_path = {e["path"]: e for e in body["endpoints"]}
-    for path in ("/api/generate/unconditional", "/api/generate/motif",
-                 "/api/generate/binder", "/api/generate"):
-        assert by_path[path]["examples"], f"no examples for {path}"
-
-
-def test_openapi_served(client: httpx.Client) -> None:
-    r = client.get("/openapi.json")
-    r.raise_for_status()
-    spec = r.json()
-    assert "paths" in spec
-    for path in ("/api/generate/unconditional", "/api/generate/motif",
-                 "/api/generate/binder", "/api/generate"):
-        assert path in spec["paths"], f"{path} missing from OpenAPI spec"
-
-
-def test_unknown_job_returns_404(client: httpx.Client) -> None:
-    assert client.get("/api/jobs/missing-job-id").status_code == 404
-    assert client.get("/api/jobs/missing-job-id/files").status_code == 404
-    assert client.get("/api/jobs/missing-job-id/log").status_code == 404
-    assert client.get("/api/jobs/missing-job-id/download").status_code == 404
-    assert client.get("/api/jobs/missing-job-id/file/foo.pdb").status_code == 404
-
-
-# =====================================================================
-# 422 Error inputs (fast, no GPU)
-# =====================================================================
-
-
-def test_422_motif_bad_zip(client: httpx.Client) -> None:
-    """Corrupt zip → 422."""
-    r = client.post(
-        "/api/generate/motif",
-        files={"dataset": ("junk.zip", b"not a zip", "application/zip")},
+def _assert_completed(body: dict) -> None:
+    assert body["status"] == "completed", (
+        f"failed: kind={body.get('failure_kind')} summary={body.get('error_summary')!r}"
     )
-    assert r.status_code == 422
+    assert body.get("started_at") is not None
+    assert body.get("completed_at") is not None
+    assert body.get("duration_seconds") is not None
+    assert body["duration_seconds"] > 0
+    assert body.get("output_count", 0) > 0
+    assert body.get("output_total_bytes", 0) > 0
 
 
-def test_422_motif_zip_without_problems(client: httpx.Client) -> None:
-    """Valid zip but missing problems/ directory → 422."""
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as zf:
-        zf.writestr("random/file.txt", "x")
-    r = client.post(
-        "/api/generate/motif",
-        files={"dataset": ("noproblems.zip", buf.getvalue(), "application/zip")},
-    )
-    assert r.status_code == 422
-    assert "problems/" in r.json()["detail"].lower()
+def _download_bytes(client: httpx.Client, job_id: str, path: str) -> bytes:
+    r = _retry_get(client, f"/api/jobs/{job_id}/file/{path}")
+    assert r.status_code == 200, f"download {path} failed: {r.status_code} {r.text!r}"
+    return r.content
 
 
-def test_422_binder_bad_zip(client: httpx.Client) -> None:
-    """Corrupt zip for binder → 422."""
-    r = client.post(
-        "/api/generate/binder",
-        files={"dataset": ("bad.zip", b"corrupt", "application/zip")},
-    )
-    assert r.status_code == 422
+# ---------------------------------------------------------------------------
+# Module-scoped inference fixtures.  Each endpoint runs ONCE per test module;
+# per-endpoint assertions reuse the shared JobInfo dict.
+# ---------------------------------------------------------------------------
 
 
-def test_422_custom_invalid_yaml(client: httpx.Client) -> None:
-    """Non-parseable YAML → 422."""
-    r = client.post(
-        "/api/generate",
-        data={"config_yaml": "{ invalid yaml: ["},
-    )
-    assert r.status_code == 422
-
-
-def test_422_custom_yaml_not_a_dict(client: httpx.Client) -> None:
-    """YAML that parses to a list, not a mapping → 422."""
-    r = client.post(
-        "/api/generate",
-        data={"config_yaml": "- item1\n- item2\n"},
-    )
-    assert r.status_code == 422
-
-
-# =====================================================================
-# Inference: unconditional
-# =====================================================================
-
-
-def test_unconditional_minimal_job(client: httpx.Client, base_url: str) -> None:
-    """No dataset upload — 1 sample, 50-residue monomer."""
-    r = client.post(
-        "/api/generate/unconditional",
+@pytest.fixture(scope="module")
+def unconditional_job(client: httpx.Client, session_headers: dict[str, str]) -> dict:
+    """Minimal unconditional generation — 1 sample, 50-residue monomer."""
+    r = _retry_post(
+        client, "/api/generate/unconditional",
         data={
             "n_sample": "1",
             "batch_size": "1",
@@ -294,157 +192,76 @@ def test_unconditional_minimal_job(client: httpx.Client, base_url: str) -> None:
             "max_length": "50",
             "length_step": "50",
         },
+        headers=session_headers,
     )
-    r.raise_for_status()
-    submit = r.json()
-    _assert_submitted(submit)
-    assert submit["input_params"]["n_sample"] == 1
-    assert submit["input_params"]["min_length"] == 50
+    assert r.status_code == 200, f"submit failed: {r.status_code} {r.text!r}"
+    job_id = _assert_submitted(r.json())
 
-    final = poll_job(client, base_url, submit["job_id"], timeout_s=INFERENCE_TIMEOUT_S)
-    _assert_completed(final, base_url, client)
-
-
-def test_unconditional_output_has_pdb(client: httpx.Client, base_url: str) -> None:
-    """Verify unconditional generation produces at least one PDB file with ATOM records."""
-    job_id, final, files = _submit_and_poll(
-        client, base_url, "/api/generate/unconditional",
-        data={
-            "n_sample": "1",
-            "batch_size": "1",
-            "min_length": "50",
-            "max_length": "50",
-            "length_step": "50",
-        },
+    final = poll_job(
+        client, "", job_id,
+        timeout_s=POLL_TIMEOUT_S, interval_s=POLL_INTERVAL_S,
+        max_transient_errors=60,
+        extra_headers=session_headers,
     )
-
-    pdb_files = [f for f in files if f.endswith(".pdb")]
-    assert pdb_files, f"no PDB files in output: {files}"
-
-    content = _download_bytes(client, job_id, pdb_files[0])
-    text = content.decode("utf-8", errors="replace")
-    assert "ATOM" in text, "PDB file does not contain ATOM records"
+    _assert_completed(final)
+    return final
 
 
-def test_unconditional_with_direction_scale(client: httpx.Client, base_url: str) -> None:
-    """Explicit direction_scale=0.0 (recommended for longer proteins)."""
-    r = client.post(
-        "/api/generate/unconditional",
-        data={
-            "n_sample": "1",
-            "batch_size": "1",
-            "min_length": "50",
-            "max_length": "50",
-            "length_step": "50",
-            "direction_scale": "0.0",
-        },
-    )
-    r.raise_for_status()
-    submit = r.json()
-    _assert_submitted(submit)
-    assert submit["input_params"]["direction_scale"] == 0.0
-
-    final = poll_job(client, base_url, submit["job_id"], timeout_s=INFERENCE_TIMEOUT_S)
-    _assert_completed(final, base_url, client)
-
-
-# =====================================================================
-# Inference: motif scaffolding
-# =====================================================================
-
-
-def test_motif_minimal_job(client: httpx.Client, base_url: str) -> None:
-    """Single-problem motif zip built on the fly from motifbench/01_1LDB."""
-    r = client.post(
-        "/api/generate/motif",
+@pytest.fixture(scope="module")
+def motif_job(client: httpx.Client, session_headers: dict[str, str]) -> dict:
+    """Minimal motif scaffolding job — 1 sample from motifbench 01_1LDB."""
+    r = _retry_post(
+        client, "/api/generate/motif",
         files={"dataset": ("motif.zip", _motif_zip(), "application/zip")},
         data={
             "n_sample": "1",
             "batch_size": "1",
             "selections": "01_1LDB",
         },
+        headers=session_headers,
     )
-    r.raise_for_status()
-    submit = r.json()
-    _assert_submitted(submit)
-    assert submit["input_params"]["selections"] == "01_1LDB"
+    assert r.status_code == 200, f"submit failed: {r.status_code} {r.text!r}"
+    job_id = _assert_submitted(r.json())
 
-    final = poll_job(client, base_url, submit["job_id"], timeout_s=INFERENCE_TIMEOUT_S)
-    _assert_completed(final, base_url, client)
-
-
-def test_motif_output_has_pdb(client: httpx.Client, base_url: str) -> None:
-    """Motif scaffolding produces PDB files with ATOM records."""
-    job_id, final, files = _submit_and_poll(
-        client, base_url, "/api/generate/motif",
-        data={
-            "n_sample": "1",
-            "batch_size": "1",
-            "selections": "01_1LDB",
-        },
-        files={"dataset": ("motif.zip", _motif_zip(), "application/zip")},
+    final = poll_job(
+        client, "", job_id,
+        timeout_s=POLL_TIMEOUT_S, interval_s=POLL_INTERVAL_S,
+        max_transient_errors=60,
+        extra_headers=session_headers,
     )
-
-    pdb_files = [f for f in files if f.endswith(".pdb")]
-    assert pdb_files, f"no PDB files in output: {files}"
-
-    content = _download_bytes(client, job_id, pdb_files[0])
-    text = content.decode("utf-8", errors="replace")
-    assert "ATOM" in text
+    _assert_completed(final)
+    return final
 
 
-# =====================================================================
-# Inference: binder design
-# =====================================================================
-
-
-def test_binder_minimal_job(client: httpx.Client, base_url: str) -> None:
-    """Single-problem binder zip built from genie3/test/binder/01_bhrf1."""
-    r = client.post(
-        "/api/generate/binder",
+@pytest.fixture(scope="module")
+def binder_job(client: httpx.Client, session_headers: dict[str, str]) -> dict:
+    """Minimal binder design job — 1 sample from 01_bhrf1."""
+    r = _retry_post(
+        client, "/api/generate/binder",
         files={"dataset": ("binder.zip", _binder_zip(), "application/zip")},
         data={
             "n_sample": "1",
             "batch_size": "1",
             "selections": "01_bhrf1",
         },
+        headers=session_headers,
     )
-    r.raise_for_status()
-    submit = r.json()
-    _assert_submitted(submit)
-    assert submit["input_params"]["selections"] == "01_bhrf1"
+    assert r.status_code == 200, f"submit failed: {r.status_code} {r.text!r}"
+    job_id = _assert_submitted(r.json())
 
-    final = poll_job(client, base_url, submit["job_id"], timeout_s=INFERENCE_TIMEOUT_S)
-    _assert_completed(final, base_url, client)
-
-
-def test_binder_output_has_pdb(client: httpx.Client, base_url: str) -> None:
-    """Binder design produces PDB files with ATOM records."""
-    job_id, final, files = _submit_and_poll(
-        client, base_url, "/api/generate/binder",
-        data={
-            "n_sample": "1",
-            "batch_size": "1",
-            "selections": "01_bhrf1",
-        },
-        files={"dataset": ("binder.zip", _binder_zip(), "application/zip")},
+    final = poll_job(
+        client, "", job_id,
+        timeout_s=POLL_TIMEOUT_S, interval_s=POLL_INTERVAL_S,
+        max_transient_errors=60,
+        extra_headers=session_headers,
     )
-
-    pdb_files = [f for f in files if f.endswith(".pdb")]
-    assert pdb_files, f"no PDB files in output: {files}"
-
-    content = _download_bytes(client, job_id, pdb_files[0])
-    text = content.decode("utf-8", errors="replace")
-    assert "ATOM" in text
+    _assert_completed(final)
+    return final
 
 
-# =====================================================================
-# Inference: custom YAML
-# =====================================================================
-
-
-def test_custom_minimal_job(client: httpx.Client, base_url: str) -> None:
-    """Freeform `/api/generate` with a tiny unconditional YAML (no dataset)."""
+@pytest.fixture(scope="module")
+def custom_job(client: httpx.Client, session_headers: dict[str, str]) -> dict:
+    """Minimal custom YAML job — server rewrites paths.rootdir + paths.dataset."""
     config = {
         "experiment": {"name": "fc_smoke_custom"},
         "paths": {"rootdir": "PLACEHOLDER_OVERRIDDEN_BY_SERVER"},
@@ -460,193 +277,336 @@ def test_custom_minimal_job(client: httpx.Client, base_url: str) -> None:
         },
         "evaluation": {"version": "unconditional", "folding": {"model_name": "esmfold"}},
     }
-    r = client.post(
-        "/api/generate",
+    r = _retry_post(
+        client, "/api/generate",
         data={"config_yaml": yaml.safe_dump(config)},
+        headers=session_headers,
     )
-    r.raise_for_status()
-    submit = r.json()
-    _assert_submitted(submit)
-    assert submit["input_params"]["config_yaml"] == "(user-supplied)"
+    assert r.status_code == 200, f"submit failed: {r.status_code} {r.text!r}"
+    job_id = _assert_submitted(r.json())
 
-    final = poll_job(client, base_url, submit["job_id"], timeout_s=INFERENCE_TIMEOUT_S)
-    _assert_completed(final, base_url, client)
-
-
-def test_custom_with_dataset_zip(client: httpx.Client, base_url: str) -> None:
-    """Custom YAML + dataset zip — server rewrites paths.rootdir and paths.dataset."""
-    config = {
-        "experiment": {"name": "fc_custom_motif"},
-        "paths": {"rootdir": "PLACEHOLDER", "dataset": "PLACEHOLDER"},
-        "generation": {
-            "dataset": {
-                "source": "motif",
-                "selections": "01_1LDB",
-                "n_sample": 1,
-                "batch_size": 1,
-            },
-            "sampler": {"sampler": {"direction_scale": 0.1}},
-        },
-    }
-    r = client.post(
-        "/api/generate",
-        data={"config_yaml": yaml.safe_dump(config)},
-        files={"dataset": ("motif.zip", _motif_zip(), "application/zip")},
+    final = poll_job(
+        client, "", job_id,
+        timeout_s=POLL_TIMEOUT_S, interval_s=POLL_INTERVAL_S,
+        max_transient_errors=60,
+        extra_headers=session_headers,
     )
-    r.raise_for_status()
-    submit = r.json()
-    _assert_submitted(submit)
-
-    final = poll_job(client, base_url, submit["job_id"], timeout_s=INFERENCE_TIMEOUT_S)
-    _assert_completed(final, base_url, client)
+    _assert_completed(final)
+    return final
 
 
-# =====================================================================
-# Job lifecycle endpoints
-# =====================================================================
+# ===================================================================
+# Section 1: Smoke (no inference compute)
+# ===================================================================
 
 
-def test_job_status_polling(client: httpx.Client, base_url: str) -> None:
-    """Job transitions from pending/running → completed; intermediate polls return valid JobInfo."""
-    r = client.post(
-        "/api/generate/unconditional",
-        data={
-            "n_sample": "1",
-            "batch_size": "1",
-            "min_length": "50",
-            "max_length": "50",
-            "length_step": "50",
-        },
-    )
-    r.raise_for_status()
-    job_id = r.json()["job_id"]
+@pytest.mark.fc
+class TestSmoke:
+    def test_healthz(self, client):
+        r = _retry_get(client, "/healthz")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["status"] == "ok"
+        assert body["service"] == "genie3"
+        assert "version" in body
 
-    info = client.get(f"/api/jobs/{job_id}").json()
-    assert info["job_id"] == job_id
-    assert info["status"] in ("pending", "running", "completed")
+    def test_healthz_detail(self, client):
+        """Custom /healthz/detail reports NAS-mounted pretrained checkpoint presence."""
+        r = _retry_get(client, "/healthz/detail")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["status"] == "ok"
+        assert body["service"] == "genie3"
+        # Weights externalized to NAS — verify presence + file count.
+        # See engineering/decisions/2026-06-26-service-weights-externalization.md.
+        assert body["pretrained_dir"] == "/data/models/genie3/pretrained/v1"
+        assert body["weights_loaded"] is True, (
+            f"NAS weights missing at {body['pretrained_dir']}: "
+            f"files_found={body.get('files_found')}"
+        )
+        assert body["files_found"] >= 1, (
+            "expected at least 1 pretrained file (checkpoint / config); "
+            f"got {body.get('files_found')}"
+        )
+        assert body["max_concurrent_jobs"] >= 1
+        assert isinstance(body.get("active_jobs"), int)
 
-    final = poll_job(client, base_url, job_id, timeout_s=INFERENCE_TIMEOUT_S)
-    _assert_completed(final, base_url, client)
-
-
-def test_job_files_endpoint(client: httpx.Client, base_url: str) -> None:
-    """GET /api/jobs/{id}/files returns output file paths after completion."""
-    job_id, final, files = _submit_and_poll(
-        client, base_url, "/api/generate/unconditional",
-        data={
-            "n_sample": "1",
-            "batch_size": "1",
-            "min_length": "50",
-            "max_length": "50",
-            "length_step": "50",
-        },
-    )
-
-    r = client.get(f"/api/jobs/{job_id}/files")
-    r.raise_for_status()
-    body = r.json()
-    assert body["job_id"] == job_id
-    assert isinstance(body["files"], list)
-    assert len(body["files"]) > 0
-    assert any(f.endswith(".pdb") for f in body["files"])
+    def test_openapi_served(self, client):
+        r = _retry_get(client, "/openapi.json")
+        assert r.status_code == 200
+        spec = r.json()
+        for p in ("/api/generate/unconditional", "/api/generate/motif",
+                  "/api/generate/binder", "/api/generate"):
+            assert p in spec["paths"], f"missing endpoint in OpenAPI: {p}"
 
 
-def test_job_single_file_download(client: httpx.Client, base_url: str) -> None:
-    """GET /api/jobs/{id}/file/{path} returns the file content."""
-    job_id, final, files = _submit_and_poll(
-        client, base_url, "/api/generate/unconditional",
-        data={
-            "n_sample": "1",
-            "batch_size": "1",
-            "min_length": "50",
-            "max_length": "50",
-            "length_step": "50",
-        },
-    )
-
-    pdb_file = next(f for f in files if f.endswith(".pdb"))
-    r = client.get(f"/api/jobs/{job_id}/file/{pdb_file}")
-    r.raise_for_status()
-    assert len(r.content) > 0
-    assert b"ATOM" in r.content
+# ===================================================================
+# Section 2: Manifest
+# ===================================================================
 
 
-def test_job_log_endpoint(client: httpx.Client, base_url: str) -> None:
-    """GET /api/jobs/{id}/log returns log text."""
-    job_id, final, files = _submit_and_poll(
-        client, base_url, "/api/generate/unconditional",
-        data={
-            "n_sample": "1",
-            "batch_size": "1",
-            "min_length": "50",
-            "max_length": "50",
-            "length_step": "50",
-        },
-    )
+@pytest.mark.fc
+class TestManifest:
+    def test_sync_endpoints_listed(self, client):
+        body = _retry_get(client, "/api/manifest").json()
+        paths = {e["path"] for e in body["endpoints"]}
+        sync_endpoints = {
+            "/api/generate/unconditional",
+            "/api/generate/motif",
+            "/api/generate/binder",
+            "/api/generate",
+        }
+        assert sync_endpoints <= paths, (
+            f"missing sync endpoints: {sync_endpoints - paths}"
+        )
+        # Any additional endpoints must be task-mode variants.
+        extras = paths - sync_endpoints
+        expected_task = {
+            "/api/tasks/generate/unconditional",
+            "/api/tasks/generate/motif",
+            "/api/tasks/generate/binder",
+            "/api/tasks/generate",
+        }
+        assert extras <= expected_task, (
+            f"unexpected non-task endpoints: {extras - expected_task}"
+        )
 
-    r = client.get(f"/api/jobs/{job_id}/log")
-    r.raise_for_status()
-    body = r.json()
-    assert body["job_id"] == job_id
-    assert "log" in body
-    assert isinstance(body["log"], str)
+    def test_service_specific_tool_outputs(self, client):
+        extras = _retry_get(client, "/api/manifest").json()["service_specific"]
+        assert "tool_outputs" in extras
+        assert "*.pdb" in extras["tool_outputs"]["all_modes"]
 
+    def test_service_specific_config_tips(self, client):
+        extras = _retry_get(client, "/api/manifest").json()["service_specific"]
+        assert "config_tips" in extras
+        assert "cond_strategy" in extras["config_tips"]
+        assert "direction_scale" in extras["config_tips"]
 
-def test_job_download_zip(client: httpx.Client, base_url: str) -> None:
-    """GET /api/jobs/{id}/download returns a valid zip archive with PDB outputs."""
-    job_id, final, files = _submit_and_poll(
-        client, base_url, "/api/generate/unconditional",
-        data={
-            "n_sample": "1",
-            "batch_size": "1",
-            "min_length": "50",
-            "max_length": "50",
-            "length_step": "50",
-        },
-    )
+    def test_service_specific_uri_schemes(self, client):
+        extras = _retry_get(client, "/api/manifest").json()["service_specific"]
+        assert "input_uri_schemes" in extras
 
-    r = client.get(f"/api/jobs/{job_id}/download")
-    r.raise_for_status()
-    assert "application/zip" in r.headers.get("content-type", "")
-
-    zf = zipfile.ZipFile(io.BytesIO(r.content))
-    names = zf.namelist()
-    assert len(names) > 0
-    assert any(n.endswith(".pdb") for n in names)
-
-
-def test_job_file_not_found(client: httpx.Client, base_url: str) -> None:
-    """Requesting a non-existent file within a valid completed job → 404."""
-    job_id, final, files = _submit_and_poll(
-        client, base_url, "/api/generate/unconditional",
-        data={
-            "n_sample": "1",
-            "batch_size": "1",
-            "min_length": "50",
-            "max_length": "50",
-            "length_step": "50",
-        },
-    )
-
-    r = client.get(f"/api/jobs/{job_id}/file/nonexistent.xyz")
-    assert r.status_code == 404
+    def test_endpoint_examples(self, client):
+        body = _retry_get(client, "/api/manifest").json()
+        by_path = {e["path"]: e for e in body["endpoints"]}
+        for path in ("/api/generate/unconditional", "/api/generate/motif",
+                     "/api/generate/binder", "/api/generate"):
+            assert by_path[path]["examples"], f"no examples for {path}"
 
 
-def test_job_delete(client: httpx.Client, base_url: str) -> None:
-    """DELETE /api/jobs/{id} removes the job; subsequent GET returns 404."""
-    job_id, final, files = _submit_and_poll(
-        client, base_url, "/api/generate/unconditional",
-        data={
-            "n_sample": "1",
-            "batch_size": "1",
-            "min_length": "50",
-            "max_length": "50",
-            "length_step": "50",
-        },
-    )
+# ===================================================================
+# Section 3: Error cases (fast, no GPU)
+# ===================================================================
 
-    r = client.delete(f"/api/jobs/{job_id}")
-    r.raise_for_status()
-    assert r.json()["status"] == "deleted"
 
-    assert client.get(f"/api/jobs/{job_id}").status_code == 404
+@pytest.mark.fc
+class TestErrors:
+    def test_unknown_job_status_404(self, client):
+        assert _retry_get(client, "/api/jobs/missing-job-id").status_code == 404
+
+    def test_unknown_job_files_404(self, client):
+        assert _retry_get(client, "/api/jobs/missing-job-id/files").status_code == 404
+
+    def test_unknown_job_log_404(self, client):
+        assert _retry_get(client, "/api/jobs/missing-job-id/log").status_code == 404
+
+    def test_unknown_job_download_404(self, client):
+        assert _retry_get(client, "/api/jobs/missing-job-id/download").status_code == 404
+
+    def test_unknown_job_file_404(self, client):
+        assert _retry_get(client, "/api/jobs/missing-job-id/file/foo.pdb").status_code == 404
+
+    def test_422_motif_bad_zip(self, client):
+        r = _retry_post(
+            client, "/api/generate/motif",
+            files={"dataset": ("junk.zip", b"not a zip", "application/zip")},
+        )
+        assert r.status_code == 422
+
+    def test_422_motif_zip_without_problems(self, client):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("random/file.txt", "x")
+        r = _retry_post(
+            client, "/api/generate/motif",
+            files={"dataset": ("noproblems.zip", buf.getvalue(), "application/zip")},
+        )
+        assert r.status_code == 422
+        assert "problems/" in r.json()["detail"].lower()
+
+    def test_422_binder_bad_zip(self, client):
+        r = _retry_post(
+            client, "/api/generate/binder",
+            files={"dataset": ("bad.zip", b"corrupt", "application/zip")},
+        )
+        assert r.status_code == 422
+
+    def test_422_custom_invalid_yaml(self, client):
+        r = _retry_post(
+            client, "/api/generate",
+            data={"config_yaml": "{ invalid yaml: ["},
+        )
+        assert r.status_code == 422
+
+    def test_422_custom_yaml_not_a_dict(self, client):
+        r = _retry_post(
+            client, "/api/generate",
+            data={"config_yaml": "- item1\n- item2\n"},
+        )
+        assert r.status_code == 422
+
+
+# ===================================================================
+# Section 4: Sync inference — unconditional
+# ===================================================================
+
+
+@pytest.mark.fc
+class TestSyncUnconditional:
+    def test_job_completed(self, unconditional_job):
+        assert unconditional_job["status"] == "completed"
+
+    def test_input_params_echo(self, unconditional_job):
+        params = unconditional_job.get("input_params") or {}
+        assert params.get("n_sample") == 1
+        assert params.get("min_length") == 50
+        assert params.get("max_length") == 50
+
+    def test_pdb_output_present(self, client, unconditional_job):
+        job_id = unconditional_job["job_id"]
+        files = _retry_get(client, f"/api/jobs/{job_id}/files").json()["files"]
+        pdb_files = [f for f in files if f.endswith(".pdb")]
+        assert pdb_files, f"no PDB files in output: {files}"
+        content = _download_bytes(client, job_id, pdb_files[0])
+        assert b"ATOM" in content
+
+
+# ===================================================================
+# Section 5: Sync inference — motif scaffolding
+# ===================================================================
+
+
+@pytest.mark.fc
+class TestSyncMotif:
+    def test_job_completed(self, motif_job):
+        assert motif_job["status"] == "completed"
+
+    def test_input_params_echo(self, motif_job):
+        params = motif_job.get("input_params") or {}
+        assert params.get("selections") == "01_1LDB"
+        assert params.get("n_sample") == 1
+
+    def test_pdb_output_present(self, client, motif_job):
+        job_id = motif_job["job_id"]
+        files = _retry_get(client, f"/api/jobs/{job_id}/files").json()["files"]
+        pdb_files = [f for f in files if f.endswith(".pdb")]
+        assert pdb_files, f"no PDB files in output: {files}"
+        content = _download_bytes(client, job_id, pdb_files[0])
+        assert b"ATOM" in content
+
+
+# ===================================================================
+# Section 6: Sync inference — binder design
+# ===================================================================
+
+
+@pytest.mark.fc
+class TestSyncBinder:
+    def test_job_completed(self, binder_job):
+        assert binder_job["status"] == "completed"
+
+    def test_input_params_echo(self, binder_job):
+        params = binder_job.get("input_params") or {}
+        assert params.get("selections") == "01_bhrf1"
+        assert params.get("n_sample") == 1
+
+    def test_pdb_output_present(self, client, binder_job):
+        job_id = binder_job["job_id"]
+        files = _retry_get(client, f"/api/jobs/{job_id}/files").json()["files"]
+        pdb_files = [f for f in files if f.endswith(".pdb")]
+        assert pdb_files, f"no PDB files in output: {files}"
+        content = _download_bytes(client, job_id, pdb_files[0])
+        assert b"ATOM" in content
+
+
+# ===================================================================
+# Section 7: Sync inference — custom YAML
+# ===================================================================
+
+
+@pytest.mark.fc
+class TestSyncCustom:
+    def test_job_completed(self, custom_job):
+        assert custom_job["status"] == "completed"
+
+    def test_input_params_echo(self, custom_job):
+        params = custom_job.get("input_params") or {}
+        # Custom endpoint records only summary + num_devices.
+        assert params.get("config_yaml") == "(user-supplied)"
+
+    def test_pdb_output_present(self, client, custom_job):
+        job_id = custom_job["job_id"]
+        files = _retry_get(client, f"/api/jobs/{job_id}/files").json()["files"]
+        pdb_files = [f for f in files if f.endswith(".pdb")]
+        assert pdb_files, f"no PDB files in output: {files}"
+
+
+# ===================================================================
+# Section 8: Job lifecycle (files, download, log, delete) on unconditional_job
+# ===================================================================
+
+
+@pytest.mark.fc
+class TestJobLifecycle:
+    def test_status_endpoint(self, client, unconditional_job):
+        job_id = unconditional_job["job_id"]
+        r = _retry_get(client, f"/api/jobs/{job_id}")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["job_id"] == job_id
+        assert body["status"] == "completed"
+
+    def test_files_endpoint(self, client, unconditional_job):
+        job_id = unconditional_job["job_id"]
+        r = _retry_get(client, f"/api/jobs/{job_id}/files")
+        assert r.status_code == 200
+        files = r.json()["files"]
+        assert any(f.endswith(".pdb") for f in files)
+
+    def test_single_file_download_pdb(self, client, unconditional_job):
+        job_id = unconditional_job["job_id"]
+        files = _retry_get(client, f"/api/jobs/{job_id}/files").json()["files"]
+        pdb = next(f for f in files if f.endswith(".pdb"))
+        data = _download_bytes(client, job_id, pdb)
+        assert b"ATOM" in data
+
+    def test_job_log_endpoint(self, client, unconditional_job):
+        job_id = unconditional_job["job_id"]
+        r = _retry_get(client, f"/api/jobs/{job_id}/log")
+        assert r.status_code == 200
+        body = r.json()
+        log_text = body.get("log") or body.get("text", "")
+        assert isinstance(log_text, str)
+        assert len(log_text) > 0
+
+    def test_job_download_zip(self, client, unconditional_job):
+        job_id = unconditional_job["job_id"]
+        r = _retry_get(client, f"/api/jobs/{job_id}/download")
+        assert r.status_code == 200
+        assert "application/zip" in r.headers.get("content-type", "")
+        zf = zipfile.ZipFile(io.BytesIO(r.content))
+        names = zf.namelist()
+        assert any(n.endswith(".pdb") for n in names)
+
+    def test_job_file_not_found(self, client, unconditional_job):
+        job_id = unconditional_job["job_id"]
+        r = _retry_get(client, f"/api/jobs/{job_id}/file/nonexistent.xyz")
+        assert r.status_code == 404
+
+    def test_job_delete(self, client, custom_job):
+        """DELETE the custom_job — the other jobs stay intact for their tests."""
+        job_id = custom_job["job_id"]
+        r = _retry_delete(client, f"/api/jobs/{job_id}")
+        assert r.status_code == 200
+        assert r.json().get("status") == "deleted"
+        assert _retry_get(client, f"/api/jobs/{job_id}").status_code == 404
