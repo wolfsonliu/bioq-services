@@ -55,6 +55,15 @@ vendor_one tinyprot   "$TINYPROT_REPO"   "$TINYPROT_SHA"
 vendor_one promera    "$PROMERA_REPO"    "$PROMERA_SHA"
 vendor_one LigandMPNN "$LIGANDMPNN_REPO" "$LIGANDMPNN_SHA"
 
+# promera 上游 pyproject 把 tinyprot 声明为 git+https://... 依赖，uv 解析时
+# 会忽略镜像里已装好的 vendored tinyprot、转而联网拉 HEAD——既要求基础镜像
+# 里有 git（cuda:*-runtime 不带），又会覆盖上面 pin 的 TINYPROT_SHA。这里
+# 用 patches/promera-pyproject.toml（已把 tinyprot 改成普通包名）覆盖，保证
+# docker build 完全离线且用的是 vendor 的 tinyprot。
+cp "$PROJECT_ROOT/services/promera-server/patches/promera-pyproject.toml" \
+   "$DST/promera/pyproject.toml"
+echo "=== patched promera/pyproject.toml (tinyprot: git URL -> package name) ==="
+
 echo
 echo "Vendored 3 upstreams into $DST:"
 du -sh "$DST"/*/

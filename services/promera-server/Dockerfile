@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     add-apt-repository -y ppa:deadsnakes/ppa && \
     apt-get update && apt-get install -y --no-install-recommends \
     python3.12 python3.12-venv python3.12-dev \
-    ca-certificates curl \
+    ca-certificates curl git \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 # build-essential is required at runtime by triton: the JIT path
