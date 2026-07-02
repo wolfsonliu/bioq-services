@@ -33,6 +33,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 
 _URL_LINE_RE = re.compile(r"^([A-Za-z0-9_-]+):\s*(https?://\S+)\s*$")
@@ -87,6 +88,67 @@ def fc_url(service_name: str, *, start: Path | None = None) -> str:
             f"known services: {sorted(urls)}"
         )
     return urls[service_name]
+
+
+class Retry429Transport(httpx.HTTPTransport):
+    """httpx transport that retries HTTP 429 responses with linear backoff.
+
+    Alibaba Cloud FC returns 429 when the account-level GPU quota for a
+    specific card class (e.g. ``fc.gpu.tesla.1``) is exhausted by any
+    running function in the account.  This affects every service whose
+    Dockerfile requests that card, not just the one under test — quota
+    hits during unrelated inference runs will surface as 429 on smoke
+    calls (``/healthz``, ``/api/manifest``, ``/openapi.json``).  Wrapping
+    the client with this transport lets tests wait out short bursts
+    instead of failing spuriously.
+
+    Only 429 is retried; other status codes pass through unchanged.
+    """
+
+    def __init__(
+        self,
+        *args: Any,
+        max_retries: int = 10,
+        backoff_s: float = 20.0,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self._max_retries = max_retries
+        self._backoff_s = backoff_s
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        resp = super().handle_request(request)
+        for _ in range(self._max_retries):
+            if resp.status_code != 429:
+                return resp
+            resp.read()
+            resp.close()
+            time.sleep(self._backoff_s)
+            resp = super().handle_request(request)
+        return resp
+
+
+def make_retrying_client(
+    base_url: str,
+    *,
+    timeout: httpx.Timeout | float = 120.0,
+    max_retries: int = 10,
+    backoff_s: float = 20.0,
+    **client_kwargs: Any,
+) -> httpx.Client:
+    """Return an ``httpx.Client`` whose transport auto-retries HTTP 429.
+
+    Use this in FC integration tests where account-level GPU quota
+    exhaustion can produce 429 on any request — including cheap smoke
+    calls.  See :class:`Retry429Transport` for context.
+    """
+    transport = Retry429Transport(max_retries=max_retries, backoff_s=backoff_s)
+    return httpx.Client(
+        base_url=base_url,
+        timeout=timeout,
+        transport=transport,
+        **client_kwargs,
+    )
 
 
 def poll_job(
@@ -172,8 +234,10 @@ def skip_fc_tests_unless_enabled(config: Any, items: list[Any]) -> None:
 
 
 __all__ = [
+    "Retry429Transport",
     "fc_url",
     "find_aliyun_fc_url_md",
+    "make_retrying_client",
     "parse_fc_urls",
     "poll_job",
     "register_fc_marker",

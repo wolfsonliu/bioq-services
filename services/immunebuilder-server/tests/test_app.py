@@ -264,6 +264,10 @@ def test_predict_tcr_argv(tmp_path):
         settings=_Off(),
     )
     assert "TCRBuilder2" in argv[0]
+    # TCRBuilder2 CLI does not accept -n/--numbering_scheme (only
+    # ABodyBuilder2 and NanoBodyBuilder2 do); guard against regressions.
+    assert "-n" not in argv
+    assert "--numbering_scheme" not in argv
 
 
 def test_predict_argv_no_save_all(tmp_path):

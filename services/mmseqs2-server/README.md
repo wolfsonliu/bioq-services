@@ -120,14 +120,32 @@ To pin a different release: `MMSEQS_VERSION=<tag> ./scripts/vendor.sh`. Only
 tags that publish a `mmseqs-linux-gpu.tar.gz` asset are valid (`18-8cc5c` is
 the current default; earlier tags like `15-6f452` do NOT have a GPU artifact).
 
+### GPU index prerequisite
+
+The default DB names (`uniref30_2302_db`, `colabfold_envdb_202108_db`) are
+the ColabFold-canonical release names. For GPU-accelerated search
+(`MMSEQS2_GPU_ENABLED=true`, default), each DB must be preformatted with a
+GPU index (`.idx` sidecar file):
+
+```bash
+# One-off, run once per DB on an HPC node with mmseqs GPU binary:
+mmseqs createindex uniref30_2302_db          <tmp-workdir> --split 0 --index-subset 2 --threads 8
+mmseqs createindex colabfold_envdb_202108_db <tmp-workdir> --split 0 --index-subset 2 --threads 8
+```
+
+`/healthz/detail` reports `db_loaded: true/false` based on the presence of
+`<default_db>.idx` under `MMSEQS2_DB_DIR`. If your DBs are still CPU-only
+format, set `MMSEQS2_GPU_ENABLED=false` at deploy time (much slower — only
+usable for smoke tests, not production MSA).
+
 ## FC deployment
 
 | Env var | Default | Notes |
 |---|---|---|
 | `MMSEQS2_JOBS_BASE_DIR` | `/data/mmseqs2_jobs` | NAS path for job state + output a3m / templates |
 | `MMSEQS2_DB_DIR` | `/data/models/mmseqs2` | NAS path containing the pre-built ColabFold DBs (follows the `/data/models/<svc>/` externalization convention) |
-| `MMSEQS2_DEFAULT_DB` | `uniref30_subset_4090_gpu` | UniRef30 GPU DB name (relative to `MMSEQS2_DB_DIR`) |
-| `MMSEQS2_ENV_DB` | `colabfold_envdb_gpu` | ColabFoldDB env DB; unset to disable env mode |
+| `MMSEQS2_DEFAULT_DB` | `uniref30_2302_db` | UniRef30 DB name (relative to `MMSEQS2_DB_DIR`); ColabFold-canonical `mmseqs databases UniRef30` release naming |
+| `MMSEQS2_ENV_DB` | `colabfold_envdb_202108_db` | ColabFoldDB env DB name; unset to disable env mode |
 | `MMSEQS2_GPU_ENABLED` | `true` | Force CPU fallback by setting to `false` |
 | `MMSEQS2_THREADS` | `4` | CPU threads per mmseqs invocation |
 | `MMSEQS2_SESSION_HEADER_NAME` | `bioagent-session-id` | FC session affinity (set via FC console too) |

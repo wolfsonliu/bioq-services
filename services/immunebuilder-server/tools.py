@@ -28,12 +28,22 @@ def _common_flags(
     job_dir: Path,
     fasta_path: Path,
     settings: ImmuneBuilderSettings,
+    supports_numbering: bool = True,
 ) -> list[str]:
-    """Build flag fragment shared by all three predictors."""
+    """Build flag fragment shared by all three predictors.
+
+    ``supports_numbering=False`` for TCRBuilder2 — the upstream CLI parser
+    (``ImmuneBuilder/TCRBuilder2.py::command_line_interface``) does not
+    accept ``-n / --numbering_scheme`` (only ABodyBuilder2 and
+    NanoBodyBuilder2 do).  Passing the flag makes argparse abort with
+    ``TCRBuilder2: error: unrecognized arguments: -n imgt``.
+    """
     output_dir = job_dir / "output"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    argv = ["-f", str(fasta_path), "-n", req.numbering_scheme]
+    argv = ["-f", str(fasta_path)]
+    if supports_numbering:
+        argv += ["-n", req.numbering_scheme]
 
     if req.save_all_models:
         argv += ["--to_directory", "-o", str(output_dir)]
@@ -84,5 +94,11 @@ def predict_tcr_argv(
 ) -> list[str]:
     return [
         str(settings.venv_bin / "TCRBuilder2"),
-        *_common_flags(req, job_dir=job_dir, fasta_path=fasta_path, settings=settings),
+        *_common_flags(
+            req,
+            job_dir=job_dir,
+            fasta_path=fasta_path,
+            settings=settings,
+            supports_numbering=False,
+        ),
     ]

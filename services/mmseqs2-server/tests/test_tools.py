@@ -68,8 +68,8 @@ def _settings(**overrides: object) -> MMseqs2Settings:
         "jobs_base_dir": Path("/tmp/mmseqs2_jobs"),
         "mmseqs_binary": "/opt/mmseqs-gpu/bin/mmseqs",
         "db_dir": Path("/data/models/mmseqs2"),
-        "default_db": "uniref30_subset_4090_gpu",
-        "env_db": "colabfold_envdb_gpu",
+        "default_db": "uniref30_2302_db",
+        "env_db": "colabfold_envdb_202108_db",
         "gpu_enabled": True,
         "threads": 4,
     }
@@ -105,13 +105,13 @@ def test_argv_env_mode_appends_db3() -> None:
         query_path=Path("/tmp/query.fasta"),
         output_dir=Path("/tmp/out"),
         mode_config=parse_mode_flags("env"),
-        settings=_settings(env_db="colabfold_envdb_gpu"),
+        settings=_settings(env_db="colabfold_envdb_202108_db"),
     )
     assert "--use-env" in argv
     use_env_value = argv[argv.index("--use-env") + 1]
     assert use_env_value == "1"
     assert "--db3" in argv
-    assert argv[argv.index("--db3") + 1] == "colabfold_envdb_gpu"
+    assert argv[argv.index("--db3") + 1] == "colabfold_envdb_202108_db"
 
 
 def test_argv_non_env_mode_omits_db3() -> None:

@@ -1,23 +1,28 @@
-"""End-to-end tests against the deployed mmseqs2 Function Compute service.
+"""FC tests for mmseqs2-server — ColabFold-protocol (sync HTTP) surface.
 
 Marked ``@pytest.mark.fc``, skipped by default. Run with::
 
     pytest -m fc services/mmseqs2-server/tests/test_fc.py
 
-The base URL is read from ``services/aliyun_fc_url.md`` — update that file
-after deploying a new tag in the FC console.
+Base URL is read from ``services/aliyun_fc_url.md`` — update that file after
+deploying a new tag.
 
-Two layered surfaces are exercised:
+This file covers the **sync** side (ColabFold protocol) of the service:
 
-* **ColabFold protocol** (``/ticket/*`` + ``/result/download/*``) — the
-  legacy submit-and-poll path; clients like boltz-server's
-  ``--msa_server_url`` and the upstream ColabFold notebooks talk to this.
-* **FC async task mode** (``/api/tasks/*``) — newer atomic-task path,
-  invoked via ``X-Fc-Invocation-Type: Async`` + ``X-Bioagent-Job-Id``.  Echoes
-  the patterns used by boltz-server / immunebuilder-server.
+* ``POST /ticket/msa`` — submit a monomer (unpaired) MSA
+* ``GET  /ticket/<id>`` — poll ColabFold-protocol status
+* ``GET  /result/download/<id>`` — download the .a3m tarball
+* Smoke + manifest + validation (both /ticket/* and /api/tasks/* validation
+  paths return quickly and share fixtures cheaply here)
 
-Inference cases use ``mode=env`` (UniRef30 + ColabFoldDB) with a short
-ubiquitin-like sequence so MSA finishes within FC's instance lifetime.
+The **async task** (``/api/tasks/*``) surface lives in
+:mod:`test_fc_task.py` — patterned after
+:mod:`services.rfantibody-server.tests.test_fc_task`. Async task mode has
+better FC instance utilization (FC platform manages queueing / affinity)
+whereas sync submit + poll needs client-side session-affinity handling to
+avoid burning one FC instance per poll.  This file consolidates sync
+lifecycle assertions onto a single ``msa_job`` module fixture so we run
+exactly ONE MSA computation for the entire sync surface.
 """
 
 from __future__ import annotations
@@ -32,17 +37,22 @@ import pytest
 
 from bioagent_service.fc_testing import fc_url, poll_job
 
+SERVICE = "mmseqs2-server"
+SESSION_HEADER = "bioagent-session-id"
+
 pytestmark = pytest.mark.fc
 
 # Small monomer (52 aa) — keeps the MSA quick on the GPU subset DB.
 SHORT_MONOMER = "QLEDSEVEAVAKGLEEMYANGVTEDNFKNYVKNNFAQQEISSVEEELNVN"
 MONOMER_Q = f">probe1\n{SHORT_MONOMER}\n"
 
-# Two-chain heterodimer for paired tests; both chains short.
+# Two-chain heterodimer used by /ticket/pair validation cases.
 PAIRED_Q = (
     f">chainA\n{SHORT_MONOMER}\n"
     f">chainB\nMQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDY\n"
 )
+
+TIMEOUT = httpx.Timeout(connect=30, read=300, write=60, pool=30)
 
 
 # ---------------------------------------------------------------------------
@@ -52,14 +62,12 @@ PAIRED_Q = (
 
 @pytest.fixture(scope="module")
 def base_url() -> str:
-    return fc_url("mmseqs2-server", start=Path(__file__))
+    return fc_url(SERVICE, start=Path(__file__))
 
 
 @pytest.fixture(scope="module")
 def client(base_url: str):
-    # mmseqs2 MSA cold-start ~60s, search ~3-10 min for short seqs.  Match
-    # other heavy services' generous read timeout.
-    with httpx.Client(base_url=base_url, timeout=httpx.Timeout(300.0)) as c:
+    with httpx.Client(base_url=base_url, timeout=TIMEOUT) as c:
         yield c
 
 
@@ -68,261 +76,266 @@ def client(base_url: str):
 # ---------------------------------------------------------------------------
 
 
-def _async_submit_and_poll(
+def _get_with_retry(
     client: httpx.Client,
-    base_url: str,
-    endpoint: str,
-    data: dict,
+    path: str,
     *,
-    task_id: str,
-    timeout_s: int = 2400,
-) -> tuple[str, dict, list[str]]:
-    """POST as FC async task; poll ``/api/jobs/{task_id}`` until terminal.
+    headers: dict[str, str] | None = None,
+    max_attempts: int = 20,
+    backoff_s: int = 30,
+) -> httpx.Response:
+    """GET that retries on FC HTTP-gateway 429 throttling.
 
-    Sends ``X-Fc-Invocation-Type: Async`` + matching X-Bioagent-Job-Id /
-    X-Fc-Async-Task-Id so FC enqueues the work and dedups duplicate
-    invocations at the platform layer.  Asserts the submit returned 202.
-
-    Returns ``(task_id, final_jobinfo, files)``.
+    See project memory ``project_fc_http_polling_unreliable_at_concurrency``.
     """
-    r = client.post(
-        endpoint,
-        data=data,
-        headers={
-            "X-Fc-Invocation-Type": "Async",
-            "X-Bioagent-Job-Id": task_id,
-            "X-Fc-Async-Task-Id": task_id,
-        },
-    )
-    assert r.status_code == 202, (
-        f"expected 202 from async invocation; got {r.status_code} body={r.text!r}.  "
-        f"Check that FC console has async task mode enabled for this function."
-    )
-
-    final = poll_job(client, base_url, task_id, timeout_s=timeout_s, interval_s=20)
-    assert final["status"] == "completed", final
-
-    files = client.get(f"/api/jobs/{task_id}/files").json()["files"]
-    return task_id, final, files
+    last: httpx.Response | None = None
+    for _ in range(max_attempts):
+        last = client.get(path, headers=headers or {})
+        if last.status_code != 429:
+            return last
+        time.sleep(backoff_s)
+    assert last is not None
+    return last
 
 
 # ---------------------------------------------------------------------------
-# Smoke
+# Module-scoped ticket-submit fixture — one MSA reused across all sync tests
 # ---------------------------------------------------------------------------
 
 
-def test_healthz(client: httpx.Client) -> None:
-    r = client.get("/healthz")
-    r.raise_for_status()
-    body = r.json()
-    assert body["status"] == "ok"
-    assert body["service"] == "mmseqs2"
+@pytest.fixture(scope="module")
+def msa_job(client: httpx.Client) -> dict:
+    """Submit one monomer MSA via /ticket/msa and poll to COMPLETE.
 
+    Uses session affinity end-to-end: the framework's session middleware
+    echoes ``job_id`` into the response's ``bioagent-session-id`` header on
+    the initial POST, and we send that header on every subsequent GET so FC
+    routes polls back to the instance that owns the job (avoids the "one
+    instance per poll" fanout that plain-sync tests otherwise cause).
 
-def test_healthz_detail_exposes_db_signal(client: httpx.Client) -> None:
-    body = client.get("/healthz/detail").json()
-    assert body["service"] == "mmseqs2"
-    assert "db_loaded" in body
-    assert "gpu_free_mb" in body
-
-
-def test_manifest_lists_all_endpoints(client: httpx.Client) -> None:
-    paths = {e["path"] for e in client.get("/api/manifest").json()["endpoints"]}
-    # ColabFold protocol surface
-    assert "/ticket/msa" in paths
-    assert "/ticket/pair" in paths
-    # FC async task surface (added alongside ColabFold protocol)
-    assert "/api/tasks/msa" in paths
-    assert "/api/tasks/pair" in paths
-
-
-def test_openapi_served(client: httpx.Client) -> None:
-    client.get("/openapi.json").raise_for_status()
-
-
-def test_unknown_job_returns_404(client: httpx.Client) -> None:
-    assert client.get("/api/jobs/missing-mmseqs-job").status_code == 404
-
-
-# ---------------------------------------------------------------------------
-# Validation (no GPU work, quick)
-# ---------------------------------------------------------------------------
-
-
-def test_ticket_msa_invalid_mode_returns_protocol_error(client: httpx.Client) -> None:
-    """ColabFold protocol: invalid input → 200 + {"status": "ERROR"} (NOT 4xx)."""
-    r = client.post("/ticket/msa", data={"q": MONOMER_Q, "mode": "nonsense"})
-    assert r.status_code == 200
-    body = r.json()
-    assert body["status"] == "ERROR"
-    assert "id" not in body
-
-
-def test_tasks_msa_invalid_mode_returns_422(client: httpx.Client) -> None:
-    """Task endpoints use HTTP 4xx for input errors (distinct from ColabFold)."""
-    r = client.post("/api/tasks/msa", data={"q": MONOMER_Q, "mode": "nonsense"})
-    assert r.status_code == 422
-
-
-def test_tasks_msa_paired_mode_rejected(client: httpx.Client) -> None:
-    r = client.post(
-        "/api/tasks/msa", data={"q": MONOMER_Q, "mode": "pairgreedy"}
-    )
-    assert r.status_code == 422
-
-
-def test_tasks_pair_single_chain_rejected(client: httpx.Client) -> None:
-    r = client.post(
-        "/api/tasks/pair", data={"q": MONOMER_Q, "mode": "pairgreedy"}
-    )
-    assert r.status_code == 422
-
-
-# ---------------------------------------------------------------------------
-# Inference: FC async task mode (the production path)
-# ---------------------------------------------------------------------------
-
-
-def test_async_task_msa_minimal(client: httpx.Client, base_url: str) -> None:
-    """Async-invoke /api/tasks/msa, poll JobInfo to completion.
-
-    Validates the full async task pipeline:
-      - HTTP 202 on submit (async task mode is on)
-      - task_id from X-Bioagent-Job-Id is used as JobInfo.job_id
-      - server runs orchestrator synchronously inside the FC instance
-      - .a3m files land in the job's output dir
-      - JobInfo.input_params does NOT echo the raw query string ``q``
+    Returns a dict with ``job_id``, ``session`` (header dict) and
+    ``final`` (the last /ticket/<id> body — COMPLETE).  Consumed by
+    every ``TestTicketLifecycle`` case, so we pay the MSA cost once.
     """
-    task_id = f"fc-async-msa-{int(time.time())}"
-    task_id, final, files = _async_submit_and_poll(
-        client, base_url, "/api/tasks/msa",
-        {"q": MONOMER_Q, "mode": "env"},
-        task_id=task_id,
-    )
-
-    assert final["job_id"] == task_id
-    assert final["completed_at"] is not None
-    assert final["duration_seconds"] is not None and final["duration_seconds"] > 0
-
-    a3m_files = [f for f in files if f.endswith(".a3m")]
-    assert a3m_files, f"no .a3m output in: {files}"
-
-    # Privacy: the raw query sequence must not be echoed in JobInfo.input_params.
-    serialized = repr(final.get("input_params"))
-    assert SHORT_MONOMER not in serialized
-    assert final["input_params"]["mode"] == "env"
-    assert final["input_params"]["sequence_count"] == 1
-
-
-def test_async_task_msa_honors_x_bioagent_job_id(
-    client: httpx.Client, base_url: str,
-) -> None:
-    """X-Bioagent-Job-Id flows end-to-end into JobInfo.job_id."""
-    task_id = f"fc-async-id-{int(time.time())}"
-    r = client.post(
-        "/api/tasks/msa",
-        data={"q": MONOMER_Q, "mode": "env"},
-        headers={
-            "X-Fc-Invocation-Type": "Async",
-            "X-Bioagent-Job-Id": task_id,
-            "X-Fc-Async-Task-Id": task_id,
-        },
-    )
-    assert r.status_code == 202
-
-    final = poll_job(client, base_url, task_id, timeout_s=2400, interval_s=20)
-    assert final["status"] == "completed", final
-    assert final["job_id"] == task_id
-
-
-def test_async_task_duplicate_rejected_at_fc_platform_layer(
-    client: httpx.Client, base_url: str,
-) -> None:
-    """Same X-Fc-Async-Task-Id twice → FC platform dedups at HTTP 409.
-
-    Mirrors boltz-server's parallel test: FC's async task mode dedupes by
-    X-Fc-Async-Task-Id before the function is even invoked, so the second
-    submit returns 409 without burning a cold-start.  Server-side framework
-    dedup is the fallback for invocation paths that bypass FC (LocalDispatcher,
-    direct curl, future K8s backend).
-    """
-    task_id = f"fc-async-dup-{int(time.time())}"
-    payload_first = {"q": MONOMER_Q, "mode": "env"}
-    payload_second = {"q": PAIRED_Q, "mode": "all"}  # diff payload; must be ignored
-
-    r1 = client.post(
-        "/api/tasks/msa",
-        data=payload_first,
-        headers={
-            "X-Fc-Invocation-Type": "Async",
-            "X-Bioagent-Job-Id": task_id,
-            "X-Fc-Async-Task-Id": task_id,
-        },
-    )
-    assert r1.status_code == 202
-
-    final = poll_job(client, base_url, task_id, timeout_s=2400, interval_s=20)
-    assert final["status"] == "completed", final
-    first_created_at = final["created_at"]
-    first_seq_count = final["input_params"]["sequence_count"]
-
-    r2 = client.post(
-        "/api/tasks/msa",
-        data=payload_second,
-        headers={
-            "X-Fc-Invocation-Type": "Async",
-            "X-Bioagent-Job-Id": task_id,
-            "X-Fc-Async-Task-Id": task_id,
-        },
-    )
-    # FC platform layer rejects (409) OR accepts (202) and server-side dedup
-    # kicks in.  Either is acceptable per
-    # engineering/decisions/2026-06-17-fc-async-task-mode.md.
-    assert r2.status_code in (202, 409), (
-        f"expected 409 (FC dedup) or 202 (server dedups); got {r2.status_code}"
-    )
-    if r2.status_code == 202:
-        time.sleep(30)  # let server-side dedup finalize
-
-    re_query = client.get(f"/api/jobs/{task_id}").json()
-    assert re_query["status"] == "completed"
-    assert re_query["created_at"] == first_created_at, (
-        "duplicate async invoke must not reset created_at"
-    )
-    assert re_query["input_params"]["sequence_count"] == first_seq_count, (
-        "duplicate async invoke must not overwrite original input_params"
-    )
-
-
-# ---------------------------------------------------------------------------
-# Inference: ColabFold protocol (sync submit + poll + download)
-# ---------------------------------------------------------------------------
-
-
-def test_ticket_msa_minimal_full_lifecycle(
-    client: httpx.Client, base_url: str,
-) -> None:
-    """Submit via /ticket/msa, poll /ticket/{id} → COMPLETE, then download tarball."""
     r = client.post("/ticket/msa", data={"q": MONOMER_Q, "mode": "env"})
-    assert r.status_code == 200
+    assert r.status_code == 200, f"submit failed: {r.status_code} {r.text!r}"
     body = r.json()
-    assert body["status"] == "PENDING"
+    assert body["status"] == "PENDING", body
     job_id = body["id"]
 
-    # Poll the ColabFold ticket endpoint — the protocol the upstream client uses.
+    # Framework's session middleware echoes job_id as the affinity header
+    # value.  Fall back to job_id if for some reason the header wasn't set
+    # (e.g. middleware disabled) — session affinity then just becomes best
+    # effort rather than mandatory.
+    session_id = r.headers.get(SESSION_HEADER, job_id)
+    session = {SESSION_HEADER: session_id}
+
+    # Poll the ColabFold-protocol status endpoint until terminal.  Interval
+    # is generous (20 s) so we don't hammer FC while an MSA is running.
     deadline = time.monotonic() + 2400
-    status = "PENDING"
+    final_ticket: dict = {}
     while time.monotonic() < deadline:
-        s = client.get(f"/ticket/{job_id}").json()
-        status = s["status"]
-        if status in ("COMPLETE", "ERROR"):
+        s = _get_with_retry(client, f"/ticket/{job_id}", headers=session)
+        assert s.status_code == 200, f"/ticket/{job_id} GET failed: {s.status_code} {s.text!r}"
+        final_ticket = s.json()
+        if final_ticket["status"] in ("COMPLETE", "ERROR"):
             break
         time.sleep(20)
-    assert status == "COMPLETE", f"final ticket status: {status}"
+    assert final_ticket.get("status") == "COMPLETE", (
+        f"ticket did not complete within budget: {final_ticket}"
+    )
+    return {"job_id": job_id, "session": session, "final": final_ticket}
 
-    # Download the .a3m tarball.
-    dl = client.get(f"/result/download/{job_id}")
-    assert dl.status_code == 200
-    with tarfile.open(fileobj=io.BytesIO(dl.content), mode="r:gz") as tf:
-        names = tf.getnames()
-    assert any(n.endswith(".a3m") for n in names), f"no .a3m in tarball: {names}"
+
+# ===================================================================
+# Section 1: Smoke — no job submission needed
+# ===================================================================
+
+
+@pytest.mark.fc
+class TestSmoke:
+    def test_healthz(self, client: httpx.Client) -> None:
+        r = _get_with_retry(client, "/healthz")
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["status"] == "ok"
+        assert body["service"] == "mmseqs2"
+
+    def test_healthz_detail_exposes_db_signal(self, client: httpx.Client) -> None:
+        r = _get_with_retry(client, "/healthz/detail")
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["service"] == "mmseqs2"
+        assert "db_loaded" in body
+        assert "gpu_free_mb" in body
+        assert "active_jobs" in body
+
+    def test_openapi_served(self, client: httpx.Client) -> None:
+        r = _get_with_retry(client, "/openapi.json")
+        assert r.status_code == 200, r.text
+
+    def test_unknown_job_returns_404(self, client: httpx.Client) -> None:
+        r = _get_with_retry(client, "/api/jobs/missing-mmseqs-job")
+        assert r.status_code == 404
+
+
+# ===================================================================
+# Section 2: Manifest — both surfaces should be advertised
+# ===================================================================
+
+
+@pytest.mark.fc
+class TestManifest:
+    def test_service_name(self, client: httpx.Client) -> None:
+        body = _get_with_retry(client, "/api/manifest").json()
+        assert body["service"] == "mmseqs2"
+
+    def test_endpoints_include_both_surfaces(self, client: httpx.Client) -> None:
+        paths = {e["path"] for e in _get_with_retry(client, "/api/manifest").json()["endpoints"]}
+        # ColabFold-protocol surface
+        assert "/ticket/msa" in paths
+        assert "/ticket/pair" in paths
+        # FC async task surface
+        assert "/api/tasks/msa" in paths
+        assert "/api/tasks/pair" in paths
+
+
+# ===================================================================
+# Section 3: Validation errors — cheap (no GPU work), covers both surfaces
+# ===================================================================
+
+
+@pytest.mark.fc
+class TestTicketValidation:
+    """ColabFold protocol: bad input → 200 + ``{"status": "ERROR"}`` (NOT 4xx)."""
+
+    def test_invalid_mode_returns_protocol_error(self, client: httpx.Client) -> None:
+        r = client.post("/ticket/msa", data={"q": MONOMER_Q, "mode": "nonsense"})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["status"] == "ERROR"
+        assert "id" not in body
+
+    def test_empty_q_returns_protocol_error(self, client: httpx.Client) -> None:
+        r = client.post("/ticket/msa", data={"q": "", "mode": "env"})
+        assert r.status_code == 200
+        assert r.json()["status"] == "ERROR"
+
+    def test_paired_mode_on_ticket_msa_returns_error(self, client: httpx.Client) -> None:
+        r = client.post("/ticket/msa", data={"q": MONOMER_Q, "mode": "pairgreedy"})
+        assert r.status_code == 200
+        assert r.json()["status"] == "ERROR"
+
+    def test_pair_single_chain_returns_error(self, client: httpx.Client) -> None:
+        r = client.post("/ticket/pair", data={"q": MONOMER_Q, "mode": "pairgreedy"})
+        assert r.status_code == 200
+        assert r.json()["status"] == "ERROR"
+
+
+@pytest.mark.fc
+class TestTaskValidation:
+    """Task endpoints use standard HTTP 4xx for input errors (distinct from
+    ColabFold's 200+ERROR envelope) — callers there speak JobInfo."""
+
+    def test_invalid_mode_returns_422(self, client: httpx.Client) -> None:
+        r = client.post("/api/tasks/msa", data={"q": MONOMER_Q, "mode": "nonsense"})
+        assert r.status_code == 422
+
+    def test_paired_mode_on_msa_endpoint_returns_422(self, client: httpx.Client) -> None:
+        r = client.post("/api/tasks/msa", data={"q": MONOMER_Q, "mode": "pairgreedy"})
+        assert r.status_code == 422
+
+    def test_pair_single_chain_returns_422(self, client: httpx.Client) -> None:
+        r = client.post("/api/tasks/pair", data={"q": MONOMER_Q, "mode": "pairgreedy"})
+        assert r.status_code == 422
+
+
+# ===================================================================
+# Section 4: ColabFold-protocol lifecycle — one MSA, many assertions
+# ===================================================================
+
+
+@pytest.mark.fc
+class TestTicketLifecycle:
+    def test_status_is_complete(self, msa_job: dict) -> None:
+        assert msa_job["final"]["status"] == "COMPLETE"
+        assert msa_job["final"]["id"] == msa_job["job_id"]
+
+    def test_jobinfo_endpoint_agrees(
+        self, client: httpx.Client, msa_job: dict,
+    ) -> None:
+        """``GET /api/jobs/<id>`` (framework lifecycle) should agree with the
+        ColabFold ``/ticket/<id>`` view on the same job."""
+        r = _get_with_retry(
+            client, f"/api/jobs/{msa_job['job_id']}", headers=msa_job["session"],
+        )
+        assert r.status_code == 200
+        info = r.json()
+        assert info["job_id"] == msa_job["job_id"]
+        assert info["status"] == "completed"
+        # Privacy: raw sequence must NEVER appear in JobInfo.input_params.
+        assert SHORT_MONOMER not in repr(info.get("input_params"))
+        # Summary fields the ticket path populated for us.
+        assert info["input_params"]["mode"] == "env"
+        assert info["input_params"]["sequence_count"] == 1
+
+    def test_result_download_returns_tar_gz_with_a3m(
+        self, client: httpx.Client, msa_job: dict,
+    ) -> None:
+        r = _get_with_retry(
+            client, f"/result/download/{msa_job['job_id']}", headers=msa_job["session"],
+        )
+        assert r.status_code == 200
+        # Content-type is application/x-tar; the payload is a gzipped tarball
+        # (ColabFold client uses ``tarfile.open(fileobj=..., mode='r|gz')``).
+        assert r.headers.get("content-type", "").startswith("application/x-tar")
+        with tarfile.open(fileobj=io.BytesIO(r.content), mode="r:gz") as tf:
+            names = tf.getnames()
+        assert any(n.endswith(".a3m") for n in names), (
+            f"no .a3m in downloaded tarball: {names}"
+        )
+
+    def test_files_endpoint_lists_a3m(
+        self, client: httpx.Client, msa_job: dict,
+    ) -> None:
+        """Framework lifecycle GET /api/jobs/<id>/files also lists the .a3m."""
+        r = _get_with_retry(
+            client, f"/api/jobs/{msa_job['job_id']}/files", headers=msa_job["session"],
+        )
+        assert r.status_code == 200
+        files = r.json()["files"]
+        assert any(f.endswith(".a3m") for f in files), f"no .a3m in files: {files}"
+
+
+# ===================================================================
+# Section 5: A duplicate poll after completion should still succeed
+# (regression guard for session-affinity + job-store round-trip).
+# ===================================================================
+
+
+@pytest.mark.fc
+class TestPostCompletionQueries:
+    def test_repeat_ticket_poll_is_still_complete(
+        self, client: httpx.Client, msa_job: dict,
+    ) -> None:
+        # We already saw COMPLETE inside the fixture; hitting the endpoint
+        # again should be idempotent (no accidental transition to ERROR /
+        # PENDING).
+        r = _get_with_retry(
+            client, f"/ticket/{msa_job['job_id']}", headers=msa_job["session"],
+        )
+        assert r.status_code == 200
+        assert r.json()["status"] == "COMPLETE"
+
+    def test_poll_job_helper_reaches_terminal(
+        self, client: httpx.Client, base_url: str, msa_job: dict,
+    ) -> None:
+        """Framework's ``poll_job`` (JobInfo lifecycle) can also observe the
+        terminal state — useful for downstream clients like ensemble-server
+        that speak JobInfo, not the ColabFold protocol."""
+        final = poll_job(
+            client, "", msa_job["job_id"],
+            timeout_s=60, interval_s=5,
+            extra_headers=msa_job["session"],
+        )
+        assert final["status"] == "completed"

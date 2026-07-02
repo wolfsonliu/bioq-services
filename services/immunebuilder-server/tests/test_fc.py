@@ -16,7 +16,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from bioagent_service.fc_testing import fc_url, poll_job
+from bioagent_service.fc_testing import fc_url, make_retrying_client, poll_job
 
 pytestmark = pytest.mark.fc
 
@@ -55,7 +55,11 @@ def base_url() -> str:
 
 @pytest.fixture(scope="module")
 def client(base_url: str) -> httpx.Client:
-    with httpx.Client(base_url=base_url, timeout=httpx.Timeout(120.0)) as c:
+    # Wrap in Retry429Transport so smoke assertions survive short bursts of
+    # account-level GPU quota exhaustion (FC returns 429 at the platform
+    # layer when 'fc.gpu.tesla.1' is saturated by any function in the
+    # account, not just immunebuilder).
+    with make_retrying_client(base_url, timeout=httpx.Timeout(120.0)) as c:
         yield c
 
 
@@ -143,24 +147,40 @@ def test_healthz(client: httpx.Client) -> None:
 
 
 def test_healthz_detail(client: httpx.Client) -> None:
+    """immunebuilder overrides framework's /healthz/detail with a
+    weights-focused probe (see app.py:healthz_detail).  The response
+    schema is service-specific, not the framework default."""
     r = client.get("/healthz/detail")
     r.raise_for_status()
     body = r.json()
+    assert body["status"] == "ok"
     assert body["service"] == "immunebuilder"
-    assert body["jobs_base_dir_exists"] is True
     assert "version" in body
-    assert "active_jobs" in body
+    assert "weights_dir" in body
+    assert body["weights_loaded"] is True, (
+        f"NAS weights probe failed: {body}"
+    )
+    assert body["files_found"] >= 12, (
+        f"expected >=12 weight files, got {body['files_found']}"
+    )
     assert isinstance(body["active_jobs"], int)
-    assert "max_concurrent_jobs" in body
-    assert "disk_usage_mb" in body
-    assert "disk_limit_mb" in body
+    assert isinstance(body["max_concurrent_jobs"], int)
 
 
-def test_manifest_lists_three_endpoints(client: httpx.Client) -> None:
+def test_manifest_lists_endpoints(client: httpx.Client) -> None:
+    """Manifest exposes both sync (/api/predict_*) and FC async task
+    (/api/tasks/predict_*) variants for each predictor."""
     r = client.get("/api/manifest")
     r.raise_for_status()
     paths = {e["path"] for e in r.json()["endpoints"]}
-    assert paths == {"/api/predict_antibody", "/api/predict_nanobody", "/api/predict_tcr"}
+    assert paths == {
+        "/api/predict_antibody",
+        "/api/predict_nanobody",
+        "/api/predict_tcr",
+        "/api/tasks/predict_antibody",
+        "/api/tasks/predict_nanobody",
+        "/api/tasks/predict_tcr",
+    }
 
 
 def test_manifest_predictors(client: httpx.Client) -> None:
@@ -196,7 +216,14 @@ def test_openapi_served(client: httpx.Client) -> None:
     r.raise_for_status()
     spec = r.json()
     assert "paths" in spec
-    for path in ("/api/predict_antibody", "/api/predict_nanobody", "/api/predict_tcr"):
+    for path in (
+        "/api/predict_antibody",
+        "/api/predict_nanobody",
+        "/api/predict_tcr",
+        "/api/tasks/predict_antibody",
+        "/api/tasks/predict_nanobody",
+        "/api/tasks/predict_tcr",
+    ):
         assert path in spec["paths"], f"{path} missing from OpenAPI spec"
 
 

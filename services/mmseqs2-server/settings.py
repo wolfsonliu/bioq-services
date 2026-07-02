@@ -35,14 +35,18 @@ class MMseqs2Settings(ServiceSettings):
     # (engineering/decisions/2026-06-26-service-weights-externalization.md).
     db_dir: Path = Field(default=Path("/data/models/mmseqs2"))
 
-    # UniRef30 GPU database name (relative to db_dir). The 4090 GPU subset is
-    # the default — override via MMSEQS2_DEFAULT_DB at deploy time when a
-    # different card / DB is in use.
-    default_db: str = Field(default="uniref30_subset_4090_gpu")
+    # UniRef30 database name (relative to db_dir). Default follows the
+    # ColabFold-canonical release naming (`uniref30_YYMM_db`) — this is
+    # what `mmseqs databases UniRef30` produces and what upstream ColabFold
+    # notebooks reference. Override via MMSEQS2_DEFAULT_DB if you use a
+    # differently-named DB (e.g. a `_gpu` subset preformatted with
+    # `mmseqs createindex --split 0 --index-subset 2`).
+    default_db: str = Field(default="uniref30_2302_db")
 
     # Environmental DB (ColabFoldDB). `None` disables the env-mode branch so
-    # the orchestrator runs UniRef30-only (mode = "all" / "nofilter").
-    env_db: Optional[str] = Field(default="colabfold_envdb_gpu")
+    # the orchestrator runs UniRef30-only (mode = "all" / "nofilter"). Default
+    # is the standard ColabFold envDB 202108 release.
+    env_db: Optional[str] = Field(default="colabfold_envdb_202108_db")
 
     # Whether to run mmseqs in GPU mode. Set to False to force CPU fallback
     # (e.g. local dev without a CUDA card).
