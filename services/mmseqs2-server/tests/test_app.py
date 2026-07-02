@@ -328,29 +328,80 @@ def test_get_result_download_unknown_id_returns_503(client: TestClient) -> None:
     assert resp.json()["status"] == "ERROR"
 
 
-def test_get_result_download_completed_streams_tar_gz(
+def test_get_result_download_completed_returns_uniref_a3m(
     client: TestClient, tmp_path: Path
 ) -> None:
-    """A COMPLETED job whose output dir has .a3m files yields a tar.gz body."""
+    """Unpaired outputs are repacked as a single ``uniref.a3m`` at the top
+    level of the tarball — ColabFold + boltz clients look for exactly this
+    filename (see ``opensource/boltz/src/boltz/data/msa/mmseqs2.py:260``)."""
     job_id = "okjob"
     info = JobInfo(job_id=job_id, status=JobStatus.COMPLETED)
     client.app.state.job_store.get = lambda jid: info if jid == job_id else None
 
-    # Lay down the expected output layout under the *real* adapter's job_dir.
     adapter = client.app.state.adapter
     out_dir = adapter.output_dir(adapter.job_dir(job_id))
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "q1.a3m").write_text(">q1\nMKQHKAM\n")
-    (out_dir / "q2.a3m").write_text(">q2\nLLLLLLL\n")
+    # Orchestrator's unpack step emits one file per query, named by jobname.
+    (out_dir / "101.a3m").write_text(">101\nMKQHKAM\n")
+    (out_dir / "102.a3m").write_text(">102\nLLLLLLL\n")
 
     resp = client.get(f"/result/download/{job_id}")
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("application/x-tar")
 
-    # Verify the tarball is well-formed + contains both files.
     with tarfile.open(fileobj=io.BytesIO(resp.content), mode="r:gz") as tf:
         members = sorted(m.name for m in tf.getmembers())
-    assert members == ["q1.a3m", "q2.a3m"]
+        assert members == ["uniref.a3m"], (
+            f"unpaired-only tarball must expose exactly 'uniref.a3m'; got {members}"
+        )
+        # Body is per-query MSAs joined by \x00 (ColabFold parse convention).
+        body = tf.extractfile("uniref.a3m").read()  # type: ignore[union-attr]
+    assert body.count(b"\x00") == 1, (
+        "multi-query uniref.a3m must have exactly one \\x00 separator "
+        f"between the two source files; got {body!r}"
+    )
+    assert b">101" in body and b">102" in body
+
+
+def test_get_result_download_paired_returns_pair_a3m(
+    client: TestClient,
+) -> None:
+    """Paired outputs are repacked as ``pair.a3m`` — see boltz mmseqs2.py:258."""
+    job_id = "pairjob"
+    info = JobInfo(job_id=job_id, status=JobStatus.COMPLETED)
+    client.app.state.job_store.get = lambda jid: info if jid == job_id else None
+
+    adapter = client.app.state.adapter
+    out_dir = adapter.output_dir(adapter.job_dir(job_id))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "101.paired.a3m").write_text(">101\nMKQHKAM:LLLLLLL\n")
+
+    resp = client.get(f"/result/download/{job_id}")
+    assert resp.status_code == 200
+    with tarfile.open(fileobj=io.BytesIO(resp.content), mode="r:gz") as tf:
+        members = sorted(m.name for m in tf.getmembers())
+    assert members == ["pair.a3m"], (
+        f"paired-only tarball must expose exactly 'pair.a3m'; got {members}"
+    )
+
+
+def test_get_result_download_mixed_returns_both(client: TestClient) -> None:
+    """A job with both unpaired and paired outputs → both files present."""
+    job_id = "mixjob"
+    info = JobInfo(job_id=job_id, status=JobStatus.COMPLETED)
+    client.app.state.job_store.get = lambda jid: info if jid == job_id else None
+
+    adapter = client.app.state.adapter
+    out_dir = adapter.output_dir(adapter.job_dir(job_id))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "101.a3m").write_text(">101\nMKQHKAM\n")
+    (out_dir / "101.paired.a3m").write_text(">101\nMKQHKAM:LLLLLLL\n")
+
+    resp = client.get(f"/result/download/{job_id}")
+    assert resp.status_code == 200
+    with tarfile.open(fileobj=io.BytesIO(resp.content), mode="r:gz") as tf:
+        members = sorted(m.name for m in tf.getmembers())
+    assert members == ["pair.a3m", "uniref.a3m"]
 
 
 # ---------------------------------------------------------------------------

@@ -338,9 +338,97 @@ def get_ticket_status(request: Request, job_id: str) -> dict:
     return response
 
 
+def _concat_a3ms_with_null_separator(paths: list[Path]) -> bytes:
+    """Concatenate a3m files with ``\\x00`` separators (ColabFold wire format).
+
+    Both upstream ColabFold's ``run_mmseqs2`` and Boltz's ``run_mmseqs2`` fork
+    parse the downloaded a3m as a **single file** where distinct query
+    sections are separated by a null byte (see ``colabfold.py:301-315`` /
+    ``boltz/data/msa/mmseqs2.py:268-284``).  The parser flips ``update_M``
+    on ``\\x00`` and then reads the next ``>{numeric_id}`` header as the start
+    of a new query.
+
+    Ordering: we sort by filename so numeric-jobname queries (e.g. ``101.a3m``,
+    ``102.a3m``) come out in the order the client submitted them.  Empty
+    files are dropped — an empty a3m entry would otherwise leave the parser
+    with an unresolvable ``M`` key.
+    """
+    payload = b""
+    for i, p in enumerate(sorted(paths)):
+        chunk = p.read_bytes()
+        if not chunk:
+            continue
+        if payload:
+            payload += b"\x00"
+        payload += chunk
+    return payload
+
+
+def _build_colabfold_tarball(out_dir: Path) -> bytes | None:
+    """Repack the orchestrator's output as a ColabFold-canonical tar.gz.
+
+    Contract enforced (mirrors ``api.colabfold.com`` layout so
+    ``boltz --use_msa_server=<us>`` and upstream ColabFold notebooks work
+    against us as a drop-in replacement):
+
+    * ``uniref.a3m`` — concatenation of every ``<jobname>.a3m`` (unpaired,
+      i.e. NOT ``.paired.a3m``) with ``\\x00`` separators.  Present iff at
+      least one unpaired MSA was produced.
+    * ``pair.a3m``   — concatenation of every ``<jobname>.paired.a3m`` (and
+      ``<jobname>.env.paired.a3m`` for env-pair mode) with ``\\x00``
+      separators.  Present iff at least one paired MSA was produced.
+
+    Returns the raw tar.gz bytes, or ``None`` if ``out_dir`` has no a3m
+    outputs at all.
+
+    NOTE: ``mode=env`` unpaired output is currently merged into the single
+    ``<jobname>.a3m`` file at the orchestrator layer (upstream ColabFold
+    keeps ``uniref.a3m`` + ``bfd.mgnify30.metaeuk30.smag30.a3m`` separate).
+    Clients that pass ``use_env=True`` and expect the second file will need
+    a follow-up orchestrator change; today they still get all the sequence
+    data, just concatenated into ``uniref.a3m``.
+    """
+    if not out_dir.is_dir():
+        return None
+
+    all_a3m = [
+        p for p in out_dir.rglob("*.a3m")
+        if p.is_file() and p.stat().st_size > 0
+    ]
+    if not all_a3m:
+        return None
+
+    paired = [p for p in all_a3m if p.name.endswith(".paired.a3m")]
+    unpaired = [p for p in all_a3m if not p.name.endswith(".paired.a3m")]
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        for arcname, sources in (
+            ("uniref.a3m", unpaired),
+            ("pair.a3m", paired),
+        ):
+            if not sources:
+                continue
+            payload = _concat_a3ms_with_null_separator(sources)
+            if not payload:
+                continue
+            info = tarfile.TarInfo(name=arcname)
+            info.size = len(payload)
+            info.mode = 0o644
+            tf.addfile(info, io.BytesIO(payload))
+    buf.seek(0)
+    return buf.getvalue()
+
+
 @app.get("/result/download/{job_id}")
 def get_result_download(request: Request, job_id: str):
-    """Stream a tar.gz of the job's `.a3m` files.
+    """Stream a tar.gz of the job's a3m outputs in ColabFold-canonical layout.
+
+    The tarball contains ``uniref.a3m`` and/or ``pair.a3m`` at the top level
+    with per-query MSAs concatenated using ``\\x00`` separators — the wire
+    format both upstream ColabFold and Boltz expect from
+    ``https://api.colabfold.com/result/download/<id>``.  See
+    ``_build_colabfold_tarball`` for the full contract.
 
     The ColabFold client parses the response body as a tarball regardless of
     Content-Type (``tarfile.open(fileobj=response.raw, mode='r|gz')``), but we
@@ -356,26 +444,16 @@ def get_result_download(request: Request, job_id: str):
         )
 
     out_dir = adapter.output_dir(adapter.job_dir(job_id))
-    a3m_files = [p for p in out_dir.rglob("*.a3m") if p.is_file() and p.stat().st_size > 0]
-    if not a3m_files:
+    payload = _build_colabfold_tarball(out_dir)
+    if payload is None:
         return StreamingResponse(
             iter([b'{"status": "ERROR"}']),
             status_code=503,
             media_type="application/json",
         )
 
-    # Build the tarball in-memory; .a3m payloads are typically a few MiB even
-    # for multimers, so this is fine without a temp file. Stream the buffer
-    # back to the client.
-    buf = io.BytesIO()
-    out_resolved = out_dir.resolve()
-    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
-        for path in a3m_files:
-            tf.add(path, arcname=str(path.resolve().relative_to(out_resolved)))
-    buf.seek(0)
-
     return StreamingResponse(
-        buf,
+        io.BytesIO(payload),
         media_type="application/x-tar",
         headers={"Content-Disposition": f"attachment; filename={job_id}.tar.gz"},
     )

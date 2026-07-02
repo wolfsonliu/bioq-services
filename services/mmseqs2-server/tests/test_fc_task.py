@@ -145,9 +145,13 @@ def _poll_to_completion(client: httpx.Client, task_id: str) -> dict:
 def msa_submit_response(
     client: httpx.Client, msa_task_id: str,
 ) -> httpx.Response:
+    # ``mode=all`` = UniRef30 only, filter=1, unpaired.  Pinned here so the
+    # test suite does NOT require the colabfold_envdb_202108_db to be
+    # uploaded to NAS — env DB deployment is tracked separately.  Switch to
+    # ``mode=env`` once envdb + .idx is staged.
     return client.post(
         "/api/tasks/msa",
-        data={"q": MONOMER_Q, "mode": "env"},
+        data={"q": MONOMER_Q, "mode": "all"},
         headers=_async_headers(msa_task_id),
     )
 
@@ -247,7 +251,7 @@ class TestAsyncMsa:
 
     def test_input_params_summary(self, msa_task: dict) -> None:
         params = msa_task.get("input_params") or {}
-        assert params.get("mode") == "env"
+        assert params.get("mode") == "all"
         assert params.get("sequence_count") == 1
         assert params.get("total_residues") == len(SHORT_MONOMER)
 
@@ -387,11 +391,12 @@ class TestAsyncDuplicateDedup:
         first_mode = (msa_task.get("input_params") or {}).get("mode")
 
         # Resubmit same task_id with a DIFFERENT mode to prove dedup — if
-        # anything re-runs, the new mode ("all") would overwrite the
-        # input_params snapshot.
+        # anything re-runs, the new mode ("nofilter") would overwrite the
+        # input_params snapshot.  Both modes are UniRef30-only so the env DB
+        # need not be staged (first msa fixture also uses UniRef30-only).
         r2 = client.post(
             "/api/tasks/msa",
-            data={"q": MONOMER_Q, "mode": "all"},
+            data={"q": MONOMER_Q, "mode": "nofilter"},
             headers=_async_headers(msa_task_id),
         )
         assert r2.status_code in (202, 409), (

@@ -117,7 +117,9 @@ def msa_job(client: httpx.Client) -> dict:
     ``final`` (the last /ticket/<id> body — COMPLETE).  Consumed by
     every ``TestTicketLifecycle`` case, so we pay the MSA cost once.
     """
-    r = client.post("/ticket/msa", data={"q": MONOMER_Q, "mode": "env"})
+    # ``mode=all`` = UniRef30 only, filter=1, unpaired.  Pinned so the sync
+    # lifecycle fixture doesn't need colabfold_envdb_202108_db staged on NAS.
+    r = client.post("/ticket/msa", data={"q": MONOMER_Q, "mode": "all"})
     assert r.status_code == 200, f"submit failed: {r.status_code} {r.text!r}"
     body = r.json()
     assert body["status"] == "PENDING", body
@@ -276,7 +278,7 @@ class TestTicketLifecycle:
         # Privacy: raw sequence must NEVER appear in JobInfo.input_params.
         assert SHORT_MONOMER not in repr(info.get("input_params"))
         # Summary fields the ticket path populated for us.
-        assert info["input_params"]["mode"] == "env"
+        assert info["input_params"]["mode"] == "all"
         assert info["input_params"]["sequence_count"] == 1
 
     def test_result_download_returns_tar_gz_with_a3m(
