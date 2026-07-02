@@ -54,12 +54,42 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _serialize_fasta(records: list[ParsedSequence]) -> str:
+def _serialize_fasta(
+    records: list[ParsedSequence],
+    *,
+    paired: bool = False,
+) -> str:
     """Render ParsedSequence records back into a FASTA string.
 
     The orchestrator wants a file on disk; this is the inverse of
-    ``parse_query_fasta``. Each record is written as ``>{header}\\n{seq}\\n``.
+    ``parse_query_fasta``.
+
+    Serialization depends on whether this is a paired-multimer submission:
+
+    * ``paired=False`` (default, /ticket/msa + /api/tasks/msa):
+      each record is written as its own ``>{header}\\n{seq}\\n`` block —
+      the orchestrator's ``get_queries`` treats each record as an
+      independent monomer query and emits one MSA per record.
+
+    * ``paired=True`` (/ticket/pair + /api/tasks/pair): chains are
+      **collapsed into a single record** with sequences joined by ``:``.
+      This is the ColabFold-canonical complex-query format that
+      ``get_queries`` requires to flag ``is_complex=True`` (see
+      ``services/mmseqs2-server/_colabfold_helpers.py:260-268``) — without
+      it, orchestrator would classify 2+ records as 2+ independent
+      monomers and skip the paired search entirely.
+
+    ColabFold's own client (``opensource/ColabFold/colabfold/colabfold.py``
+    line 82-84) submits multi-record FASTA to ``/ticket/pair`` and the
+    ColabFold server does the same collapse internally; we mirror that
+    behaviour so the wire protocol stays drop-in compatible.
     """
+    if paired and len(records) >= 2:
+        merged_seq = ":".join(r.sequence for r in records)
+        # Preserve the first chain's header as the complex jobname — mmseqs
+        # uses it only as a filename prefix, so exact value doesn't matter,
+        # but keeping the first record's header makes log lines readable.
+        return f">{records[0].header}\n{merged_seq}\n"
     return "".join(f">{r.header}\n{r.sequence}\n" for r in records)
 
 
@@ -194,6 +224,8 @@ def _make_search_build(
     -> argv``) by accepting both call signatures via ``*args``.
     """
 
+    is_paired = mode_config.pair_mode == "paired"
+
     def _build(*args) -> list[str]:
         job_dir: Path = args[-1]
         input_dir = job_dir / "input"
@@ -201,7 +233,10 @@ def _make_search_build(
         input_dir.mkdir(parents=True, exist_ok=True)
         output_dir.mkdir(parents=True, exist_ok=True)
         fasta_path = input_dir / "query.fasta"
-        fasta_path.write_text(_serialize_fasta(parsed_sequences), encoding="utf-8")
+        fasta_path.write_text(
+            _serialize_fasta(parsed_sequences, paired=is_paired),
+            encoding="utf-8",
+        )
         return colabfold_search_argv(
             query_path=fasta_path,
             output_dir=output_dir,

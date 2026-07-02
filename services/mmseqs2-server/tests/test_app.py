@@ -200,6 +200,62 @@ def test_post_ticket_pair_valid_returns_pending(
     assert stub_submit[0]["label"] == "pair"
 
 
+def test_post_ticket_pair_serializes_chains_with_colon(
+    client: TestClient, stub_submit: list[dict]
+) -> None:
+    """Regression: /ticket/pair must collapse multi-record FASTA into a
+    single ``:``-joined complex record before handing off to the orchestrator.
+
+    Root cause of an earlier FC bug: the orchestrator's ``get_queries``
+    treats each ``>`` record as an independent monomer; without the collapse,
+    a 2-chain query is misclassified as 2 monomers and paired search is
+    skipped (WARNING: "pair-mode=paired requested but query is a monomer").
+    See services/mmseqs2-server/_colabfold_helpers.py:212-271.
+    """
+    resp = client.post(
+        "/ticket/pair",
+        data={"q": _VALID_PAIRED_Q, "mode": "pairgreedy"},
+    )
+    assert resp.status_code == 200
+
+    # Inspect the FASTA the closure wrote for the orchestrator.
+    job_dir = stub_submit[0]["job_dir"]
+    fasta_text = (job_dir / "input" / "query.fasta").read_text(encoding="utf-8")
+    # Should be ONE record with chains joined by ':' (ColabFold complex format).
+    assert fasta_text.count(">") == 1, (
+        f"pair fasta must be a single-record complex, got:\n{fasta_text}"
+    )
+    assert "MKQHKAM:LLLLLLL" in fasta_text, (
+        f"pair fasta must join chains with ':' — got:\n{fasta_text}"
+    )
+
+
+def test_post_ticket_msa_keeps_multi_record_layout(
+    client: TestClient, stub_submit: list[dict]
+) -> None:
+    """Unpaired /ticket/msa must NOT collapse — each record stays independent.
+
+    The mirror of the paired-collapse regression: for /ticket/msa, multiple
+    FASTA records represent N independent monomer queries and the
+    orchestrator emits one MSA per record.  Collapsing would silently merge
+    them into a fake complex.
+    """
+    multi_monomer = ">q1\nMKQHKAM\n>q2\nLLLLLLL\n"
+    resp = client.post(
+        "/ticket/msa",
+        data={"q": multi_monomer, "mode": "env"},
+    )
+    assert resp.status_code == 200
+
+    job_dir = stub_submit[0]["job_dir"]
+    fasta_text = (job_dir / "input" / "query.fasta").read_text(encoding="utf-8")
+    assert fasta_text.count(">") == 2, (
+        f"msa fasta must preserve N-record layout, got:\n{fasta_text}"
+    )
+    # Chains must NOT be joined by ':' (that's the paired-complex shape).
+    assert ":" not in fasta_text
+
+
 @pytest.mark.parametrize(
     "data,reason",
     [
