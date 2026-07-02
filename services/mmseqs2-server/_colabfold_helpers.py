@@ -183,7 +183,7 @@ def pair_msa(
 
 
 def msa_to_str(
-    unpaired_msa: List[str],
+    unpaired_msa: Optional[List[str]],
     paired_msa: Optional[List[str]],
     query_seqs_unique: List[str],
     query_seqs_cardinality: List[int],

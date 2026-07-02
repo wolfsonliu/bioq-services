@@ -454,3 +454,78 @@ def test_main_cli_validation_paired_requires_strategy(
     ])
     with pytest.raises(SystemExit):
         orchestrator.main()
+
+
+# ---------------------------------------------------------------------------
+# _emit_complex_outputs — paired-only branch must not pass empty unpaired list
+# ---------------------------------------------------------------------------
+
+
+def test_emit_complex_outputs_pair_only_does_not_pass_empty_unpaired(
+    tmp_path: Path,
+) -> None:
+    """Regression: FC pair endpoint used to fail with
+    ``IndexError: list index out of range`` because ``_emit_complex_outputs``
+    initialised ``unpaired_msa = []`` even when ``keep_unpaired=False``.
+    ``pair_msa`` distinguishes "not provided" from "empty" via ``is None``
+    so a stray empty list routed us into the both-provided branch and
+    ``pad_sequences([], ...)`` blew up on ``a3m_lines[0]``.
+
+    Verified end-to-end on FC v0.0.4 (job ``cc4025d8ce414559870c``).
+    """
+    base = tmp_path
+    # Pretend the paired unpack step wrote per-chain files.
+    (base / "0.paired.a3m").write_text(">101\nACDE\n>seq1\nACDE\n")
+    (base / "1.paired.a3m").write_text(">102\nWXYZ\n>seq2\nWXYZ\n")
+
+    queries_unique = [
+        # (jobname, sequences, cardinality, other)
+        ("complex_1", ["ACDE", "WXYZ"], [1, 1], None),
+    ]
+
+    # Must not raise IndexError; must produce base/0.a3m.
+    orchestrator._emit_complex_outputs(
+        base,
+        queries_unique,
+        keep_unpaired=False,
+        keep_paired=True,
+        unpack=True,
+    )
+    output = base / "0.a3m"
+    assert output.exists(), "paired-only concat did not produce 0.a3m"
+    text = output.read_text()
+    # msa_to_str prefixes with "#<lens>\t<cardinalities>\n" header.
+    assert text.startswith("#4,4\t1,1\n"), (
+        f"unexpected header line: {text.splitlines()[:1]}"
+    )
+    # Pair mode CONCATENATES chains into single rows joined by tab in the
+    # header (``>101\t102``) with sequences glued (``ACDEWXYZ``).  This is
+    # ``pair_sequences``'s contract — one row per paired hit across all chains.
+    assert ">101\t102" in text, (
+        f"paired MSA missing concatenated chain header: {text!r}"
+    )
+    assert "ACDEWXYZ" in text, (
+        f"paired MSA missing glued-chain sequence: {text!r}"
+    )
+
+
+def test_emit_complex_outputs_unpaired_only_still_works(
+    tmp_path: Path,
+) -> None:
+    """The mirror case: keep_unpaired=True + keep_paired=False must also
+    concat correctly (this path used to work; guard against regression)."""
+    base = tmp_path
+    (base / "0.a3m").write_text(">101\nACDE\n>seq1\nACDE\n")
+    (base / "1.a3m").write_text(">102\nWXYZ\n>seq2\nWXYZ\n")
+
+    queries_unique = [
+        ("complex_1", ["ACDE", "WXYZ"], [1, 1], None),
+    ]
+    orchestrator._emit_complex_outputs(
+        base,
+        queries_unique,
+        keep_unpaired=True,
+        keep_paired=False,
+        unpack=True,
+    )
+    assert (base / "0.a3m").exists()

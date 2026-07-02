@@ -74,7 +74,6 @@ custom_channels:
   conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
   bioconda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
   pytorch: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
-  rdkit: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
 EOF
 
 # ---------------------------------------------------------------------------
@@ -84,7 +83,7 @@ EOF
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     micromamba create -y -n diffusion_hopping \
-        -c pyg -c nvidia -c pytorch -c rdkit -c conda-forge -c bioconda \
+        -c pyg -c nvidia -c pytorch -c conda-forge -c bioconda \
         python=3.10 \
         pytorch::pytorch=1.13.1 \
         pytorch-cuda=11.7 \
@@ -97,7 +96,7 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
         pandas=1.5.2 \
         biopandas=0.4.1 \
         biopython=1.80 \
-        rdkit=2022.09.3 \
+        conda-forge::rdkit=2022.09.3 \
         openbabel=3.1.1 \
         tqdm=4.64.1 \
         bioconda::reduce

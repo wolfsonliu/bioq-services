@@ -1032,10 +1032,18 @@ def _emit_complex_outputs(
         query_seqs_cardinality,
         _other,
     ) in enumerate(queries_unique):
-        unpaired_msa: List[str] = []
-        paired_msa: list | None = [] if len(query_seqs_cardinality) > 1 else None
+        # NB: ``pair_msa`` distinguishes "not provided" from "provided but
+        # empty" via ``is None``.  If we default to ``[]`` when the flag is
+        # False, pair_msa's branch selector routes to the both-provided path
+        # and calls pad_sequences([], ...) which raises IndexError on
+        # ``a3m_lines[0]``.  Keep these as None unless the corresponding
+        # side was actually collected below.
+        unpaired_msa: List[str] | None = [] if keep_unpaired else None
+        paired_msa: list | None = (
+            [] if (keep_paired and len(query_seqs_cardinality) > 1) else None
+        )
         for _seq in query_sequences:
-            if keep_unpaired:
+            if keep_unpaired and unpaired_msa is not None:
                 with base.joinpath(f"{idx}.a3m").open("r") as f:
                     unpaired_msa.append(f.read())
                 base.joinpath(f"{idx}.a3m").unlink(missing_ok=True)
