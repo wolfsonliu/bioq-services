@@ -258,7 +258,7 @@ apptainer run --nv \
 | `DRUGHIVE_WEIGHTS_DIR` | `/data/models/drughive/checkpoints` | NAS mount |
 | `DRUGHIVE_CHECKPOINT_FILENAME` | `drughive_model_ch9.ckpt` | Single Zenodo ckpt |
 | `DRUGHIVE_MODEL_ID` | `c9_pdbzinc` | Passed to upstream YAML |
-| `DRUGHIVE_DOCKING_CMD` | `qvina2` | bioconda's binary name (upstream default `qvina2.1` is overridden) |
+| `DRUGHIVE_DOCKING_CMD` | `qvina2.1` | Vendored QuickVina 2 binary from QVina github (Apache-2.0); `qvina2` symlink also available |
 | `DRUGHIVE_MAX_CONCURRENT_JOBS` | `1` | Single-GPU serial |
 | `DRUGHIVE_SESSION_HEADER_NAME` | `bioagent-session-id` | FC session affinity |
 | `DRUGHIVE_TASK_ENDPOINTS_ENABLED` | `true` | Toggle `/api/tasks/*` |
@@ -266,8 +266,11 @@ apptainer run --nv \
 ## Local development
 
 ```bash
-# 1. Vendor upstream (once, or when bumping SHA)
+# 1a. Vendor DrugHIVE upstream (once, or when bumping SHA)
 ./services/drughive-server/scripts/vendor.sh
+
+# 1b. Vendor QuickVina 2 static binary (once, Apache-2.0)
+./services/drughive-server/scripts/vendor_qvina.sh
 
 # 2. Offline unit tests — no Docker, no GPU, no weights
 uv run python -m pytest services/drughive-server/tests/test_app.py -v

@@ -127,10 +127,10 @@ DB），让 `/healthz/detail` 探针逻辑统一。
 ```
 /data/models/chembounce/
 └── data/
-    ├── scaffolds.txt                         ← 全量 ~4M scaffolds SMILES
-    ├── scaffolds_250mw.txt                   ← 250 MW 子集
+    ├── Scaffolds_processed.txt               ← 全量 ~4M scaffolds SMILES
+    ├── Scaffolds_processed_mw250.txt         ← 250 MW 子集
     ├── scaffold_fingerprints.npz             ← 全量 Morgan FP
-    └── scaffold_fingerprints_250mw.npz       ← 子集 Morgan FP
+    └── scaffold_fingerprints_mw250.npz       ← 子集 Morgan FP
 ```
 
 ### Pre-stage（一次性）

@@ -29,8 +29,9 @@ def client(tmp_path, monkeypatch):
     data_dir = tmp_path / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
     # Touch 250mw DB files so healthz/detail reports it as present.
-    (data_dir / "scaffolds_250mw.txt").write_text("CC\n")
-    (data_dir / "scaffold_fingerprints_250mw.npz").write_bytes(b"\x00")
+    # Names match upstream Zenodo release (see settings.py comment).
+    (data_dir / "Scaffolds_processed_mw250.txt").write_text("CC\n")
+    (data_dir / "scaffold_fingerprints_mw250.npz").write_bytes(b"\x00")
 
     sys.modules.pop("server.app", None)
     sys.modules.pop("server.settings", None)
@@ -56,7 +57,7 @@ def test_healthz_detail_reports_db_status(client):
     assert body["database_status"]["full"] is False
     # weights_loaded is "service usable" → True (250mw default works)
     assert body["weights_loaded"] is True
-    assert "scaffolds.txt" in body["weights_missing"]
+    assert "Scaffolds_processed.txt" in body["weights_missing"]
 
 
 def test_manifest_service_name(client):
@@ -182,7 +183,7 @@ def test_settings_defaults():
     # See engineering/decisions/2026-06-26-service-weights-externalization.md.
     assert s.weights_dir == Path("/data/models/chembounce/data")
     assert s.fingerprint_250mw == Path(
-        "/data/models/chembounce/data/scaffold_fingerprints_250mw.npz"
+        "/data/models/chembounce/data/scaffold_fingerprints_mw250.npz"
     )
     assert s.fingerprint_full == Path(
         "/data/models/chembounce/data/scaffold_fingerprints.npz"
@@ -199,7 +200,7 @@ def test_settings_env_override(monkeypatch):
     assert s.weights_dir == Path("/mnt/scratch/chembounce")
     # Computed paths track weights_dir.
     assert s.fingerprint_250mw == Path(
-        "/mnt/scratch/chembounce/scaffold_fingerprints_250mw.npz"
+        "/mnt/scratch/chembounce/scaffold_fingerprints_mw250.npz"
     )
 
 
@@ -245,9 +246,9 @@ def test_scaffold_hop_argv_has_required_flags(tmp_path):
     assert "-n" in argv and "42" in argv
     assert "-t" in argv and "0.7" in argv
     assert "--scaffold-db" in argv
-    assert str(tmp_path / "data" / "scaffolds_250mw.txt") in argv
+    assert str(tmp_path / "data" / "Scaffolds_processed_mw250.txt") in argv
     assert "--fingerprint-db" in argv
-    assert str(tmp_path / "data" / "scaffold_fingerprints_250mw.npz") in argv
+    assert str(tmp_path / "data" / "scaffold_fingerprints_mw250.npz") in argv
     assert "--qed_min" in argv and "0.5" in argv
     assert "--wo_lipinski" in argv
 
@@ -273,7 +274,7 @@ def test_scaffold_hop_argv_full_db(tmp_path):
         job_dir=job_dir,
         settings=s,
     )
-    assert str(tmp_path / "data" / "scaffolds.txt") in argv
+    assert str(tmp_path / "data" / "Scaffolds_processed.txt") in argv
     assert str(tmp_path / "data" / "scaffold_fingerprints.npz") in argv
 
 

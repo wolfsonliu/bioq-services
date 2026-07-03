@@ -16,3 +16,4 @@ ensemble-server: https://fc-ensemble-vnugpsiojy.cn-hangzhou-vpc.fcapp.run
 mmseqs2-server: https://fc-mmseqs-ijlwlhpldm.cn-hangzhou-vpc.fcapp.run
 diffdock-pp-server: 
 diffusion-hopping-server: https://fc-diff-hopping-xefuosyhju.cn-hangzhou-vpc.fcapp.run
+chembounce-server: https://fc-chembounce-vhjhvjexpd.cn-hangzhou-vpc.fcapp.run

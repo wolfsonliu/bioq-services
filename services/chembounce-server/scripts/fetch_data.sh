@@ -14,11 +14,11 @@
 #   DATA_DST=/mnt/nas/data/models/chembounce/data \
 #       ./services/chembounce-server/scripts/fetch_data.sh
 #
-# Contents (~ multi-GB; full DB + 250mw subset):
-#   scaffolds.txt                          (~hundreds of MB)
-#   scaffolds_250mw.txt                    (~MB)
+# Contents (~ multi-GB; full DB + 250mw subset — upstream Zenodo names):
+#   Scaffolds_processed.txt                (~hundreds of MB)
+#   Scaffolds_processed_mw250.txt          (~MB)
 #   scaffold_fingerprints.npz              (~GB)
-#   scaffold_fingerprints_250mw.npz        (~tens of MB)
+#   scaffold_fingerprints_mw250.npz        (~tens of MB)
 #   ... plus SAscore data if upstream includes it
 
 set -euo pipefail
@@ -31,7 +31,7 @@ URL_PRIMARY="https://zenodo.org/records/16741967/files/data.zip"
 URL_FALLBACK="https://www.dropbox.com/scl/fi/1wlp71fdvjycee8r52wp6/data.zip?rlkey=o328bgjyj2mtyf71khmzceh72&st=89du7ywu&dl=1"
 
 ZIP="$DST/data.zip"
-if [[ -f "$DST/scaffold_fingerprints_250mw.npz" ]]; then
+if [[ -f "$DST/scaffold_fingerprints_mw250.npz" ]]; then
     echo "[skip] $DST already populated"
     du -sh "$DST"/* 2>/dev/null | head -10
     exit 0

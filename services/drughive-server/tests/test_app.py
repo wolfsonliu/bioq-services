@@ -71,7 +71,7 @@ def test_settings_defaults():
     assert s.weights_dir == Path("/data/models/drughive/checkpoints")
     assert s.checkpoint_filename == "drughive_model_ch9.ckpt"
     assert s.model_id == "c9_pdbzinc"
-    assert s.docking_cmd == "qvina2"
+    assert s.docking_cmd == "qvina2.1"
     assert s.checkpoint_path == Path(
         "/data/models/drughive/checkpoints/drughive_model_ch9.ckpt"
     )
@@ -211,8 +211,8 @@ def test_build_optimize_config_full(tmp_path):
     assert cfg["key_opt"] == "affinity_qvina"
     assert cfg["n_cycles"] == 2
     assert cfg["zbetas"] == [0.3, 0.2]
-    # docking_cmd comes from settings (default "qvina2"), NOT from request
-    assert cfg["docking_cmd"] == "qvina2"
+    # docking_cmd comes from settings (default "qvina2.1"), NOT from request
+    assert cfg["docking_cmd"] == "qvina2.1"
 
 
 def test_build_optimize_config_scalar_zbetas(tmp_path):

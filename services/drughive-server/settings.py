@@ -63,11 +63,12 @@ class DrughiveSettings(ServiceSettings):
     )
 
     docking_cmd: str = Field(
-        default="qvina2",
-        description="QVina2 binary name.  Upstream default is `qvina2.1` "
-        "(from qvina.github.io tarball); we ship bioconda's `qvina` "
-        "package which installs `qvina2` (no `.1` suffix).  Passed "
-        "through to upstream YAML config `docking_cmd:` field.",
+        default="qvina2.1",
+        description="QVina2 binary name.  Upstream default is `qvina2.1`; "
+        "we vendor that exact binary from the QVina github repo "
+        "(Apache-2.0, see scripts/vendor_qvina.sh) into the conda env "
+        "bin/.  A `qvina2` symlink is also created for flexibility.  "
+        "Passed through to upstream YAML config `docking_cmd:` field.",
     )
 
     # Single-GPU FC instances run jobs serially; /api/optimize is

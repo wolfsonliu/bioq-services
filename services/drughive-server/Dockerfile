@@ -12,6 +12,7 @@
 #
 # Prerequisites (one-time, re-run to bump pinned upstream commit / refresh weights):
 #   ./services/drughive-server/scripts/vendor.sh          # → upstream/
+#   ./services/drughive-server/scripts/vendor_qvina.sh    # → qvina/qvina2.1
 #   ./services/drughive-server/scripts/fetch_weights.sh   # → weights/  (Zenodo)
 #
 # DrugHIVE source lives at services/drughive-server/upstream/ (vendored at
@@ -23,8 +24,8 @@
 #
 # Multistage layout
 # -----------------
-#   builder = conda env (Py 3.10 + PyTorch 1.12 + cu117 + rdkit + openbabel
-#             + bioconda::qvina) + framework + cleanup.
+#   builder = conda env (Py 3.10 + PyTorch 1.12 + cu117 + rdkit + openbabel)
+#             + vendored qvina2.1 static binary + framework + cleanup.
 #   runtime = lean: conda env from builder + DrugHIVE source + server code.
 #
 # Base: nvidia/cuda 11.8 -runtime (forward-compatible with conda's
@@ -89,10 +90,11 @@ EOF
 #   - Python bumped 3.9 → 3.10 (better wheel coverage; 1.12 has cu117 wheels
 #     for both).
 #   - rdkit bumped 2021.09.5 → 2022.09.3 (py3.10-friendly; API compatible).
-#   - Added `bioconda::qvina` for the /api/optimize QVina2 docking loop.
-#     bioconda's `qvina` package installs a `qvina2` binary (no `.1` suffix);
-#     settings.docking_cmd = "qvina2" tells upstream to use that name.
 #   - Removed plotly (visualization only, no impact on inference).
+# QVina2 is NOT installed via conda — bioconda's `qvina` recipe has no
+# actual package files (verified 2026-07-02).  We drop the pre-built,
+# statically-linked qvina2.1 binary from the QVina github repo (Apache-2.0)
+# below via the COPY step; see scripts/vendor_qvina.sh.
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     micromamba create -y -n drughive \
@@ -110,8 +112,19 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
         scikit-image=0.20.0 \
         scikit-learn=1.3.0 \
         tqdm=4.65.0 \
-        pyyaml=6.0 \
-        bioconda::qvina
+        pyyaml=6.0
+
+# ---------------------------------------------------------------------------
+# QVina2 static binary — vendored via scripts/vendor_qvina.sh (Apache-2.0,
+# from https://github.com/QVina/qvina).  Placed inside the conda env's bin
+# so it lands on PATH alongside python / rdkit tools.  Both `qvina2.1` (the
+# upstream DrugHIVE default docking_cmd) and `qvina2` (short-name symlink)
+# are exposed for flexibility.
+# ---------------------------------------------------------------------------
+COPY services/drughive-server/qvina/qvina2.1 \
+     /opt/conda/envs/drughive/bin/qvina2.1
+RUN chmod +x /opt/conda/envs/drughive/bin/qvina2.1 && \
+    ln -sf qvina2.1 /opt/conda/envs/drughive/bin/qvina2
 
 # ---------------------------------------------------------------------------
 # DrugHIVE source — from vendored upstream/ (see scripts/vendor.sh).
@@ -123,15 +136,15 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/drughive/bin/python \
         -e /opt/drughive
 
-# Build-time smoke: verify all critical imports work.
+# Build-time smoke: verify all critical imports + qvina2.1 binary work.
 RUN /opt/conda/envs/drughive/bin/python -c \
     "import torch; print('torch', torch.__version__); \
      import openbabel; print('openbabel ok'); \
      from rdkit import Chem; print('rdkit', Chem.__name__); \
      import drughive; print('drughive ok'); \
      import shutil; \
-     assert shutil.which('qvina2'), 'qvina2 binary missing!'; \
-     print('qvina2 at', shutil.which('qvina2'))"
+     assert shutil.which('qvina2.1'), 'qvina2.1 binary missing!'; \
+     print('qvina2.1 at', shutil.which('qvina2.1'))"
 
 # ---------------------------------------------------------------------------
 # Cleanup dead weight from the conda env.

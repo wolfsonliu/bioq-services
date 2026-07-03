@@ -67,13 +67,14 @@ def healthz_detail(request: Request) -> dict:
     Reports both 250mw and full as separate flags; service can run with just
     one of them (250mw is required by default), full is bonus.
     """
+    # Labels reflect the actual filenames on NAS (upstream release names).
     db250 = {
-        "scaffolds_250mw.txt": settings.scaffold_db_250mw,
-        "scaffold_fingerprints_250mw.npz": settings.fingerprint_250mw,
+        settings.scaffold_db_250mw.name: settings.scaffold_db_250mw,
+        settings.fingerprint_250mw.name: settings.fingerprint_250mw,
     }
     db_full = {
-        "scaffolds.txt": settings.scaffold_db_full,
-        "scaffold_fingerprints.npz": settings.fingerprint_full,
+        settings.scaffold_db_full.name: settings.scaffold_db_full,
+        settings.fingerprint_full.name: settings.fingerprint_full,
     }
     missing_250mw = {k: str(p) for k, p in db250.items() if not p.exists()}
     missing_full = {k: str(p) for k, p in db_full.items() if not p.exists()}

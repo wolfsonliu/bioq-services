@@ -48,20 +48,25 @@ class ChemBounceSettings(ServiceSettings):
         description="Scaffold SMILES + Morgan-FP .npz database directory.",
     )
 
+    # File names below match the upstream Zenodo release
+    # (https://zenodo.org/records/16741967/files/data.zip).  Upstream's
+    # own `install.sh` extracts these exact filenames; our fetch_data.sh
+    # + NAS layout keep them as-is (mixed casing / `mw250` suffix
+    # ordering / `_processed_` middle) rather than renaming.
     @computed_field  # type: ignore[misc]
     @property
     def scaffold_db_250mw(self) -> Path:
-        return self.weights_dir / "scaffolds_250mw.txt"
+        return self.weights_dir / "Scaffolds_processed_mw250.txt"
 
     @computed_field  # type: ignore[misc]
     @property
     def scaffold_db_full(self) -> Path:
-        return self.weights_dir / "scaffolds.txt"
+        return self.weights_dir / "Scaffolds_processed.txt"
 
     @computed_field  # type: ignore[misc]
     @property
     def fingerprint_250mw(self) -> Path:
-        return self.weights_dir / "scaffold_fingerprints_250mw.npz"
+        return self.weights_dir / "scaffold_fingerprints_mw250.npz"
 
     @computed_field  # type: ignore[misc]
     @property
