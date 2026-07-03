@@ -81,10 +81,13 @@ EOF
 # 1.13.1 + cu117 + PyG 2.2 + scatter + rdkit + openbabel) PLUS `reduce`
 # (Duke biochemistry tool; bioconda). Removed wandb (not needed at inference).
 #
-# mkl<2024.1 / intel-openmp<2024.1: pytorch 1.13's libtorch_cpu.so
-# weak-references `iJIT_NotifyEvent`, which mkl 2024.1+ / intel-openmp
-# 2024.1+ dropped — without the pin, `import torch` blows up at runtime with
-# `undefined symbol: iJIT_NotifyEvent`.  See pytorch/pytorch#123097.
+# ittapi: pytorch 1.13's libtorch_cpu.so weak-references `iJIT_NotifyEvent`
+# (Intel VTune ITT).  Without a provider `.so` in the env's lib/, `import
+# torch` blows up with `undefined symbol: iJIT_NotifyEvent`.  Historically
+# `mkl` bundled the symbol, but mkl 2024.1+ removed it — hence the failure
+# on fresh builds.  Adding conda-forge's `ittapi` supplies libjitprofiling.so
+# independently of the mkl version.  See
+# engineering/guides/pytorch-conda-ittapi.md and pytorch/pytorch#123097.
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     micromamba create -y -n diffusion_hopping \
@@ -105,8 +108,7 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
         openbabel=3.1.1 \
         tqdm=4.64.1 \
         bioconda::reduce \
-        "mkl<2024.1" \
-        "intel-openmp<2024.1"
+        conda-forge::ittapi
 
 # ---------------------------------------------------------------------------
 # DiffHopp source — from vendored upstream/ (see scripts/vendor.sh).
