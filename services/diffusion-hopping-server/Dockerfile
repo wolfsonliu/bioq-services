@@ -80,6 +80,11 @@ EOF
 # Conda env — based on upstream's environment.yml (Python 3.10 + pytorch
 # 1.13.1 + cu117 + PyG 2.2 + scatter + rdkit + openbabel) PLUS `reduce`
 # (Duke biochemistry tool; bioconda). Removed wandb (not needed at inference).
+#
+# mkl<2024.1 / intel-openmp<2024.1: pytorch 1.13's libtorch_cpu.so
+# weak-references `iJIT_NotifyEvent`, which mkl 2024.1+ / intel-openmp
+# 2024.1+ dropped — without the pin, `import torch` blows up at runtime with
+# `undefined symbol: iJIT_NotifyEvent`.  See pytorch/pytorch#123097.
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     micromamba create -y -n diffusion_hopping \
@@ -99,7 +104,9 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
         conda-forge::rdkit=2022.09.3 \
         openbabel=3.1.1 \
         tqdm=4.64.1 \
-        bioconda::reduce
+        bioconda::reduce \
+        "mkl<2024.1" \
+        "intel-openmp<2024.1"
 
 # ---------------------------------------------------------------------------
 # DiffHopp source — from vendored upstream/ (see scripts/vendor.sh).
