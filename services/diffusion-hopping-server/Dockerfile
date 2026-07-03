@@ -81,13 +81,19 @@ EOF
 # 1.13.1 + cu117 + PyG 2.2 + scatter + rdkit + openbabel) PLUS `reduce`
 # (Duke biochemistry tool; bioconda). Removed wandb (not needed at inference).
 #
-# ittapi: pytorch 1.13's libtorch_cpu.so weak-references `iJIT_NotifyEvent`
-# (Intel VTune ITT).  Without a provider `.so` in the env's lib/, `import
-# torch` blows up with `undefined symbol: iJIT_NotifyEvent`.  Historically
-# `mkl` bundled the symbol, but mkl 2024.1+ removed it — hence the failure
-# on fresh builds.  Adding conda-forge's `ittapi` supplies libjitprofiling.so
-# independently of the mkl version.  See
-# engineering/guides/pytorch-conda-ittapi.md and pytorch/pytorch#123097.
+# iJIT_NotifyEvent fix (belt-and-braces): pytorch 1.13's libtorch_cpu.so
+# weak-references `iJIT_NotifyEvent` (Intel VTune ITT).  Without a provider
+# in the env's lib/, `import torch` blows up with `undefined symbol:
+# iJIT_NotifyEvent`.  Historically `mkl` bundled the symbol, but mkl 2024.1+
+# removed it — hence the failure on fresh builds.
+#
+# For pytorch 2.0.1 (deeprank-ab), `ittapi` alone fixes it; for pytorch 1.13
+# `ittapi` is insufficient (verified 2026-07-03 on FC) — the loader still
+# reports the symbol undefined.  Pin `mkl<2024.1` / `intel-openmp<2024.1`
+# so the mkl-provided collector still resolves the symbol.  Keep `ittapi`
+# too — it's harmless and gives a second-source for pytorch 2.x rebuilds.
+#
+# See engineering/guides/pytorch-conda-ittapi.md and pytorch/pytorch#123097.
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     micromamba create -y -n diffusion_hopping \
@@ -108,7 +114,9 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
         openbabel=3.1.1 \
         tqdm=4.64.1 \
         bioconda::reduce \
-        conda-forge::ittapi
+        conda-forge::ittapi \
+        "mkl<2024.1" \
+        "intel-openmp<2024.1"
 
 # ---------------------------------------------------------------------------
 # DiffHopp source — from vendored upstream/ (see scripts/vendor.sh).
