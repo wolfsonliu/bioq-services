@@ -91,10 +91,21 @@ EOF
 #     for both).
 #   - rdkit bumped 2021.09.5 → 2022.09.3 (py3.10-friendly; API compatible).
 #   - Removed plotly (visualization only, no impact on inference).
+#
 # QVina2 is NOT installed via conda — bioconda's `qvina` recipe has no
 # actual package files (verified 2026-07-02).  We drop the pre-built,
 # statically-linked qvina2.1 binary from the QVina github repo (Apache-2.0)
 # below via the COPY step; see scripts/vendor_qvina.sh.
+#
+# iJIT_NotifyEvent fix: pytorch 1.12 / 1.13's libtorch_cpu.so weak-references
+# `iJIT_NotifyEvent` (Intel VTune ITT).  Without a provider in the env's
+# lib/, `import torch` blows up with `undefined symbol: iJIT_NotifyEvent`.
+# Historically `mkl` bundled the symbol, but mkl 2024.1+ / intel-openmp
+# 2024.1+ dropped it — hence the failure on fresh builds.
+# Pin `mkl<2024.1` / `intel-openmp<2024.1` (which still ship the ITT
+# collector) + add `ittapi` as a second source.  Same fix as
+# diffusion-hopping-server; see engineering/guides/pytorch-conda-ittapi.md
+# and pytorch/pytorch#123097.
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     micromamba create -y -n drughive \
@@ -112,7 +123,10 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
         scikit-image=0.20.0 \
         scikit-learn=1.3.0 \
         tqdm=4.65.0 \
-        pyyaml=6.0
+        pyyaml=6.0 \
+        conda-forge::ittapi \
+        "mkl<2024.1" \
+        "intel-openmp<2024.1"
 
 # ---------------------------------------------------------------------------
 # QVina2 static binary — vendored via scripts/vendor_qvina.sh (Apache-2.0,

@@ -83,11 +83,20 @@ EOF
 # spline-conv + e3nn + biopython + biopandas). Skip wandb (training-only)
 # and matplotlib (visualization plots).
 #
-# ittapi: same issue as diffusion-hopping-server. pytorch 1.13's
-# libtorch_cpu.so weakly references `iJIT_NotifyEvent` (Intel VTune ITT).
-# mkl 2024.1+ removed the symbol, so `import torch` blows up unless
-# conda-forge's `ittapi` provides libjitprofiling.so independently.
-# See engineering/guides/pytorch-conda-ittapi.md.
+# iJIT_NotifyEvent fix (belt-and-braces): pytorch 1.13's libtorch_cpu.so
+# weak-references `iJIT_NotifyEvent` (Intel VTune ITT).  Without a provider
+# in the env's lib/, `import torch` blows up with `undefined symbol:
+# iJIT_NotifyEvent`.  Historically `mkl` bundled the symbol, but mkl 2024.1+
+# removed it — hence the failure on fresh builds.
+#
+# For pytorch 1.13 `ittapi` alone is INSUFFICIENT (verified 2026-07-03 on
+# both diffusion-hopping-server and diffdock-pp-server builds) — the
+# dynamic loader still reports the symbol undefined.  Pin `mkl<2024.1` /
+# `intel-openmp<2024.1` so the mkl-provided collector still resolves the
+# symbol.  Keep `ittapi` too — it's harmless and gives a second-source for
+# pytorch 2.x rebuilds.
+#
+# See engineering/guides/pytorch-conda-ittapi.md and pytorch/pytorch#123097.
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     micromamba create -y -n diffdock_pp \
@@ -113,7 +122,9 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
         conda-forge::tqdm \
         conda-forge::tensorboardx \
         conda-forge::tensorboard \
-        conda-forge::ittapi
+        conda-forge::ittapi \
+        "mkl<2024.1" \
+        "intel-openmp<2024.1"
 
 # fair-esm from PyPI (not on conda-forge). Deferred so the base env cache
 # isn't invalidated when we bump only this.
