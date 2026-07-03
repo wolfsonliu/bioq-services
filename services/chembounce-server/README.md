@@ -198,7 +198,7 @@ docker run --rm \
     -v /data:/data \
     -v /path/to/db:/data/models/chembounce/data:ro \
     chembounce-server \
-    /opt/conda/envs/chembounce/bin/python -m server scaffold_hop \
+    /opt/server-venv/bin/python -m server scaffold_hop \
     --input-smiles "CCCCC1=NC..." \
     --output-dir /data/results/ \
     --params-json '{"frag_max_n": 100, "tanimoto_threshold": 0.5, "database": "250mw"}'

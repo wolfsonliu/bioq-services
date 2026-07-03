@@ -16,8 +16,12 @@
 # Multistage layout
 # -----------------
 #   builder = conda env (Python 3.8 + RDKit 2020.09.5 + scaffoldgraph 1.1.2
-#             + oddt + molvs + numpy/pandas/scikit-learn) + framework + cleanup.
-#   runtime = lean: conda env from builder + ChemBounce source + server code.
+#             + oddt + molvs + numpy/pandas/scikit-learn) for the ChemBounce
+#             subprocess; plus /opt/server-venv (Python 3.11) for the
+#             FastAPI + bioagent-service-framework layer (framework requires
+#             py>=3.10, upstream conda env pins py3.8 — split by design).
+#   runtime = lean: conda env + server venv from builder + ChemBounce source
+#             + server code.
 #
 # Base: python:3.11-slim (Debian bookworm; ~120 MB) — micromamba is bolted
 # on top for the conda env.  No nvidia/cuda base because no GPU.
@@ -108,11 +112,15 @@ RUN /opt/conda/envs/chembounce/bin/pip uninstall -y \
     && find /opt/conda/envs/chembounce -name '*.pyc' -delete
 
 # ---------------------------------------------------------------------------
-# Shared bioagent service framework — independent layer.
+# Server venv — isolated Python 3.11 (base image's system Python) for the
+# FastAPI + bioagent-service-framework layer.  Kept separate from the
+# chembounce conda env (py3.8, pinned by upstream) because the framework
+# requires py>=3.10 and uses `X | None` unions at runtime.
 # ---------------------------------------------------------------------------
 RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
     --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --python /opt/conda/envs/chembounce/bin/python \
+    python3.11 -m venv /opt/server-venv \
+    && uv pip install --python /opt/server-venv/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
 
@@ -125,14 +133,18 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV MAMBA_ROOT_PREFIX=/opt/conda
-ENV PATH=/opt/conda/envs/chembounce/bin:$PATH
+# server-venv on PATH first so `python`/`uvicorn` resolve to the py3.11
+# framework env; conda env still on PATH for occasional debugging.
+ENV PATH=/opt/server-venv/bin:/opt/conda/envs/chembounce/bin:$PATH
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Conda env + ChemBounce source from builder.
+# Conda env (py3.8 for chembounce subprocess) + server venv (py3.11 for
+# FastAPI/framework) + ChemBounce source from builder.
 COPY --from=builder /opt/conda /opt/conda
+COPY --from=builder /opt/server-venv /opt/server-venv
 COPY --from=builder /opt/chembounce /opt/chembounce
 
 # Server code as `server` package — uvicorn imports `server.app:app`.
@@ -168,6 +180,8 @@ ENV CHEMBOUNCE_MAX_CONCURRENT_JOBS=1
 
 ENV PORT=9000
 EXPOSE 9000
-CMD ["/opt/conda/envs/chembounce/bin/python", "-m", "uvicorn", \
+# uvicorn runs in the server venv (py3.11 + framework); ChemBounce is
+# invoked as a subprocess via CHEMBOUNCE_PYTHON (conda env py3.8).
+CMD ["/opt/server-venv/bin/python", "-m", "uvicorn", \
      "server.app:app", "--host", "0.0.0.0", "--port", "9000", \
      "--timeout-keep-alive", "900"]
