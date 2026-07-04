@@ -119,6 +119,24 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
         "intel-openmp<2024.1"
 
 # ---------------------------------------------------------------------------
+# Build-time smoke test — catches:
+#   1. iJIT_NotifyEvent undefined symbol (torch import fails)
+#   2. resolver silently picking CPU-only pytorch (torch.version.cuda is None
+#      → later torch_sparse import fails with `libc10_cuda.so: cannot open
+#      shared object file` on FC; observed 2026-07-04)
+#   3. torch_geometric / torch_sparse ABI mismatch
+# Fail fast at build so we don't discover it at FC deploy time.
+# ---------------------------------------------------------------------------
+RUN /opt/conda/envs/diffusion_hopping/bin/python -c "\
+import torch; \
+print('torch', torch.__version__, 'cuda', torch.version.cuda); \
+assert torch.version.cuda is not None, \
+    'pytorch built without CUDA — resolver picked CPU variant (check mkl/intel-openmp pins vs pytorch-cuda)'; \
+import torch_geometric; print('pyg', torch_geometric.__version__); \
+import torch_sparse; print('torch_sparse OK'); \
+import torch_scatter; print('torch_scatter OK')"
+
+# ---------------------------------------------------------------------------
 # DiffHopp source — from vendored upstream/ (see scripts/vendor.sh).
 # We install it editable so `from diffusion_hopping import ...` resolves.
 # Upstream has no setup.py / pyproject — we use pip's PEP 660 "src as
