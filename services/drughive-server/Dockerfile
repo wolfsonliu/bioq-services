@@ -90,7 +90,11 @@ EOF
 #   - Python bumped 3.9 → 3.10 (better wheel coverage; 1.12 has cu117 wheels
 #     for both).
 #   - rdkit bumped 2021.09.5 → 2022.09.3 (py3.10-friendly; API compatible).
-#   - Removed plotly (visualization only, no impact on inference).
+#   - Kept plotly (upstream `drughive/atomgridding.py` imports it at module
+#     scope — not just for viz).  Verified 2026-07-05 by FC runtime crash.
+#   - Added matplotlib (imported unconditionally by drughive/gridutils,
+#     lightning, trainutils, molfitting, visutils — not in upstream
+#     requirements.txt but they were relying on a transitive pull).
 #
 # QVina2 is NOT installed via conda — bioconda's `qvina` recipe has no
 # actual package files (verified 2026-07-02).  We drop the pre-built,
@@ -131,6 +135,8 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
         scikit-learn=1.3.0 \
         tqdm=4.65.0 \
         pyyaml=6.0 \
+        plotly=5.9.0 \
+        matplotlib \
         conda-forge::ittapi \
         "mkl<2024.1" \
         "intel-openmp<2024.1" \
@@ -158,12 +164,37 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/drughive/bin/python \
         -e /opt/drughive
 
-# Build-time smoke: verify all critical imports + qvina2.1 binary work.
-RUN /opt/conda/envs/drughive/bin/python -c \
+# ---------------------------------------------------------------------------
+# SA_Score is an RDKit **Contrib** module — not on the Python path by
+# default.  Upstream `drughive/molecules.py` does `from SA_Score import
+# sascorer` expecting the caller to have added rdkit's Contrib/SA_Score
+# to sys.path (or, more commonly, dropped a copy under cwd).
+# Conda's rdkit ships Contrib at ``share/RDKit/Contrib/`` — symlink
+# SA_Score onto /opt/drughive so the `from SA_Score import` works from
+# any cwd.  Verified 2026-07-05.
+# ---------------------------------------------------------------------------
+RUN CONTRIB_DIR="/opt/conda/envs/drughive/share/RDKit/Contrib" && \
+    if [ -d "$CONTRIB_DIR/SA_Score" ]; then \
+        ln -sf "$CONTRIB_DIR/SA_Score" /opt/drughive/SA_Score; \
+        echo "SA_Score linked: /opt/drughive/SA_Score -> $CONTRIB_DIR/SA_Score"; \
+    else \
+        echo "ERROR: SA_Score missing from rdkit Contrib at $CONTRIB_DIR" >&2; \
+        ls "$CONTRIB_DIR" >&2 || true; \
+        exit 1; \
+    fi
+
+# Build-time smoke: verify critical inference imports + qvina2.1 binary.
+# Note: `import drughive` alone was too weak (empty __init__.py) — must
+# import a real submodule to exercise the transitive chain (plotly /
+# matplotlib / SA_Score / pytorch-lightning / etc).
+RUN cd /opt/drughive && /opt/conda/envs/drughive/bin/python -c \
     "import torch; print('torch', torch.__version__); \
      import openbabel; print('openbabel ok'); \
      from rdkit import Chem; print('rdkit', Chem.__name__); \
-     import drughive; print('drughive ok'); \
+     import plotly, matplotlib; print('plotly/matplotlib ok'); \
+     from SA_Score import sascorer; print('sascorer ok'); \
+     from drughive.generating import MolGenerator, MolGeneratorSpatial; \
+     print('drughive.generating ok'); \
      import shutil; \
      assert shutil.which('qvina2.1'), 'qvina2.1 binary missing!'; \
      print('qvina2.1 at', shutil.which('qvina2.1'))"

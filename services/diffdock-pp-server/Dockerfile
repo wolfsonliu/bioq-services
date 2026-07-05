@@ -169,12 +169,34 @@ print('pyg / sparse / scatter / cluster OK')"
 # ---------------------------------------------------------------------------
 # DiffDock-PP source — from vendored upstream/ (see scripts/vendor.sh).
 # Upstream has no setup.py; we import via PYTHONPATH at runtime instead of
-# `pip install -e`.  Second smoke: DiffDock-PP module actually loads.
+# `pip install -e`.
+#
+# Second smoke: exercise the FULL upstream module chain that inference.py
+# will eventually load, including the notebooks/utils_notebooks import that
+# factory.py:13 needs (verified 2026-07-05 on v0.0.3 build: without this
+# smoke, forgetting to re-run vendor.sh after modifying its exclusion rules
+# silently ships a broken image — every dock call fails post-diffusion with
+# `ModuleNotFoundError: No module named 'notebooks'`).
+#
+# We inject `wandb` + `matplotlib` stubs the same way inference.py does at
+# runtime — the smoke must exactly mirror the runtime import environment.
 # ---------------------------------------------------------------------------
 COPY services/diffdock-pp-server/upstream /opt/diffdock-pp
-RUN /opt/conda/envs/diffdock_pp/bin/python -c \
-    "import sys; sys.path.insert(0, '/opt/diffdock-pp/src'); \
-     from geom_utils import set_time; print('diffdock_pp OK')"
+RUN /opt/conda/envs/diffdock_pp/bin/python -c "\
+import sys, types; \
+sys.path.insert(0, '/opt/diffdock-pp/src'); \
+sys.modules.setdefault('wandb', types.ModuleType('wandb')); \
+mpl = sys.modules.setdefault('matplotlib', types.ModuleType('matplotlib')); \
+plt = sys.modules.setdefault('matplotlib.pyplot', types.ModuleType('matplotlib.pyplot')); \
+mpl.pyplot = plt; \
+from geom_utils import set_time; \
+from model import load_model, to_cuda; \
+from data import load_data, get_data, BindingDataset; \
+from filtering.dataset import get_confidence_loader; \
+from evaluation.compute_rmsd import evaluate_all_rmsds; \
+from sample import sample; \
+import main_inf; \
+print('diffdock_pp upstream module chain OK')"
 
 # ---------------------------------------------------------------------------
 # Cleanup dead weight from the conda env (mirrors diffusion-hopping cleanup).
