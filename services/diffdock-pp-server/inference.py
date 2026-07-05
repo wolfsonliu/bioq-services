@@ -354,15 +354,28 @@ def main() -> int:
     save_path = args.output / "_ckpt"
     save_path.mkdir(parents=True, exist_ok=True)
 
-    # Upstream `src/main_inf.py` has an unconditional `import wandb` at line 13,
-    # even though every wandb.* call is gated behind `if args.wandb_sweep:`
-    # (which we permanently set False via single_pair_inference.yaml). We
-    # inject an empty stub module so the top-level import succeeds without
-    # actually installing wandb in the conda env (~50 MB saved).
-    # Any accidental wandb.<attr> access would raise AttributeError — that's
-    # the intended fail-loud behavior if wandb_sweep ever gets flipped on.
+    # Upstream has two unconditional imports of deps we deliberately don't
+    # install (both are dead — the imported names are never actually
+    # referenced in the inference path):
+    #   - src/main_inf.py:13: `import wandb` (all wandb.* calls gated by
+    #     `if args.wandb_sweep:`, permanently False via config yaml)
+    #   - src/evaluation/compute_rmsd.py:10: `from matplotlib import pyplot as plt`
+    #     (`plt` is never referenced in the file — dead import)
+    # We inject empty stub modules so top-level imports succeed without
+    # installing the real packages (~50 MB wandb + ~80 MB matplotlib saved).
+    # Any accidental attribute access would raise AttributeError — the
+    # intended fail-loud behavior if either dead branch ever gets revived.
+    #
+    # `from matplotlib import pyplot as plt` requires matplotlib.pyplot to
+    # be reachable as an attribute of the parent matplotlib module (Python
+    # does `getattr(matplotlib, 'pyplot')` after ensuring both are in
+    # sys.modules), so we wire the attribute explicitly.
     import types as _types
-    sys.modules.setdefault("wandb", _types.ModuleType("wandb"))
+    _wandb = sys.modules.setdefault("wandb", _types.ModuleType("wandb"))
+    _mpl = sys.modules.setdefault("matplotlib", _types.ModuleType("matplotlib"))
+    _plt = sys.modules.setdefault("matplotlib.pyplot",
+                                  _types.ModuleType("matplotlib.pyplot"))
+    _mpl.pyplot = _plt  # noqa: SLF001
 
     # Heavy imports gated past validate() so bad params get clean errors.
     from args import parse_args as upstream_parse

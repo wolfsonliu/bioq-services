@@ -47,10 +47,16 @@ rm -rf .git
 # Sync into DST. --delete drops stale files from previous vendor runs.
 # DiffDock-PP upstream ships score/confidence ckpts under checkpoints/ (~22 MB);
 # fetch_weights.sh copies them (plus args.yaml + ESM-2) to the NAS layout.
+#
+# **Do NOT** exclude `src/notebooks/` — `src/notebooks/utils_notebooks.py`
+# defines `Dict2Class` which is imported by `src/model/factory.py:13` at
+# inference time (verified by v0.0.2 FC run failing with
+# `ModuleNotFoundError: No module named 'notebooks'`). Excluding just the
+# `.ipynb` files trims ~5 MB but keeps the required .py.
 rsync -a --delete \
     --exclude='__pycache__' --exclude='*.pyc' \
     --exclude='baselines/rmsd_plots/' \
-    --exclude='src/notebooks/' \
+    --exclude='*.ipynb' \
     "$TMP/repo/" "$DST/"
 
 echo "Vendored $DIFFDOCK_PP_REPO @ $DIFFDOCK_PP_SHA"
