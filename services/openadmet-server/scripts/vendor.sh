@@ -22,21 +22,16 @@ set -euo pipefail
 OPENADMET_REPO="${OPENADMET_REPO:-https://github.com/OpenADMET/openadmet-models.git}"
 OPENADMET_SHA="${OPENADMET_SHA:-b6571905ac1d76a557f6c4795a278ea8643c336e}"
 
-# Pip-git deps referenced by openadmet-models-gpu.yaml.  These pins are
-# looser than the main repo (the yaml uses @main / @master — we snapshot
-# them here at whatever HEAD they're at when this script runs, and update
-# manually if needed).
+# Pip-git deps referenced by openadmet-models-gpu.yaml.  The upstream yaml
+# uses @main / @master — we snapshot each repo's *current default branch*
+# HEAD (resolved via `git ls-remote --symref HEAD`), so this stays working
+# even if a repo renames master→main later.  The resolved SHA is printed
+# at the end so you can lock it in vendor.sh if reproducibility matters.
 declare -A PIP_DEPS=(
     ["molfeat"]="https://github.com/OpenADMET/molfeat.git"
     ["TabPFN"]="https://github.com/PriorLabs/TabPFN.git"
     ["neural-pairwise-regression"]="https://github.com/JacksonBurns/neural-pairwise-regression.git"
     ["useful_rdkit_utils"]="https://github.com/PatWalters/useful_rdkit_utils.git"
-)
-declare -A PIP_BRANCHES=(
-    ["molfeat"]="main"
-    ["TabPFN"]="main"
-    ["neural-pairwise-regression"]="master"
-    ["useful_rdkit_utils"]="master"
 )
 
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"
@@ -58,11 +53,22 @@ _clone_retry() {
         echo "  clone failed, retrying in $((i*10))s ..."
         sleep $((i*10))
     done
+    # Populate worktree.  If a specific ref is requested we check it out;
+    # otherwise the working tree is left detached at whatever HEAD points to
+    # (the remote's default branch — origin/HEAD is set by clone).
     if [[ -n "$ref" ]]; then
         (cd "$dst" && git checkout "$ref")
     else
-        (cd "$dst" && git checkout HEAD)
+        (cd "$dst" && git checkout FETCH_HEAD 2>/dev/null || git -C "$dst" checkout "$(git -C "$dst" symbolic-ref --short refs/remotes/origin/HEAD | sed 's|^origin/||')")
     fi
+}
+
+# Resolve <owner>/<repo>.git's default branch via ls-remote (network call,
+# but cheap — one line). Returns the branch name ('main' / 'master' / ...).
+_default_branch() {
+    local repo="$1"
+    git ls-remote --symref "$repo" HEAD 2>/dev/null \
+        | awk '/^ref:/ {sub("refs/heads/", "", $2); print $2; exit}'
 }
 
 # ---- Main upstream repo ----
@@ -84,12 +90,17 @@ echo "  -> $DST"
 
 # ---- Pip-git deps ----
 echo "[2/2] Vendoring pip-git deps into $PIP_DST"
+declare -A RESOLVED_SHA
 for name in "${!PIP_DEPS[@]}"; do
     repo="${PIP_DEPS[$name]}"
-    branch="${PIP_BRANCHES[$name]}"
-    echo "  * $name  <- $repo @ $branch"
+    branch="$(_default_branch "$repo")"
+    if [[ -z "$branch" ]]; then
+        echo "ERROR: could not resolve default branch for $repo" >&2
+        exit 1
+    fi
+    echo "  * $name  <- $repo @ $branch (default)"
     _clone_retry "$repo" "$TMP/$name" "$branch"
-    (cd "$TMP/$name" && git checkout "$branch")
+    RESOLVED_SHA[$name]="$(cd "$TMP/$name" && git rev-parse HEAD)"
     rm -rf "$TMP/$name/.git"
     rsync -a --delete --exclude='__pycache__' --exclude='*.pyc' \
         "$TMP/$name/" "$PIP_DST/$name/"
@@ -97,5 +108,10 @@ done
 
 echo ""
 echo "Vendored OpenADMET @ $OPENADMET_SHA"
-echo "  main: $DST  ($(du -sh "$DST" | cut -f1))"
+echo "  main:     $DST  ($(du -sh "$DST" | cut -f1))"
 echo "  pip_deps: $PIP_DST  ($(du -sh "$PIP_DST" | cut -f1))"
+echo ""
+echo "Resolved pip_deps snapshot SHAs (record here if pin needed):"
+for name in "${!RESOLVED_SHA[@]}"; do
+    printf "  %-32s  %s\n" "$name" "${RESOLVED_SHA[$name]}"
+done

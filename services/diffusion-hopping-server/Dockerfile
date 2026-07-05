@@ -105,6 +105,8 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     micromamba create -y -n diffusion_hopping \
         -c pyg -c nvidia -c pytorch -c conda-forge -c bioconda \
         python=3.10 \
+        pip \
+        setuptools \
         "pytorch::pytorch=1.13.1=py3.10_cuda11.7_cudnn8.5.0_0" \
         pytorch-cuda=11.7 \
         torchvision=0.14.1 \
@@ -140,7 +142,9 @@ assert torch.version.cuda is not None, \
     'pytorch built without CUDA — resolver picked CPU variant (check mkl/intel-openmp pins vs pytorch-cuda)'; \
 import torch_geometric; print('pyg', torch_geometric.__version__); \
 import torch_sparse; print('torch_sparse OK'); \
-import torch_scatter; print('torch_scatter OK')"
+import torch_scatter; print('torch_scatter OK'); \
+import pytorch_lightning as pl; print('pytorch-lightning', pl.__version__); \
+import pkg_resources; print('pkg_resources OK')"
 
 # ---------------------------------------------------------------------------
 # DiffHopp source — from vendored upstream/ (see scripts/vendor.sh).
