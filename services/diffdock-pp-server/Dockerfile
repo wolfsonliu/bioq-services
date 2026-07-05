@@ -98,18 +98,37 @@ EOF
 #
 # See engineering/guides/pytorch-conda-ittapi.md and pytorch/pytorch#123097.
 # ---------------------------------------------------------------------------
+# pytorch pin note (belt-and-braces, verified 2026-07-05):
+#
+# - Upstream DiffDock-PP README uses `pytorch=1.13.0` + `pytorch-cuda=11.6`,
+#   but conda `pyg` channel has thinner matrix coverage — pin `pytorch=1.13.1`
+#   + `pytorch-cuda=11.7` (same as diffusion-hopping-server; 1.13.0→1.13.1 has
+#   no API changes affecting DiffDock-PP source).
+#
+# - **Explicit CUDA build string** on the pytorch pin (`=py3.10_cuda11.7_cudnn8.5.0_0`)
+#   is essential: with `mkl<2024.1` + `intel-openmp<2024.1` added for the ITT
+#   fix, conda resolver otherwise **silently picks the CPU-only pytorch build**
+#   (`=py3.10_cpu_0`) without warning. Symptom: `import torch` works but
+#   `torch.version.cuda is None`, and `import torch_geometric` crashes with
+#   `libc10_cuda.so: cannot open shared object file` because `pytorch-scatter`
+#   / `pytorch-sparse` were built against the CUDA ABI.
+#
+# - Let `pyg::pyg=2.2.0` transitively pull compatible `pytorch-sparse` /
+#   `pytorch-cluster` / `pytorch-spline-conv` versions — only pin
+#   `pytorch-scatter=2.1.0` explicitly (matches upstream README's target).
+#
+# See engineering/guides/pytorch-conda-ittapi.md for the full trap chain
+# (ITT symbol → mkl pin → CPU variant fallback) and the recommended
+# build-time smoke.
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     micromamba create -y -n diffdock_pp \
         -c pyg -c nvidia -c pytorch -c conda-forge \
         python=3.10 \
-        pytorch::pytorch=1.13.0 \
+        "pytorch::pytorch=1.13.1=py3.10_cuda11.7_cudnn8.5.0_0" \
         pytorch-cuda=11.7 \
-        torchvision=0.14.0 \
+        torchvision=0.14.1 \
         pyg::pyg=2.2.0 \
         pyg::pytorch-scatter=2.1.0 \
-        pyg::pytorch-sparse=0.6.15 \
-        pyg::pytorch-cluster \
-        pyg::pytorch-spline-conv \
         conda-forge::e3nn=0.5.1 \
         conda-forge::biopython=1.80 \
         conda-forge::biopandas=0.4.1 \
@@ -133,9 +152,24 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         fair-esm
 
 # ---------------------------------------------------------------------------
+# Build-time smoke: catch all three known conda-pytorch failure modes before
+# the image ships (see engineering/guides/pytorch-conda-ittapi.md):
+#   1. iJIT_NotifyEvent undefined symbol (mkl 2024.1+ dropped ITT collector)
+#   2. CPU-only pytorch silently picked by resolver (missing libc10_cuda.so)
+#   3. PyG native ops (scatter / sparse / cluster) ABI mismatch with pytorch
+# All three would otherwise show up only at first inference request.
+# ---------------------------------------------------------------------------
+RUN /opt/conda/envs/diffdock_pp/bin/python -c "\
+import torch; \
+print('torch', torch.__version__, 'cuda', torch.version.cuda); \
+assert torch.version.cuda is not None, 'pytorch built without CUDA (resolver picked CPU variant)'; \
+import torch_geometric, torch_sparse, torch_scatter, torch_cluster; \
+print('pyg / sparse / scatter / cluster OK')"
+
+# ---------------------------------------------------------------------------
 # DiffDock-PP source — from vendored upstream/ (see scripts/vendor.sh).
 # Upstream has no setup.py; we import via PYTHONPATH at runtime instead of
-# `pip install -e`.  Do a smoke import to catch missing conda deps early.
+# `pip install -e`.  Second smoke: DiffDock-PP module actually loads.
 # ---------------------------------------------------------------------------
 COPY services/diffdock-pp-server/upstream /opt/diffdock-pp
 RUN /opt/conda/envs/diffdock_pp/bin/python -c \

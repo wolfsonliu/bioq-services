@@ -93,13 +93,19 @@ EOF
 # so the mkl-provided collector still resolves the symbol.  Keep `ittapi`
 # too — it's harmless and gives a second-source for pytorch 2.x rebuilds.
 #
+# Build-string pin (`=py3.10_cuda11.7_cudnn8.5.0_0`) forces the CUDA variant
+# of pytorch.  Without it, the resolver silently picks the CPU-only build
+# (`=py3.10_cpu_0`) under the mkl<2024.1 + intel-openmp<2024.1 constraints
+# — leading to `libc10_cuda.so: cannot open shared object file` at
+# torch_sparse import (verified 2026-07-04 on FC).
+#
 # See engineering/guides/pytorch-conda-ittapi.md and pytorch/pytorch#123097.
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     micromamba create -y -n diffusion_hopping \
         -c pyg -c nvidia -c pytorch -c conda-forge -c bioconda \
         python=3.10 \
-        pytorch::pytorch=1.13.1 \
+        "pytorch::pytorch=1.13.1=py3.10_cuda11.7_cudnn8.5.0_0" \
         pytorch-cuda=11.7 \
         torchvision=0.14.1 \
         pyg::pyg=2.2.0 \
