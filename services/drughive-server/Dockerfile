@@ -106,6 +106,13 @@ EOF
 # collector) + add `ittapi` as a second source.  Same fix as
 # diffusion-hopping-server; see engineering/guides/pytorch-conda-ittapi.md
 # and pytorch/pytorch#123097.
+#
+# setuptools<80: pytorch-lightning 2.0's bundled `lightning_fabric` calls
+# `pkg_resources.declare_namespace(__name__)` at import time; setuptools
+# 80+ removed the `pkg_resources` module (April 2025).  Without the pin,
+# `python generate_molecules.py` dies with
+# `ModuleNotFoundError: No module named 'pkg_resources'`.  Verified on FC
+# 2026-07-05 with a fresh solve that pulled setuptools 81.
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     micromamba create -y -n drughive \
@@ -126,7 +133,8 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
         pyyaml=6.0 \
         conda-forge::ittapi \
         "mkl<2024.1" \
-        "intel-openmp<2024.1"
+        "intel-openmp<2024.1" \
+        "setuptools<80"
 
 # ---------------------------------------------------------------------------
 # QVina2 static binary — vendored via scripts/vendor_qvina.sh (Apache-2.0,

@@ -1,0 +1,76 @@
+edition: 3.0.0
+name: fc3-example
+access: default
+resources:
+  fcDemo:
+    component: fc3
+    props:
+      region: cn-hangzhou
+      handler: index.handler
+      imagePrewarmStatus: Success
+      diskSize: 10240
+      runtime: custom-container
+      cpu: 4
+      instanceConcurrency: 200
+      vpcConfig:
+        securityGroupId: sg-bp16eiz6pkbsj4suejie
+        anytunnelViaENI: false
+        vpcId: vpc-bp1y6pbb5wp095bxej4np
+        vSwitchIds:
+          - vsw-bp10yskvjvewq3ndyl4tv
+      role: ''
+      disableOndemand: false
+      nasConfig:
+        groupId: 0
+        mountPoints:
+          - enableTLS: false
+            serverAddr: 0620a487b6-gum23.cn-hangzhou.nas.aliyuncs.com:/fc
+            mountDir: /data
+        userId: 0
+      description: ''
+      timeout: 36000
+      sessionAffinityConfig:
+        affinityHeaderFieldName: bioagent-session-id
+        disableSessionIdReuse: false
+        enableAutoPause: false
+        sessionConcurrencyPerInstance: 1
+        sessionIdleTimeoutInSeconds: 600
+        sessionTTLInSeconds: 86400
+      internetAccess: true
+      resourceGroupId: rg-acfm2onshbsoxxy
+      instanceIsolationMode: SHARE
+      logConfig:
+        enableRequestMetrics: true
+        enableInstanceMetrics: true
+        logBeginRule: DefaultRegex
+        project: serverless-cn-hangzhou-19ebd24e-ebe2-5da6-bf89-3c78e2ce4d70
+        logstore: default-logs
+      functionName: fc_ppiflow
+      sessionAffinity: HEADER_FIELD
+      gpuConfig:
+        gpuMemorySize: 16384
+        gpuType: fc.gpu.tesla.1
+      customContainerConfig:
+        image: harbor.ruosheng.bio/aliyun_fc/ppiflow-server:v0.0.11
+        port: 9000
+        healthCheckConfig: {}
+      memorySize: 16384
+      environmentVariables:
+        PPIFLOW_SESSION_HEADER_NAME: bioagent-session-id
+      idleTimeout: 300
+      triggers:
+        - triggerConfig:
+            methods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - HEAD
+              - OPTIONS
+              - PATCH
+            authType: anonymous
+            disableURLInternet: true
+          triggerName: defaultTrigger
+          description: ''
+          qualifier: LATEST
+          triggerType: http

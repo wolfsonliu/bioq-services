@@ -14,7 +14,7 @@ esmfold2-server: https://fc-esmfold-spayusioug.cn-hangzhou-vpc.fcapp.run
 promera-server: https://fc-promera-adkrlhmlcq.cn-hangzhou-vpc.fcapp.run
 ensemble-server: https://fc-ensemble-vnugpsiojy.cn-hangzhou-vpc.fcapp.run
 mmseqs2-server: https://fc-mmseqs-ijlwlhpldm.cn-hangzhou-vpc.fcapp.run
-diffdock-pp-server: 
+diffdock-pp-server: https://fc-diffdock-pp-xbbyfajnci.cn-hangzhou-vpc.fcapp.run
 diffusion-hopping-server: https://fc-diff-hopping-xefuosyhju.cn-hangzhou-vpc.fcapp.run
 chembounce-server: https://fc-chembounce-vhjhvjexpd.cn-hangzhou-vpc.fcapp.run
 drughive-server: https://fc-drughive-tifmpsjove.cn-hangzhou-vpc.fcapp.run

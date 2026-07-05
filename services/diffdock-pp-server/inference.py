@@ -354,6 +354,16 @@ def main() -> int:
     save_path = args.output / "_ckpt"
     save_path.mkdir(parents=True, exist_ok=True)
 
+    # Upstream `src/main_inf.py` has an unconditional `import wandb` at line 13,
+    # even though every wandb.* call is gated behind `if args.wandb_sweep:`
+    # (which we permanently set False via single_pair_inference.yaml). We
+    # inject an empty stub module so the top-level import succeeds without
+    # actually installing wandb in the conda env (~50 MB saved).
+    # Any accidental wandb.<attr> access would raise AttributeError — that's
+    # the intended fail-loud behavior if wandb_sweep ever gets flipped on.
+    import types as _types
+    sys.modules.setdefault("wandb", _types.ModuleType("wandb"))
+
     # Heavy imports gated past validate() so bad params get clean errors.
     from args import parse_args as upstream_parse
     from main_inf import main as upstream_main

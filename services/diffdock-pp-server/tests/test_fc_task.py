@@ -9,11 +9,30 @@ Validates the /api/tasks/dock endpoint end-to-end under FC async task mode
 (``X-Fc-Invocation-Type: Async``). Async task mode pins the FC instance
 for the whole job (no 30s HTTP-gateway recycle risk) and dedups by
 ``X-Fc-Async-Task-Id`` at the platform layer.
+
+PDB source — sync bootstrap, then ``file://`` URIs
+--------------------------------------------------
+FC async invocation caps the event payload at **128 KiB**. Our 1a2k
+fixtures are 161 KB (receptor) + 129 KB (ligand) = ~290 KB in multipart,
+so uploading them directly in the async submit gets rejected with
+``EntityTooLarge`` at the FC gateway.
+
+So we use a sync-bootstrap pattern: one sync POST to ``/api/dock`` (with
+smallest valid params) lands both PDBs at
+``/data/diffdock_pp_jobs/<bootstrap_id>/input/{receptor,ligand}.pdb`` as a
+side-effect of framework's ``_save_inputs`` running BEFORE the subprocess
+starts.  Subsequent async submits reference the staged files via
+``file://`` URIs.
+
+Override the bootstrap with ``DIFFDOCK_PP_TEST_RECEPTOR_NAS_PATH=`` /
+``DIFFDOCK_PP_TEST_LIGAND_NAS_PATH=`` env vars pointing at PDB files
+pre-staged elsewhere on NAS — skips the bootstrap inference cost on reruns.
 """
 
 from __future__ import annotations
 
 import io
+import os
 import time
 import uuid
 import zipfile
@@ -30,7 +49,14 @@ DATA_DIR = Path(__file__).resolve().parent / "data"
 TEST_RECEPTOR = DATA_DIR / "1a2k_receptor.pdb"
 TEST_LIGAND = DATA_DIR / "1a2k_ligand.pdb"
 
-POLL_TIMEOUT_S = 1200
+# NAS layout on the deployed FC service — must match settings.jobs_base_dir.
+JOBS_BASE_DIR_ON_FC = "/data/diffdock_pp_jobs"
+
+# Optional pre-staged NAS paths to skip the sync-bootstrap step on reruns.
+PRESTAGED_RECEPTOR = os.environ.get("DIFFDOCK_PP_TEST_RECEPTOR_NAS_PATH")
+PRESTAGED_LIGAND = os.environ.get("DIFFDOCK_PP_TEST_LIGAND_NAS_PATH")
+
+POLL_TIMEOUT_S = 1800
 POLL_INTERVAL_S = 20
 TIMEOUT = httpx.Timeout(connect=30, read=300, write=600, pool=30)
 
@@ -49,6 +75,48 @@ def base_url() -> str:
 def client(base_url: str):
     with httpx.Client(base_url=base_url, timeout=TIMEOUT) as c:
         yield c
+
+
+@pytest.fixture(scope="module")
+def staged_pdb_uris(client: httpx.Client) -> tuple[str, str]:
+    """One-time sync upload that lands receptor + ligand on FC NAS.
+
+    Returns ``(receptor_uri, ligand_uri)`` for use as ``receptor_uri`` /
+    ``ligand_uri`` in subsequent async submits.
+
+    The sync POST runs a real DiffDock-PP inference in the background —
+    we don't need its output, only the side-effect of ``_save_inputs``
+    persisting both PDBs to NAS before submit returns.  Net cost: 1
+    extra minimal (num_samples=1) inference run.
+
+    If both ``DIFFDOCK_PP_TEST_*_NAS_PATH`` env vars are set, the
+    bootstrap is skipped.
+    """
+    if PRESTAGED_RECEPTOR and PRESTAGED_LIGAND:
+        return f"file://{PRESTAGED_RECEPTOR}", f"file://{PRESTAGED_LIGAND}"
+
+    with open(TEST_RECEPTOR, "rb") as fh_r, open(TEST_LIGAND, "rb") as fh_l:
+        r = client.post(
+            "/api/dock",
+            # Force stable filenames — the framework saves upload.filename,
+            # so we control the resulting NAS path.
+            files={
+                "receptor": ("receptor.pdb", fh_r.read(), "chemical/x-pdb"),
+                "ligand": ("ligand.pdb", fh_l.read(), "chemical/x-pdb"),
+            },
+            data={
+                "num_samples": "1",
+                "top_k": "1",
+                "use_confidence_model": "false",  # skip confidence pass to cut cost
+                "seed": "0",
+            },
+        )
+    assert r.status_code == 200, (
+        f"bootstrap sync upload failed: {r.status_code} {r.text!r}"
+    )
+    job_id = r.json()["job_id"]
+    base = f"file://{JOBS_BASE_DIR_ON_FC}/{job_id}/input"
+    return f"{base}/receptor.pdb", f"{base}/ligand.pdb"
 
 
 @pytest.fixture(scope="module")
@@ -88,23 +156,22 @@ def _poll_to_completion(client, task_id: str) -> dict:
 
 
 @pytest.fixture(scope="module")
-def dock_submit_response(client, dock_task_id):
-    with open(TEST_RECEPTOR, "rb") as fh_r, open(TEST_LIGAND, "rb") as fh_l:
-        r = client.post(
-            "/api/tasks/dock",
-            files={
-                "receptor": ("1a2k_receptor.pdb", fh_r.read(), "chemical/x-pdb"),
-                "ligand": ("1a2k_ligand.pdb", fh_l.read(), "chemical/x-pdb"),
-            },
-            data={
-                "num_samples": "4",
-                "top_k": "2",
-                "use_confidence_model": "true",
-                "seed": "42",
-            },
-            headers=_async_headers(dock_task_id),
-        )
-    return r
+def dock_submit_response(
+    client, dock_task_id, staged_pdb_uris: tuple[str, str],
+):
+    receptor_uri, ligand_uri = staged_pdb_uris
+    return client.post(
+        "/api/tasks/dock",
+        data={
+            "receptor_uri": receptor_uri,
+            "ligand_uri": ligand_uri,
+            "num_samples": "4",
+            "top_k": "2",
+            "use_confidence_model": "true",
+            "seed": "42",
+        },
+        headers=_async_headers(dock_task_id),
+    )
 
 
 @pytest.fixture(scope="module")
@@ -206,24 +273,25 @@ class TestJobLifecycle:
 class TestAsyncDuplicateDedup:
     """Repeat submits of the same X-Fc-Async-Task-Id must not rerun."""
 
-    def test_duplicate_does_not_rerun(self, client, dock_task_id, dock_task):
+    def test_duplicate_does_not_rerun(
+        self, client, dock_task_id, dock_task, staged_pdb_uris,
+    ):
         first_created = dock_task["created_at"]
         first_completed = dock_task["completed_at"]
 
-        with open(TEST_RECEPTOR, "rb") as fh_r, open(TEST_LIGAND, "rb") as fh_l:
-            r2 = client.post(
-                "/api/tasks/dock",
-                files={
-                    "receptor": ("1a2k_receptor.pdb", fh_r.read(), "chemical/x-pdb"),
-                    "ligand": ("1a2k_ligand.pdb", fh_l.read(), "chemical/x-pdb"),
-                },
-                data={
-                    "num_samples": "8",  # deliberately different — must not take effect
-                    "top_k": "4",
-                    "seed": "999",
-                },
-                headers=_async_headers(dock_task_id),
-            )
+        receptor_uri, ligand_uri = staged_pdb_uris
+        r2 = client.post(
+            "/api/tasks/dock",
+            data={
+                "receptor_uri": receptor_uri,
+                "ligand_uri": ligand_uri,
+                # Deliberately different params — must not take effect if dedup works.
+                "num_samples": "8",
+                "top_k": "4",
+                "seed": "999",
+            },
+            headers=_async_headers(dock_task_id),
+        )
         # FC platform dedup returns 409; framework-layer dedup returns 202 + existing JobInfo.
         assert r2.status_code in (202, 409), (
             f"expected 202 or 409; got {r2.status_code} {r2.text!r}"
