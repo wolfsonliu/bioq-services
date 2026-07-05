@@ -1,0 +1,6 @@
+OPENADMET_CANONICAL_SMILES,compound_id
+CCCCC1=NC(=C(N1CC2=CC=C(C=C2)C3=CC=CC=C3C4=NNN=N4)CO)Cl,losartan
+CC(=O)OC1=CC=CC=C1C(=O)O,aspirin
+CN1CCN(CC1)C1=NC(=NC2=C1SC1=CC=CC=C12)N,clozapine
+Cn1c(=O)c2c(ncn2C)n(C)c1=O,caffeine
+CC(C)Cc1ccc(cc1)C(C)C(=O)O,ibuprofen
