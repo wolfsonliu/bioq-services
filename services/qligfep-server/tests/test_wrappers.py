@@ -161,3 +161,34 @@ def test_setup_resfep_stages_and_collects(tmp_path):
     assert (out / "setup.json").exists()
     meta = json.loads((out / "setup.json").read_text())
     assert meta["mutation"] == "A24V" and meta["dual"] is True
+
+
+def test_setup_lie_stages_and_collects(tmp_path):
+    work, out = _work_out(tmp_path)
+    ligprep = tmp_path / "lp"; ligprep.mkdir()
+    protprep = tmp_path / "pp"; protprep.mkdir()
+    for n in ("17.lib", "17.prm", "17.pdb"):
+        (ligprep / n).write_text(n)
+    for n in ("protein.pdb", "water.pdb"):
+        (protprep / n).write_text(n)
+
+    from server import setup_lie_cli
+
+    def fake_run(argv, cwd=None, *args, **kw):
+        (Path(cwd) / "inputfiles").mkdir()
+        for leg in ("md_LIE_bound", "md_LIE_free"):
+            (Path(cwd) / leg).mkdir()
+            (Path(cwd) / leg / "run.inp").write_text("")
+        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="", stderr="")
+
+    with patch.object(subprocess, "run", side_effect=fake_run):
+        rc = setup_lie_cli.run(
+            ligand_name="17", forcefield="OPLSAAM", system="protein",
+            cofactors=None, radius=22.0, time_ns=5.0, temperature=298.15,
+            replicates=10, cluster="LOCAL", preplocation="LOCAL",
+            ligprep_dir=ligprep, protprep_dir=protprep,
+            work_dir=work, output_dir=out,
+        )
+    assert rc == 0
+    assert (out / "setup.json").exists()
+    assert (out / "md_LIE_bound").exists() and (out / "md_LIE_bound" / "run.inp").exists()
