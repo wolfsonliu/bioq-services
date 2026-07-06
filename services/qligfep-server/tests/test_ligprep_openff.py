@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-DATA = Path(__file__).resolve().parent / "data" / "ligand" / "17.mol2"
+DATA = Path(__file__).resolve().parent / "data" / "ligand" / "17.pdb"
 
 openff = pytest.importorskip("openff.toolkit")
 
