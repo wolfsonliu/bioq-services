@@ -44,6 +44,15 @@ ENV PYTHONUNBUFFERED=1
 ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
 ENV UV_HTTP_TIMEOUT=600
 
+# BuildKit builders don't expose the NVIDIA driver ABI, so conda's `__cuda`
+# virtual package is missing at solve time.  Modern conda-forge pytorch-gpu
+# metapackage requires `__cuda` and will refuse to install without an
+# override.  This env var fakes the presence of CUDA 12.4 for the solver;
+# actual GPU support comes from the base image (nvidia/cuda:12.4.1-runtime)
+# plus the NVIDIA container runtime at deploy time.
+# See: https://conda-forge.org/docs/user/tipsandtricks/#installing-cuda-enabled-packages
+ENV CONDA_OVERRIDE_CUDA=12.4
+
 # No `git` in apt — vendor.sh ran on host; image never clones.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential wget ca-certificates \
@@ -90,6 +99,7 @@ EOF
 # from local pip_deps/ (vendor.sh output), NOT github — see design §6.8.
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
+    CONDA_OVERRIDE_CUDA=12.4 \
     micromamba create -y -n openadmet-models \
         -c conda-forge \
         python=3.12 \
