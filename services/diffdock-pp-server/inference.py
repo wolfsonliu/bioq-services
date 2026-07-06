@@ -140,18 +140,40 @@ def validate(args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 
 
-PAIR_NAME = "pair"  # sits under data_path/, files pair_r_b.pdb / pair_l_b.pdb
+PAIR_NAME = "pair"  # PDB pair name; DB5Loader keys data dict by this string
 
 
 def prepare_dataset_layout(args: argparse.Namespace, workdir: Path) -> tuple[Path, Path]:
-    """Copy receptor/ligand into a DB5-style temp dir + write splits CSV.
+    """Copy receptor/ligand into the DB5-style layout DB5Loader expects.
 
-    Returns (data_file_csv, data_path).
+    DB5Loader (upstream `data_train_utils.py:560`) hard-appends
+    `structures/` to `args.data_path` in its __init__:
+
+        self.root = os.path.join(self.root, "structures")
+
+    then in `read_files` iterates the splits CSV and does
+    `parse_pdb(<root>/<pdb>_{r,l}_b.pdb)`. So the on-disk layout must be:
+
+        <data_root>/
+        ├── splits_test.csv        ← --data_file
+        └── structures/            ← DB5Loader appends this
+            ├── pair_r_b.pdb
+            └── pair_l_b.pdb
+
+    Returns (splits_csv, data_root) — `data_root` is passed as
+    `--data_path` (WITHOUT the `structures/` suffix; loader adds it).
+
+    v0.0.5 → v0.0.6 fix history: the `structures/` subdir was missing,
+    causing FileNotFoundError after ESM embedding.  Wasn't caught by
+    v0.0.4 tests because the yaml-override bug silently redirected
+    load_data to upstream's bundled 1A2K sample dataset (which already
+    had a `structures/` subdir).
     """
     data_root = workdir / "diffdock_pp_input"
-    data_root.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(args.receptor, data_root / f"{PAIR_NAME}_r_b.pdb")
-    shutil.copy2(args.ligand, data_root / f"{PAIR_NAME}_l_b.pdb")
+    structures_dir = data_root / "structures"
+    structures_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(args.receptor, structures_dir / f"{PAIR_NAME}_r_b.pdb")
+    shutil.copy2(args.ligand, structures_dir / f"{PAIR_NAME}_l_b.pdb")
 
     splits_csv = data_root / "splits_test.csv"
     splits_csv.write_text(f"path,split\n{PAIR_NAME},test\n")
