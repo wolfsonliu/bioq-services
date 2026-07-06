@@ -32,3 +32,34 @@ def test_cog_wrapper_writes_result_json(tmp_path):
     assert rc == 0
     result = json.loads((out / "result.json").read_text())
     assert result == {"cx": 0.535, "cy": 26.772, "cz": 8.819, "mode": "all"}
+
+
+def test_protprep_wrapper_stages_and_collects(tmp_path):
+    work, out = _work_out(tmp_path)
+    protein = tmp_path / "in" / "prot.pdb"; protein.parent.mkdir()
+    protein.write_text("ATOM      1  N   ALA A   1       0.000   0.000   0.000\n")
+
+    from server import protprep_cli
+
+    def fake_run(argv, cwd, *args, **kw):
+        # simulate upstream protprep.py creating protein.pdb + water.pdb + protprep.log in cwd
+        (Path(cwd) / "protein.pdb").write_text("ATOM protein_out\n")
+        (Path(cwd) / "water.pdb").write_text("HETATM water_out\n")
+        (Path(cwd) / "protprep.log").write_text("done\n")
+        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="", stderr="")
+
+    with patch.object(subprocess, "run", side_effect=fake_run):
+        rc = protprep_cli.run(
+            protein_pdb=protein,
+            sphere_radius=22.0, sphere_center="0.5:1.0:2.0",
+            forcefield="OPLSAAM", mutchain=None,
+            nowater=False, noclean=False, preplocation="LOCAL",
+            work_dir=work, output_dir=out,
+        )
+    assert rc == 0
+    assert (out / "protein.pdb").exists()
+    assert (out / "water.pdb").exists()
+    assert (out / "system.json").exists()
+    meta = json.loads((out / "system.json").read_text())
+    assert meta["sphere_center"] == "0.5:1.0:2.0"
+    assert meta["forcefield"] == "OPLSAAM"
