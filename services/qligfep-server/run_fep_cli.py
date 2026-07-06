@@ -86,14 +86,15 @@ def run(*, setup_dir: Path, window_idx: int, leg: str,
     work_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    fep_dir = setup_dir / f"FEP{window_idx + 1}"  # QligFEP uses 1-based FEP dirs
+    fep_dir = setup_dir / f"FEP{window_idx}"
     if not fep_dir.exists():
-        candidates = list(setup_dir.glob("FEP*"))
-        matches = [c for c in candidates if c.name == f"FEP{window_idx + 1}"]
-        if matches:
-            fep_dir = matches[0]
+        # Fallback: QligFEP historically uses 1-based FEP dirs (FEP1, FEP2, ...);
+        # allow callers that pass 0-based window_idx to still resolve.
+        alt = setup_dir / f"FEP{window_idx + 1}"
+        if alt.exists():
+            fep_dir = alt
         else:
-            print(f"FEP{window_idx + 1} not found in {setup_dir}", file=sys.stderr)
+            print(f"FEP{window_idx} not found in {setup_dir}", file=sys.stderr)
             return 2
 
     for item in fep_dir.iterdir():
