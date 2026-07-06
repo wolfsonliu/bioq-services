@@ -128,3 +128,36 @@ def test_setup_ligfep_stages_and_collects(tmp_path):
     assert (out / "setup.json").exists()
     meta = json.loads((out / "setup.json").read_text())
     assert meta["windows"] == 51 and meta["lig1"] == "17"
+
+
+def test_setup_resfep_stages_and_collects(tmp_path):
+    work, out = _work_out(tmp_path)
+    protprep = tmp_path / "pp"; protprep.mkdir()
+    for n in ("protein.pdb", "water.pdb"):
+        (protprep / n).write_text(n)
+
+    from server import setup_resfep_cli
+
+    def fake_run(argv, cwd=None, *args, **kw):
+        base = Path(cwd) / "A24V"
+        for leg in ("1.protein", "2.water"):
+            fep = base / leg / "FEP1"; fep.mkdir(parents=True)
+            (fep / "md_0500_0500.inp").write_text("")
+            (base / leg / "FEP_submit.sh").write_text("#!/bin/bash\n")
+        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="", stderr="")
+
+    with patch.object(subprocess, "run", side_effect=fake_run):
+        rc = setup_resfep_cli.run(
+            mutation="A24V", mutchain="A", protprep_dir=protprep,
+            system="protein", dual=True, shell_rest=25.0,
+            tripeptide=False, cofactors=None,
+            forcefield="OPLSAAM", windows=51, sampling="linear",
+            timestep="2fs", temperature=298.15, replicates=10,
+            start="0.5", cluster="LOCAL",
+            work_dir=work, output_dir=out,
+        )
+    assert rc == 0
+    assert (out / "1.protein" / "FEP_submit.sh").exists()
+    assert (out / "setup.json").exists()
+    meta = json.loads((out / "setup.json").read_text())
+    assert meta["mutation"] == "A24V" and meta["dual"] is True
