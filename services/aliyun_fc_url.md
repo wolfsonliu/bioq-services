@@ -18,4 +18,4 @@ diffdock-pp-server: https://fc-diffdock-pp-xbbyfajnci.cn-hangzhou-vpc.fcapp.run
 diffusion-hopping-server: https://fc-diff-hopping-xefuosyhju.cn-hangzhou-vpc.fcapp.run
 chembounce-server: https://fc-chembounce-vhjhvjexpd.cn-hangzhou-vpc.fcapp.run
 drughive-server: https://fc-drughive-tifmpsjove.cn-hangzhou-vpc.fcapp.run
-openadmet-server: TBD (not yet deployed; upstream https://github.com/OpenADMET/openadmet-models)
+openadmet-server: https://fc-openadmet-dckbxdfnvj.cn-hangzhou-vpc.fcapp.run

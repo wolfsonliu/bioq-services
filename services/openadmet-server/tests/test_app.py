@@ -184,6 +184,66 @@ def test_models_endpoint_lists_registered(client):
     assert cyp["model_type"] == "ChemPropModel"
 
 
+def test_models_endpoint_supports_nested_anvil_training_layout(tmp_path, monkeypatch):
+    """HF-native layout `<name>/anvil_training/recipe_components/...` should work.
+
+    This is the layout produced by `hf download openadmet/<name>` without
+    manual flattening — the server tolerates it (v0.0.2+).
+    """
+    import importlib
+    import sys
+    import yaml
+
+    weights_dir = tmp_path / "weights"
+    models_root = weights_dir / "models"
+    foundations = weights_dir / "foundations" / ".chemprop"
+    models_root.mkdir(parents=True)
+    foundations.mkdir(parents=True)
+    (foundations / "chemeleon_mp.pt").write_bytes(b"\x00" * 4096)
+
+    # Nested layout: <name>/anvil_training/recipe_components/*.yaml
+    nested_root = models_root / "herg-nested"
+    nested_inner = nested_root / "anvil_training"
+    (nested_inner / "recipe_components").mkdir(parents=True)
+    (nested_inner / "recipe_components" / "metadata.yaml").write_text(yaml.safe_dump({
+        "biotargets": ["hERG"], "tag": "herg-nested-v1", "build_number": 0,
+        "description": "nested test", "name": "chemprop_pchembl",
+    }))
+    (nested_inner / "recipe_components" / "data.yaml").write_text(yaml.safe_dump({
+        "input_col": "OPENADMET_CANONICAL_SMILES",
+        "target_cols": ["pchembl_value_mean"],
+    }))
+    (nested_inner / "recipe_components" / "procedure.yaml").write_text(yaml.safe_dump({
+        "model": {"type": "ChemPropModel"},
+        "feat": {"type": "ChemPropFeaturizer"},
+    }))
+    (nested_inner / "model.pth").write_bytes(b"\x00")
+
+    monkeypatch.setenv("OPENADMET_JOBS_BASE_DIR", str(tmp_path / "jobs"))
+    monkeypatch.setenv("OPENADMET_ROOT", str(tmp_path / "upstream"))
+    monkeypatch.setenv("OPENADMET_PYTHON", "/bin/true")
+    monkeypatch.setenv("OPENADMET_WEIGHTS_DIR", str(weights_dir))
+    (tmp_path / "upstream").mkdir(parents=True, exist_ok=True)
+
+    from server.settings import _cached_list_models
+    _cached_list_models.cache_clear()
+
+    sys.modules.pop("server.app", None)
+    sys.modules.pop("server.settings", None)
+    sys.modules.pop("server.adapter", None)
+    from fastapi.testclient import TestClient
+    server_app = importlib.import_module("server.app")
+    c = TestClient(server_app.app)
+
+    body = c.get("/api/models").json()
+    assert body["count"] == 1
+    m = body["models"][0]
+    assert m["name"] == "herg-nested"
+    # The resolved path should include the anvil_training/ suffix so
+    # subprocess `--model-dir` gets the dir with model.pth in it.
+    assert m["path"].endswith("/anvil_training")
+
+
 # ===== Validation errors =====================================================
 
 

@@ -133,14 +133,18 @@ class OpenAdmetSettings(ServiceSettings):
     # ---- Model registry helpers ----
 
     def model_path(self, name: str) -> Path:
-        """Return absolute path to a NAS-registered model dir, raising if missing."""
-        p = self.models_root / name
-        if not p.is_dir():
-            raise ValueError(
-                f"Model '{name}' not registered under {self.models_root}. "
-                f"Available: {[m.name for m in self.list_models()]}"
-            )
-        return p
+        """Return the resolved model_dir path (with ``anvil_training/`` suffix if nested).
+
+        Delegates to the registry so both flat and nested NAS layouts are
+        transparently supported — see ``_read_model_info``.
+        """
+        for info in self.list_models():
+            if info.name == name:
+                return info.path
+        raise ValueError(
+            f"Model '{name}' not registered under {self.models_root}. "
+            f"Available: {[m.name for m in self.list_models()]}"
+        )
 
     def list_models(self) -> list[ModelInfo]:
         """Scan `models_root` for anvil-trained model_dirs and return metadata.
@@ -185,32 +189,51 @@ def _cached_list_models(models_root: Path, _mtime_key: int) -> list[ModelInfo]:
 
 
 def _read_model_info(model_dir: Path) -> Optional[ModelInfo]:
-    rc = model_dir / "recipe_components"
-    meta_p = rc / "metadata.yaml"
-    data_p = rc / "data.yaml"
-    proc_p = rc / "procedure.yaml"
-    if not (meta_p.is_file() and data_p.is_file() and proc_p.is_file()):
-        return None
-    try:
-        meta = yaml.safe_load(meta_p.read_text()) or {}
-        data = yaml.safe_load(data_p.read_text()) or {}
-        proc = yaml.safe_load(proc_p.read_text()) or {}
-    except yaml.YAMLError:
-        return None
+    """Recognize an anvil model directory in either of two layouts.
 
-    target_cols = data.get("target_cols") or []
-    if isinstance(target_cols, str):
-        target_cols = [target_cols]
+    * **Flat**:   ``<model_dir>/recipe_components/{metadata,data,procedure}.yaml``
+                  + ``<model_dir>/model.pth``
+    * **Nested**: ``<model_dir>/anvil_training/recipe_components/...``
+                  + ``<model_dir>/anvil_training/model.pth``
+                  (this is HuggingFace's default download layout for
+                  openadmet/* model repos)
 
-    return ModelInfo(
-        name=model_dir.name,
-        path=model_dir,
-        input_col=data.get("input_col") or "OPENADMET_CANONICAL_SMILES",
-        target_cols=list(target_cols),
-        biotargets=list(meta.get("biotargets") or []),
-        tag=meta.get("tag") or "",
-        description=meta.get("description") or "",
-        model_type=(proc.get("model") or {}).get("type") or "",
-        feat_type=(proc.get("feat") or {}).get("type") or "",
-        build_number=int(meta.get("build_number") or 0),
-    )
+    The nested layout is common if models were rsync'd straight from
+    ``opensource/openadmet-models/hc/`` without stripping ``anvil_training/``.
+    The returned ``ModelInfo.path`` always points at the directory that
+    contains ``model.pth`` (i.e. the anvil_training subdir if nested), so
+    downstream ``openadmet predict --model-dir`` gets the right path.
+    """
+    candidates = [model_dir, model_dir / "anvil_training"]
+    for candidate in candidates:
+        rc = candidate / "recipe_components"
+        meta_p = rc / "metadata.yaml"
+        data_p = rc / "data.yaml"
+        proc_p = rc / "procedure.yaml"
+        if not (meta_p.is_file() and data_p.is_file() and proc_p.is_file()):
+            continue
+
+        try:
+            meta = yaml.safe_load(meta_p.read_text()) or {}
+            data = yaml.safe_load(data_p.read_text()) or {}
+            proc = yaml.safe_load(proc_p.read_text()) or {}
+        except yaml.YAMLError:
+            continue
+
+        target_cols = data.get("target_cols") or []
+        if isinstance(target_cols, str):
+            target_cols = [target_cols]
+
+        return ModelInfo(
+            name=model_dir.name,     # outer dir name — the registry key
+            path=candidate,          # actual model.pth dir (with anvil_training suffix if nested)
+            input_col=data.get("input_col") or "OPENADMET_CANONICAL_SMILES",
+            target_cols=list(target_cols),
+            biotargets=list(meta.get("biotargets") or []),
+            tag=meta.get("tag") or "",
+            description=meta.get("description") or "",
+            model_type=(proc.get("model") or {}).get("type") or "",
+            feat_type=(proc.get("feat") or {}).get("type") or "",
+            build_number=int(meta.get("build_number") or 0),
+        )
+    return None
