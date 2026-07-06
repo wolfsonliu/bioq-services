@@ -63,3 +63,30 @@ def test_protprep_wrapper_stages_and_collects(tmp_path):
     meta = json.loads((out / "system.json").read_text())
     assert meta["sphere_center"] == "0.5:1.0:2.0"
     assert meta["forcefield"] == "OPLSAAM"
+
+
+def test_ligprep_wrapper_calls_openff2q(tmp_path):
+    work, out = _work_out(tmp_path)
+    lig = tmp_path / "in" / "17.mol2"; lig.parent.mkdir()
+    lig.write_text("@<TRIPOS>MOLECULE\n17\n1 0 0 0 0\n")
+
+    from server import ligprep_cli
+
+    calls: list[list[str]] = []
+
+    def fake_run(argv, cwd=None, *args, **kw):
+        calls.append(list(argv))
+        for ext in ("lib", "prm", "pdb"):
+            (Path(cwd) / f"17.{ext}").write_text(f"{ext} content\n")
+        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="", stderr="")
+
+    with patch.object(ligprep_cli, "_generate_offxml", return_value=None):
+        with patch.object(subprocess, "run", side_effect=fake_run):
+            rc = ligprep_cli.run(
+                ligand=lig, ligand_name="17", forcefield="openff-2.1.0",
+                net_charge=None, work_dir=work, output_dir=out,
+            )
+    assert rc == 0
+    for ext in ("lib", "prm", "pdb"):
+        assert (out / f"17.{ext}").exists()
+    assert any("openff2Q.py" in " ".join(c) for c in calls)
