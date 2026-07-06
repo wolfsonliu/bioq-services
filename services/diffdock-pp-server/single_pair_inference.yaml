@@ -1,66 +1,72 @@
 ---
-# Bundled DiffDock-PP inference config with paper-optimized temperature
-# sampling parameters. Copied from upstream
-# opensource/DiffDock-PP/config/single_pair_inference.yaml at pinned SHA
-# 25a28900736c0730821e45265ee8e409751c358a (2023-08).
+# Bundled DiffDock-PP inference config.
 #
-# See engineering/decisions/2026-07-03-diffdock-pp-server-design.md for why
-# these values live in the image (not the API): temp_* are model-optimized,
-# not user-facing tuning knobs.
+# **IMPORTANT**: Upstream `src/args.py:process_args` merges this yaml AFTER
+# argparse via `override_args`, so any key here overrides the CLI. That means
+# runtime-varying params (data_file, data_path, mirror_ligand, no_final_noise,
+# run_inference_without_confidence_model, actual_steps, num_samples, seed, etc.)
+# MUST be omitted from the yaml — our wrapper passes them on the CLI.
 #
-# file is parsed by inner-most keys only
- data:
-     dataset: db5
-     data_file: datasets/single_pair_dataset/splits_test.csv
-     data_path: datasets/single_pair_dataset
-     resolution: residue
-     no_graph_cache: True
-     knn_size: 20
-     use_orientation_features: False
-     multiplicity: 1
-     use_unbound: False
- model:
-     model_type: e3nn
-     no_torsion: True
-     no_batch_norm: True
-     lm_embed_dim: 1280
-     dropout: 0.0
-     dynamic_max_cross: True
-     cross_cutoff_weight: 3
-     cross_cutoff_bias: 40
-     cross_max_dist: 80
-     num_conv_layers: 4
-     ns: 16
-     nv: 4
-     dist_embed_dim: 32
-     cross_dist_embed_dim: 32
-     sigma_embed_dim: 32
-     max_radius: 5.
- train:
-     patience: 2000
-     epochs: 2000
-     lr: 1.e-3
-     weight_decay: 0.
-     tr_weight: 0.5
-     rot_weight: 0.5
-     tor_weight: 0.
-     val_inference_freq: 10
-     num_steps: 40
-     actual_steps: 40
- diffusion:
-     tr_s_min: 0.01
-     tr_s_max: 30.0
-     rot_s_min: 0.01
-     rot_s_max: 1.65
-     sample_train: True
-     num_inference_complexes_train_data: 1200
- inference:
-     mirror_ligand: False
-     run_inference_without_confidence_model: False
-     wandb_sweep: False
-     no_final_noise: True
-     # optimized for without conf_model (paper appendix)
-     temp_sampling: 2.439
-     temp_psi: 0.216
-     temp_sigma_data_tr: 0.593
-     temp_sigma_data_rot:  0.228
+# What stays here: model architecture (fixed by the trained checkpoint),
+# diffusion sigmas (fixed by the training scheme), temperature-sampling
+# tuning (paper-optimized), and `dataset: db5` (selects the loader).
+#
+# Copied from upstream opensource/DiffDock-PP/config/single_pair_inference.yaml
+# at pinned SHA 25a28900736c0730821e45265ee8e409751c358a (2023-08), with
+# `data.data_file`, `data.data_path`, `inference.mirror_ligand`,
+# `inference.no_final_noise`, `inference.run_inference_without_confidence_model`,
+# and `train.actual_steps` stripped so the CLI is authoritative.
+#
+# Bug history: v0.0.4 shipped with data_file/data_path in the yaml → every
+# dock call silently ran on upstream's 1A2K sample PDBs, ignoring uploads.
+# Detected 2026-07-06 via async task test showing KeyError('pair') during
+# post-process. See design doc §3.
+data:
+    dataset: db5
+    resolution: residue
+    no_graph_cache: True
+    knn_size: 20
+    use_orientation_features: False
+    multiplicity: 1
+    use_unbound: False
+model:
+    model_type: e3nn
+    no_torsion: True
+    no_batch_norm: True
+    lm_embed_dim: 1280
+    dropout: 0.0
+    dynamic_max_cross: True
+    cross_cutoff_weight: 3
+    cross_cutoff_bias: 40
+    cross_max_dist: 80
+    num_conv_layers: 4
+    ns: 16
+    nv: 4
+    dist_embed_dim: 32
+    cross_dist_embed_dim: 32
+    sigma_embed_dim: 32
+    max_radius: 5.
+train:
+    patience: 2000
+    epochs: 2000
+    lr: 1.e-3
+    weight_decay: 0.
+    tr_weight: 0.5
+    rot_weight: 0.5
+    tor_weight: 0.
+    val_inference_freq: 10
+    num_steps: 40
+diffusion:
+    tr_s_min: 0.01
+    tr_s_max: 30.0
+    rot_s_min: 0.01
+    rot_s_max: 1.65
+    sample_train: True
+    num_inference_complexes_train_data: 1200
+inference:
+    wandb_sweep: False
+    # paper-optimized low-temperature sampling (no-confidence variant tuning)
+    temp_sampling: 2.439
+    temp_psi: 0.216
+    temp_sigma_data_tr: 0.593
+    temp_sigma_data_rot: 0.228

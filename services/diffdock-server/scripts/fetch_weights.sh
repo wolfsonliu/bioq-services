@@ -40,9 +40,9 @@ mkdir -p "$DST"
 #      workdir/v1.1/confidence_model/best_model_epoch75.pt
 #      workdir/v1.1/confidence_model/model_parameters.yml
 # --------------------------------------------------------------------------
-DIFFDOCK_ZIP_URL="${DIFFDOCK_ZIP_URL:-https://github.com/gcorso/DiffDock/releases/latest/download/diffdock_models.zip}"
-SCORE_CKPT="$DST/workdir/v1.1/score_model/best_ema_inference_epoch_model.pt"
-CONF_CKPT="$DST/workdir/v1.1/confidence_model/best_model_epoch75.pt"
+DIFFDOCK_ZIP_URL="${DIFFDOCK_ZIP_URL:-https://github.com/gcorso/DiffDock/releases/download/v1.1/diffdock_models.zip}"
+SCORE_CKPT="$DST/score_model/best_ema_inference_epoch_model.pt"
+CONF_CKPT="$DST/confidence_model/best_model_epoch75.pt"
 
 if [[ -f "$SCORE_CKPT" && -f "$CONF_CKPT" ]]; then
     echo "==> DiffDock-L checkpoints already present"

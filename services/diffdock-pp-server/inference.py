@@ -258,9 +258,23 @@ def _load_visualization_values(args, csv_path: Path, data_root: Path) -> dict:
     ]
     try:
         reload_args = upstream_parse()
+        # Sanity-check that yaml drift didn't reintroduce data_file/data_path
+        # overrides — those were stripped from single_pair_inference.yaml in
+        # 2026-07-06 after v0.0.4 silently ran on upstream's 1A2K sample data
+        # instead of the user's uploaded PDBs.
+        if str(reload_args.data_file) != str(csv_path):
+            raise SystemExit(
+                f"reload_args.data_file drift: got {reload_args.data_file!r}, "
+                f"expected {str(csv_path)!r} — check bundled yaml for "
+                f"stray data_file / data_path keys."
+            )
         data = load_data(reload_args)
-        # Data structure: data.data[PAIR_NAME]["visualization_values"]
-        entry = data.data[PAIR_NAME]
+        if not data.data:
+            raise SystemExit("no data entries loaded from load_data")
+        # We only ever run 1 pair per job, so take the sole entry regardless
+        # of what key upstream uses (DB5Loader keys by `line['path']`, i.e.
+        # PAIR_NAME, but we don't rely on that string matching).
+        entry = next(iter(data.data.values()))
         return entry["visualization_values"]
     finally:
         sys.argv = saved_argv
@@ -386,6 +400,21 @@ def main() -> int:
                                    save_path)
     try:
         upstream_args = upstream_parse()
+        # Guard against yaml overriding CLI data_file / data_path — see
+        # inference.py:_load_visualization_values for the incident that
+        # motivated this check.
+        if str(upstream_args.data_file) != str(csv_path):
+            raise SystemExit(
+                f"upstream_args.data_file drift: got "
+                f"{upstream_args.data_file!r}, expected {str(csv_path)!r} "
+                f"— bundled yaml is overriding CLI. Check "
+                f"single_pair_inference.yaml for stray data_file / data_path."
+            )
+        if str(upstream_args.data_path) != str(data_root):
+            raise SystemExit(
+                f"upstream_args.data_path drift: got "
+                f"{upstream_args.data_path!r}, expected {str(data_root)!r}"
+            )
         upstream_main(upstream_args)
     finally:
         sys.argv = saved_argv

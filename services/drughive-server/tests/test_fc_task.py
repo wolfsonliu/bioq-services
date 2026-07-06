@@ -44,9 +44,13 @@ POCKET_PDB = DATA_DIR / "5d3h_pocket.pdb"
 LIGAND_SDF = DATA_DIR / "5d3h_ligand.sdf"
 POCKET_PDBQT = DATA_DIR / "5d3h_pocket.pdbqt"
 
-# SMARTS pattern for a phenyl ring — small, guaranteed to match many
-# ligands (fallback for the scaffold-hopping mode).
-SMARTS_PATTERN = "c1ccccc1"
+# SMARTS pattern for scaffold hopping: amide (C=O)N.  Verified to have
+# exactly 1 match in 5d3h_ligand.sdf via rdkit; benzene "c1ccccc1" would
+# NOT match (5d3h ligand's aromatic ring fails RDKit kekulization due to
+# an OH substituent conflict).  If GetSubstructMatches returns empty,
+# upstream strips all atoms → downstream PCA crashes with
+# "Found array with 0 sample(s)".
+SMARTS_PATTERN = "C(=O)N"
 
 # generate/spatial: DrugHIVE sampling of 10 candidates + FF opt runs
 # ~30-90s on Tesla T4.  optimize is a full QVina2 loop: even trimmed to
