@@ -25,10 +25,19 @@
 #   runtime = lean: cuda-runtime + conda env from builder + DiffDock source
 #             + server code + precomputed `.so3_*.npy` / `.torus_*.npy` LUTs.
 #
-# Base: nvidia/cuda 11.7.1 devel (builder — nvcc for openfold build) /
-# runtime (runtime — smaller).  pytorch 1.13.1+cu117 works on runtime.
+# Base: nvidia/cuda 11.8.0 (both devel builder and runtime).  pytorch
+# 1.13.1+cu117 wheels have cu117 as CUDA runtime, but CUDA 11.8 is
+# fully backward-compatible (11.7 wheels run on 11.8 driver + libs).
+# Aligns with diffdock-pp-server / diffusion-hopping-server / drughive-server —
+# all four pytorch-1.13 conda services share the same 11.8 base.
+#
+# openfold pip build: nvcc 11.8 backward-emits CUDA 11.7 ABI-compatible
+# object code (verified 2026-07-06 in diffdock-pp-server smoke).
+# 12.x devel bases are NOT safe here: pytorch 1.13.1+cu117 statically
+# links cudart 11.7 + cudnn 8.5, but base 12.x cudnn 9+ would ABI-conflict
+# with pytorch's bundled shared libs at runtime.
 
-ARG BASE_DEVEL=nvidia/cuda:11.7.1-devel-ubuntu22.04
+ARG BASE_DEVEL=nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
 ARG BASE_RUNTIME=nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 ARG MICROMAMBA_IMAGE=mambaorg/micromamba:2.6.2
 

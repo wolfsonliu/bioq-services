@@ -192,3 +192,45 @@ def test_setup_lie_stages_and_collects(tmp_path):
     assert rc == 0
     assert (out / "setup.json").exists()
     assert (out / "md_LIE_bound").exists() and (out / "md_LIE_bound" / "run.inp").exists()
+
+
+def test_run_fep_wraps_qprep_and_qdyn_sequence(tmp_path):
+    work, out = _work_out(tmp_path)
+    setup = tmp_path / "setup"; (setup / "FEP5").mkdir(parents=True)
+    (setup / "FEP5" / "qprep.inp").write_text("qprep input")
+    for name in ("eq1.inp", "eq2.inp", "eq3.inp", "eq4.inp", "eq5.inp"):
+        (setup / "FEP5" / name).write_text(name)
+    (setup / "FEP5" / "md_0500_0500.inp").write_text("md")
+
+    from server import run_fep_cli
+
+    calls: list[str] = []
+
+    def fake_run(argv, cwd=None, *args, **kw):
+        calls.append(argv[0])
+        # simulate .en output
+        (Path(cwd) / "md_0500_0500.en").write_bytes(b"\x00\x01")
+        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="", stderr="")
+
+    with patch.object(subprocess, "run", side_effect=fake_run):
+        rc = run_fep_cli.run(
+            setup_dir=setup, window_idx=5, leg="protein",
+            replicate_idx=0, device="cpu", nprocs=1,
+            stage="both", keep_dcd=True,
+            q_bin_dir=tmp_path / "Qbin",
+            work_dir=work, output_dir=out,
+        )
+    assert rc == 0
+    # 1 qprep + 5 eq + 1 md = 7 calls
+    assert len(calls) >= 6
+    win = out / "window_5_rep_0"
+    assert win.exists()
+    assert (win / "md_0500_0500.en").exists()
+    assert (out / "run.json").exists()
+
+
+def test_run_fep_gpu_binary_selected(tmp_path):
+    from server import run_fep_cli
+    assert run_fep_cli._select_binary("gpu", Path("/opt/Q6/bin")) == Path("/opt/Q6/bin/qdyn_cuda")
+    assert run_fep_cli._select_binary("mpi", Path("/opt/Q6/bin")) == Path("/opt/Q6/bin/qdynp")
+    assert run_fep_cli._select_binary("cpu", Path("/opt/Q6/bin")) == Path("/opt/Q6/bin/qdyn")
