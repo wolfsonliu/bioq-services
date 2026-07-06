@@ -90,3 +90,41 @@ def test_ligprep_wrapper_calls_openff2q(tmp_path):
     for ext in ("lib", "prm", "pdb"):
         assert (out / f"17.{ext}").exists()
     assert any("openff2Q.py" in " ".join(c) for c in calls)
+
+
+def test_setup_ligfep_stages_and_collects(tmp_path):
+    work, out = _work_out(tmp_path)
+    ligprep = tmp_path / "lp"; ligprep.mkdir()
+    protprep = tmp_path / "pp"; protprep.mkdir()
+    for n in ("17.lib", "17.prm", "17.pdb", "18.lib", "18.prm", "18.pdb"):
+        (ligprep / n).write_text(n)
+    for n in ("protein.pdb", "water.pdb"):
+        (protprep / n).write_text(n)
+
+    from server import setup_ligfep_cli
+
+    def fake_run(argv, cwd=None, *args, **kw):
+        base = Path(cwd) / "17-18"
+        for leg in ("1.protein", "2.water"):
+            fep1 = base / leg / "FEP1"
+            fep1.mkdir(parents=True)
+            (fep1 / "md_0500_0500.inp").write_text("")
+            (base / leg / "FEP_submit.sh").write_text("#!/bin/bash\n")
+        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="", stderr="")
+
+    with patch.object(subprocess, "run", side_effect=fake_run):
+        rc = setup_ligfep_cli.run(
+            lig1_name="17", lig2_name="18",
+            ligprep_dir=ligprep, protprep_dir=protprep,
+            forcefield="OPLSAAM", system="protein", start="0.5",
+            temperature=298.15, replicates=10, windows=51,
+            sampling="linear", timestep="2fs", cluster="LOCAL",
+            to_clean=True,
+            work_dir=work, output_dir=out,
+        )
+    assert rc == 0
+    assert (out / "1.protein" / "FEP_submit.sh").exists()
+    assert (out / "2.water" / "FEP_submit.sh").exists()
+    assert (out / "setup.json").exists()
+    meta = json.loads((out / "setup.json").read_text())
+    assert meta["windows"] == 51 and meta["lig1"] == "17"
