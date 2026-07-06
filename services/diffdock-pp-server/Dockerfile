@@ -171,17 +171,46 @@ print('pyg / sparse / scatter / cluster OK')"
 # Upstream has no setup.py; we import via PYTHONPATH at runtime instead of
 # `pip install -e`.
 #
-# Second smoke: exercise the FULL upstream module chain that inference.py
-# will eventually load, including the notebooks/utils_notebooks import that
-# factory.py:13 needs (verified 2026-07-05 on v0.0.3 build: without this
-# smoke, forgetting to re-run vendor.sh after modifying its exclusion rules
-# silently ships a broken image — every dock call fails post-diffusion with
-# `ModuleNotFoundError: No module named 'notebooks'`).
-#
-# We inject `wandb` + `matplotlib` stubs the same way inference.py does at
-# runtime — the smoke must exactly mirror the runtime import environment.
+# **Before this step you MUST run scripts/vendor.sh** — the COPY below
+# does not fetch from github, it just copies from the host tree.  If the
+# host `services/diffdock-pp-server/upstream/` is stale (e.g. missing
+# `src/notebooks/utils_notebooks.py` which factory.py imports), the image
+# ships broken.  vendor.sh has been updated 2026-07-05 to include
+# notebooks/*.py — if you saw a v0.0.2/v0.0.3 build succeed, that only
+# means the layer cache was hiding the problem.
 # ---------------------------------------------------------------------------
 COPY services/diffdock-pp-server/upstream /opt/diffdock-pp
+
+# ---------------------------------------------------------------------------
+# Fast smoke #1 (< 1s): verify the required source files landed.  Fails
+# immediately if scripts/vendor.sh wasn't re-run with the notebooks-*.py
+# fix.  Cheaper than waiting for the Python import smoke below to fail
+# after 3 minutes of torch startup.
+# ---------------------------------------------------------------------------
+RUN set -e; \
+    for f in /opt/diffdock-pp/src/main_inf.py \
+             /opt/diffdock-pp/src/sample.py \
+             /opt/diffdock-pp/src/model/factory.py \
+             /opt/diffdock-pp/src/model/__init__.py \
+             /opt/diffdock-pp/src/data/data.py \
+             /opt/diffdock-pp/src/filtering/dataset.py \
+             /opt/diffdock-pp/src/evaluation/compute_rmsd.py \
+             /opt/diffdock-pp/src/geom_utils/transform.py \
+             /opt/diffdock-pp/src/notebooks/utils_notebooks.py; do \
+        [ -f "$f" ] || { \
+            echo "ERROR: required upstream file missing: $f"; \
+            echo "Did you run ./services/diffdock-pp-server/scripts/vendor.sh?"; \
+            exit 1; \
+        }; \
+    done; \
+    echo 'vendor filesystem check OK'
+
+# ---------------------------------------------------------------------------
+# Smoke #2: exercise the FULL upstream module chain that inference.py
+# will eventually load.  We inject `wandb` + `matplotlib` stubs the same
+# way inference.py does at runtime — the smoke must exactly mirror the
+# runtime import environment.
+# ---------------------------------------------------------------------------
 RUN /opt/conda/envs/diffdock_pp/bin/python -c "\
 import sys, types; \
 sys.path.insert(0, '/opt/diffdock-pp/src'); \

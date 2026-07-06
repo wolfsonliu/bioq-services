@@ -99,6 +99,11 @@ EOF
 # — leading to `libc10_cuda.so: cannot open shared object file` at
 # torch_sparse import (verified 2026-07-04 on FC).
 #
+# `setuptools<80`: setuptools 80.0 (2025-04) removed the `pkg_resources`
+# module; pytorch-lightning 1.8.1's __init__ still uses `pkg_resources.
+# declare_namespace` at import time.  Pin below 80 to keep it.  (Not just
+# a hypothetical — hit this on 2026-07-05.)
+#
 # See engineering/guides/pytorch-conda-ittapi.md and pytorch/pytorch#123097.
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
@@ -106,7 +111,7 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
         -c pyg -c nvidia -c pytorch -c conda-forge -c bioconda \
         python=3.10 \
         pip \
-        setuptools \
+        "setuptools<80" \
         "pytorch::pytorch=1.13.1=py3.10_cuda11.7_cudnn8.5.0_0" \
         pytorch-cuda=11.7 \
         torchvision=0.14.1 \

@@ -56,39 +56,45 @@ ENV MAMBA_ROOT_PREFIX=/opt/conda
 ENV PATH=/opt/conda/envs/openadmet-models/bin:$PATH
 
 # ---------------------------------------------------------------------------
-# CN mirrors (Huawei pip + TUNA conda).  Same layout as drughive-server.
+# CN mirrors — Huawei for pip, TUNA for conda-forge.  Note: upstream
+# openadmet-models-gpu.yaml uses ONLY conda-forge (no pytorch/nvidia/defaults
+# channels).  If we drop the yaml's channel constraint by adding `-c pytorch`
+# etc., the solver — under `channel_priority: strict` — picks pytorch-gpu
+# 1.9.1 from the `pytorch` channel (old py3.6 build), which conflicts with
+# every modern package.  So: mirror upstream exactly — conda-forge only.
 # ---------------------------------------------------------------------------
 RUN mkdir -p /root/.config/pip \
     && printf '[global]\nindex-url = https://repo.huaweicloud.com/repository/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
        > /root/.config/pip/pip.conf \
     && cat > /root/.condarc <<'EOF'
 channels:
-  - defaults
+  - conda-forge
 show_channel_urls: true
-channel_priority: strict
-default_channels:
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/msys2
+# `flexible` (not strict) — lets the solver upgrade transitive deps across
+# builds within conda-forge itself (e.g. old libtiff pinning old pillow
+# pinning old datamol).  strict would freeze at the first-found build and
+# create false conflicts.
+channel_priority: flexible
 custom_channels:
   conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
-  bioconda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
-  pytorch: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
 EOF
 
 # ---------------------------------------------------------------------------
-# Conda env — based on upstream devtools/conda-envs/openadmet-models-gpu.yaml.
-# We inline the yaml (not COPY-and-install) so the layer is cacheable and
-# the pin set is visible in `docker history`.  All pip-git deps in the
-# upstream yaml are installed from local pip_deps/ (vendor.sh output),
-# NOT github — see §6.8 of the design doc.
+# Conda env — mirrors upstream devtools/conda-envs/openadmet-models-gpu.yaml
+# (conda-forge only channel).  Key pins:
+#   * python=3.12                — upstream requires >=3.12,<3.14
+#   * pytorch-gpu>=2.4           — old (1.9) metapackage would trap solver
+#   * pytorch-lightning<=2.6.1   — upstream pin
+#   * chemprop>=2.1.1, zarr>=3.0 — upstream pins
+# All pip-git deps in the upstream yaml (molfeat/TabPFN/etc.) are installed
+# from local pip_deps/ (vendor.sh output), NOT github — see design §6.8.
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     micromamba create -y -n openadmet-models \
-        -c pytorch -c nvidia -c conda-forge \
+        -c conda-forge \
         python=3.12 \
-        pytorch-gpu \
-        pytorch-lightning \
+        "pytorch-gpu>=2.4" \
+        "pytorch-lightning<=2.6.1" \
         rdkit \
         ase \
         boto3 \
