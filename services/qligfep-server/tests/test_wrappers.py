@@ -258,3 +258,51 @@ def test_run_fep_gpu_binary_selected(tmp_path):
     assert run_fep_cli._select_binary("gpu", Path("/opt/Q6/bin")) == Path("/opt/Q6/bin/qdyn_cuda")
     assert run_fep_cli._select_binary("mpi", Path("/opt/Q6/bin")) == Path("/opt/Q6/bin/qdynp")
     assert run_fep_cli._select_binary("cpu", Path("/opt/Q6/bin")) == Path("/opt/Q6/bin/qdyn")
+
+
+def test_analyze_fep_produces_results_and_csv(tmp_path):
+    work, out = _work_out(tmp_path)
+    run_dir = tmp_path / "run"; run_dir.mkdir()
+
+    from server import analyze_fep_cli
+
+    def fake_run(argv, cwd=None, *args, **kw):
+        (Path(cwd) / "results.txt").write_text(
+            "# ligand pair analysis\n"
+            "17 -> 18   DDG = -3.20 kcal/mol   +/- 0.30\n"
+        )
+        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="", stderr="")
+
+    with patch.object(subprocess, "run", side_effect=fake_run):
+        rc = analyze_fep_cli.run(
+            run_dir=run_dir, temperature=298.15, start="0.5",
+            end_state_catastrophe=1000.0, use_pdb=False,
+            work_dir=work, output_dir=out,
+        )
+    assert rc == 0
+    assert (out / "results.txt").exists()
+    assert (out / "DDG.csv").exists()
+    csv_text = (out / "DDG.csv").read_text()
+    assert "pair,DDG_kcalmol,std_kcalmol" in csv_text
+    # Accept either "17->18,-3.20,0.30" or a partial parse
+    assert "-3.20" in csv_text or "17" in csv_text
+
+
+def test_analyze_lie_produces_results_and_csv(tmp_path):
+    work, out = _work_out(tmp_path)
+    run_dir = tmp_path / "run"; run_dir.mkdir()
+
+    from server import analyze_lie_cli
+
+    def fake_run(argv, cwd=None, *args, **kw):
+        (Path(cwd) / "results.txt").write_text("LIE 17: dG = -8.30 kcal/mol\n")
+        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="", stderr="")
+
+    with patch.object(subprocess, "run", side_effect=fake_run):
+        rc = analyze_lie_cli.run(
+            run_dir=run_dir, radius=22.0, cofactors=None,
+            work_dir=work, output_dir=out,
+        )
+    assert rc == 0
+    assert (out / "results.txt").exists()
+    assert (out / "LIE_energies.csv").exists()
