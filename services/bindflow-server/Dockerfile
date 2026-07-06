@@ -1,0 +1,185 @@
+# Build from bioagent project root:
+#   docker build --platform linux/amd64 -t bindflow-server \
+#       -f services/bindflow-server/Dockerfile .
+#
+# Pre-build (once; re-run to bump the pinned upstream SHA):
+#   ./services/bindflow-server/scripts/vendor.sh   # → upstream/
+#
+# Upstream (ale94mleon/BindFlow) is GPL-3.0.  Downstream distribution
+# must comply with GPL-3 (source availability etc.).
+#
+# HPC-primary service — Docker image is mainly consumed as an
+# apptainer/singularity SIF and invoked via `python -m server {fep|mmpbsa}`.
+# HTTP mode (uvicorn) is kept for local dev / smoke testing; not deployed to FC.
+#
+# Multistage layout
+# -----------------
+#   builder = conda env (Python 3.10 + snakemake + bioconda gromacs=2024.5
+#             + ambertools + openmm + openff-toolkit + parmed + mpi4py
+#             + pdbfixer + bindflow + gmx_MMPBSA pinned commit
+#             + bioagent-service-framework)
+#   runtime = lean: conda env + BindFlow upstream + server code.
+#
+# Base: nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04 — reserved for future
+# GPU mdrun; bioconda gromacs=2024.5 in v0.0.1 is CPU-only.  Runtime image
+# does NOT include the CUDA toolkit (headers/nvcc); only the runtime libs
+# needed by future GPU builds.
+
+ARG BASE_IMAGE=nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+ARG MICROMAMBA_IMAGE=mambaorg/micromamba:2.6.2
+
+
+# ===========================================================================
+# Stage 1: builder — conda env + BindFlow source + framework.
+# ===========================================================================
+FROM ${MICROMAMBA_IMAGE} AS micromamba
+FROM ${BASE_IMAGE} AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# NB: no `git` in apt — vendor.sh ran on host; image never clones.
+# gmx_MMPBSA is installed from a git URL via pip below, which does need git
+# at builder time only.  Runtime stage does not include git.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential ca-certificates wget git \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=micromamba /bin/micromamba /bin/micromamba
+ENV MAMBA_EXE=/bin/micromamba
+ENV MAMBA_ROOT_PREFIX=/opt/conda
+ENV PATH=/opt/conda/envs/bindflow/bin:$PATH
+
+# ---------------------------------------------------------------------------
+# Mirror configuration for CN-friendly builds.
+# ---------------------------------------------------------------------------
+RUN mkdir -p /root/.config/pip \
+    && printf '[global]\nindex-url = https://repo.huaweicloud.com/repository/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
+       > /root/.config/pip/pip.conf \
+    && cat > /root/.condarc <<'EOF'
+channels:
+  - conda-forge
+  - bioconda
+show_channel_urls: true
+channel_priority: flexible
+custom_channels:
+  conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+  bioconda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+EOF
+
+# ---------------------------------------------------------------------------
+# Create conda env.
+#
+# Pins mostly follow docs/source/env/latest/environment-linux.yml from
+# upstream (BindFlow), MINUS espaloma (would pull tensorflow + dgl, +3-6 GB;
+# design doc §11.3), PLUS bioconda snakemake=7.32.2 and bioconda
+# gromacs=2024.5 for self-contained MD.
+# ---------------------------------------------------------------------------
+COPY services/bindflow-server/environment.yml /tmp/bindflow-env.yml
+RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
+    --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    micromamba env create -y -n bindflow -f /tmp/bindflow-env.yml
+
+# ---------------------------------------------------------------------------
+# BindFlow itself — installed editable from vendored upstream/.
+# --no-deps because the conda env already provides the deps in tested pins.
+# ---------------------------------------------------------------------------
+COPY services/bindflow-server/upstream /opt/bindflow/upstream
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    /opt/conda/envs/bindflow/bin/pip install --no-deps -e /opt/bindflow/upstream
+
+# ---------------------------------------------------------------------------
+# gmx_MMPBSA — required for /api/calculate/mmpbsa.  Upstream's install
+# guide pins this specific commit for tested Python 3.10 compatibility.
+# ---------------------------------------------------------------------------
+ARG GMX_MMPBSA_COMMIT=27929e02067bc2321286809818d778a77a872010
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    /opt/conda/envs/bindflow/bin/pip install --no-deps -U \
+    "git+https://github.com/Valdes-Tresanco-MS/gmx_MMPBSA.git@${GMX_MMPBSA_COMMIT}"
+
+# ---------------------------------------------------------------------------
+# Framework — into the same conda env (Python 3.10 satisfies requires-python).
+# ---------------------------------------------------------------------------
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    /opt/conda/envs/bindflow/bin/pip install \
+        "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
+
+# ---------------------------------------------------------------------------
+# Cleanup dead weight from the conda env.
+# ---------------------------------------------------------------------------
+RUN /opt/conda/envs/bindflow/bin/pip uninstall -y \
+        jupyterlab jupyter_server jupyterlab_server jupyter_client \
+        ipywidgets ipykernel notebook nbconvert nbformat || true \
+    && find /opt/conda/envs/bindflow/lib -name '*.a' -delete \
+    && rm -rf \
+        /opt/conda/envs/bindflow/share/doc \
+        /opt/conda/envs/bindflow/share/man \
+        /opt/conda/envs/bindflow/share/locale \
+    && find /opt/conda/envs/bindflow/lib/python3.10/site-packages \
+        -depth -type d \( -name 'tests' -o -name 'test' \) \
+        -exec rm -rf {} + \
+    && find /opt/conda/envs/bindflow -depth -type d \
+        -name '__pycache__' -exec rm -rf {} + \
+    && find /opt/conda/envs/bindflow -name '*.pyc' -delete
+
+
+# ===========================================================================
+# Stage 2: runtime — conda env + BindFlow source + server code.
+# ===========================================================================
+FROM ${BASE_IMAGE}
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV MAMBA_ROOT_PREFIX=/opt/conda
+ENV PATH=/opt/conda/envs/bindflow/bin:$PATH
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates libgomp1 libxml2 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /opt/conda /opt/conda
+COPY --from=builder /opt/bindflow /opt/bindflow
+
+# Server code as `server` package — uvicorn imports `server.app:app`,
+# `python -m server` triggers server/__main__.py.
+COPY services/bindflow-server/__init__.py \
+     services/bindflow-server/__main__.py \
+     services/bindflow-server/VERSION \
+     services/bindflow-server/app.py \
+     services/bindflow-server/adapter.py \
+     services/bindflow-server/inference.py \
+     services/bindflow-server/models.py \
+     services/bindflow-server/settings.py \
+     services/bindflow-server/tools.py \
+     services/bindflow-server/uris.py \
+     /opt/bindflow/server/
+
+WORKDIR /opt/bindflow
+
+# PYTHONPATH lets `server.app` / `server.__main__` be importable regardless
+# of the container runner's WORKDIR (Apptainer does not honor WORKDIR — see
+# engineering/guides/apptainer-compatibility.md).
+ENV PYTHONPATH=/opt/bindflow
+ENV BINDFLOW_ROOT=/opt/bindflow
+ENV BINDFLOW_PYTHON=/opt/conda/envs/bindflow/bin/python
+ENV BINDFLOW_INFERENCE_SCRIPT=/opt/bindflow/server/inference.py
+ENV BINDFLOW_JOBS_BASE_DIR=/data/bindflow_jobs
+
+# Weights placeholder — BindFlow has no NN weights; NAS mount optional.
+ENV BINDFLOW_WEIGHTS_DIR=/data/models/bindflow
+ENV BINDFLOW_MAX_CONCURRENT_JOBS=1
+# HPC-primary — task endpoints disabled by default (see design doc §3.3).
+ENV BINDFLOW_TASK_ENDPOINTS_ENABLED=false
+
+RUN mkdir -p /data/bindflow_jobs
+
+ENV PORT=9000
+EXPOSE 9000
+# HTTP mode is the container default.  For CLI batch mode (HPC-primary):
+#   apptainer exec image.sif python -m server {fep|mmpbsa} ...
+CMD ["/opt/conda/envs/bindflow/bin/python", "-m", "uvicorn", \
+     "server.app:app", "--host", "0.0.0.0", "--port", "9000", \
+     "--timeout-keep-alive", "900"]

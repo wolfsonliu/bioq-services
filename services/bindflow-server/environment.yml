@@ -1,0 +1,39 @@
+# Conda environment for bindflow-server.
+#
+# Mostly mirrors upstream docs/source/env/latest/environment-linux.yml but:
+#   * espaloma is INTENTIONALLY omitted (would pull tensorflow + dgl,
+#     adding ~3-6 GB; design doc §11.3).  Users get openff and gaff FFs.
+#   * bioconda snakemake=7.32.2 replaces upstream's pip snakemake so the
+#     `snakemake` binary lands on PATH without extra shims.
+#   * bioconda gromacs=2024.5 is added — self-contained MD engine matching
+#     BindFlow's [2022, 2026) supported range.
+#
+# gmx_MMPBSA is installed separately from git (pinned commit) in the
+# Dockerfile — it's not in bioconda / pypi.
+name: bindflow
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.10.14
+  - pip
+  - bioconda::snakemake=7.32.2
+  - bioconda::gromacs=2024.5
+  - ambertools=22.5
+  - openmm=8.0.0
+  - openmmforcefields=0.11.2
+  - pdbfixer=1.9
+  - openff-toolkit=0.14.2
+  - pyyaml=6.0
+  - parmed=4.1.0
+  - pandas=2.0.3
+  - numpy=1.22.4
+  - mpi4py=3.1.5
+  - pip:
+      - alchemlyb==2.0.0
+      - mdanalysis==2.5.0
+      - mdrestraintsgenerator==0.2.1
+      - pymbar==4.0.1
+      - pytraj==2.0.6
+      - rdkit==2023.3.2
+      - toff==0.2.0
