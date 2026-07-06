@@ -16,12 +16,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY services/qligfep-server/upstream/Q6 /src/Q6
 WORKDIR /src/Q6/src
+# Q6 (esguerra/Q6 @ 202d90c) has no CUDA build target — only default (gfortran)
+# + mpi (via `make mpi COMP=gcc`).  device=gpu in run-fep is therefore not
+# supported by v0.0.1; qligfep-server /healthz/detail will show qdyn_cuda
+# as missing, and RunFepRequest(device=gpu) will fail with a clear
+# "binary not found" from _select_binary.  See engineering/decisions/
+# 2026-07-06-qligfep-server-design.md §10 risk #1 for context.
 RUN mkdir -p /opt/Q6/bin \
-    && make gcc  && cp ../bin/qdyn ../bin/qprep ../bin/qfep ../bin/qcalc /opt/Q6/bin/ \
+    && make all COMP=gcc \
+    && cp ../bin/qdyn ../bin/qprep ../bin/qfep ../bin/qcalc /opt/Q6/bin/ \
     && make clean \
-    && make mpi  && cp ../bin/qdynp /opt/Q6/bin/ \
-    && make clean \
-    && make cuda && cp ../bin/qdyn_cuda /opt/Q6/bin/
+    && make mpi COMP=gcc \
+    && cp ../bin/qdynp /opt/Q6/bin/
 
 # ---- runtime ----
 FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04

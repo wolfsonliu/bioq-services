@@ -202,13 +202,17 @@ def test_run_fep_wraps_qprep_and_qdyn_sequence(tmp_path):
         (setup / "FEP6" / name).write_text(name)
     (setup / "FEP6" / "md_0500_0500.inp").write_text("md")
 
+    # Q6 binaries must exist for the existence check in run().
+    q_bin = tmp_path / "Qbin"; q_bin.mkdir()
+    for b in ("qdyn", "qdynp", "qdyn_cuda", "qprep", "qfep", "qcalc"):
+        (q_bin / b).write_text("#!/bin/sh\n"); (q_bin / b).chmod(0o755)
+
     from server import run_fep_cli
 
     calls: list[str] = []
 
     def fake_run(argv, cwd=None, *args, **kw):
         calls.append(argv[0])
-        # simulate .en output
         (Path(cwd) / "md_0500_0500.en").write_bytes(b"\x00\x01")
         return subprocess.CompletedProcess(args=argv, returncode=0, stdout="", stderr="")
 
@@ -217,11 +221,10 @@ def test_run_fep_wraps_qprep_and_qdyn_sequence(tmp_path):
             setup_dir=setup, window_idx=5, leg="protein",
             replicate_idx=0, device="cpu", nprocs=1,
             stage="both", keep_dcd=True,
-            q_bin_dir=tmp_path / "Qbin",
+            q_bin_dir=q_bin,
             work_dir=work, output_dir=out,
         )
     assert rc == 0
-    # 1 qprep + 5 eq + 1 md = 7 calls
     assert len(calls) >= 6
     win = out / "window_5_rep_0"
     assert win.exists()
@@ -241,12 +244,16 @@ def test_run_fep_zero_indexed_maps_to_fep1(tmp_path):
         (Path(cwd) / "md_0000_1000.en").write_bytes(b"x")
         return subprocess.CompletedProcess(args=argv, returncode=0, stdout="", stderr="")
 
+    q_bin = tmp_path / "Qbin"; q_bin.mkdir()
+    for b in ("qdyn", "qdynp", "qdyn_cuda", "qprep", "qfep", "qcalc"):
+        (q_bin / b).write_text("#!/bin/sh\n"); (q_bin / b).chmod(0o755)
+
     with patch.object(subprocess, "run", side_effect=fake_run):
         rc = run_fep_cli.run(
             setup_dir=setup, window_idx=0, leg="protein",
             replicate_idx=0, device="cpu", nprocs=1,
             stage="md", keep_dcd=False,
-            q_bin_dir=tmp_path / "Qbin",
+            q_bin_dir=q_bin,
             work_dir=work, output_dir=out,
         )
     assert rc == 0
@@ -258,6 +265,29 @@ def test_run_fep_gpu_binary_selected(tmp_path):
     assert run_fep_cli._select_binary("gpu", Path("/opt/Q6/bin")) == Path("/opt/Q6/bin/qdyn_cuda")
     assert run_fep_cli._select_binary("mpi", Path("/opt/Q6/bin")) == Path("/opt/Q6/bin/qdynp")
     assert run_fep_cli._select_binary("cpu", Path("/opt/Q6/bin")) == Path("/opt/Q6/bin/qdyn")
+
+
+def test_run_fep_reports_missing_binary(tmp_path):
+    """device=gpu fails with rc=3 when qdyn_cuda binary isn't shipped."""
+    work, out = _work_out(tmp_path)
+    setup = tmp_path / "setup"; (setup / "FEP1").mkdir(parents=True)
+    (setup / "FEP1" / "md_0000_1000.inp").write_text("")
+
+    q_bin = tmp_path / "Qbin"; q_bin.mkdir()
+    # only qdyn / qdynp exist — qdyn_cuda absent
+    for b in ("qdyn", "qdynp"):
+        (q_bin / b).write_text("#!/bin/sh\n"); (q_bin / b).chmod(0o755)
+
+    from server import run_fep_cli
+
+    rc = run_fep_cli.run(
+        setup_dir=setup, window_idx=0, leg="protein",
+        replicate_idx=0, device="gpu", nprocs=1,
+        stage="md", keep_dcd=False,
+        q_bin_dir=q_bin,
+        work_dir=work, output_dir=out,
+    )
+    assert rc == 3
 
 
 def test_analyze_fep_produces_results_and_csv(tmp_path):

@@ -96,6 +96,14 @@ def run(*, setup_dir: Path, window_idx: int, leg: str,
         shutil.copy2(item, work_dir / item.name)
 
     binary = _select_binary(device, q_bin_dir)
+    if not binary.exists():
+        print(
+            f"Q6 binary not found for device={device!r}: {binary}. "
+            f"Note: qligfep-server v0.0.1 ships only qdyn + qdynp; "
+            f"device=gpu (qdyn_cuda) is not supported.",
+            file=sys.stderr,
+        )
+        return 3
     return_codes: dict[str, int] = {}
     started = time.monotonic()
 
