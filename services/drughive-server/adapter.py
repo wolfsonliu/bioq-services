@@ -18,12 +18,20 @@ class DrughiveAdapter(JobAdapter):
         super().__init__(settings)
 
     def detect_outputs(self, job_dir: Path) -> bool:
-        """True if any of the three modes' primary output SDF exists."""
+        """True if any of the three modes' primary output SDF exists.
+
+        Upstream writes into nested subdirs
+        ``output/<gen_name>/<pdb_id>/mols_gen.sdf`` (de novo / spatial) or
+        ``output/pdbzinc_initial/<pdb_id>/mols_gen.sdf`` (optimize initial
+        population).  Use ``rglob`` since the depth varies per mode.  The
+        ``mols_gen*`` pattern matches both bare ``mols_gen.sdf`` and the
+        FF-optimized ``mols_gen_opt.sdf``.
+        """
         out = self.output_dir(job_dir)
         if not out.exists():
             return False
-        for pattern in ("mols_gen_*.sdf", "mols_pred_*.sdf", "mols_initial_*.sdf"):
-            for p in out.glob(pattern):
+        for pattern in ("mols_gen*.sdf", "mols_pred*.sdf", "mols_initial*.sdf"):
+            for p in out.rglob(pattern):
                 if p.is_file() and p.stat().st_size > 0:
                     return True
         return False
@@ -40,9 +48,9 @@ class DrughiveAdapter(JobAdapter):
                 "license": "USC-RL v2.0 (non-commercial academic research only)",
             },
             "tool_outputs": {
-                "generate": "output/mols_gen_<pdb_id>.sdf",
-                "generate_spatial": "output/mols_pred_<pdb_id>.sdf",
-                "optimize": "output/mols_initial_<pdb_id>.sdf + mols_opt_<i>_<pdb_id>.sdf per cycle",
+                "generate": "output/<gen_name>/<pdb_id>/mols_gen.sdf (+ mols_gen_opt.sdf if ffopt_mols=true)",
+                "generate_spatial": "output/<gen_name>/<pdb_id>/mols_gen.sdf (spatial mode; MolGeneratorSpatial writes the same filename)",
+                "optimize": "output/pdbzinc_initial/<pdb_id>/mols_gen.sdf + output/<save_name>/<model_id>_<save_name>_opt<i>/<pdb_id>/mols_gen.sdf per cycle + *_qvina.csv docking scores",
             },
             "input_uri_schemes": {
                 "target": "multipart / oss:// / file:// / job:// / http(s)://",

@@ -339,25 +339,39 @@ def test_adapter_detect_outputs_empty(tmp_path):
     assert a.detect_outputs(job_dir) is False
 
 
-def test_adapter_detect_outputs_generate(tmp_path):
+def test_adapter_detect_outputs_generate_nested(tmp_path):
+    """Upstream writes into output/<gen_name>/<pdb_id>/mols_gen.sdf — needs rglob."""
     from server.adapter import DrughiveAdapter
 
     a = DrughiveAdapter(settings=_off_settings())
     job_dir = tmp_path / "job"
-    out = job_dir / "output"
-    out.mkdir(parents=True)
-    (out / "mols_gen_5d3h.sdf").write_text("valid_sdf_content\n$$$$\n")
+    nested = job_dir / "output" / "prior" / "5d3h"
+    nested.mkdir(parents=True)
+    (nested / "mols_gen.sdf").write_text("valid_sdf_content\n$$$$\n")
     assert a.detect_outputs(job_dir) is True
 
 
-def test_adapter_detect_outputs_optimize(tmp_path):
+def test_adapter_detect_outputs_optimize_initial_pool(tmp_path):
+    """Optimize mode writes output/pdbzinc_initial/<pdb_id>/mols_gen.sdf."""
     from server.adapter import DrughiveAdapter
 
     a = DrughiveAdapter(settings=_off_settings())
     job_dir = tmp_path / "job"
-    out = job_dir / "output"
-    out.mkdir(parents=True)
-    (out / "mols_initial_5d3h.sdf").write_text("initial_pop\n$$$$\n")
+    nested = job_dir / "output" / "pdbzinc_initial" / "5d3h"
+    nested.mkdir(parents=True)
+    (nested / "mols_gen.sdf").write_text("initial_pop\n$$$$\n")
+    assert a.detect_outputs(job_dir) is True
+
+
+def test_adapter_detect_outputs_ffopt_variant(tmp_path):
+    """`mols_gen_opt.sdf` (FF-post-processed) also counts."""
+    from server.adapter import DrughiveAdapter
+
+    a = DrughiveAdapter(settings=_off_settings())
+    job_dir = tmp_path / "job"
+    nested = job_dir / "output" / "prior" / "5d3h"
+    nested.mkdir(parents=True)
+    (nested / "mols_gen_opt.sdf").write_text("ffopt\n$$$$\n")
     assert a.detect_outputs(job_dir) is True
 
 

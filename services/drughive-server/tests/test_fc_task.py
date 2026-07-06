@@ -331,10 +331,13 @@ class TestAsyncGenerate:
         files = _get_with_retry(
             client, f"/api/jobs/{generate_task_id}/files"
         ).json()["files"]
-        # Upstream writes mols_gen_<pdb_id>.sdf (single SDF, N molecules inside)
-        assert any("mols_gen" in f and f.endswith(".sdf") for f in files), (
-            f"mols_gen_*.sdf missing from generate output: {files}"
-        )
+        # Upstream writes into a nested layout:
+        #   output/<gen_name>/<pdb_id>/mols_gen.sdf  (+ mols_gen_opt.sdf if ffopt)
+        # gen_name defaults to "prior" when zbetas=[0,0,0,0].
+        assert any(
+            f.endswith("/mols_gen.sdf") or f.endswith("/mols_gen_opt.sdf")
+            for f in files
+        ), f"mols_gen[_opt].sdf missing from generate output: {files}"
 
     def test_input_params_echoed(self, generate_task):
         params = generate_task.get("input_params") or {}
@@ -345,8 +348,10 @@ class TestAsyncGenerate:
         files = _get_with_retry(
             client, f"/api/jobs/{generate_task_id}/files"
         ).json()["files"]
+        # Prefer the FF-optimized SDF if present, else the raw mols_gen.sdf.
         sdf_name = next(
-            f for f in files if "mols_gen" in f and f.endswith(".sdf")
+            (f for f in files if f.endswith("/mols_gen_opt.sdf")),
+            next(f for f in files if f.endswith("/mols_gen.sdf")),
         )
         r = _get_with_retry(client, f"/api/jobs/{generate_task_id}/file/{sdf_name}")
         assert r.status_code == 200
@@ -362,10 +367,15 @@ class TestAsyncGenerateSpatial:
         files = _get_with_retry(
             client, f"/api/jobs/{spatial_task_id}/files"
         ).json()["files"]
-        # Upstream MolGeneratorSpatial writes mols_pred_<pdb_id>.sdf
-        assert any("mols_pred" in f and f.endswith(".sdf") for f in files), (
-            f"mols_pred_*.sdf missing from generate_spatial output: {files}"
-        )
+        # MolGeneratorSpatial writes into the same nested layout as MolGenerator:
+        # output/<gen_name>/<pdb_id>/mols_gen.sdf.  Some versions also emit
+        # mols_pred*.sdf variants for the modified region.
+        assert any(
+            f.endswith("/mols_gen.sdf")
+            or f.endswith("/mols_gen_opt.sdf")
+            or ("/mols_pred" in f and f.endswith(".sdf"))
+            for f in files
+        ), f"mols_gen/mols_pred SDF missing from spatial output: {files}"
 
     def test_input_params_echoed(self, spatial_task):
         params = spatial_task.get("input_params") or {}
@@ -377,7 +387,10 @@ class TestAsyncGenerateSpatial:
             client, f"/api/jobs/{spatial_task_id}/files"
         ).json()["files"]
         sdf_name = next(
-            f for f in files if "mols_pred" in f and f.endswith(".sdf")
+            f for f in files
+            if f.endswith("/mols_gen_opt.sdf")
+            or f.endswith("/mols_gen.sdf")
+            or ("/mols_pred" in f and f.endswith(".sdf"))
         )
         r = _get_with_retry(client, f"/api/jobs/{spatial_task_id}/file/{sdf_name}")
         assert r.status_code == 200
@@ -394,11 +407,11 @@ class TestAsyncOptimize:
             client, f"/api/jobs/{optimize_task_id}/files"
         ).json()["files"]
         # optimize starts by generating the initial population under
-        # output/pdbzinc_initial/... — presence of any mols_gen*.sdf under
-        # the job output tree indicates the pipeline ran past that stage.
-        assert any("mols_gen" in f and f.endswith(".sdf") for f in files), (
-            f"initial-pool SDF missing from optimize output: {files}"
-        )
+        # output/pdbzinc_initial/<pdb_id>/mols_gen.sdf — any nested
+        # mols_gen*.sdf proves the pipeline got past model load.
+        assert any(
+            "/mols_gen" in f and f.endswith(".sdf") for f in files
+        ), f"initial-pool mols_gen*.sdf missing from optimize output: {files}"
 
     def test_input_params_echoed(self, optimize_task):
         params = optimize_task.get("input_params") or {}
@@ -466,7 +479,7 @@ class TestJobLifecycle:
         zf = zipfile.ZipFile(io.BytesIO(r.content))
         names = zf.namelist()
         assert any("mols_gen" in n and n.endswith(".sdf") for n in names), (
-            f"mols_gen SDF missing from zip: {names}"
+            f"mols_gen SDF missing from zip (nested paths OK): {names}"
         )
 
     def test_single_file_download_missing_returns_404(
