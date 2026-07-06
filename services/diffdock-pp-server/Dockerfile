@@ -266,6 +266,17 @@ ENV PYTHONUNBUFFERED=1
 ENV MAMBA_ROOT_PREFIX=/opt/conda
 ENV PATH=/opt/conda/envs/diffdock_pp/bin:$PATH
 
+# FC containers ship with LANG unset → Python's locale.getpreferredencoding()
+# returns 'ascii', which makes `open(path)` (no encoding kwarg) fail on any
+# UTF-8 byte.  Upstream `src/args.py:process_args` does `open(args.config_file)`
+# without encoding, so if the bundled yaml has any UTF-8 char, the second
+# yaml read (from our _load_visualization_values postprocess step) crashes
+# with `UnicodeDecodeError: 'ascii' codec can't decode byte 0xe2 ...`.
+# Setting LANG closes this class of bug for every `open()` in the container.
+# Verified 2026-07-06 on v0.0.6 dock run.
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates libgomp1 \
     && rm -rf /var/lib/apt/lists/*

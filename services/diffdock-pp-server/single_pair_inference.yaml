@@ -1,11 +1,11 @@
 ---
 # Bundled DiffDock-PP inference config.
 #
-# **IMPORTANT**: Upstream `src/args.py:process_args` merges this yaml AFTER
+# IMPORTANT: Upstream `src/args.py:process_args` merges this yaml AFTER
 # argparse via `override_args`, so any key here overrides the CLI. That means
 # runtime-varying params (data_file, data_path, mirror_ligand, no_final_noise,
 # run_inference_without_confidence_model, actual_steps, num_samples, seed, etc.)
-# MUST be omitted from the yaml — our wrapper passes them on the CLI.
+# MUST be omitted from the yaml - our wrapper passes them on the CLI.
 #
 # What stays here: model architecture (fixed by the trained checkpoint),
 # diffusion sigmas (fixed by the training scheme), temperature-sampling
@@ -17,10 +17,17 @@
 # `inference.no_final_noise`, `inference.run_inference_without_confidence_model`,
 # and `train.actual_steps` stripped so the CLI is authoritative.
 #
-# Bug history: v0.0.4 shipped with data_file/data_path in the yaml → every
-# dock call silently ran on upstream's 1A2K sample PDBs, ignoring uploads.
-# Detected 2026-07-06 via async task test showing KeyError('pair') during
-# post-process. See design doc §3.
+# Bug history:
+#   - v0.0.4 shipped with data_file/data_path in the yaml. Every dock call
+#     silently ran on upstream's 1A2K sample PDBs, ignoring uploads.
+#     Detected via async task test showing KeyError('pair') during
+#     post-process. See design doc section 3b.
+#   - v0.0.6 shipped with UTF-8 chars (em dash, arrow, section sign) in
+#     these comments. Container LANG defaults to ASCII on FC, and
+#     upstream's `open()` uses no explicit encoding, so `yaml.safe_load`
+#     crashed with UnicodeDecodeError on the second yaml read (during
+#     postprocess). Fix in v0.0.7: ASCII-only comments here plus
+#     `ENV LANG=C.UTF-8` in the runtime Dockerfile. See design doc 3d.
 data:
     dataset: db5
     resolution: residue
