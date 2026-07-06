@@ -196,11 +196,11 @@ def test_setup_lie_stages_and_collects(tmp_path):
 
 def test_run_fep_wraps_qprep_and_qdyn_sequence(tmp_path):
     work, out = _work_out(tmp_path)
-    setup = tmp_path / "setup"; (setup / "FEP5").mkdir(parents=True)
-    (setup / "FEP5" / "qprep.inp").write_text("qprep input")
+    setup = tmp_path / "setup"; (setup / "FEP6").mkdir(parents=True)
+    (setup / "FEP6" / "qprep.inp").write_text("qprep input")
     for name in ("eq1.inp", "eq2.inp", "eq3.inp", "eq4.inp", "eq5.inp"):
-        (setup / "FEP5" / name).write_text(name)
-    (setup / "FEP5" / "md_0500_0500.inp").write_text("md")
+        (setup / "FEP6" / name).write_text(name)
+    (setup / "FEP6" / "md_0500_0500.inp").write_text("md")
 
     from server import run_fep_cli
 
@@ -227,6 +227,30 @@ def test_run_fep_wraps_qprep_and_qdyn_sequence(tmp_path):
     assert win.exists()
     assert (win / "md_0500_0500.en").exists()
     assert (out / "run.json").exists()
+
+
+def test_run_fep_zero_indexed_maps_to_fep1(tmp_path):
+    """window_idx is 0-based; 0 should locate FEP1 (Q's 1-based convention)."""
+    work, out = _work_out(tmp_path)
+    setup = tmp_path / "setup"; (setup / "FEP1").mkdir(parents=True)
+    (setup / "FEP1" / "md_0000_1000.inp").write_text("")
+
+    from server import run_fep_cli
+
+    def fake_run(argv, cwd=None, *args, **kw):
+        (Path(cwd) / "md_0000_1000.en").write_bytes(b"x")
+        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="", stderr="")
+
+    with patch.object(subprocess, "run", side_effect=fake_run):
+        rc = run_fep_cli.run(
+            setup_dir=setup, window_idx=0, leg="protein",
+            replicate_idx=0, device="cpu", nprocs=1,
+            stage="md", keep_dcd=False,
+            q_bin_dir=tmp_path / "Qbin",
+            work_dir=work, output_dir=out,
+        )
+    assert rc == 0
+    assert (out / "window_0_rep_0" / "md_0000_1000.en").exists()
 
 
 def test_run_fep_gpu_binary_selected(tmp_path):

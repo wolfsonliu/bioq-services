@@ -86,16 +86,11 @@ def run(*, setup_dir: Path, window_idx: int, leg: str,
     work_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    fep_dir = setup_dir / f"FEP{window_idx}"
+    # window_idx is 0-based externally; Q uses 1-based FEP directories.
+    fep_dir = setup_dir / f"FEP{window_idx + 1}"
     if not fep_dir.exists():
-        # Fallback: QligFEP historically uses 1-based FEP dirs (FEP1, FEP2, ...);
-        # allow callers that pass 0-based window_idx to still resolve.
-        alt = setup_dir / f"FEP{window_idx + 1}"
-        if alt.exists():
-            fep_dir = alt
-        else:
-            print(f"FEP{window_idx} not found in {setup_dir}", file=sys.stderr)
-            return 2
+        print(f"FEP{window_idx + 1} not found in {setup_dir}", file=sys.stderr)
+        return 2
 
     for item in fep_dir.iterdir():
         shutil.copy2(item, work_dir / item.name)
