@@ -10,6 +10,13 @@
 #
 # gmx_MMPBSA is installed separately from git (pinned commit) in the
 # Dockerfile — it's not in bioconda / pypi.
+#
+# NOTE: `docker build` does NOT consume this file directly.  The Dockerfile
+# splits the install into layered `micromamba install` calls to reduce peak
+# solver memory (see Dockerfile "SPLIT into 4 install layers" section).  This
+# file is retained as the authoritative pin manifest — bump pins here first,
+# then mirror the change into the Dockerfile layers.  Also usable for local
+# `micromamba env create -f environment.yml` on high-memory hosts.
 name: bindflow
 channels:
   - conda-forge

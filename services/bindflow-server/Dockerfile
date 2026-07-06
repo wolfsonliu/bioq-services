@@ -69,17 +69,58 @@ custom_channels:
 EOF
 
 # ---------------------------------------------------------------------------
-# Create conda env.
+# Create conda env — SPLIT into 4 install layers.
+#
+# Rationale: a single `micromamba env create` on the full 20+ package pinned
+# stack peaks at ~4-6 GB solver memory (ambertools + openmm + openff-toolkit +
+# mpi4py + bioconda gromacs cross-channel resolution).  On memory-constrained
+# hosts (< 16 GB total) the OOM killer takes out the build (exit 137).
+#
+# Splitting into layers lets each solve work on a smaller graph:
+#   Layer 1: Python + core numerics + PATH essentials
+#   Layer 2: bioconda gromacs + snakemake (small; separate channel resolution)
+#   Layer 3: ambertools alone (biggest single package)
+#   Layer 4: chemistry stack (openmm, openff, pdbfixer, parmed, mpi4py)
+#
+# Each layer also gives Docker its own layer cache so incremental
+# `environment.yml` bumps only rebuild from the changed layer down.
 #
 # Pins mostly follow docs/source/env/latest/environment-linux.yml from
-# upstream (BindFlow), MINUS espaloma (would pull tensorflow + dgl, +3-6 GB;
-# design doc §11.3), PLUS bioconda snakemake=7.32.2 and bioconda
-# gromacs=2024.5 for self-contained MD.
+# upstream (BindFlow), MINUS espaloma (design doc §11.3).
 # ---------------------------------------------------------------------------
-COPY services/bindflow-server/environment.yml /tmp/bindflow-env.yml
+
+# Layer 1: base python + numerics.
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
-    --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    micromamba env create -y -n bindflow -f /tmp/bindflow-env.yml
+    micromamba create -y -n bindflow \
+        python=3.10.14 pip \
+        numpy=1.22.4 pandas=2.0.3 pyyaml=6.0
+
+# Layer 2: bioconda gromacs + snakemake.
+RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
+    micromamba install -y -n bindflow \
+        'bioconda::snakemake=7.32.2' \
+        'bioconda::gromacs=2024.5'
+
+# Layer 3: ambertools (largest single package, ~2 GB installed).
+RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
+    micromamba install -y -n bindflow ambertools=22.5
+
+# Layer 4: chemistry / MD stack.
+RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
+    micromamba install -y -n bindflow \
+        openmm=8.0.0 openmmforcefields=0.11.2 \
+        pdbfixer=1.9 openff-toolkit=0.14.2 \
+        parmed=4.1.0 mpi4py=3.1.5
+
+# Layer 5: pip-only chemistry deps (small; batched into one solve).
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    /opt/conda/envs/bindflow/bin/pip install \
+        alchemlyb==2.0.0 mdanalysis==2.5.0 mdrestraintsgenerator==0.2.1 \
+        pymbar==4.0.1 pytraj==2.0.6 rdkit==2023.3.2 toff==0.2.0
+
+# `environment.yml` retained as authoritative source of pins; not consumed
+# by the build directly (see layer split above).
+COPY services/bindflow-server/environment.yml /opt/bindflow/environment.yml
 
 # ---------------------------------------------------------------------------
 # BindFlow itself — installed editable from vendored upstream/.

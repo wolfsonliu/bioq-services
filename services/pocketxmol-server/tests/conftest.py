@@ -1,9 +1,13 @@
-"""Register `server` package alias for tests + fc marker."""
+"""Register `server` package alias + `fc` marker."""
+
 from __future__ import annotations
 
 import importlib.util
 import sys
+import time
 from pathlib import Path
+
+import pytest
 
 SERVICE_DIR = Path(__file__).resolve().parent.parent
 
@@ -26,8 +30,16 @@ from bioagent_service.fc_testing import (  # noqa: E402
 
 def pytest_configure(config):
     register_fc_marker(config)
-    config.addinivalue_line("markers", "slow: opt-in slow / real-run tests")
 
 
 def pytest_collection_modifyitems(config, items):
     skip_fc_tests_unless_enabled(config, items)
+
+
+@pytest.fixture(scope="session")
+def local_output_dir() -> Path:
+    """Per-test-session directory for FC test artifact downloads."""
+    base = Path(__file__).resolve().parent / "fc_outputs"
+    run_dir = base / f"run-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    return run_dir

@@ -156,6 +156,19 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     && rm -rf /tmp/pip_deps
 
 # ---------------------------------------------------------------------------
+# Sync boto3 <-> botocore.  The pip layer above may pull transitive deps
+# that upgrade botocore beyond conda's boto3 compat window (or vice versa),
+# breaking `import boto3` with:
+#     ImportError: cannot import name 'DocumentModifiedShape' from botocore.docs.utils
+# because boto3 1.35+ requires the newer symbol while an older botocore
+# (or a botocore held back by aiobotocore/s3fs pins) doesn't have it.
+# Reinstall as a matched pair — uv resolves them together.
+# ---------------------------------------------------------------------------
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python /opt/conda/envs/openadmet-models/bin/python \
+        --upgrade boto3 botocore
+
+# ---------------------------------------------------------------------------
 # OpenADMET source — from vendored upstream/ (see scripts/vendor.sh).
 # Editable install so `openadmet` CLI command and `from openadmet.models import ...`
 # both work.  Upstream's pyproject.toml declares `openadmet = "openadmet.models.cli.cli:cli"`.
