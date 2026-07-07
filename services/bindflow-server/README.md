@@ -202,8 +202,10 @@ apptainer pull bindflow-server.sif docker://harbor.ruosheng.bio/aliyun_fc/bindfl
 - **长跑**：单次 FEP 项目常常 20+ 小时；HTTP submit/poll 模式在开发机上跑
   只推荐 MMPBSA 或极小规模 FEP。生产走 CLI + sbatch。
 - **espaloma FF 未包含**：v0.0.1 只支持 openff / gaff。见设计文档 §11.3。
-- **GROMACS 是 bioconda 版本 (2024.5, CPU-only)**：未来上 GPU 需要 v0.0.2 变
-  体镜像或换 source-build 路径。
+- **GROMACS 走 bioconda / conda-forge (`>=2023,<2026`, CPU-only)**：具体版本
+  由 solver 从两个 channel 里选（bioconda 不发所有 patch 版本，锁死 patch
+  pin 会 unresolvable）；未来上 GPU 需要 v0.0.2 变体镜像或换 source-build
+  路径。
 - **`global_config_yaml` 是可信客户端专用**：可注入 shell 命令
   (`extra_directives.dependencies`)；不要暴露给不受信任的调用方。见 §11.5。
 

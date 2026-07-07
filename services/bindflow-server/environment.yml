@@ -5,8 +5,10 @@
 #     adding ~3-6 GB; design doc §11.3).  Users get openff and gaff FFs.
 #   * bioconda snakemake=7.32.2 replaces upstream's pip snakemake so the
 #     `snakemake` binary lands on PATH without extra shims.
-#   * bioconda gromacs=2024.5 is added — self-contained MD engine matching
-#     BindFlow's [2022, 2026) supported range.
+#   * gromacs>=2023,<2026 is added — self-contained MD engine matching
+#     BindFlow's [2022, 2026) supported range.  Range (not exact patch) pin
+#     because bioconda / conda-forge don't publish every point release, so a
+#     locked pin like `=2024.5` reproducibly fails to resolve.
 #
 # gmx_MMPBSA is installed separately from git (pinned commit) in the
 # Dockerfile — it's not in bioconda / pypi.
@@ -25,7 +27,9 @@ dependencies:
   - python=3.10.14
   - pip
   - bioconda::snakemake=7.32.2
-  - bioconda::gromacs=2024.5
+  # bioconda / conda-forge don't ship every gromacs patch version; a range pin
+  # lets the solver pick whatever's currently packaged in [2023, 2026).
+  - gromacs >=2023,<2026
   - ambertools=22.5
   - openmm=8.0.0
   - openmmforcefields=0.11.2

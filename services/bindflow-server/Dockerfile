@@ -14,14 +14,14 @@
 #
 # Multistage layout
 # -----------------
-#   builder = conda env (Python 3.10 + snakemake + bioconda gromacs=2024.5
+#   builder = conda env (Python 3.10 + snakemake + gromacs>=2023,<2026 (bioconda / conda-forge)
 #             + ambertools + openmm + openff-toolkit + parmed + mpi4py
 #             + pdbfixer + bindflow + gmx_MMPBSA pinned commit
 #             + bioagent-service-framework)
 #   runtime = lean: conda env + BindFlow upstream + server code.
 #
 # Base: nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04 — reserved for future
-# GPU mdrun; bioconda gromacs=2024.5 in v0.0.1 is CPU-only.  Runtime image
+# GPU mdrun; gromacs>=2023,<2026 (bioconda / conda-forge) in v0.0.1 is CPU-only.  Runtime image
 # does NOT include the CUDA toolkit (headers/nvcc); only the runtime libs
 # needed by future GPU builds.
 
@@ -95,11 +95,18 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
         python=3.10.14 pip \
         numpy=1.22.4 pandas=2.0.3 pyyaml=6.0
 
-# Layer 2: bioconda gromacs + snakemake.
+# Layer 2: gromacs + snakemake.
+#
+# GROMACS pin: `gromacs>=2023,<2026` — a range rather than exact patch pin
+# because bioconda / conda-forge don't ship every point release; only a
+# subset (e.g. 2024.1, 2024.4) is packaged.  BindFlow's supported range is
+# [2022, 2026); we start at 2023 for pymbar / mdanalysis compatibility.
+# Solver picks the newest available across both channels (see /root/.condarc).
+# Snakemake pinned to 7.32.2 per BindFlow's tested env.
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     micromamba install -y -n bindflow \
         'bioconda::snakemake=7.32.2' \
-        'bioconda::gromacs=2024.5'
+        'gromacs>=2023,<2026'
 
 # Layer 3: ambertools (largest single package, ~2 GB installed).
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \

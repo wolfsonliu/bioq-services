@@ -126,6 +126,8 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
         conda-forge::networkx=2.8.4 \
         conda-forge::tqdm \
         conda-forge::pybind11=2.11.1 \
+        conda-forge::ninja \
+        conda-forge::wheel \
         conda-forge::ittapi \
         "mkl<2024.1" \
         "intel-openmp<2024.1" \
@@ -133,12 +135,23 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
 
 # fair-esm[esmfold] pulls openfold + ml-collections + einops. openfold is a
 # git-installed package that compiles CUDA extensions — needs nvcc + gcc
-# (present in cuda-devel base) + setuptools=69.5.1 (already pinned above).
+# (present in cuda-devel base) + setuptools=69.5.1 (already pinned above)
+# + ninja + wheel + pybind11 + torch (all conda-installed above).
 # Compile time ~5 min; extension size ~500 MB.
+#
+# `--no-build-isolation` is REQUIRED — openfold's setup.py does
+# `import torch` at top level to introspect CUDA arch flags.  Without this
+# flag, uv creates an isolated PEP 517 build env that doesn't have torch,
+# and the build fails with:
+#     ModuleNotFoundError: No module named 'torch'
+# With --no-build-isolation, the build reuses the target conda env's
+# packages, which already includes torch 1.13.1 + setuptools + ninja +
+# wheel + pybind11.  Same pattern applies to dllogger.
 #
 # pytorch-lightning=1.9.5, torchmetrics=0.11.0 come from upstream env yaml.
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/diffdock/bin/python \
+        --no-build-isolation \
         "pytorch-lightning==1.9.5" \
         "torchmetrics==0.11.0" \
         "fair-esm[esmfold]==2.0.0" \

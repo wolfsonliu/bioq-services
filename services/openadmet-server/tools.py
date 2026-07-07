@@ -302,11 +302,23 @@ def build_predict_shell(argvs: list[list[str]], *, output_dir: Path) -> list[str
     output_dir_pylit = repr(str(output_dir))
     predictions_pylit = repr(str(output_dir / "predictions.csv"))
     merge_py = f"""\
-import glob, pandas as pd
+import glob, os, pandas as pd
 paths = sorted(glob.glob({output_dir_pylit} + "/predictions_group_*.csv"))
+if not paths:
+    # Adopt fallback: some upstream builds write predictions.csv directly
+    # in output_dir (single-model call, no per-group suffix).  Salvage it.
+    fallback = sorted(glob.glob({output_dir_pylit} + "/*.csv"))
+    if fallback:
+        paths = fallback
+    else:
+        try:
+            listing = sorted(os.listdir({output_dir_pylit}))
+        except Exception as _e:
+            listing = f"(cannot list: {{_e}})"
+        raise SystemExit(
+            f"no per-group prediction CSVs produced. output_dir contents: {{listing!r}}"
+        )
 dfs = [pd.read_csv(p) for p in paths]
-if not dfs:
-    raise SystemExit("no per-group prediction CSVs produced")
 merged = dfs[0]
 # For subsequent groups, only take OADMET_* columns (predictions/std/aq),
 # keeping index alignment to the first group's rows.
@@ -315,9 +327,17 @@ for df in dfs[1:]:
     if extra:
         merged = pd.concat([merged, df[extra]], axis=1)
 merged.to_csv({predictions_pylit}, index=False)
+print(f"merged {{len(paths)}} group CSV(s) -> predictions.csv "
+      f"({{len(merged)}} rows, {{len(merged.columns)}} cols)")
 """
     parts.append(f"python -c {shlex.quote(merge_py)}")
-    return ["bash", "-c", " && ".join(parts)]
+    # Use ; not && so downstream errors surface even if a subprocess printed
+    # a warning to stderr but returned 0.  We still want the pipeline to
+    # short-circuit if openadmet predict itself fails (rc != 0), so wrap
+    # with `set -e` up front (`set -e` propagates to each command, including
+    # merge; SystemExit yields rc != 0 so pipeline stops there too).
+    script = "set -e\n" + "\n".join(parts)
+    return ["bash", "-c", script]
 
 
 # ---------------------------------------------------------------------------
