@@ -23,7 +23,7 @@ class QligfepSettings(ServiceSettings):
     root: Path = Field(default=Path("/opt/qligfep-server"))
     upstream_dir: Path = Field(default=Path("/opt/qligfep-server/upstream/qligfep"))
     q_bin_dir: Path = Field(default=Path("/opt/Q6/bin"))
-    python: Path = Field(default=Path("/opt/qligfep-server/.venv/bin/python"))
+    python: Path = Field(default=Path("/opt/conda/envs/qligfep/bin/python"))
     default_cluster: Literal["LOCAL", "CSB", "SLURM"] = "LOCAL"
     max_concurrent_jobs: int = 4
     task_endpoints_enabled: bool = False

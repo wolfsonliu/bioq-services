@@ -19,7 +19,7 @@
 #
 # Multistage layout
 # -----------------
-#   builder = cuda-devel + conda env (Py 3.9 + pytorch 1.13.1 + cu117 + PyG 2.2
+#   builder = cuda-devel + conda env (Py 3.10 + pytorch 1.13.1 + cu117 + PyG 2.2
 #             + e3nn + fair-esm[esmfold] + openfold git build) + LUT precompute
 #             + framework + cleanup.
 #   runtime = lean: cuda-runtime + conda env from builder + DiffDock source
@@ -90,10 +90,19 @@ custom_channels:
 EOF
 
 # ---------------------------------------------------------------------------
-# Conda env — matches upstream DiffDock environment.yml.
+# Conda env — derived from upstream DiffDock environment.yml but built with
+# explicit pins here (NOT `micromamba env create -f environment.yml`).  The
+# vendored upstream/environment.yml is never consumed; notably we bump
+# python 3.9 → 3.10 for the framework's Python>=3.10 requirement.
 #
 # CRITICAL pins:
-#   - python=3.9.18                : upstream pin (openfold + setuptools work)
+#   - python=3.10                  : bumped from upstream's 3.9 pin — the
+#                                    bioagent-service-framework requires
+#                                    Python>=3.10, and the whole stack
+#                                    (pytorch 1.13.1, PyG 2.2, openfold,
+#                                    rdkit 2022.03.3, prody) has py310 conda
+#                                    builds.  Matches diffdock-pp-server which
+#                                    runs this exact pytorch stack on 3.10.
 #   - pytorch=1.13.1 + cu117       : upstream pin (also matches diffdock-pp)
 #   - CUDA build string explicit   : otherwise resolver silently picks CPU
 #                                    build under mkl<2024.1 (verified on
@@ -108,8 +117,8 @@ EOF
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     micromamba create -y -n diffdock \
         -c pyg -c nvidia -c pytorch -c conda-forge \
-        python=3.9.18 \
-        "pytorch::pytorch=1.13.1=py3.9_cuda11.7_cudnn8.5.0_0" \
+        python=3.10 \
+        "pytorch::pytorch=1.13.1=py3.10_cuda11.7_cudnn8.5.0_0" \
         pytorch-cuda=11.7 \
         torchvision=0.14.1 \
         pyg::pyg=2.2.0 \
@@ -239,7 +248,7 @@ RUN /opt/conda/envs/diffdock/bin/pip uninstall -y \
         /opt/conda/envs/diffdock/share/doc \
         /opt/conda/envs/diffdock/share/man \
         /opt/conda/envs/diffdock/share/locale \
-    && find /opt/conda/envs/diffdock/lib/python3.9/site-packages \
+    && find /opt/conda/envs/diffdock/lib/python3.10/site-packages \
         -depth -type d \( -name 'tests' -o -name 'test' \) \
         -exec rm -rf {} + \
     && find /opt/conda/envs/diffdock -depth -type d \
