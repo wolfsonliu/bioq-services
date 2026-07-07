@@ -256,6 +256,28 @@ def test_build_predict_shell_wraps_argvs(tmp_path):
     assert shell[2].index("echo a") < shell[2].index("python -c")
 
 
+def test_build_predict_shell_embedded_python_is_syntactically_valid(tmp_path):
+    """Regression: v0.0.2 shipped with `shlex.quote` on the path inside the
+    embedded python -c code, producing invalid Python for plain /-paths.
+    See engineering/decisions/2026-07-05-openadmet-server-design.md and
+    the failed job at 2026-07-06 (probe-1783378692 → SyntaxError)."""
+    import ast, shlex
+
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    shell = build_predict_shell([["/bin/echo", "x"]], output_dir=output_dir)
+    joined = shell[2]
+
+    # Extract the `python -c '...'` payload back out via shell tokenization.
+    tokens = shlex.split(joined)
+    py_arg_idx = tokens.index("-c") + 1
+    py_code = tokens[py_arg_idx]
+
+    # This must parse. Old broken output emitted `glob.glob(/tmp/... + "/...")`
+    # which raises SyntaxError immediately.
+    ast.parse(py_code)
+
+
 def test_compare_argv_mode_a(tmp_path):
     s = _Off()
     req = CompareRequest(

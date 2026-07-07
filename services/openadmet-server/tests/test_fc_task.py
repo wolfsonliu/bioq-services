@@ -25,7 +25,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from bioagent_service.fc_testing import fc_url, poll_job
+from bioagent_service.fc_testing import fc_url
 
 SERVICE = "openadmet-server"
 
@@ -96,14 +96,53 @@ def _get_with_retry(
 
 
 def _poll_to_completion(client: httpx.Client, task_id: str) -> dict:
-    final = poll_job(
-        client, "", task_id,
-        timeout_s=POLL_TIMEOUT_S,
-        interval_s=POLL_INTERVAL_S,
-        max_transient_errors=60,
+    """Poll ``/api/jobs/<id>`` until terminal, treating HTTP 429 as transient.
+
+    Framework's ``poll_job`` calls ``raise_for_status`` on 429 which makes the
+    fixture bomb out under FC gateway rate-limiting (project memory
+    ``project_fc_http_polling_unreliable_at_concurrency``).  We implement a
+    plain retry loop here that keeps polling on 429 / 5xx / connection error.
+    """
+    deadline = time.monotonic() + POLL_TIMEOUT_S
+    transient = 0
+    max_transient = 120  # ~40 min of 20 s intervals of pure 429 tolerated
+
+    while time.monotonic() < deadline:
+        try:
+            r = client.get(f"/api/jobs/{task_id}")
+        except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError):
+            transient += 1
+            if transient > max_transient:
+                raise
+            time.sleep(POLL_INTERVAL_S)
+            continue
+
+        if r.status_code in (429, 500, 502, 503, 504):
+            transient += 1
+            if transient > max_transient:
+                raise RuntimeError(
+                    f"transient status {r.status_code} exceeded budget on {task_id}"
+                )
+            time.sleep(POLL_INTERVAL_S)
+            continue
+
+        if r.status_code == 404:
+            # Task not yet visible on this instance — normal early on.
+            time.sleep(POLL_INTERVAL_S)
+            continue
+
+        r.raise_for_status()
+        body = r.json()
+        if body["status"] in ("completed", "failed", "cancelled"):
+            assert body["status"] == "completed", (
+                f"task ended in state {body['status']}: {body}"
+            )
+            return body
+        time.sleep(POLL_INTERVAL_S)
+
+    raise RuntimeError(
+        f"task {task_id} did not reach terminal state within {POLL_TIMEOUT_S}s"
     )
-    assert final["status"] == "completed", f"task did not complete: {final}"
-    return final
 
 
 # ---------------------------------------------------------------------------

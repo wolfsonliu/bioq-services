@@ -280,7 +280,15 @@ def build_predict_shell(argvs: list[list[str]], *, output_dir: Path) -> list[str
     ``predictions.csv`` via a Python one-liner (pandas is a hard dep of the
     conda env).
 
-    Emits argv shell-safe joining via ``shlex.join``.
+    Two separate quoting concerns are involved:
+
+    * **Path literals inside the Python code** — must be valid Python
+      string literals.  Use ``repr()`` (yields ``'…'`` with proper escaping)
+      NOT ``shlex.quote()`` which is for shell tokens and leaves plain
+      paths unquoted (breaking Python parsing).
+    * **The whole Python source when embedded in ``bash -c 'python -c …'``**
+      — must survive one round of shell parsing.  Use ``shlex.quote()`` on
+      the whole ``merge_py`` string.
     """
     import shlex
 
@@ -291,9 +299,11 @@ def build_predict_shell(argvs: list[list[str]], *, output_dir: Path) -> list[str
     # Merge step — outer join by row index on the group CSVs. Simple
     # concatenation of PRED/STD columns works because all groups share the
     # same row ordering (upstream keeps input CSV row order in predictions).
-    merge_py = f"""
+    output_dir_pylit = repr(str(output_dir))
+    predictions_pylit = repr(str(output_dir / "predictions.csv"))
+    merge_py = f"""\
 import glob, pandas as pd
-paths = sorted(glob.glob({shlex.quote(str(output_dir))} + "/predictions_group_*.csv"))
+paths = sorted(glob.glob({output_dir_pylit} + "/predictions_group_*.csv"))
 dfs = [pd.read_csv(p) for p in paths]
 if not dfs:
     raise SystemExit("no per-group prediction CSVs produced")
@@ -304,7 +314,7 @@ for df in dfs[1:]:
     extra = [c for c in df.columns if c.startswith("OADMET_") and c not in merged.columns]
     if extra:
         merged = pd.concat([merged, df[extra]], axis=1)
-merged.to_csv({shlex.quote(str(output_dir / "predictions.csv"))}, index=False)
+merged.to_csv({predictions_pylit}, index=False)
 """
     parts.append(f"python -c {shlex.quote(merge_py)}")
     return ["bash", "-c", " && ".join(parts)]
