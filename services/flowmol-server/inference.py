@@ -6,10 +6,18 @@ Why not just call upstream `test.py`?
      transitively via `flowmol.__init__`) runs `subprocess.run("wget ...")`
      when the checkpoint is missing.  FC / airgapped SIF have no egress —
      we load checkpoints explicitly from NAS instead.
-  2. `test.py` does `from flowmol.analysis.metrics import SampleAnalyzer`
-     at module scope, which pulls in `import wandb`.  The metrics path
-     isn't reached during pure generation, so we stub `wandb` and skip the
-     `metrics` module entirely.
+  2. `flowmol.models.flowmol` does `from flowmol.analysis.metrics import
+     SampleAnalyzer` at module scope, and `FlowMol.__init__` constructs a
+     `SampleAnalyzer` unconditionally.  That drags in `import wandb` +
+     `import posebusters` (module top of metrics.py) and, at construction,
+     `pb.PoseBusters(...)` + a `data/<dataset>/energy_dist.npz` +
+     `train_data_valencies_*.json` — none of which the pure-generation path
+     touches (`.analyze()` is only called in `training_step`).  We stub
+     `wandb` + `posebusters` so the module imports, then replace
+     `SampleAnalyzer` with a no-op so `__init__` skips posebusters / the
+     energy-dist file (which upstream doesn't even ship for
+     `geom_full_kekulized`).  See adding-a-new-service.md §"包装 conda-based
+     upstream 的常见陷阱".
   3. Upstream defaults `output_file` to `<model_dir>/samples/sampled_mols.sdf`.
      `model_dir` lives on read-only NAS in production — we route output to
      `<job_dir>/output/molecules.sdf`.
@@ -40,12 +48,17 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 # Dead-import stubs — MUST be injected before ANY `flowmol` import.
 # ---------------------------------------------------------------------------
-# `flowmol.analysis.metrics` unconditionally `import wandb` at top level.
-# The metrics path is only used with the `--metrics` flag (which we don't
-# expose in v0.0.1).  Stubbing wandb costs 0 KB and lets us skip the
-# ~50 MB wandb wheel.  See engineering/guides/adding-a-new-service.md
+# `flowmol.analysis.metrics` unconditionally `import wandb` AND
+# `import posebusters as pb` at top level.  The metrics path is only reached
+# via `SampleAnalyzer.analyze()` (training_step / `--metrics`), never during
+# pure generation.  Stubbing both lets metrics.py import without pulling the
+# ~50 MB wandb wheel or the ~500 MB posebusters+xtb+dftd4 stack.  The
+# matching no-op replacement of `SampleAnalyzer` itself (which `FlowMol.
+# __init__` constructs unconditionally) happens in main(), after the module
+# is imported.  See engineering/guides/adding-a-new-service.md
 # §"包装 conda-based upstream 的常见陷阱" item 4.
 sys.modules.setdefault("wandb", types.ModuleType("wandb"))
+sys.modules.setdefault("posebusters", types.ModuleType("posebusters"))
 
 
 def parse_args() -> argparse.Namespace:
@@ -100,7 +113,20 @@ def main() -> int:
     import torch
     from pytorch_lightning import seed_everything
     from rdkit import Chem, RDLogger
+    import flowmol.models.flowmol as flowmol_mod
     from flowmol.models.flowmol import FlowMol
+
+    # Neutralise the metrics-only SampleAnalyzer that FlowMol.__init__
+    # constructs unconditionally.  Its real __init__ calls pb.PoseBusters()
+    # and reads energy_dist.npz + valency JSON — none needed for generation,
+    # and energy_dist.npz isn't even shipped for geom_full_kekulized.  The
+    # no-op keeps `.sample_analyzer` a harmless attribute; `.analyze()` is
+    # never called on our path.
+    class _NoopSampleAnalyzer:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+    flowmol_mod.SampleAnalyzer = _NoopSampleAnalyzer
 
     # Silence rdkit's chatty valence warnings — sampled mols legitimately
     # include invalid graphs which are filtered by molecule_builder.

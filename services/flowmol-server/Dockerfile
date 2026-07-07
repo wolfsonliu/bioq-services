@@ -143,7 +143,9 @@ RUN set -e; \
              /opt/flowmol/flowmol/models/flowmol.py \
              /opt/flowmol/flowmol/analysis/molecule_builder.py \
              /opt/flowmol/flowmol/model_utils/load.py \
-             /opt/flowmol/test.py; do \
+             /opt/flowmol/test.py \
+             /opt/flowmol/data/geom_full_kekulized/train_data_marginal_dists.pt \
+             /opt/flowmol/data/geom_full_kekulized/train_data_n_atoms_histogram.pt; do \
         [ -f "$f" ] || { echo "ERROR: $f missing; run scripts/vendor.sh"; exit 1; }; \
     done
 
@@ -153,8 +155,9 @@ RUN set -e; \
 #   2. resolver picking CPU-only pytorch (torch.version.cuda is None → later
 #      torch_sparse / dgl import fails with libc10_cuda.so missing)
 #   3. torch_geometric / dgl ABI mismatch vs pytorch 2.2 cu121
-#   4. `wandb` dead-import in flowmol.analysis.metrics (must be stubbed
-#      before we touch flowmol.*)
+#   4. `wandb` + `posebusters` dead-imports in flowmol.analysis.metrics
+#      (must be stubbed before we touch flowmol.*; the runtime path mirrors
+#      this in server/inference.py)
 # Fail fast at build so we don't discover it at FC deploy time.
 # See engineering/guides/adding-a-new-service.md
 # §"包装 conda-based upstream 的常见陷阱".
@@ -162,6 +165,7 @@ RUN set -e; \
 RUN /opt/conda/envs/flowmol/bin/python -c "\
 import sys, types; \
 sys.modules.setdefault('wandb', types.ModuleType('wandb')); \
+sys.modules.setdefault('posebusters', types.ModuleType('posebusters')); \
 sys.path.insert(0, '/opt/flowmol'); \
 import torch; \
 print('torch', torch.__version__, 'cuda', torch.version.cuda); \

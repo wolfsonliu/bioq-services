@@ -44,14 +44,21 @@ fi
 rm -rf .git
 
 # Sync into DST. --delete drops stale files from previous vendor runs.
-# Exclude the notebook + large-ish sample dirs — these aren't needed at
-# runtime. The `flowmol/trained_models/` directory is NOT excluded but is
-# effectively empty until fetch_weights.sh runs; upstream ships only a
-# readme there.
+# Exclude the notebook + image dirs — not needed at runtime. The
+# `flowmol/trained_models/` directory is NOT excluded but is effectively
+# empty until fetch_weights.sh runs; upstream ships only a readme there.
+#
+# `data/` is NOT excluded: upstream ships tiny (~60 KB total) per-dataset
+# summary artifacts there — `data/geom_full_kekulized/train_data_marginal_
+# dists.pt` + `train_data_n_atoms_histogram.pt` are loaded eagerly by
+# `FlowMol.__init__` (configure_prior + build_n_atoms_dist) for EVERY GEOM
+# checkpoint, so sampling fails with FileNotFoundError without them. Only
+# the small summary .pt/.json/.npz files are in git — the raw/processed
+# GEOM-Drugs dataset itself is not tracked upstream, so this stays tiny.
 rsync -a --delete \
     --exclude='__pycache__' --exclude='*.pyc' \
     --exclude='*.ipynb' \
-    --exclude='images/' --exclude='data/' \
+    --exclude='images/' \
     "$TMP/repo/" "$DST/"
 
 echo "Vendored $FLOWMOL_REPO @ $FLOWMOL_SHA"
