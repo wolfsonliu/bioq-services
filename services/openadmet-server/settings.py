@@ -83,6 +83,20 @@ class OpenAdmetSettings(ServiceSettings):
         description="Python interpreter inside the conda env.",
     )
 
+    # Setuptools entry-point script created by `pip install -e ./upstream`.
+    # Upstream defines `openadmet = "openadmet.models.cli.cli:cli"` in
+    # pyproject.toml → this exact path is generated.
+    #
+    # DO NOT switch to `python -m openadmet.models.cli.cli` — that module
+    # has no `if __name__ == '__main__': cli()` guard, so it just imports
+    # (30 s of chemprop/molfeat/torch import) and exits rc=0 without ever
+    # invoking the click group.  Discovered 2026-07-07 during v0.0.4
+    # diagnostic — subprocess ran 36 s, log empty, output_dir empty.
+    cli_binary: str = Field(
+        default="/opt/conda/envs/openadmet-models/bin/openadmet",
+        description="OpenADMET CLI entry-point script (from setuptools).",
+    )
+
     # Weight root — see §6.7 of the design doc.  Layout:
     #   weights_dir/models/<name>/{model.pth,model.json,recipe_components/,...}
     #   weights_dir/foundations/.chemprop/chemeleon_mp.pt

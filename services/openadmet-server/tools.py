@@ -155,9 +155,15 @@ def predict_argv(
     model_dirs: list[Path],
     settings: OpenAdmetSettings,
 ) -> list[str]:
-    """Compose one ``openadmet predict`` invocation for a group of models sharing an input_col."""
+    """Compose one ``openadmet predict`` invocation for a group of models sharing an input_col.
+
+    Uses the setuptools-generated ``openadmet`` script (settings.cli_binary),
+    NOT ``python -m openadmet.models.cli.cli`` — see the settings.py comment
+    on why ``python -m`` silently no-ops for click groups without a
+    ``__main__`` guard.
+    """
     argv: list[str] = [
-        settings.python, "-m", "openadmet.models.cli.cli", "predict",
+        settings.cli_binary, "predict",
         "--input-path", str(input_path),
         "--input-col", input_col,
         "--output-csv", str(output_csv),
@@ -188,7 +194,7 @@ def compare_argv_mode_a(
     """`openadmet compare` in Mode A (from model dirs + label_types)."""
     output_dir.mkdir(parents=True, exist_ok=True)
     argv: list[str] = [
-        settings.python, "-m", "openadmet.models.cli.cli", "compare",
+        settings.cli_binary, "compare",
         "--output-dir", str(output_dir),
     ]
     for mp in model_dirs:
@@ -212,7 +218,7 @@ def compare_argv_mode_b(
     """`openadmet compare` in Mode B (from JSON stats)."""
     output_dir.mkdir(parents=True, exist_ok=True)
     argv: list[str] = [
-        settings.python, "-m", "openadmet.models.cli.cli", "compare",
+        settings.cli_binary, "compare",
         "--output-dir", str(output_dir),
     ]
     for sf in stats_files:

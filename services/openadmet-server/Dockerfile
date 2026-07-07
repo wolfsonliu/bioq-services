@@ -178,14 +178,21 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/openadmet-models/bin/python \
         --no-deps -e /opt/openadmet/upstream
 
-# Build-time smoke: verify critical imports + CLI entry point.
+# Build-time smoke: verify critical imports + CLI entry-point script.
+# The `openadmet` script is created by setuptools from the pyproject.toml
+# [project.scripts] table (`openadmet = openadmet.models.cli.cli:cli`).
+# We rely on it — NOT `python -m openadmet.models.cli.cli` — because the
+# module lacks a `__main__` guard and would silently no-op.
 RUN /opt/conda/envs/openadmet-models/bin/python -c \
     "import torch; print('torch', torch.__version__, 'cuda?', torch.cuda.is_available()); \
      from rdkit import Chem; print('rdkit ok'); \
      import chemprop; print('chemprop', chemprop.__version__); \
      import molfeat; print('molfeat', getattr(molfeat, '__version__', '?')); \
      import openadmet.models; print('openadmet.models ok'); \
-     from openadmet.models.cli.cli import cli; print('openadmet CLI ok')"
+     from openadmet.models.cli.cli import cli; print('openadmet CLI ok')" \
+    && test -x /opt/conda/envs/openadmet-models/bin/openadmet \
+    && /opt/conda/envs/openadmet-models/bin/openadmet --help > /dev/null \
+    && echo "openadmet entry-point OK"
 
 # ---------------------------------------------------------------------------
 # Cleanup dead weight — same recipe as drughive-server.

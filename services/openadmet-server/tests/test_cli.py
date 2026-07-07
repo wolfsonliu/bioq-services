@@ -163,7 +163,8 @@ def test_group_models_override_col_flattens(tmp_path):
 
 
 def test_predict_argv_has_required_flags(tmp_path):
-    s = _Off(python="/bin/python", weights_dir=tmp_path / "w")
+    s = _Off(cli_binary="/opt/conda/envs/openadmet-models/bin/openadmet",
+             weights_dir=tmp_path / "w")
     req = PredictRequest(
         input_smiles=LOSARTAN, model_names=["m1"],
         accelerator="cpu",
@@ -176,9 +177,13 @@ def test_predict_argv_has_required_flags(tmp_path):
         model_dirs=[tmp_path / "mA"],
         settings=s,
     )
-    assert argv[0] == "/bin/python"
-    assert "openadmet.models.cli.cli" in argv
+    # First token must be the setuptools entry-point script — NOT `python`.
+    # `python -m openadmet.models.cli.cli` no-ops silently (see settings.py).
+    assert argv[0].endswith("/openadmet")
     assert "predict" in argv
+    # We must NOT still be using the broken `-m` invocation.
+    assert "-m" not in argv
+    assert "openadmet.models.cli.cli" not in argv
     assert "--input-path" in argv
     assert "--input-col" in argv and "OPENADMET_CANONICAL_SMILES" in argv
     assert "--accelerator" in argv and "cpu" in argv
@@ -186,7 +191,7 @@ def test_predict_argv_has_required_flags(tmp_path):
 
 
 def test_predict_argv_multiple_models(tmp_path):
-    s = _Off(python="/bin/python")
+    s = _Off()
     req = PredictRequest(input_smiles=LOSARTAN, model_names=["m1", "m2"])
     argv = predict_argv(
         req,
