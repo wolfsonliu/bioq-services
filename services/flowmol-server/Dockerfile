@@ -18,9 +18,11 @@
 #             PyG scatter/cluster + rdkit) + framework + cleanup.
 #   runtime = lean: conda env from builder + FlowMol source + server code.
 #
-# Base: nvidia/cuda 12.1.1 -runtime — matches pytorch-cuda=12.1 + dgl cu121.
+# Base: nvidia/cuda 12.1.0 -runtime — matches pytorch-cuda=12.1 + dgl cu121.
+# (12.1.0 is what's cached on the build host; pytorch cu121 wheels are ABI-
+# compatible with any 12.1.x runtime.)
 
-ARG BASE_IMAGE=nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+ARG BASE_IMAGE=nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
 ARG MICROMAMBA_IMAGE=mambaorg/micromamba:2.6.2
 
 
