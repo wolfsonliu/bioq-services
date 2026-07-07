@@ -54,9 +54,11 @@ ENV PYTHONUNBUFFERED=1
 ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
 ENV UV_HTTP_TIMEOUT=600
 
-# nvcc is in cuda-devel; add gcc (openfold C++/CUDA ext build), wget, ca-certs.
+# nvcc is in cuda-devel; add gcc (openfold C++/CUDA ext build), wget, ca-certs,
+# and **git** — uv needs the git CLI on PATH to resolve `openfold @ git+...`
+# and `dllogger @ git+...` VCS specifiers (uv 0.11 no longer bundles libgit2).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        build-essential wget ca-certificates \
+        build-essential wget ca-certificates git \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=micromamba /bin/micromamba /bin/micromamba
