@@ -25,9 +25,9 @@ class DiffdockSettings(ServiceSettings):
     root: Path = Field(
         default=Path("/opt/diffdock"),
         description="Service root (subprocess cwd).  Upstream utils/so3.py "
-        "and utils/torus.py read `.so3_*.npy` and `.torus_*.npy` via CWD-"
-        "relative paths — these LUT files are pre-computed at Docker build "
-        "time and live under this root.",
+        "reads `.so3_*.npy` and utils/torus.py reads `.p.npy` + `.score.npy` "
+        "via CWD-relative paths — these LUT files are pre-computed at Docker "
+        "build time and live under this root.",
     )
 
     python: str = Field(

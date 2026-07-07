@@ -199,14 +199,19 @@ RUN set -e; \
     echo 'vendor filesystem check OK'
 
 # ---------------------------------------------------------------------------
-# Pre-compute SO(3) / torus LUT files.  Upstream utils/so3.py + utils/torus.py
-# call ``np.load('.so3_omegas_array4.npy')`` — CWD-relative, no path prefix.
-# Running the script here bakes the `.npy` files into /opt/diffdock/; runtime
-# subprocess CWD points there.  ~2 min build cost saved on every request.
+# Pre-compute SO(3) / torus LUT files.  Upstream utils/so3.py writes
+# ``.so3_*.npy`` and utils/torus.py writes ``.p.npy`` + ``.score.npy`` —
+# all CWD-relative, no path prefix.  precompute_series.py just imports both
+# modules to trigger the else-branch that generates + saves them.
+# Baking here into /opt/diffdock/ (runtime subprocess CWD points there)
+# saves ~2 min on the first request.
 # ---------------------------------------------------------------------------
 WORKDIR /opt/diffdock
 RUN /opt/conda/envs/diffdock/bin/python utils/precompute_series.py \
-    && ls -la /opt/diffdock/.so3_*.npy /opt/diffdock/.torus_*.npy 2>/dev/null \
+    && ls -la /opt/diffdock/.so3_omegas_array4.npy \
+              /opt/diffdock/.so3_cdf_vals4.npy \
+              /opt/diffdock/.p.npy \
+              /opt/diffdock/.score.npy \
     && echo 'SO(3) / torus LUT precompute OK'
 
 # ---------------------------------------------------------------------------

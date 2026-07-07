@@ -100,7 +100,7 @@ def healthz_detail(request: Request) -> dict:
     # utils/precompute_series.py regenerates them (or fail on FC where
     # write to / may be forbidden).
     so3_cache = settings.root / ".so3_omegas_array4.npy"
-    torus_cache = settings.root / ".torus_score_norms.npy"
+    torus_cache = settings.root / ".p.npy"
 
     return {
         "status": "ok",
