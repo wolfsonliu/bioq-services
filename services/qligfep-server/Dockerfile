@@ -7,7 +7,7 @@
 # See engineering/decisions/2026-07-06-qligfep-server-design.md §6.4.
 
 # ---- Q6 builder ----
-FROM nvidia/cuda:12.4.1-devel-ubuntu22.04 AS q6-builder
+FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04 AS q6-builder
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential cmake gfortran openmpi-bin libopenmpi-dev \
@@ -30,7 +30,7 @@ RUN mkdir -p /opt/Q6/bin \
     && cp ../bin/qdynp /opt/Q6/bin/
 
 # ---- runtime ----
-FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1

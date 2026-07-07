@@ -125,10 +125,12 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
         pyyaml=6.0.1
 
 # Pip-only deps that don't have clean conda packages.
+# `click` — undeclared dep of useful-rdkit-utils (ring_systems.py imports it).
 RUN /opt/conda/envs/flowmol/bin/pip install --no-cache-dir \
         useful-rdkit-utils==0.3.12 \
         torch-ema==0.3 \
-        appdirs==1.4.4
+        appdirs==1.4.4 \
+        click
 
 # ---------------------------------------------------------------------------
 # Build-time smoke #1: filesystem sanity — vendor.sh must have populated
