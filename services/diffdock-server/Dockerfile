@@ -163,6 +163,10 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
 # the target conda env (torch 1.13.1 + setuptools + ninja + wheel + pybind11).
 #
 # omegaconf / ml-collections / einops = esmfold extra deps minus deepspeed.
+# dm-tree (imports as `tree`) is an openfold runtime dep declared only in
+# openfold's environment.yml — NOT its setup.py install_requires — so pip
+# doesn't pull it transitively.  openfold/np/residue_constants.py does
+# `import tree`, so it must be added explicitly.
 # biopython / scipy come from the conda layer; pytorch-lightning / torchmetrics
 # pinned per upstream env yaml.
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -174,6 +178,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         omegaconf \
         ml-collections \
         einops \
+        dm-tree \
         "openfold @ git+https://github.com/aqlaboratory/openfold.git@4b41059694619831a7db195b7e0988fc4ff3a307" \
         "dllogger @ git+https://github.com/NVIDIA/dllogger.git" \
         requests
