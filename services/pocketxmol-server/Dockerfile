@@ -173,7 +173,7 @@ import pytorch_lightning as pl; print('pytorch-lightning', pl.__version__); \
 from rdkit import Chem; print('rdkit ok'); \
 import openbabel; print('openbabel ok'); \
 import easydict, yaml, lmdb, Bio; print('easydict/yaml/lmdb/Bio ok'); \
-import peptidebuilder; print('peptidebuilder ok')"
+import PeptideBuilder; print('PeptideBuilder ok')"
 
 # ---------------------------------------------------------------------------
 # Cleanup dead weight from the conda env.
