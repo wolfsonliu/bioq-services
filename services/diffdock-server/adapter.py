@@ -121,6 +121,12 @@ class DiffdockAdapter(JobAdapter):
                 "ligand": "SMILES needs a valid parseable structure; RDKit ETKDG "
                 "generates seed conformer.  If RDKit fails to embed, upstream "
                 "logs 'Failed on ...' and skips → detect_outputs returns false.",
+                "async_payload_limit": "FC async task mode (/api/tasks/dock) "
+                "caps the request payload at 128 KiB.  A full protein PDB is "
+                "almost always larger, so for /api/tasks/dock pass the protein "
+                "via protein_uri (file:// on NAS, oss://, or job://) — NOT a "
+                "multipart upload.  Sync /api/dock has no such cap and accepts "
+                "multipart uploads directly.",
             },
             "input_uri_schemes": {
                 "protein": "multipart .pdb / job:// / oss:// / file:// / http(s):// / "

@@ -9,17 +9,33 @@ Validates ``/api/tasks/dock`` end-to-end under FC async task mode
 (``X-Fc-Invocation-Type: Async``) across all three input combos:
 PDB + SDF, PDB + SMILES, protein_sequence + SMILES (ESMFold path).
 
-Payload sizing — all three tests use vendored 1a0q:
+PDB source — sync bootstrap, then ``file://`` URIs
+--------------------------------------------------
+FC async invocation caps the event payload at **128 KiB**.  DiffDock docks
+to a *full* protein, and even the smallest realistic protein PDB is
+> 128 KiB (1a0q is ~500 KB), so uploading it directly in the async submit
+is rejected with ``EntityTooLarge`` at the FC gateway.
 
-    1a0q_protein.pdb : ~500 KB
-    1a0q_ligand.sdf  :   ~3 KB
-    ─────────────────────────
-    worst case       : ~503 KB (still under FC's 6 MB body cap)
+So we use a sync-bootstrap pattern (same as diffdock-pp-server): one sync
+POST to ``/api/dock`` (normal HTTP, no 128 KiB cap) lands the protein +
+ligand at ``/data/diffdock_jobs/<bootstrap_id>/input/{protein.pdb,
+ligand.sdf}`` as a side-effect of the framework building the argv (which
+resolves + persists inputs) before submit returns.  Subsequent async
+submits reference the staged files via ``file://`` URIs — the async
+payload then carries only the tiny URI strings.
+
+This mirrors real agent usage: large protein inputs to the async endpoint
+must come via ``file://`` (NAS) or ``oss://`` URIs, never multipart.
+
+Override the bootstrap with ``DIFFDOCK_TEST_PROTEIN_NAS_PATH=`` /
+``DIFFDOCK_TEST_LIGAND_NAS_PATH=`` env vars pointing at PDB/SDF files
+pre-staged elsewhere on NAS — skips the bootstrap inference cost on reruns.
 """
 
 from __future__ import annotations
 
 import io
+import os
 import time
 import uuid
 import zipfile
@@ -35,6 +51,13 @@ SERVICE = "diffdock-server"
 DATA_DIR = Path(__file__).resolve().parent / "data"
 PROTEIN_PDB = DATA_DIR / "1a0q_protein.pdb"
 LIGAND_SDF = DATA_DIR / "1a0q_ligand.sdf"
+
+# NAS layout on the deployed FC service — must match settings.jobs_base_dir.
+JOBS_BASE_DIR_ON_FC = "/data/diffdock_jobs"
+
+# Optional pre-staged NAS paths to skip the sync-bootstrap step on reruns.
+PRESTAGED_PROTEIN = os.environ.get("DIFFDOCK_TEST_PROTEIN_NAS_PATH")
+PRESTAGED_LIGAND = os.environ.get("DIFFDOCK_TEST_LIGAND_NAS_PATH")
 
 # 1a0q sequence chain A (first 300 aa) — enough to fold with ESMFold and
 # small enough to fit on T4/A10 without swap.  This trims the test wall time
@@ -74,6 +97,50 @@ def base_url() -> str:
 def client(base_url: str):
     with httpx.Client(base_url=base_url, timeout=TIMEOUT) as c:
         yield c
+
+
+@pytest.fixture(scope="module")
+def staged_pdb_uris(client: httpx.Client) -> tuple[str, str]:
+    """One-time sync upload that lands protein + ligand on FC NAS.
+
+    Returns ``(protein_uri, ligand_uri)`` as ``file://`` URIs for use in
+    subsequent async submits (whose 128 KiB payload cap can't fit the
+    ~500 KB protein PDB directly).
+
+    The sync POST runs one minimal real docking in the background — we
+    only need the side-effect of the framework persisting both inputs to
+    ``<jobs_base_dir>/<job_id>/input/`` before submit returns.  Net cost:
+    one extra samples_per_complex=1 / inference_steps=10 run.
+
+    Skipped when both ``DIFFDOCK_TEST_*_NAS_PATH`` env vars are set.
+    """
+    if PRESTAGED_PROTEIN and PRESTAGED_LIGAND:
+        return f"file://{PRESTAGED_PROTEIN}", f"file://{PRESTAGED_LIGAND}"
+
+    with open(PROTEIN_PDB, "rb") as fp, open(LIGAND_SDF, "rb") as fl:
+        r = client.post(
+            "/api/dock",
+            # Stable filenames — framework saves upload.filename, so we
+            # control the resulting NAS path.
+            files={
+                "protein": ("protein.pdb", fp.read(), "chemical/x-pdb"),
+                "ligand": ("ligand.sdf", fl.read(), "chemical/x-mdl-sdfile"),
+            },
+            data={
+                "complex_name": "bootstrap",
+                "samples_per_complex": "1",
+                "inference_steps": "10",
+                "actual_steps": "10",
+                "batch_size": "1",
+                "seed": "0",
+            },
+        )
+    assert r.status_code == 200, (
+        f"bootstrap sync upload failed: {r.status_code} {r.text!r}"
+    )
+    job_id = r.json()["job_id"]
+    base = f"file://{JOBS_BASE_DIR_ON_FC}/{job_id}/input"
+    return f"{base}/protein.pdb", f"{base}/ligand.sdf"
 
 
 @pytest.fixture(scope="module")
@@ -146,25 +213,24 @@ def _sdf_looks_valid(content: bytes) -> bool:
 @pytest.fixture(scope="module")
 def pdb_sdf_submit_response(
     client: httpx.Client, pdb_sdf_task_id: str,
+    staged_pdb_uris: tuple[str, str],
 ) -> httpx.Response:
-    with open(PROTEIN_PDB, "rb") as fp, open(LIGAND_SDF, "rb") as fl:
-        return client.post(
-            "/api/tasks/dock",
-            files={
-                "protein": (PROTEIN_PDB.name, fp.read(), "chemical/x-pdb"),
-                "ligand": (LIGAND_SDF.name, fl.read(), "chemical/x-mdl-sdfile"),
-            },
-            data={
-                "complex_name": "1a0q_pdb_sdf",
-                # Quick-run params to keep wall time reasonable.
-                "samples_per_complex": "3",
-                "inference_steps": "10",
-                "actual_steps": "10",
-                "batch_size": "3",
-                "seed": "42",
-            },
-            headers=_async_headers(pdb_sdf_task_id),
-        )
+    protein_uri, ligand_uri = staged_pdb_uris
+    return client.post(
+        "/api/tasks/dock",
+        data={
+            "protein_uri": protein_uri,
+            "ligand_uri": ligand_uri,
+            "complex_name": "1a0q_pdb_sdf",
+            # Quick-run params to keep wall time reasonable.
+            "samples_per_complex": "3",
+            "inference_steps": "10",
+            "actual_steps": "10",
+            "batch_size": "3",
+            "seed": "42",
+        },
+        headers=_async_headers(pdb_sdf_task_id),
+    )
 
 
 @pytest.fixture(scope="module")
@@ -184,24 +250,23 @@ def pdb_sdf_task(
 @pytest.fixture(scope="module")
 def pdb_smiles_submit_response(
     client: httpx.Client, pdb_smiles_task_id: str,
+    staged_pdb_uris: tuple[str, str],
 ) -> httpx.Response:
-    with open(PROTEIN_PDB, "rb") as fp:
-        return client.post(
-            "/api/tasks/dock",
-            files={
-                "protein": (PROTEIN_PDB.name, fp.read(), "chemical/x-pdb"),
-            },
-            data={
-                "ligand_description": LIGAND_SMILES,
-                "complex_name": "1a0q_pdb_smi",
-                "samples_per_complex": "3",
-                "inference_steps": "10",
-                "actual_steps": "10",
-                "batch_size": "3",
-                "seed": "42",
-            },
-            headers=_async_headers(pdb_smiles_task_id),
-        )
+    protein_uri, _ = staged_pdb_uris
+    return client.post(
+        "/api/tasks/dock",
+        data={
+            "protein_uri": protein_uri,
+            "ligand_description": LIGAND_SMILES,
+            "complex_name": "1a0q_pdb_smi",
+            "samples_per_complex": "3",
+            "inference_steps": "10",
+            "actual_steps": "10",
+            "batch_size": "3",
+            "seed": "42",
+        },
+        headers=_async_headers(pdb_smiles_task_id),
+    )
 
 
 @pytest.fixture(scope="module")
@@ -501,6 +566,7 @@ class TestAsyncDuplicateDedup:
         client: httpx.Client,
         pdb_sdf_task_id: str,
         pdb_sdf_task: dict,
+        staged_pdb_uris: tuple[str, str],
     ):
         first_created_at = pdb_sdf_task["created_at"]
         first_completed_at = pdb_sdf_task["completed_at"]
@@ -508,23 +574,21 @@ class TestAsyncDuplicateDedup:
             pdb_sdf_task.get("input_params") or {}
         ).get("complex_name")
 
-        with open(PROTEIN_PDB, "rb") as fp, open(LIGAND_SDF, "rb") as fl:
-            r2 = client.post(
-                "/api/tasks/dock",
-                files={
-                    "protein": (PROTEIN_PDB.name, fp.read(), "chemical/x-pdb"),
-                    "ligand": (LIGAND_SDF.name, fl.read(), "chemical/x-mdl-sdfile"),
-                },
-                data={
-                    "complex_name": "SHOULD_NOT_APPLY",
-                    "samples_per_complex": "3",
-                    "inference_steps": "10",
-                    "actual_steps": "10",
-                    "batch_size": "3",
-                    "seed": "42",
-                },
-                headers=_async_headers(pdb_sdf_task_id),
-            )
+        protein_uri, ligand_uri = staged_pdb_uris
+        r2 = client.post(
+            "/api/tasks/dock",
+            data={
+                "protein_uri": protein_uri,
+                "ligand_uri": ligand_uri,
+                "complex_name": "SHOULD_NOT_APPLY",
+                "samples_per_complex": "3",
+                "inference_steps": "10",
+                "actual_steps": "10",
+                "batch_size": "3",
+                "seed": "42",
+            },
+            headers=_async_headers(pdb_sdf_task_id),
+        )
         assert r2.status_code in (202, 409), (
             f"expected 409 (FC platform dedup) or 202 (FC forwards → framework "
             f"dedups); got {r2.status_code} body={r2.text!r}"

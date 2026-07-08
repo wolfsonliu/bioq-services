@@ -151,10 +151,20 @@ def main() -> None:
     # root is expected to be settings.root (/opt/diffdock in the image);
     # the wrapper takes it from DIFFDOCK_ROOT if set, else falls back to
     # CWD (already fine for CLI batch use).
-    upstream_root = Path(os.environ.get("DIFFDOCK_ROOT", os.getcwd()))
+    upstream_root = str(Path(os.environ.get("DIFFDOCK_ROOT", os.getcwd())))
     os.chdir(upstream_root)
-    if str(upstream_root) not in sys.path:
-        sys.path.insert(0, str(upstream_root))
+    # Force upstream root to the FRONT of sys.path, ahead of this script's
+    # own directory (/opt/diffdock/server).  Critical: server/ contains our
+    # own `models.py` (DockRequest pydantic models), and upstream does
+    # `from models.aa_model import AAModel` (utils/utils.py:17).  When run as
+    # `python /opt/diffdock/server/run_inference.py`, Python puts the script
+    # dir at sys.path[0], so a bare `import models` would resolve to our
+    # server/models.py (a module, not a package) → "'models' is not a
+    # package".  Removing + re-inserting upstream_root at index 0 makes
+    # upstream's flat packages (models/, utils/, datasets/) win the lookup.
+    while upstream_root in sys.path:
+        sys.path.remove(upstream_root)
+    sys.path.insert(0, upstream_root)
 
     # Rewrite argv for upstream's parse_args().
     sys.argv = ["inference"] + build_upstream_argv(args)

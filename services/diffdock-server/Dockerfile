@@ -340,6 +340,27 @@ ENV REPOSITORY_URL=file:///dev/null
 
 RUN mkdir -p /data/diffdock_jobs
 
+# ---------------------------------------------------------------------------
+# Runtime smoke: reproduce the script-dir sys.path scenario.  run_inference.py
+# lives in /opt/diffdock/server/, which Python puts at sys.path[0] when the
+# wrapper runs as a script.  server/ also has our own models.py, which would
+# shadow upstream's `models/` package (`from models.aa_model import AAModel`
+# in utils/utils.py) unless the wrapper front-loads /opt/diffdock.  This smoke
+# simulates that exact path ordering and asserts `models` resolves to the
+# upstream PACKAGE — catching the shadow at build time instead of on FC.
+RUN /opt/conda/envs/diffdock/bin/python -c "\
+import sys, os; \
+sys.path.insert(0, '/opt/diffdock/server'); \
+root='/opt/diffdock'; \
+[sys.path.remove(root) for _ in range(sys.path.count(root))]; \
+sys.path.insert(0, root); \
+os.chdir(root); \
+import models; \
+assert hasattr(models, '__path__'), 'models shadowed by non-package: '+getattr(models,'__file__','?'); \
+from models.aa_model import AAModel; \
+from inference import get_parser; \
+print('script-dir models/ shadow handled OK')"
+
 # FC session affinity: inject this header in POST responses so FC binds
 # follow-up requests to the same instance.
 ENV DIFFDOCK_SESSION_HEADER_NAME=bioagent-session-id
