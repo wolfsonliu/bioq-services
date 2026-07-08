@@ -98,8 +98,34 @@ def build_enumeration_config(p: dict, output_dir: Path, prior_base: Path) -> dic
     }
 
 
+def build_tl_config(p: dict, output_dir: Path, prior_base: Path) -> dict:
+    params = {
+        "input_model_file": _resolve_prior(
+            p.get("input_model_file"), p["generator"], prior_base),
+        "output_model_file": str(output_dir / p["output_model_name"]),
+        "smiles_file": p["smiles_file"],
+        "num_epochs": p["num_epochs"],
+        "save_every_n_epochs": p["save_every_n_epochs"],
+        "batch_size": p["batch_size"],
+        "num_refs": p["num_refs"],
+        "sample_batch_size": p["sample_batch_size"],
+    }
+    if p.get("validation_smiles_file"):
+        params["validation_smiles_file"] = p["validation_smiles_file"]
+    if p.get("pairs"):
+        params["pairs"] = dict(p["pairs"])
+    return {
+        "run_type": "transfer_learning",
+        "device": p["device"],
+        "tb_logdir": str(output_dir / "tb_TL"),
+        "json_out_config": str(output_dir / "_transfer_learning.json"),
+        "parameters": params,
+    }
+
+
 BUILDERS = {
     "sampling": build_sampling_config,
     "scoring": build_scoring_config,
     "enumeration": build_enumeration_config,
+    "transfer_learning": build_tl_config,
 }

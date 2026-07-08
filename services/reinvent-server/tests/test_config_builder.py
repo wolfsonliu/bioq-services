@@ -84,3 +84,38 @@ def test_build_enumeration_config(tmp_path):
     assert par["amino_acid_name_column"] == "Name"
     assert par["output_csv"] == str(tmp_path / "peptide_enumeration.csv")
     assert cfg["scoring"]["type"] == "geometric_mean"
+
+
+def test_build_tl_config_reinvent(tmp_path):
+    from server.config_builder import build_tl_config
+    p = {"generator": "reinvent", "input_model_file": None,
+         "output_model_name": "TL_out.model", "num_epochs": 5,
+         "save_every_n_epochs": 1, "batch_size": 50, "num_refs": 0,
+         "sample_batch_size": 100, "pairs": None, "device": "cuda:0",
+         "smiles_file": "/work/target.smi", "validation_smiles_file": None}
+    cfg = build_tl_config(p, tmp_path, Path("/nas/priors"))
+    assert cfg["run_type"] == "transfer_learning"
+    par = cfg["parameters"]
+    assert par["input_model_file"] == "/nas/priors/reinvent.prior"
+    assert par["output_model_file"] == str(tmp_path / "TL_out.model")
+    assert par["smiles_file"] == "/work/target.smi"
+    assert par["num_epochs"] == 5
+    assert "validation_smiles_file" not in par
+    assert "pairs" not in par
+    assert cfg["tb_logdir"] == str(tmp_path / "tb_TL")
+
+
+def test_build_tl_config_mol2mol_pairs(tmp_path):
+    from server.config_builder import build_tl_config
+    p = {"generator": "mol2mol", "input_model_file": ".m2m_scaffold_generic",
+         "output_model_name": "TL.model", "num_epochs": 3,
+         "save_every_n_epochs": 3, "batch_size": 50, "num_refs": 100,
+         "sample_batch_size": 100,
+         "pairs": {"type": "tanimoto", "upper_threshold": 1.0, "lower_threshold": 0.7},
+         "device": "cuda:0", "smiles_file": "/work/c.smi",
+         "validation_smiles_file": "/work/v.smi"}
+    cfg = build_tl_config(p, tmp_path, Path("/nas/priors"))
+    par = cfg["parameters"]
+    assert par["validation_smiles_file"] == "/work/v.smi"
+    assert par["pairs"]["type"] == "tanimoto"
+    assert par["pairs"]["lower_threshold"] == 0.7
