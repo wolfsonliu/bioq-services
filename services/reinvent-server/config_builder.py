@@ -123,9 +123,52 @@ def build_tl_config(p: dict, output_dir: Path, prior_base: Path) -> dict:
     }
 
 
+def build_rl_config(p: dict, output_dir: Path, prior_base: Path) -> dict:
+    prior = _resolve_prior(p.get("prior_file"), p["generator"], prior_base)
+    agent = (_resolve_prior(p["agent_file"], p["generator"], prior_base)
+             if p.get("agent_file") else prior)
+    params = {
+        "prior_file": prior,
+        "agent_file": agent,
+        "batch_size": p["batch_size"],
+        "summary_csv_prefix": str(output_dir / p["summary_csv_prefix"]),
+        "use_checkpoint": p["use_checkpoint"],
+        "purge_memories": p["purge_memories"],
+        "randomize_smiles": p["randomize_smiles"],
+    }
+    if p.get("smiles_file"):
+        params["smiles_file"] = p["smiles_file"]
+
+    cfg: dict = {
+        "run_type": "staged_learning",
+        "device": p["device"],
+        "tb_logdir": str(output_dir / "tb_logs"),
+        "json_out_config": str(output_dir / "_staged_learning.json"),
+        "parameters": params,
+        "learning_strategy": dict(p["learning_strategy"]),
+        "stage": [
+            {
+                "chkpt_file": str(output_dir / s["chkpt_name"]),
+                "termination": s["termination"],
+                "max_score": s["max_score"],
+                "min_steps": s["min_steps"],
+                "max_steps": s["max_steps"],
+                "scoring": dict(s["scoring"]),
+            }
+            for s in p["stages"]
+        ],
+    }
+    if p.get("diversity_filter"):
+        cfg["diversity_filter"] = dict(p["diversity_filter"])
+    if p.get("inception"):
+        cfg["inception"] = dict(p["inception"])
+    return cfg
+
+
 BUILDERS = {
     "sampling": build_sampling_config,
     "scoring": build_scoring_config,
     "enumeration": build_enumeration_config,
     "transfer_learning": build_tl_config,
+    "staged_learning": build_rl_config,
 }

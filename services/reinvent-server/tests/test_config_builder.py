@@ -119,3 +119,61 @@ def test_build_tl_config_mol2mol_pairs(tmp_path):
     assert par["validation_smiles_file"] == "/work/v.smi"
     assert par["pairs"]["type"] == "tanimoto"
     assert par["pairs"]["lower_threshold"] == 0.7
+
+
+def test_build_rl_config_full(tmp_path):
+    from server.config_builder import build_rl_config
+    p = {
+        "generator": "reinvent", "prior_file": None, "agent_file": None,
+        "batch_size": 64, "summary_csv_prefix": "sl", "use_checkpoint": False,
+        "purge_memories": False, "randomize_smiles": True,
+        "learning_strategy": {"type": "dap", "sigma": 128, "rate": 0.0001},
+        "diversity_filter": {"type": "IdenticalMurckoScaffold", "bucket_size": 25,
+                             "minscore": 0.4},
+        "inception": {"memory_size": 100, "sample_size": 10},
+        "device": "cuda:0", "smiles_file": None,
+        "stages": [
+            {"chkpt_name": "s1.chkpt", "termination": "simple", "max_score": 0.6,
+             "min_steps": 25, "max_steps": 100,
+             "scoring": {"type": "geometric_mean", "component": []}},
+            {"chkpt_name": "s2.chkpt", "termination": "simple", "max_score": 0.7,
+             "min_steps": 10, "max_steps": 100,
+             "scoring": {"type": "geometric_mean", "component": []}},
+        ],
+    }
+    cfg = build_rl_config(p, tmp_path, Path("/nas/priors"))
+    assert cfg["run_type"] == "staged_learning"
+    par = cfg["parameters"]
+    assert par["prior_file"] == "/nas/priors/reinvent.prior"
+    assert par["agent_file"] == "/nas/priors/reinvent.prior"  # None → prior
+    assert par["summary_csv_prefix"] == str(tmp_path / "sl")
+    assert cfg["learning_strategy"]["sigma"] == 128
+    assert cfg["diversity_filter"]["type"] == "IdenticalMurckoScaffold"
+    assert cfg["inception"]["memory_size"] == 100
+    assert isinstance(cfg["stage"], list) and len(cfg["stage"]) == 2
+    assert cfg["stage"][0]["chkpt_file"] == str(tmp_path / "s1.chkpt")
+    assert cfg["stage"][0]["scoring"]["type"] == "geometric_mean"
+    assert cfg["stage"][1]["max_score"] == 0.7
+    assert "smiles_file" not in par
+
+
+def test_build_rl_config_omits_optional_sections(tmp_path):
+    from server.config_builder import build_rl_config
+    p = {
+        "generator": "libinvent", "prior_file": ".libinvent",
+        "agent_file": "/work/agent.chkpt", "batch_size": 32,
+        "summary_csv_prefix": "sl", "use_checkpoint": True, "purge_memories": False,
+        "randomize_smiles": True,
+        "learning_strategy": {"type": "dap", "sigma": 120, "rate": 0.0001},
+        "diversity_filter": None, "inception": None, "device": "cpu",
+        "smiles_file": "/work/scaffolds.smi",
+        "stages": [{"chkpt_name": "s1.chkpt", "termination": "simple",
+                    "max_score": 0.6, "min_steps": 25, "max_steps": 50,
+                    "scoring": {"type": "arithmetic_mean", "component": []}}],
+    }
+    cfg = build_rl_config(p, tmp_path, Path("/nas/priors"))
+    assert "diversity_filter" not in cfg
+    assert "inception" not in cfg
+    assert cfg["parameters"]["agent_file"] == "/work/agent.chkpt"
+    assert cfg["parameters"]["smiles_file"] == "/work/scaffolds.smi"
+    assert cfg["parameters"]["use_checkpoint"] is True
