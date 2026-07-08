@@ -1,8 +1,6 @@
 import json
 from pathlib import Path
 
-import pytest
-
 
 def _write_params(work: Path, params: dict) -> Path:
     work.mkdir(parents=True, exist_ok=True)
@@ -30,7 +28,9 @@ def test_stage_and_build_writes_config(tmp_path, monkeypatch):
         calls["argv"] = argv
         calls["cwd"] = kwargs.get("cwd")
         calls["env"] = kwargs.get("env")
-        class R: returncode = 0
+
+        class R:
+            returncode = 0
         return R()
 
     monkeypatch.setattr(reinvent_cli.subprocess, "run", fake_run)
@@ -58,14 +58,18 @@ def test_stage_and_build_writes_config(tmp_path, monkeypatch):
 
 def test_nonzero_rc_skips_collect(tmp_path, monkeypatch):
     from server import reinvent_cli
-    work = tmp_path / "work"; out = tmp_path / "output"; out.mkdir(parents=True)
+    work = tmp_path / "work"
+    out = tmp_path / "output"
+    out.mkdir(parents=True)
     pj = _write_params(work, {"scoring": {"type": "geometric_mean", "component": []},
                               "smiles_column": "SMILES", "standardize_smiles": True,
                               "parallel": 1})
-    smi = tmp_path / "c.smi"; smi.write_text("CCO\n")
+    smi = tmp_path / "c.smi"
+    smi.write_text("CCO\n")
 
     def fake_run(argv, **kwargs):
-        class R: returncode = 7
+        class R:
+            returncode = 7
         return R()
     monkeypatch.setattr(reinvent_cli.subprocess, "run", fake_run)
 
