@@ -79,7 +79,27 @@ def build_scoring_config(p: dict, output_dir: Path, prior_base: Path) -> dict:
     }
 
 
+def build_enumeration_config(p: dict, output_dir: Path, prior_base: Path) -> dict:
+    return {
+        "run_type": "enumeration",
+        "device": p["device"],
+        "json_out_config": str(output_dir / "_enumeration.json"),
+        "parameters": {
+            "batch_size": p["batch_size"],
+            "smiles_file": p["smiles_file"],
+            # Upstream aa_enumerator.py + validation.py read amino_acid_library_file;
+            # the shipped example config's `amino_acid_library` key is stale.
+            "amino_acid_library_file": p["amino_acid_library_file"],
+            "amino_acid_name_column": p["amino_acid_name_column"],
+            "smiles_column": p["smiles_column"],
+            "output_csv": str(output_dir / "peptide_enumeration.csv"),
+        },
+        "scoring": dict(p["scoring"]),
+    }
+
+
 BUILDERS = {
     "sampling": build_sampling_config,
     "scoring": build_scoring_config,
+    "enumeration": build_enumeration_config,
 }

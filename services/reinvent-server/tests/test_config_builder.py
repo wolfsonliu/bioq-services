@@ -66,3 +66,21 @@ def test_build_scoring_config_passthrough(tmp_path):
     assert cfg["scoring"]["type"] == "geometric_mean"
     assert cfg["scoring"]["parallel"] == 4
     assert cfg["scoring"]["component"][0]["QED"]["endpoint"][0]["weight"] == 0.5
+
+
+def test_build_enumeration_config(tmp_path):
+    from server.config_builder import build_enumeration_config
+    p = {"batch_size": 20, "amino_acid_name_column": "Name",
+         "smiles_column": "Smiles", "scoring": {"type": "geometric_mean", "component": []},
+         "device": "cpu", "smiles_file": "/work/peptide.smi",
+         "amino_acid_library_file": "/work/library.csv"}
+    cfg = build_enumeration_config(p, tmp_path, tmp_path)
+    assert cfg["run_type"] == "enumeration"
+    par = cfg["parameters"]
+    assert par["batch_size"] == 20
+    assert par["smiles_file"] == "/work/peptide.smi"
+    # upstream code reads amino_acid_library_file (NOT amino_acid_library)
+    assert par["amino_acid_library_file"] == "/work/library.csv"
+    assert par["amino_acid_name_column"] == "Name"
+    assert par["output_csv"] == str(tmp_path / "peptide_enumeration.csv")
+    assert cfg["scoring"]["type"] == "geometric_mean"
