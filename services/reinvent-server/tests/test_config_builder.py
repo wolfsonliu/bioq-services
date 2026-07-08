@@ -44,3 +44,25 @@ def test_build_sampling_config_with_seed(tmp_path):
     assert cfg["parameters"]["smiles_file"] == "/work/seed.smi"
     assert cfg["parameters"]["sample_strategy"] == "beamsearch"
     assert cfg["parameters"]["model_file"] == "/nas/priors/mol2mol_high_similarity.prior"
+
+
+def test_build_scoring_config_passthrough(tmp_path):
+    from server.config_builder import build_scoring_config
+    scoring = {
+        "type": "geometric_mean",
+        "component": [
+            {"QED": {"endpoint": [{"name": "QED", "weight": 0.5}]}},
+        ],
+    }
+    p = {"smiles_column": "SMILES", "standardize_smiles": True,
+         "parallel": 4, "scoring": scoring, "device": "cpu",
+         "smiles_file": "/work/compounds.smi"}
+    cfg = build_scoring_config(p, tmp_path, tmp_path)
+    assert cfg["run_type"] == "scoring"
+    assert cfg["parameters"]["smiles_file"] == "/work/compounds.smi"
+    assert cfg["parameters"]["output_csv"] == str(tmp_path / "score_results.csv")
+    assert cfg["parameters"]["smiles_column"] == "SMILES"
+    # scoring passed through verbatim, with parallel injected
+    assert cfg["scoring"]["type"] == "geometric_mean"
+    assert cfg["scoring"]["parallel"] == 4
+    assert cfg["scoring"]["component"][0]["QED"]["endpoint"][0]["weight"] == 0.5

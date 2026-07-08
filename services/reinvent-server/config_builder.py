@@ -62,6 +62,24 @@ def build_sampling_config(p: dict, output_dir: Path, prior_base: Path) -> dict:
     }
 
 
+def build_scoring_config(p: dict, output_dir: Path, prior_base: Path) -> dict:
+    scoring = dict(p["scoring"])  # shallow copy; do not mutate caller's dict
+    scoring["parallel"] = p["parallel"]
+    return {
+        "run_type": "scoring",
+        "device": p["device"],
+        "json_out_config": str(output_dir / "_scoring.json"),
+        "parameters": {
+            "smiles_file": p["smiles_file"],
+            "smiles_column": p["smiles_column"],
+            "standardize_smiles": p["standardize_smiles"],
+            "output_csv": str(output_dir / "score_results.csv"),
+        },
+        "scoring": scoring,
+    }
+
+
 BUILDERS = {
     "sampling": build_sampling_config,
+    "scoring": build_scoring_config,
 }
