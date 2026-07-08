@@ -69,8 +69,8 @@ def test_healthz_detail_reports_missing_weights(client):
 def test_healthz_detail_flips_when_weights_appear(client, tmp_path):
     """Once the NAS layout exists, weights_loaded flips to True."""
     weights = tmp_path / "models"
-    score_dir = weights / "workdir/v1.1/score_model"
-    conf_dir = weights / "workdir/v1.1/confidence_model"
+    score_dir = weights / "score_model"
+    conf_dir = weights / "confidence_model"
     esm_dir = weights / "esm_cache/hub/checkpoints"
     for d in (score_dir, conf_dir, esm_dir):
         d.mkdir(parents=True)
@@ -95,9 +95,9 @@ def test_settings_defaults():
     assert s.inference_script == Path("/opt/diffdock/server/run_inference.py")
     assert s.config_yaml == Path("/opt/diffdock/server/default_inference_args.yaml")
     assert s.weights_dir == Path("/data/models/diffdock")
-    assert s.score_model_dir == Path("/data/models/diffdock/workdir/v1.1/score_model")
+    assert s.score_model_dir == Path("/data/models/diffdock/score_model")
     assert s.confidence_model_dir == Path(
-        "/data/models/diffdock/workdir/v1.1/confidence_model"
+        "/data/models/diffdock/confidence_model"
     )
     assert s.esm_cache_dir == Path("/data/models/diffdock/esm_cache")
 

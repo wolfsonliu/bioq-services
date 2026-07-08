@@ -140,10 +140,10 @@ Weights are **not baked into the image** — mounted from NAS at
 
 ```
 /data/models/diffdock/
-├── workdir/v1.1/score_model/best_ema_inference_epoch_model.pt         (~1 GB)
-├── workdir/v1.1/score_model/model_parameters.yml
-├── workdir/v1.1/confidence_model/best_model_epoch75.pt                (~250 MB)
-├── workdir/v1.1/confidence_model/model_parameters.yml
+├── score_model/best_ema_inference_epoch_model.pt                      (~1 GB)
+├── score_model/model_parameters.yml
+├── confidence_model/best_model_epoch75.pt                            (~250 MB)
+├── confidence_model/model_parameters.yml
 └── esm_cache/hub/checkpoints/
     ├── esm2_t33_650M_UR50D.pt                                          (~2.5 GB)
     ├── esm2_t33_650M_UR50D-contact-regression.pt                       (~4 MB)

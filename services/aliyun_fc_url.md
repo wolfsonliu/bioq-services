@@ -19,3 +19,4 @@ diffusion-hopping-server: https://fc-diff-hopping-xefuosyhju.cn-hangzhou-vpc.fca
 chembounce-server: https://fc-chembounce-vhjhvjexpd.cn-hangzhou-vpc.fcapp.run
 drughive-server: https://fc-drughive-tifmpsjove.cn-hangzhou-vpc.fcapp.run
 openadmet-server: https://fc-openadmet-dckbxdfnvj.cn-hangzhou-vpc.fcapp.run
+diffdock-server: https://fc-diffdock-seztzsjoon.cn-hangzhou-vpc.fcapp.run

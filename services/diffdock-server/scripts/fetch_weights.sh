@@ -4,7 +4,10 @@
 # Three sources to reconcile:
 #
 #   1. DiffDock-L score + confidence checkpoints — from a github release
-#      zip.  We extract into workdir/v1.1/{score_model,confidence_model}/.
+#      zip.  The zip's top level is score_model/ + confidence_model/ (NO
+#      workdir/v1.1 prefix — that nesting only appears when upstream extracts
+#      at repo root).  We unzip into WEIGHTS_DST directly, giving
+#      <WEIGHTS_DST>/score_model/ + <WEIGHTS_DST>/confidence_model/.
 #
 #   2. ESM-2 t33_650M_UR50D checkpoint (~2.5 GB) — pulled from fair-esm's
 #      CDN into the torch.hub cache layout so runtime's ESM loader finds
@@ -34,11 +37,11 @@ mkdir -p "$DST"
 
 # --------------------------------------------------------------------------
 # 1. DiffDock-L score + confidence checkpoints from github release zip.
-#    Layout inside the zip:
-#      workdir/v1.1/score_model/best_ema_inference_epoch_model.pt
-#      workdir/v1.1/score_model/model_parameters.yml
-#      workdir/v1.1/confidence_model/best_model_epoch75.pt
-#      workdir/v1.1/confidence_model/model_parameters.yml
+#    Layout inside the zip (top-level, verified 2026-07-07):
+#      score_model/best_ema_inference_epoch_model.pt
+#      score_model/model_parameters.yml
+#      confidence_model/best_model_epoch75.pt
+#      confidence_model/model_parameters.yml
 # --------------------------------------------------------------------------
 DIFFDOCK_ZIP_URL="${DIFFDOCK_ZIP_URL:-https://github.com/gcorso/DiffDock/releases/download/v1.1/diffdock_models.zip}"
 SCORE_CKPT="$DST/score_model/best_ema_inference_epoch_model.pt"

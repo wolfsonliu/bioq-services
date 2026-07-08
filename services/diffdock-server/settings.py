@@ -56,13 +56,17 @@ class DiffdockSettings(ServiceSettings):
     )
 
     score_model_subdir: str = Field(
-        default="workdir/v1.1/score_model",
+        default="score_model",
         description="Score model directory (relative to weights_dir).  "
-        "Contains best_ema_inference_epoch_model.pt + model_parameters.yml.",
+        "Contains best_ema_inference_epoch_model.pt + model_parameters.yml.  "
+        "diffdock_models.zip extracts score_model/ + confidence_model/ at its "
+        "top level (the `workdir/v1.1` nesting only appears when upstream "
+        "extracts at repo root); fetch_weights.sh unzips into weights_dir "
+        "directly so no workdir/v1.1 prefix on NAS.",
     )
 
     confidence_model_subdir: str = Field(
-        default="workdir/v1.1/confidence_model",
+        default="confidence_model",
         description="Confidence model directory (relative to weights_dir).  "
         "Contains best_model_epoch75.pt + model_parameters.yml.",
     )
