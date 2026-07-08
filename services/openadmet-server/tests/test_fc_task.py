@@ -33,6 +33,20 @@ LOSARTAN = "CCCCC1=NC(=C(N1CC2=CC=C(C=C2)C3=CC=CC=C3C4=NNN=N4)CO)Cl"
 ASPIRIN = "CC(=O)OC1=CC=CC=C1C(=O)O"
 CAFFEINE = "Cn1c(=O)c2c(ncn2C)n(C)c1=O"
 
+# All 6 chemprop-chemeleon models pre-staged on NAS (see design doc §7.2).
+# The `TestAllModels` sweep runs one async predict per model to confirm each
+# loads + infers + writes an OADMET_PRED_ column.  `pxr-chemeleon-baseline`
+# is the one model trained with input_col=OPENADMET_SMILES (the other 5 use
+# OPENADMET_CANONICAL_SMILES) — the inline-SMILES alias CSV covers both.
+ALL_MODELS = [
+    "herg-chemeleon-baseline",
+    "cyp1a2-cyp2d6-cyp3a4-cyp2c9-chemeleon-v1",
+    "cyp1a2-cyp2d6-cyp3a4-cyp3c9-chemeleon-baseline",
+    "microsomal-clearance-chemeleon-v1",
+    "permeability-logd-ppb-chemeleon-baseline",
+    "pxr-chemeleon-baseline",
+]
+
 # Small predict: 60-180 s cold + inference + CheMeleon load.  Buffer to
 # 30 min to absorb NAS-mount latency and FC 429 window.
 POLL_TIMEOUT_S = 1800
@@ -159,7 +173,7 @@ def predict_submit_response(
         "/api/tasks/predict",
         data={
             "input_smiles": f"{LOSARTAN},{ASPIRIN},{CAFFEINE}",
-            "model_names": "herg-chemeleon-baseline",
+            "model_names": '["herg-chemeleon-baseline"]',
             "accelerator": "gpu",
         },
         headers=_async_headers(predict_task_id),
@@ -346,7 +360,7 @@ class TestAsyncDuplicateDedup:
             "/api/tasks/predict",
             data={
                 "input_smiles": LOSARTAN,
-                "model_names": "herg-chemeleon-baseline",
+                "model_names": '["herg-chemeleon-baseline"]',
                 "accelerator": "cpu",  # different from first run's 'gpu'
             },
             headers=_async_headers(predict_task_id),
@@ -372,3 +386,68 @@ class TestAsyncDuplicateDedup:
         assert (re_query.get("input_params") or {}).get("accelerator") == (
             first_accelerator
         ), "duplicate async submit must not overwrite input_params"
+
+
+# ===================================================================
+# Section 6: All-models sweep — one async predict per pre-staged model.
+# ===================================================================
+
+
+@pytest.fixture(scope="module", params=ALL_MODELS)
+def model_predict_result(request, client: httpx.Client) -> dict:
+    """Submit + poll one async predict for each pre-staged model.
+
+    Parametrized over ALL_MODELS, so pytest produces one instance per model.
+    Serial (FC GPU concurrency is 1); each inference is ~40-100 s.  Uses the
+    3-SMILES inline batch, which writes all input_col aliases so every model's
+    data.yaml::input_col resolves regardless of naming convention.
+    """
+    model = request.param
+    task_id = f"fc-allm-{model[:20]}-{int(time.time())}-{uuid.uuid4().hex[:4]}"
+    resp = client.post(
+        "/api/tasks/predict",
+        data={
+            "input_smiles": f"{LOSARTAN},{ASPIRIN},{CAFFEINE}",
+            "model_names": f'["{model}"]',
+            "accelerator": "gpu",
+        },
+        headers=_async_headers(task_id),
+    )
+    assert resp.status_code == 202, (
+        f"{model}: async submit returned {resp.status_code}: {resp.text!r}"
+    )
+    job = _poll_to_completion(client, task_id)
+    return {"model": model, "task_id": task_id, "job": job}
+
+
+@pytest.mark.fc
+class TestAllModels:
+    def test_registry_has_all_expected_models(self, client: httpx.Client):
+        """Guard against NAS drift — every ALL_MODELS entry must be registered."""
+        body = _get_with_retry(client, "/api/models").json()
+        names = {m["name"] for m in body["models"]}
+        missing = set(ALL_MODELS) - names
+        assert not missing, f"expected models missing from /api/models: {missing}"
+
+    def test_model_completes_with_prediction_column(
+        self, client: httpx.Client, model_predict_result: dict
+    ):
+        model = model_predict_result["model"]
+        task_id = model_predict_result["task_id"]
+        job = model_predict_result["job"]
+
+        assert job["status"] == "completed", f"{model}: {job}"
+        assert job.get("output_count", 0) > 0, f"{model}: no outputs"
+
+        r = _get_with_retry(client, f"/api/jobs/{task_id}/file/predictions.csv")
+        assert r.status_code == 200, f"{model}: predictions.csv {r.status_code}"
+        lines = r.content.decode("utf-8", "replace").splitlines()
+        assert len(lines) >= 2, f"{model}: predictions.csv has no data rows: {lines[:3]}"
+        header = lines[0]
+        assert "OADMET_PRED_" in header, (
+            f"{model}: predictions.csv header has no OADMET_PRED_ column: {header!r}"
+        )
+        # Each of the 3 input SMILES should yield a data row.
+        assert len(lines) - 1 >= 3, (
+            f"{model}: expected >=3 prediction rows, got {len(lines) - 1}"
+        )

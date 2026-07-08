@@ -142,28 +142,38 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
         "intel-openmp<2024.1" \
         "setuptools=69.5.1"
 
-# fair-esm[esmfold] pulls openfold + ml-collections + einops. openfold is a
-# git-installed package that compiles CUDA extensions — needs nvcc + gcc
-# (present in cuda-devel base) + setuptools=69.5.1 (already pinned above)
-# + ninja + wheel + pybind11 + torch (all conda-installed above).
-# Compile time ~5 min; extension size ~500 MB.
+# ESMFold deps.  We deliberately do NOT use the `fair-esm[esmfold]` extra —
+# that extra hard-pins `deepspeed==0.5.9`, which pulls `triton==1.0.0`, which
+# has NO cp310 wheel (only cp36-39).  Since the framework's [mcp] extra needs
+# py>=3.10 (MCP SDK requirement), we can't drop to 3.9, so we instead install
+# base fair-esm + the esmfold extra's *actual* runtime deps manually,
+# skipping deepspeed.  ESMFold inference does not need deepspeed — openfold
+# guards its deepspeed activation-checkpointing (falls back to torch
+# checkpointing when deepspeed is absent).  Build-time smoke #2 below
+# verifies `import esm.esmfold.v1.esmfold` succeeds without it.
 #
-# `--no-build-isolation` is REQUIRED — openfold's setup.py does
-# `import torch` at top level to introspect CUDA arch flags.  Without this
-# flag, uv creates an isolated PEP 517 build env that doesn't have torch,
-# and the build fails with:
-#     ModuleNotFoundError: No module named 'torch'
-# With --no-build-isolation, the build reuses the target conda env's
-# packages, which already includes torch 1.13.1 + setuptools + ninja +
-# wheel + pybind11.  Same pattern applies to dllogger.
+# openfold is a git-installed package that compiles CUDA extensions — needs
+# nvcc + gcc (cuda-devel base) + setuptools=69.5.1 + ninja + wheel + pybind11
+# + torch (all conda-installed above).  Compile ~5 min; extension ~500 MB.
 #
-# pytorch-lightning=1.9.5, torchmetrics=0.11.0 come from upstream env yaml.
+# `--no-build-isolation` is REQUIRED — openfold's setup.py does `import torch`
+# at top level to introspect CUDA arch flags.  Without it, uv creates an
+# isolated PEP 517 build env with no torch and the build fails with
+# `ModuleNotFoundError: No module named 'torch'`.  With it, the build reuses
+# the target conda env (torch 1.13.1 + setuptools + ninja + wheel + pybind11).
+#
+# omegaconf / ml-collections / einops = esmfold extra deps minus deepspeed.
+# biopython / scipy come from the conda layer; pytorch-lightning / torchmetrics
+# pinned per upstream env yaml.
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/diffdock/bin/python \
         --no-build-isolation \
         "pytorch-lightning==1.9.5" \
         "torchmetrics==0.11.0" \
-        "fair-esm[esmfold]==2.0.0" \
+        "fair-esm==2.0.0" \
+        omegaconf \
+        ml-collections \
+        einops \
         "openfold @ git+https://github.com/aqlaboratory/openfold.git@4b41059694619831a7db195b7e0988fc4ff3a307" \
         "dllogger @ git+https://github.com/NVIDIA/dllogger.git" \
         requests

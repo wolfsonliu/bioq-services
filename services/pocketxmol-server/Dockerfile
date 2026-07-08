@@ -91,7 +91,11 @@ EOF
 #     3.10-friendly syntax.
 #   - rdkit=2023.9.3 : upstream default; API stable across chem utilities.
 #   - openbabel=3.1.1 : peptide .sdf → .pdb conversion in sample_use.py.
-#   - python-lmdb=1.2.1 : the utils/dataset UseDataset touches lmdb.
+#   - python-lmdb>=1.4 : utils/dataset UseDataset touches lmdb.  Upstream's
+#     cu128 yml pins 1.2.1, but that build only exists for py<=3.9 — pinning
+#     it against python=3.10 makes mamba thrash on an UNSAT spec for hours
+#     before erroring.  1.4+ has py310 builds; the lmdb read API used here
+#     is unchanged since 1.2.  Range (not exact) guards against mirror gaps.
 #   - biopython=1.83 : PDB parsing / peptide handling.
 #   - networkx=2.8 : molecule graph utilities.
 #   - setuptools<70 : upstream requires this pin (pkg_resources reliance).
@@ -107,7 +111,7 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
         numpy=1.24 \
         openbabel=3.1.1 \
         pandas=1.5.2 \
-        python-lmdb=1.2.1 \
+        "python-lmdb>=1.4,<1.7" \
         pyyaml=6.0.2 \
         tqdm=4.64.0 \
         rdkit=2023.9.3 \

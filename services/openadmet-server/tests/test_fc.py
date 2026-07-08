@@ -138,7 +138,7 @@ def test_predict_inline_smiles_minimal_job(
         "/api/predict",
         data={
             "input_smiles": f"{LOSARTAN},{ASPIRIN},{CAFFEINE}",
-            "model_names": "herg-chemeleon-baseline",
+            "model_names": '["herg-chemeleon-baseline"]',
             "accelerator": "gpu",
         },
     )
@@ -162,7 +162,7 @@ def test_predict_csv_upload_minimal_job(
             "/api/predict",
             files={"input_csv": ("demo_input.csv", fh, "text/csv")},
             data={
-                "model_names": "herg-chemeleon-baseline",
+                "model_names": '["herg-chemeleon-baseline"]',
                 "accelerator": "gpu",
             },
         )
