@@ -1,0 +1,83 @@
+# reinvent-server — REINVENT4 de novo generation / RL / TL / scoring.
+#
+# Build from bioagent project root:
+#   docker build --platform linux/amd64 -t reinvent-server -f services/reinvent-server/Dockerfile .
+#
+# Prerequisites (one-time):
+#   ./services/reinvent-server/scripts/vendor.sh         # vendor upstream/REINVENT4
+#   ./services/reinvent-server/scripts/fetch_weights.sh  # priors -> NAS (not baked)
+#
+# REINVENT4 is a pure pip package (torch 2.12 cu126) — uv venv skeleton, not conda.
+# Priors load from NAS at /data/models/reinvent (REINVENT_PRIOR_BASE), never baked.
+ARG BASE_IMAGE=nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04
+
+# ---- Stage 1: builder ----
+FROM ${BASE_IMAGE} AS builder
+ENV DEBIAN_FRONTEND=noninteractive PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
+ENV UV_HTTP_TIMEOUT=600
+# git required: iSIM is a git+ VCS specifier (uv 0.11+ shells out to git CLI).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3.11 python3.11-venv python3.11-dev ca-certificates git build-essential \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
+WORKDIR /opt/reinvent-server
+RUN uv venv --python 3.11 .venv
+ENV PATH=/opt/reinvent-server/.venv/bin:$PATH
+
+# Heavy torch first (cu126 index) — cache-friendly layer.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python .venv \
+        --extra-index-url https://download.pytorch.org/whl/cu126 \
+        --index-strategy unsafe-best-match \
+        torch==2.12.0 torchvision
+
+# Upstream REINVENT4 (vendored) + chemprop2 + iSIM.
+COPY services/reinvent-server/upstream/REINVENT4 /opt/reinvent-server/upstream/REINVENT4
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python .venv \
+        --extra-index-url https://download.pytorch.org/whl/cu126 \
+        --index-strategy unsafe-best-match \
+        "/opt/reinvent-server/upstream/REINVENT4[chemprop2]" \
+        "iSIM@git+https://github.com/mqcomplab/iSIM.git"
+
+# Shared framework + toml writer (separate layer).
+RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
+    --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python .venv "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2 tomli-w
+
+# ---- Stage 2: runtime ----
+FROM ${BASE_IMAGE}
+ENV DEBIAN_FRONTEND=noninteractive PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3.11 ca-certificates libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /opt/reinvent-server/.venv /opt/reinvent-server/.venv
+COPY --from=builder /opt/reinvent-server/upstream/REINVENT4 /opt/reinvent-server/upstream/REINVENT4
+ENV PATH=/opt/reinvent-server/.venv/bin:$PATH
+
+COPY services/reinvent-server/__init__.py \
+     services/reinvent-server/__main__.py \
+     services/reinvent-server/VERSION \
+     services/reinvent-server/app.py \
+     services/reinvent-server/adapter.py \
+     services/reinvent-server/models.py \
+     services/reinvent-server/settings.py \
+     services/reinvent-server/tools.py \
+     services/reinvent-server/config_builder.py \
+     services/reinvent-server/reinvent_cli.py \
+     /opt/reinvent-server/server/
+
+WORKDIR /opt/reinvent-server
+ENV PYTHONPATH=/opt/reinvent-server
+ENV REINVENT_ROOT=/opt/reinvent-server
+ENV REINVENT_UPSTREAM_DIR=/opt/reinvent-server/upstream/REINVENT4
+ENV REINVENT_PYTHON=/opt/reinvent-server/.venv/bin/python
+ENV REINVENT_REINVENT_BIN=/opt/reinvent-server/.venv/bin/reinvent
+ENV REINVENT_PRIOR_BASE=/data/models/reinvent
+ENV REINVENT_JOBS_BASE_DIR=/data/reinvent_jobs
+RUN mkdir -p /data/reinvent_jobs
+ENV PORT=9000
+EXPOSE 9000
+CMD ["/opt/reinvent-server/.venv/bin/python", "-m", "uvicorn", "server.app:app", \
+     "--host", "0.0.0.0", "--port", "9000", "--timeout-keep-alive", "900"]
