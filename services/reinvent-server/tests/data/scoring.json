@@ -1,0 +1,6 @@
+{
+  "type": "geometric_mean",
+  "component": [
+    {"QED": {"endpoint": [{"name": "QED", "weight": 1.0}]}}
+  ]
+}
