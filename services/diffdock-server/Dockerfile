@@ -140,8 +140,16 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
 # biopython is used by upstream (Bio.PDB / Bio.pairwise2) — add explicitly.
 # ninja + wheel speed up the openfold CUDA-extension build in Step B.
 # ---------------------------------------------------------------------------
+# --index-strategy unsafe-best-match: torch/pyg/rdkit etc live on
+# download.pytorch.org, but torchmetrics/pandas/sklearn/etc live on the
+# Huawei PyPI mirror.  uv's default "first index that has the package wins"
+# rejects e.g. torchmetrics==0.11.0 (pytorch index has torchmetrics but not
+# that version → uv won't look further).  All our indexes are trusted
+# (Huawei mirror of PyPI + official pytorch + pyg), so allow best-match
+# across all of them.
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/diffdock/bin/python \
+        --index-strategy unsafe-best-match \
         --extra-index-url https://download.pytorch.org/whl/cu117 \
         --find-links https://data.pyg.org/whl/torch-1.13.1+cu117.html \
         "numpy<2" \

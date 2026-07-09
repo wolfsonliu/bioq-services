@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
 from bioagent_service.adapter import JobAdapter
@@ -18,8 +18,9 @@ from bioagent_service.jobs import (
     cleanup_job,
     disk_usage_bytes,
 )
-from bioagent_service.models import FailureKind, JobInfo, JobStatus, utcnow
+from bioagent_service.models import FailureKind, JobInfo, JobStatus, UploadInfo, utcnow
 from bioagent_service.settings import ServiceSettings
+from bioagent_service.uploads import stage_upload
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,26 @@ def make_generic_router() -> APIRouter:
             "disk_limit_mb": settings.disk_limit_mb,
             "session_header": settings.session_header_name,
         }
+
+    # ---------- Uploads (large-input staging) ----------
+
+    @router.post("/api/uploads", response_model=UploadInfo)
+    def upload_file(request: Request, file: UploadFile = File(...)) -> UploadInfo:
+        """Stage a file on shared NAS and return a `file://` URI.
+
+        For inputs too large for the 128 KiB FC async event payload: upload the
+        bytes here over sync HTTP, then pass the returned `uri` as a `*_uri`
+        field on the real submit / async-task request. Because the file lands on
+        the shared NAS mount, any instance can resolve it later.
+        """
+        settings = _settings(request)
+        dest = stage_upload(file.file, settings.uploads_base_dir, file.filename)
+        return UploadInfo(
+            filename=dest.name,
+            size_bytes=dest.stat().st_size,
+            path=str(dest),
+            uri=f"file://{dest}",
+        )
 
     # ---------- FC lifecycle ----------
 

@@ -9,7 +9,12 @@ from pathlib import Path
 import pytest
 
 from bioagent_service.downloads import archive_dir, list_files, safe_subpath
-from bioagent_service.uploads import extract_dataset, save_upload
+from bioagent_service.uploads import (
+    extract_dataset,
+    safe_basename,
+    save_upload,
+    stage_upload,
+)
 
 
 def _make_zip(tmp_path: Path, name: str, members: dict[str, bytes]) -> Path:
@@ -25,6 +30,33 @@ def test_save_upload_streams_to_disk(tmp_path: Path) -> None:
     dest = tmp_path / "out" / "f.bin"
     saved = save_upload(buf, dest)
     assert saved.read_bytes() == b"abc" * 1000
+
+
+def test_stage_upload_unique_dirs_no_collision(tmp_path: Path) -> None:
+    base = tmp_path / "uploads"
+    a = stage_upload(io.BytesIO(b"AAA"), base, "same.pdb")
+    b = stage_upload(io.BytesIO(b"BBB"), base, "same.pdb")
+    # Same filename, different UUID parent dirs -> no overwrite.
+    assert a != b
+    assert a.parent != b.parent
+    assert a.name == b.name == "same.pdb"
+    assert a.read_bytes() == b"AAA"
+    assert b.read_bytes() == b"BBB"
+
+
+def test_stage_upload_sanitizes_traversal_filename(tmp_path: Path) -> None:
+    base = tmp_path / "uploads"
+    dest = stage_upload(io.BytesIO(b"x"), base, "../../etc/passwd")
+    assert dest.name == "passwd"
+    assert base in dest.parents
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [("a/b/c.txt", "c.txt"), ("", "upload.bin"), (None, "upload.bin"), ("..", "upload.bin")],
+)
+def test_safe_basename(raw, expected) -> None:
+    assert safe_basename(raw) == expected
 
 
 def test_extract_dataset_normal_zip(tmp_path: Path) -> None:

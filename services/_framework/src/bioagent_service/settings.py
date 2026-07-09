@@ -35,6 +35,13 @@ class ServiceSettings(BaseSettings):
         default=Path("/data/jobs"),
         description="Root directory under which per-job dirs are created.",
     )
+    # Where sync-uploaded staging files land, keyed by a per-upload UUID. Must be
+    # on the shared NAS mount (like jobs_base_dir) so a file staged on one FC
+    # instance is resolvable via file:// by an async task running on another.
+    uploads_base_dir: Path = Field(
+        default=Path("/data/uploads"),
+        description="Root directory under which POST /api/uploads stages files.",
+    )
     # When total bytes under jobs_base_dir exceed this, completed jobs are evicted.
     disk_limit_mb: int = Field(
         default=8000,

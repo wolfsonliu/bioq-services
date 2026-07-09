@@ -39,15 +39,12 @@ from bioagent_service.fc_testing import fc_url, poll_job
 
 SERVICE = "openbpmd-server"
 
-_DEFAULT_CLONE = (
-    Path(__file__).resolve().parents[3]
-    / "opensource" / "OpenBPMD" / "tests" / "files"
-)
+DATA_DIR = Path(__file__).resolve().parent / "data"
 TEST_STRUCTURE = Path(
-    os.environ.get("OPENBPMD_TEST_STRUCTURE", _DEFAULT_CLONE / "solvated.rst7")
+    os.environ.get("OPENBPMD_TEST_STRUCTURE", DATA_DIR / "solvated.rst7")
 )
 TEST_PARAMETERS = Path(
-    os.environ.get("OPENBPMD_TEST_PARAMETERS", _DEFAULT_CLONE / "solvated.prm7")
+    os.environ.get("OPENBPMD_TEST_PARAMETERS", DATA_DIR / "solvated.prm7")
 )
 LIG_RESNAME = os.environ.get("OPENBPMD_TEST_LIG_RESNAME", "UNK")
 

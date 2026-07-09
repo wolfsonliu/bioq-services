@@ -44,6 +44,20 @@ class FailureKind(str, Enum):
     INTERRUPTED = "interrupted"             # was RUNNING at process/container restart
 
 
+class UploadInfo(BaseModel):
+    """What `POST /api/uploads` returns after staging a file on shared NAS.
+
+    `uri` is a `file://` reference the caller passes as a `*_uri` field on a
+    later submit / async-task request, keeping large bytes out of the 128 KiB
+    async event payload.
+    """
+
+    filename: str = Field(..., description="Sanitized basename of the staged file.")
+    size_bytes: int = Field(..., ge=0, description="Bytes written to disk.")
+    path: str = Field(..., description="Absolute path on the shared NAS mount.")
+    uri: str = Field(..., description="file:// URI resolvable by any service's *_uri input.")
+
+
 class JobInfo(BaseModel):
     """Public job state — what `GET /api/jobs/{id}` returns."""
 

@@ -50,7 +50,7 @@ from bioagent_service.cli import CLIEndpoint, create_cli
 from bioagent_service.errors import FailureKind, extract_error_summary, finalize_job
 from bioagent_service.forms import model_form_depends
 from bioagent_service.manifest import EndpointExample, ServiceManifest
-from bioagent_service.models import JobInfo, JobStatus
+from bioagent_service.models import JobInfo, JobStatus, UploadInfo
 from bioagent_service.settings import ServiceSettings
 from bioagent_service.task_endpoint import execute_task, register_task_endpoint, resolve_task_id
 
@@ -82,6 +82,7 @@ __all__ = [
     "FailureKind",
     "ServiceManifest",
     "ServiceSettings",
+    "UploadInfo",
     "attach_mcp",
     "create_app",
     "create_cli",

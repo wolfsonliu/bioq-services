@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 import zipfile
 from pathlib import Path
 from typing import IO, Iterable
@@ -16,6 +17,36 @@ def save_upload(stream: IO[bytes], dest: Path, *, chunk_size: int = 1024 * 1024)
             if not chunk:
                 break
             f.write(chunk)
+    return dest
+
+
+def safe_basename(filename: str | None) -> str:
+    """Reduce a client-supplied filename to a safe basename.
+
+    Strips any directory components (so `../../etc/passwd` -> `passwd`) and
+    falls back to `upload.bin` when the result is empty or a bare dot segment.
+    """
+    name = Path(filename or "").name
+    if name in ("", ".", ".."):
+        return "upload.bin"
+    return name
+
+
+def stage_upload(
+    stream: IO[bytes],
+    base_dir: Path,
+    filename: str | None,
+    *,
+    chunk_size: int = 1024 * 1024,
+) -> Path:
+    """Stream an upload into a fresh UUID-keyed subdir under *base_dir*.
+
+    Each call gets its own `<base_dir>/<uuid4-hex>/<safe_name>` path, so
+    concurrent uploads of identically-named files never collide. Returns the
+    absolute destination path; the caller turns it into a `file://` URI.
+    """
+    dest = base_dir / uuid.uuid4().hex / safe_basename(filename)
+    save_upload(stream, dest, chunk_size=chunk_size)
     return dest
 
 
@@ -48,4 +79,4 @@ def extract_dataset(zip_path: Path, dest_dir: Path) -> Path:
     return dest_dir.resolve()
 
 
-__all__ = ["save_upload", "extract_dataset"]
+__all__ = ["save_upload", "safe_basename", "stage_upload", "extract_dataset"]

@@ -113,8 +113,8 @@ uv run python -m pytest services/openbpmd-server/tests/test_app.py \
     services/openbpmd-server/tests/test_cli.py -v
 
 # FC integration (opt-in; requires deployed service + GPU).
-# Fixtures resolve from opensource/OpenBPMD/tests/files/ (ligand resname UNK),
-# or override via OPENBPMD_TEST_STRUCTURE / OPENBPMD_TEST_PARAMETERS.
+# Fixtures ship in tests/data/ (solvated.rst7 + solvated.prm7, ligand resname
+# UNK); override via OPENBPMD_TEST_STRUCTURE / OPENBPMD_TEST_PARAMETERS.
 RUN_FC_TESTS=1 uv run python -m pytest -m fc \
     services/openbpmd-server/tests/test_fc.py \
     services/openbpmd-server/tests/test_fc_task.py -v

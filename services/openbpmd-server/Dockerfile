@@ -192,6 +192,10 @@ ENV OPENBPMD_WEIGHTS_DIR=/data/models/openbpmd
 ENV OPENBPMD_MAX_CONCURRENT_JOBS=1
 # Modern GPU service — FC async task endpoints enabled.
 ENV OPENBPMD_TASK_ENDPOINTS_ENABLED=true
+# FC session affinity: route a job's polls to the same instance (see
+# 2026-06-10-fc-session-affinity.md). Without this the affinity header is a
+# no-op and concurrent GPU jobs can't be scheduled onto parallel instances.
+ENV OPENBPMD_SESSION_HEADER_NAME=bioagent-session-id
 
 RUN mkdir -p /data/openbpmd_jobs
 

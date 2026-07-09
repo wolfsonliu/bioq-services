@@ -22,3 +22,4 @@ openadmet-server: https://fc-openadmet-dckbxdfnvj.cn-hangzhou-vpc.fcapp.run
 diffdock-server: https://fc-diffdock-seztzsjoon.cn-hangzhou-vpc.fcapp.run
 flowmol-server: https://fc-flowmol-avfulhilcq.cn-hangzhou-vpc.fcapp.run
 pocketxmol-server: https://fc-pocketxmol-dfjozirckm.cn-hangzhou-vpc.fcapp.run
+openbpmd-server: https://fc-openbpmd-acghosooxo.cn-hangzhou-vpc.fcapp.run

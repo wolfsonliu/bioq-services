@@ -57,7 +57,12 @@ def _echo_argv(req: _EchoRequest, job_dir: Path) -> list[str]:
 
 @pytest.fixture
 def client(tmp_path: Path) -> TestClient:
-    settings = _EchoSettings(jobs_base_dir=tmp_path / "jobs", max_concurrent_jobs=2, keepalive_interval_s=0)
+    settings = _EchoSettings(
+        jobs_base_dir=tmp_path / "jobs",
+        uploads_base_dir=tmp_path / "uploads",
+        max_concurrent_jobs=2,
+        keepalive_interval_s=0,
+    )
     adapter = _EchoAdapter(settings=settings)
     app = create_app(adapter, settings, title="Echo Test")
 
@@ -93,6 +98,36 @@ def test_health(client: TestClient) -> None:
     assert detail["service"] == "echo"
     assert detail["version"] == "0.1.0"
     assert "disk_usage_mb" in detail
+
+
+def test_upload_returns_file_uri(client: TestClient) -> None:
+    r = client.post(
+        "/api/uploads",
+        files={"file": ("protein.pdb", b"ATOM  fake pdb bytes", "chemical/x-pdb")},
+    )
+    r.raise_for_status()
+    body = r.json()
+    assert body["filename"] == "protein.pdb"
+    assert body["size_bytes"] == len(b"ATOM  fake pdb bytes")
+    assert body["uri"].startswith("file://")
+    # The staged file exists on disk and the uri points at it.
+    staged = Path(body["uri"][len("file://"):])
+    assert staged == Path(body["path"])
+    assert staged.read_bytes() == b"ATOM  fake pdb bytes"
+    # Landed under the configured uploads_base_dir, not jobs_base_dir.
+    assert client.app.state.settings.uploads_base_dir in staged.parents
+
+
+def test_upload_same_name_no_collision(client: TestClient) -> None:
+    first = client.post(
+        "/api/uploads", files={"file": ("dup.sdf", b"AAA", "chemical/x-mdl-sdfile")}
+    ).json()
+    second = client.post(
+        "/api/uploads", files={"file": ("dup.sdf", b"BBB", "chemical/x-mdl-sdfile")}
+    ).json()
+    assert first["path"] != second["path"]
+    assert Path(first["path"]).read_bytes() == b"AAA"
+    assert Path(second["path"]).read_bytes() == b"BBB"
 
 
 def test_openapi_includes_request_model(client: TestClient) -> None:
