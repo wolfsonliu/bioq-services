@@ -61,6 +61,10 @@ def _is_complex_type(annotation: Any) -> bool:
     origin = get_origin(inner)
     if origin in (dict, list, set, tuple, frozenset):
         return True
+    # Bare, unparameterized containers (``dict`` / ``list`` / ...) have no
+    # origin but still cannot be carried as a scalar form field.
+    if inner in (dict, list, set, tuple, frozenset):
+        return True
     if isinstance(inner, type) and issubclass(inner, BaseModel):
         return True
     return False
