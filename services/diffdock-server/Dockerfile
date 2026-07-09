@@ -90,98 +90,99 @@ custom_channels:
 EOF
 
 # ---------------------------------------------------------------------------
-# Conda env — derived from upstream DiffDock environment.yml but built with
-# explicit pins here (NOT `micromamba env create -f environment.yml`).  The
-# vendored upstream/environment.yml is never consumed; notably we bump
-# python 3.9 → 3.10 for the framework's Python>=3.10 requirement.
+# Conda env — MINIMAL, mirroring upstream DiffDock environment.yml structure.
 #
-# CRITICAL pins:
-#   - python=3.10                  : bumped from upstream's 3.9 pin — the
-#                                    bioagent-service-framework requires
-#                                    Python>=3.10, and the whole stack
-#                                    (pytorch 1.13.1, PyG 2.2, openfold,
-#                                    rdkit 2022.03.3, prody) has py310 conda
-#                                    builds.  Matches diffdock-pp-server which
-#                                    runs this exact pytorch stack on 3.10.
-#   - pytorch=1.13.1 + cu117       : upstream pin (also matches diffdock-pp)
-#   - CUDA build string explicit   : otherwise resolver silently picks CPU
-#                                    build under mkl<2024.1 (verified on
-#                                    diffdock-pp-server 2026-07-05)
-#   - setuptools=69.5.1            : openfold setup.py hits ImportError with
-#                                    setuptools 70+ (which removed several
-#                                    legacy compat modules)
-#   - mkl<2024.1, intel-openmp<2024.1, ittapi : iJIT_NotifyEvent weak symbol
-#                                    (pytorch 1.13 libtorch_cpu.so).  See
-#                                    engineering/guides/pytorch-conda-ittapi.md.
+# CRITICAL LESSON (2026-07-09): the entire torch / PyG / rdkit / numpy stack
+# MUST be installed via PIP wheels (as upstream does), NOT conda.  An earlier
+# revision put pytorch (pytorch channel) + pyg (pyg channel) + rdkit +
+# numpy=1.24 (conda-forge) all in conda across 3 channels.  That produced a
+# numpy C-API ABI mismatch: `torch.from_numpy(mol.GetConformer().GetPositions())`
+# (datasets/process_mols.py:298) SEGFAULTED (rc=-11) because the pytorch-channel
+# torch and conda-forge rdkit were built against different numpy ABIs than the
+# forced numpy=1.24.  Upstream avoids this entirely by using the official pip
+# torch wheel + PyG pip wheels + pip rdkit — all ABI-coherent against one numpy.
+#
+# Bonus: the official pip torch wheel is self-contained (bundles its own MKL),
+# so the iJIT_NotifyEvent weak-symbol issue (which forced mkl<2024.1 + ittapi
+# for CONDA pytorch 1.13) DOES NOT apply — those pins are removed.
+#
+# Conda holds only what upstream puts in conda: python, setuptools (openfold
+# needs <70), prody + scipy (upstream comment: "ProDy needs conda").
+#   - python=3.10 : bumped from upstream's 3.9 for framework Python>=3.10.
+#   - setuptools=69.5.1 : openfold setup.py breaks on setuptools 70+.
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     micromamba create -y -n diffdock \
-        -c pyg -c nvidia -c pytorch -c conda-forge \
+        -c conda-forge \
         python=3.10 \
-        "pytorch::pytorch=1.13.1=py3.10_cuda11.7_cudnn8.5.0_0" \
-        pytorch-cuda=11.7 \
-        torchvision=0.14.1 \
-        pyg::pyg=2.2.0 \
-        pyg::pytorch-scatter=2.1.0 \
-        conda-forge::e3nn=0.5.1 \
-        conda-forge::prody=2.2.0 \
-        conda-forge::biopython \
-        conda-forge::rdkit=2022.03.3 \
-        conda-forge::numpy=1.24 \
-        conda-forge::pandas=1.5 \
-        conda-forge::scikit-learn \
-        conda-forge::scipy=1.12.0 \
-        conda-forge::pyyaml \
-        conda-forge::networkx=2.8.4 \
-        conda-forge::tqdm \
-        conda-forge::pybind11=2.11.1 \
-        conda-forge::ninja \
-        conda-forge::wheel \
-        conda-forge::ittapi \
-        "mkl<2024.1" \
-        "intel-openmp<2024.1" \
-        "setuptools=69.5.1"
+        pip \
+        "setuptools=69.5.1" \
+        prody=2.2.0 \
+        scipy=1.12.0
 
-# ESMFold deps.  We deliberately do NOT use the `fair-esm[esmfold]` extra —
-# that extra hard-pins `deepspeed==0.5.9`, which pulls `triton==1.0.0`, which
-# has NO cp310 wheel (only cp36-39).  Since the framework's [mcp] extra needs
-# py>=3.10 (MCP SDK requirement), we can't drop to 3.9, so we instead install
-# base fair-esm + the esmfold extra's *actual* runtime deps manually,
-# skipping deepspeed.  ESMFold inference does not need deepspeed — openfold
-# guards its deepspeed activation-checkpointing (falls back to torch
-# checkpointing when deepspeed is absent).  Build-time smoke #2 below
-# verifies `import esm.esmfold.v1.esmfold` succeeds without it.
+# ---------------------------------------------------------------------------
+# Pip stack (Step A: wheels).  Mirrors upstream environment.yml's pip section
+# exactly (torch cu117 wheel + PyG wheels + rdkit + pandas + sklearn + ...),
+# on py3.10, with the esmfold deps handled deepspeed-free (see below).
 #
-# openfold is a git-installed package that compiles CUDA extensions — needs
-# nvcc + gcc (cuda-devel base) + setuptools=69.5.1 + ninja + wheel + pybind11
-# + torch (all conda-installed above).  Compile ~5 min; extension ~500 MB.
+# ABI coherence: torch, PyG native ext (cluster/scatter/sparse/spline-conv),
+# rdkit, pandas, numpy all come from pip → built against one numpy 1.x ABI.
+# `numpy<2` guards against numpy 2.0 (none of these old pkgs support it).
 #
-# `--no-build-isolation` is REQUIRED — openfold's setup.py does `import torch`
-# at top level to introspect CUDA arch flags.  Without it, uv creates an
-# isolated PEP 517 build env with no torch and the build fails with
-# `ModuleNotFoundError: No module named 'torch'`.  With it, the build reuses
-# the target conda env (torch 1.13.1 + setuptools + ninja + wheel + pybind11).
-#
-# omegaconf / ml-collections / einops = esmfold extra deps minus deepspeed.
-# dm-tree (imports as `tree`) is an openfold runtime dep declared only in
-# openfold's environment.yml — NOT its setup.py install_requires — so pip
-# doesn't pull it transitively.  openfold/np/residue_constants.py does
-# `import tree`, so it must be added explicitly.
-# biopython / scipy come from the conda layer; pytorch-lightning / torchmetrics
-# pinned per upstream env yaml.
+# ESMFold deps: we do NOT use the `fair-esm[esmfold]` extra — it hard-pins
+# deepspeed==0.5.9 → triton==1.0.0 which has NO cp310 wheel (only cp36-39).
+# Since framework[mcp] needs py>=3.10 we can't drop to 3.9, so install base
+# fair-esm + the extra's real runtime deps manually (omegaconf / ml-collections
+# / einops), skipping deepspeed.  ESMFold inference doesn't need deepspeed —
+# openfold guards its deepspeed activation-checkpointing.  dm-tree (imports as
+# `tree`) is an openfold runtime dep declared only in openfold's environment.yml
+# (not setup.py), so pip won't pull it transitively — add explicitly.
+# biopython is used by upstream (Bio.PDB / Bio.pairwise2) — add explicitly.
+# ninja + wheel speed up the openfold CUDA-extension build in Step B.
+# ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/diffdock/bin/python \
-        --no-build-isolation \
-        "pytorch-lightning==1.9.5" \
-        "torchmetrics==0.11.0" \
+        --extra-index-url https://download.pytorch.org/whl/cu117 \
+        --find-links https://data.pyg.org/whl/torch-1.13.1+cu117.html \
+        "numpy<2" \
+        "torch==1.13.1+cu117" \
+        "torch-cluster==1.6.0+pt113cu117" \
+        "torch-scatter==2.1.0+pt113cu117" \
+        "torch-sparse==0.6.16+pt113cu117" \
+        "torch-spline-conv==1.2.1+pt113cu117" \
+        "torch-geometric==2.2.0" \
+        "e3nn==0.5.1" \
         "fair-esm==2.0.0" \
+        "networkx==2.8.4" \
+        "pandas==1.5.1" \
+        "pybind11==2.11.1" \
+        "pytorch-lightning==1.9.5" \
+        "rdkit==2022.03.3" \
+        "scikit-learn==1.1.0" \
+        "torchmetrics==0.11.0" \
+        "biopython" \
         omegaconf \
         ml-collections \
         einops \
         dm-tree \
+        pyyaml \
+        requests \
+        ninja \
+        wheel
+
+# ---------------------------------------------------------------------------
+# Pip stack (Step B: git-built CUDA extensions).  openfold compiles CUDA
+# kernels — needs nvcc + gcc (cuda-devel base) + setuptools<70 + torch present.
+# `--no-build-isolation` reuses the Step-A torch (openfold's setup.py does
+# `import torch` at top level; an isolated PEP 517 env has no torch →
+# ModuleNotFoundError).  Both use git+ VCS specifiers → need the `git` CLI
+# (apt-installed above).
+# ---------------------------------------------------------------------------
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python /opt/conda/envs/diffdock/bin/python \
+        --no-build-isolation \
         "openfold @ git+https://github.com/aqlaboratory/openfold.git@4b41059694619831a7db195b7e0988fc4ff3a307" \
-        "dllogger @ git+https://github.com/NVIDIA/dllogger.git" \
-        requests
+        "dllogger @ git+https://github.com/NVIDIA/dllogger.git"
 
 # ---------------------------------------------------------------------------
 # Build-time smoke #1: CUDA torch + PyG native ops OK.  Catches the CPU-only
