@@ -38,8 +38,10 @@ ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
 ENV UV_HTTP_TIMEOUT=600
 
 # NB: no `git` in apt — vendor.sh ran on the host; the image never clones.
+# libxrender1 / libxext6: the pip rdkit wheel links libXrender.so.1 +
+# libXext.so.6 (needed even for headless Chem imports).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        build-essential wget ca-certificates \
+        build-essential wget ca-certificates libxrender1 libxext6 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=micromamba /bin/micromamba /bin/micromamba
@@ -58,13 +60,7 @@ RUN mkdir -p /root/.config/pip \
 channels:
   - defaults
 show_channel_urls: true
-# flexible (not strict): the TUNA `defaults` channel has no cp311 build of
-# numpy=1.26.3 — under strict priority the solver falls to its cp312 build
-# and collides with pytorch's py3.11 requirement.  flexible lets numpy /
-# scipy / pandas resolve from conda-forge (which ships cp311).  pytorch is
-# still nailed to the CUDA build via its exact build string below, so
-# flexible does NOT risk a silent CPU variant.
-channel_priority: flexible
+channel_priority: strict
 default_channels:
   - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
   - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r
@@ -75,21 +71,26 @@ custom_channels:
 EOF
 
 # ---------------------------------------------------------------------------
-# Conda env — mirror upstream `environment.yaml` (Python 3.11 + pytorch +
-# cu121 + rdkit + lightning + torchmetrics + openbabel + numpy/scipy/pandas).
-# Removed vs upstream: wandb / ipython (training-only).
+# Conda env — ONLY the pytorch/CUDA stack + the ITT fix.  Everything else
+# (numpy / scipy / pandas / rdkit / lightning / torchmetrics / openbabel)
+# goes through pip, exactly as upstream `environment.yaml` does.
+#
+# WHY not conda for the sci stack: mixing conda numpy (one channel) with a
+# pip rdkit wheel (built against pip numpy) risks a cross-channel numpy ABI
+# mismatch that segfaults (rc=-11) at `torch.from_numpy(<rdkit array>)`.
+# Following upstream's all-pip stack keeps a single numpy ABI.  See project
+# memory `feedback_follow_upstream_pip_stack_numpy_abi`.  This also keeps the
+# conda solve tiny (strict priority parses in seconds, not the 73 min a
+# flexible multi-channel numpy solve took).
 #
 # `pytorch=2.2.0=py3.11_cuda12.1_cudnn8.9.2_0` — explicit CUDA build string.
 # Without it the resolver can silently pick the CPU variant under the
-# mkl<2024.1 constraint below → `libc10_cuda.so` missing at runtime.
+# mkl<2024.1 constraint → `libc10_cuda.so` missing at runtime.
 #
 # iJIT_NotifyEvent (Intel VTune ITT): pytorch weak-references it; missing
-# symbol → `import torch` fails.  Install `ittapi` + pin mkl / intel-openmp
-# <2024.1.  See engineering/guides/pytorch-conda-ittapi.md.
-#
-# numpy/scipy/pandas/rdkit pinned via conda (ABI-aligned with pytorch);
-# lightning/torchmetrics/openbabel go through pip (no clean conda-forge/CN
-# mirror path or version alignment).
+# symbol → `import torch` fails.  Install `ittapi` (conda-forge) + pin mkl /
+# intel-openmp <2024.1 (both live on `defaults`, NOT conda-forge — do not
+# prefix them).  See engineering/guides/pytorch-conda-ittapi.md.
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     micromamba create -y -n semlaflow \
@@ -100,25 +101,26 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
         "pytorch::pytorch=2.2.0=py3.11_cuda12.1_cudnn8.9.2_0" \
         pytorch-cuda=12.1 \
         pytorch::pytorch-mutex=1.0=cuda \
-        conda-forge::numpy=1.26.3 \
-        conda-forge::scipy=1.12.0 \
-        conda-forge::pandas=2.2.0 \
-        conda-forge::rdkit=2023.09.5 \
         conda-forge::ittapi \
-        conda-forge::"mkl<2024.1" \
-        conda-forge::"intel-openmp<2024.1" \
-        conda-forge::tqdm=4.66.1 \
-        conda-forge::pyyaml=6.0.1
+        "mkl<2024.1" \
+        "intel-openmp<2024.1"
 
-# Pip-only deps.  openbabel-wheel provides `from openbabel import pybel`
-# (scriptutil top-level import) without conda openbabel build pain.
-# lightning pinned to the 2.2 era matching the pytorch 2.2 stack and the
-# checkpoint's expected pickle format (see design §12.4).
+# Pip deps — mirror upstream `environment.yaml` pip block (single numpy ABI).
+# openbabel-wheel provides `from openbabel import pybel` (scriptutil top-level
+# import) without conda openbabel build pain.  lightning pinned to the 2.2 era
+# matching the pytorch 2.2 stack and the checkpoint's expected pickle format
+# (see design §12.4).  pyyaml is for settings.py manifest.yaml parsing.
 RUN /opt/conda/envs/semlaflow/bin/pip install --no-cache-dir \
+        "numpy==1.26.2" \
+        "scipy==1.11.4" \
+        "pandas==2.2.2" \
+        "rdkit==2023.9.6" \
         "lightning==2.2.5" \
         "torchmetrics==1.2.1" \
         "openbabel-wheel==3.1.1.21" \
-        "typing_extensions>=4.7"
+        "typing_extensions>=4.7" \
+        "pyyaml==6.0.1" \
+        "tqdm==4.66.1"
 
 # ---------------------------------------------------------------------------
 # Build-time smoke #1: filesystem sanity — vendor.sh must have populated the
@@ -200,9 +202,10 @@ ENV PATH=/opt/conda/envs/semlaflow/bin:$PATH
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 
-# libgomp for openmp-linked libs; ca-certificates for OSS/HTTP.
+# libgomp for openmp-linked libs; ca-certificates for OSS/HTTP;
+# libxrender1 / libxext6 for the pip rdkit wheel.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates libgomp1 \
+        ca-certificates libgomp1 libxrender1 libxext6 \
     && rm -rf /var/lib/apt/lists/*
 
 # Conda env from builder.

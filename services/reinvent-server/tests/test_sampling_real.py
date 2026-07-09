@@ -15,7 +15,7 @@ pytestmark = pytest.mark.slow
 
 def test_real_reinvent_sampling(tmp_path):
     prior_base = Path(os.environ.get("REINVENT_PRIOR_BASE", "/data/models/reinvent"))
-    prior = prior_base / "reinvent.prior"
+    prior = prior_base / "reinvent_pubchem.prior"
     if not prior.exists():
         pytest.skip(f"no prior at {prior}")
     if shutil.which("reinvent") is None:

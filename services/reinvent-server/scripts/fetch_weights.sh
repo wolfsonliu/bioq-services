@@ -16,18 +16,16 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DST="${WEIGHTS_DST:-${HERE}/weights}"
-ZENODO_BASE="${ZENODO_BASE:-https://zenodo.org/records/15641296/files}"
+ZENODO_BASE="${ZENODO_BASE:-https://zenodo.org/records/20701824/files}"
 
 FILES=(
-    reinvent.prior
     libinvent.prior
+    libinvent_transformer_pubchem.prior
     linkinvent.prior
-    mol2mol_high_similarity.prior
-    mol2mol_medium_similarity.prior
-    mol2mol_mmp.prior
-    mol2mol_scaffold.prior
-    mol2mol_scaffold_generic.prior
+    linkinvent_transformer_pubchem.prior
     pepinvent.prior
+    pubchem_ecfp4_with_count_with_rank_reinvent4_dict_voc.prior
+    reinvent_pubchem.prior
 )
 
 mkdir -p "${DST}"

@@ -49,5 +49,5 @@ def test_manifest_extras(tmp_path):
     a = _adapter(tmp_path)
     ex = a.manifest_extras()
     assert "sampling" in ex["run_modes"]
-    assert ex["prior_registry"][".reinvent"] == "reinvent.prior"
+    assert ex["prior_registry"][".reinvent"] == "reinvent_pubchem.prior"
     assert "chemprop2" in ex["scoring_backends"]

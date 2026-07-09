@@ -4,13 +4,13 @@ from pathlib import Path
 def test_resolve_prior_dot_key():
     from server.config_builder import _resolve_prior
     got = _resolve_prior(".reinvent", "reinvent", Path("/nas/priors"))
-    assert got == "/nas/priors/reinvent.prior"
+    assert got == "/nas/priors/reinvent_pubchem.prior"
 
 
 def test_resolve_prior_default_for_generator():
     from server.config_builder import _resolve_prior
     got = _resolve_prior(None, "mol2mol", Path("/nas/priors"))
-    assert got == "/nas/priors/mol2mol_medium_similarity.prior"
+    assert got == "/nas/priors/pubchem_ecfp4_with_count_with_rank_reinvent4_dict_voc.prior"
 
 
 def test_resolve_prior_explicit_path_passthrough():
@@ -28,7 +28,7 @@ def test_build_sampling_config(tmp_path):
     cfg = build_sampling_config(p, out, Path("/nas/priors"))
     assert cfg["run_type"] == "sampling"
     assert cfg["device"] == "cpu"
-    assert cfg["parameters"]["model_file"] == "/nas/priors/reinvent.prior"
+    assert cfg["parameters"]["model_file"] == "/nas/priors/reinvent_pubchem.prior"
     assert cfg["parameters"]["num_smiles"] == 25
     assert cfg["parameters"]["output_file"] == str(out / "sampling.csv")
     assert "smiles_file" not in cfg["parameters"]
@@ -36,14 +36,15 @@ def test_build_sampling_config(tmp_path):
 
 def test_build_sampling_config_with_seed(tmp_path):
     from server.config_builder import build_sampling_config
-    p = {"generator": "mol2mol", "model_file": ".m2m_high", "num_smiles": 10,
+    p = {"generator": "mol2mol", "model_file": ".mol2mol", "num_smiles": 10,
          "unique_molecules": True, "randomize_smiles": False, "temperature": 1.2,
          "sample_strategy": "beamsearch", "device": "cuda:0",
          "smiles_file": "/work/seed.smi"}
     cfg = build_sampling_config(p, tmp_path, Path("/nas/priors"))
     assert cfg["parameters"]["smiles_file"] == "/work/seed.smi"
     assert cfg["parameters"]["sample_strategy"] == "beamsearch"
-    assert cfg["parameters"]["model_file"] == "/nas/priors/mol2mol_high_similarity.prior"
+    assert cfg["parameters"]["model_file"] == \
+        "/nas/priors/pubchem_ecfp4_with_count_with_rank_reinvent4_dict_voc.prior"
 
 
 def test_build_scoring_config_passthrough(tmp_path):
@@ -96,7 +97,7 @@ def test_build_tl_config_reinvent(tmp_path):
     cfg = build_tl_config(p, tmp_path, Path("/nas/priors"))
     assert cfg["run_type"] == "transfer_learning"
     par = cfg["parameters"]
-    assert par["input_model_file"] == "/nas/priors/reinvent.prior"
+    assert par["input_model_file"] == "/nas/priors/reinvent_pubchem.prior"
     assert par["output_model_file"] == str(tmp_path / "TL_out.model")
     assert par["smiles_file"] == "/work/target.smi"
     assert par["num_epochs"] == 5
@@ -107,7 +108,7 @@ def test_build_tl_config_reinvent(tmp_path):
 
 def test_build_tl_config_mol2mol_pairs(tmp_path):
     from server.config_builder import build_tl_config
-    p = {"generator": "mol2mol", "input_model_file": ".m2m_scaffold_generic",
+    p = {"generator": "mol2mol", "input_model_file": ".mol2mol",
          "output_model_name": "TL.model", "num_epochs": 3,
          "save_every_n_epochs": 3, "batch_size": 50, "num_refs": 100,
          "sample_batch_size": 100,
@@ -144,8 +145,8 @@ def test_build_rl_config_full(tmp_path):
     cfg = build_rl_config(p, tmp_path, Path("/nas/priors"))
     assert cfg["run_type"] == "staged_learning"
     par = cfg["parameters"]
-    assert par["prior_file"] == "/nas/priors/reinvent.prior"
-    assert par["agent_file"] == "/nas/priors/reinvent.prior"  # None → prior
+    assert par["prior_file"] == "/nas/priors/reinvent_pubchem.prior"
+    assert par["agent_file"] == "/nas/priors/reinvent_pubchem.prior"  # None → prior
     assert par["summary_csv_prefix"] == str(tmp_path / "sl")
     assert cfg["learning_strategy"]["sigma"] == 128
     assert cfg["diversity_filter"]["type"] == "IdenticalMurckoScaffold"

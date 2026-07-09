@@ -17,7 +17,7 @@ def test_stage_and_build_writes_config(tmp_path, monkeypatch):
     out.mkdir(parents=True)
     seed = tmp_path / "seed.smi"
     seed.write_text("CCO\n")
-    params = {"generator": "mol2mol", "model_file": ".m2m_high", "num_smiles": 5,
+    params = {"generator": "mol2mol", "model_file": ".mol2mol", "num_smiles": 5,
               "unique_molecules": True, "randomize_smiles": True, "temperature": 1.0,
               "sample_strategy": "beamsearch"}
     pj = _write_params(work, params)
@@ -43,7 +43,7 @@ def test_stage_and_build_writes_config(tmp_path, monkeypatch):
     assert rc == 0
     cfg = (work / "config.toml").read_text()
     assert 'run_type = "sampling"' in cfg
-    assert "/nas/priors/mol2mol_high_similarity.prior" in cfg
+    assert "/nas/priors/pubchem_ecfp4_with_count_with_rank_reinvent4_dict_voc.prior" in cfg
     # seed staged into work/ and referenced
     assert (work / "seed.smi").exists()
     assert str(work / "seed.smi") in cfg

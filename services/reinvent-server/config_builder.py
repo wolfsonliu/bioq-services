@@ -9,22 +9,28 @@ from __future__ import annotations
 
 from pathlib import Path
 
+# dot-key → filename, matching the files published on Zenodo record 20701824
+# ("REINVENT4 priors", the concept-DOI's current version). This release ships a
+# single Mol2Mol prior (the PubChem ECFP4 similarity model) — the older
+# mol2mol_{high,medium,mmp,scaffold,...}_similarity.prior variants are NOT
+# distributed here — and the de-novo prior is named reinvent_pubchem.prior
+# (not reinvent.prior). The two *_transformer_pubchem priors pair with REINVENT's
+# LibinventTransformer / LinkinventTransformer generators (not in v0.0.1's
+# `generator` enum, but referenceable via an explicit model_file dot-key).
 PRIOR_FILES = {
-    ".reinvent": "reinvent.prior",
+    ".reinvent": "reinvent_pubchem.prior",
     ".libinvent": "libinvent.prior",
+    ".libinvent_transformer": "libinvent_transformer_pubchem.prior",
     ".linkinvent": "linkinvent.prior",
-    ".m2m_high": "mol2mol_high_similarity.prior",
-    ".m2m_medium": "mol2mol_medium_similarity.prior",
-    ".m2m_mmp": "mol2mol_mmp.prior",
-    ".m2m_scaffold": "mol2mol_scaffold.prior",
-    ".m2m_scaffold_generic": "mol2mol_scaffold_generic.prior",
+    ".linkinvent_transformer": "linkinvent_transformer_pubchem.prior",
+    ".mol2mol": "pubchem_ecfp4_with_count_with_rank_reinvent4_dict_voc.prior",
     ".pepinvent": "pepinvent.prior",
 }
 GENERATOR_DEFAULT_PRIOR = {
     "reinvent": ".reinvent",
     "libinvent": ".libinvent",
     "linkinvent": ".linkinvent",
-    "mol2mol": ".m2m_medium",
+    "mol2mol": ".mol2mol",
     "pepinvent": ".pepinvent",
 }
 
