@@ -122,14 +122,28 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
         scipy=1.10.1
 
 # ---------------------------------------------------------------------------
-# pytorch 2.7 + cu128 + lightning + PyG 2.x + native ext wheels
+# pytorch 2.7 + cu128 + lightning + PyG 2.6.1 + native ext wheels
 # ---------------------------------------------------------------------------
-# The upstream cu128 setup guide runs the following three pip commands.
-# We reproduce them verbatim (via uv) into the pocketxmol env:
+# The upstream cu128 setup guide runs:
 #   pip install torch==2.7.0 --index-url https://download.pytorch.org/whl/cu128
-#   pip install lightning torch_geometric
+#   pip install lightning torch_geometric   ← UNPINNED — bites us, see below
 #   pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv \
 #     -f https://data.pyg.org/whl/torch-2.7.0+cu128.html
+#
+# **torch_geometric MUST be pinned to 2.6.1.**  PocketXMol's
+# utils/transforms.py calls torch_geometric.nn.pool.knn_graph.  In PyG >=2.7
+# knn_graph was rewritten to require the pyg-lib `pyg.knn` op
+# (`ImportError: 'knn_graph' requires 'pyg-lib>=0.6.0'` at runtime), dropping
+# the torch_cluster fallback.  PyG 2.6.1 still routes knn_graph through
+# torch_cluster.knn_graph — which we install below — so pinning 2.6.1 makes
+# it work without pyg-lib.  Upstream's manual-install doc documents 2.6.1
+# as a supported version.  Verified 2026-07-09 by FC runtime failure with the
+# unpinned (2.7.x) resolve.
+#
+# pyg_lib is intentionally NOT installed: PocketXMol only needs knn_graph
+# (torch_cluster path in 2.6.1), and the pyg-lib wheel for torch-2.7+cu128 is
+# the least reliably published of the set — installing it risks an sdist build
+# or ABI mismatch for zero benefit here.
 #
 # uv respects --index-url / --find-links flags identically to pip.
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -139,12 +153,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/pocketxmol/bin/python \
-        lightning torch_geometric peptidebuilder==1.1.0
+        lightning "torch_geometric==2.6.1" peptidebuilder==1.1.0
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/pocketxmol/bin/python \
         --find-links https://data.pyg.org/whl/torch-2.7.0+cu128.html \
-        pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv
+        torch_scatter torch_sparse torch_cluster torch_spline_conv
 
 # ---------------------------------------------------------------------------
 # PocketXMol source — from vendored upstream/ (scripts/vendor.sh).
@@ -169,6 +183,10 @@ import torch_geometric; print('pyg', torch_geometric.__version__); \
 import torch_scatter; print('torch_scatter ok'); \
 import torch_sparse; print('torch_sparse ok'); \
 import torch_cluster; print('torch_cluster ok'); \
+from torch_geometric.nn import knn_graph; \
+_e = knn_graph(torch.randn(5, 3), k=2); \
+assert _e.shape[0] == 2, 'knn_graph did not return an edge_index'; \
+print('knn_graph (torch_cluster backend) ok'); \
 import pytorch_lightning as pl; print('pytorch-lightning', pl.__version__); \
 from rdkit import Chem; print('rdkit ok'); \
 import openbabel; print('openbabel ok'); \

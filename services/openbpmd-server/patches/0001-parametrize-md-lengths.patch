@@ -1,0 +1,42 @@
+--- a/openbpmd.py
++++ b/openbpmd.py
+@@ -41,6 +41,13 @@
+ __version__ = "1.0.0"
+ __email__ = "dominykas.lukauskis.19@ucl.ac.uk"
+ 
++# --- bioagent openbpmd-server patch: parametrize the hardcoded MD lengths
++# --- so the integration test can run a short trajectory.  Defaults preserve
++# --- upstream behaviour exactly (500 ps equil / 10 ns production / ~100
++# --- DCD frames).  Overridden at runtime by the wrapper via these globals.
++EQUIL_STEPS = 250000   # 500 ps at 2 fs
++PROD_SIM_NS = 10       # production metadynamics length, ns
++
+ 
+ def main(args):
+     """Main entry point of the app. Takes in argparse.Namespace object as
+@@ -348,7 +355,7 @@
+     sim = Simulation(parm.topology, system, integrator,
+                      platform, properties)
+     sim.context.setPositions(input_positions)
+-    integrator.step(250000)  # run 500 ps of equilibration
++    integrator.step(EQUIL_STEPS)  # 500 ps equil (patched: was 250000)
+     all_positions = sim.context.getState(
+         getPositions=True, enforcePeriodicBox=True).getPositions()
+     # we don't want to write the dummy atoms, so we only
+@@ -473,10 +480,13 @@
+ 
+     trj_name = os.path.join(write_dir,'trj.dcd')
+ 
+-    sim_time = 10  # ns
+-    steps = 250000 * sim_time
++    sim_time = PROD_SIM_NS  # ns (patched: was hardcoded 10)
++    steps = int(250000 * sim_time)
+ 
+-    simulation.reporters.append(DCDReporter(trj_name, 25000))  # every 100 ps
++    # Derive the DCD write interval so any sim length yields ~100 frames
++    # (upstream hardcoded 25000 == steps // 100 at the default 10 ns).
++    dcd_interval = max(1, int(steps) // 100)
++    simulation.reporters.append(DCDReporter(trj_name, dcd_interval))  # ~100 frames
+     simulation.reporters.append(StateDataReporter(
+                                 os.path.join(write_dir,'sim_log.csv'), 250000,
+                                 step=True, temperature=True, progress=True,

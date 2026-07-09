@@ -1,0 +1,19 @@
+# Authoritative conda pin list for openbpmd-server (consumed by Dockerfile).
+# OpenBPMD is a pure OpenMM metadynamics workflow — no NN weights, no PyG/dgl.
+name: openbpmd
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  # OpenMM 8.1.1 ships the CUDA 12 platform + openmm.app.metadynamics.
+  # NOT 7.7 (which keeps the `simtk` namespace) — 7.7 lacks CUDA kernels for
+  # sm_86/89/90 GPUs; the wrapper injects a simtk->openmm shim instead.
+  - openmm=8.1.1
+  - mdanalysis=2.7.0
+  - mdtraj=1.10.0
+  - parmed=4.2.2
+  - numpy=1.26
+  - pandas=2.2
+  - pip:
+      - bioagent-service-framework[mcp]
