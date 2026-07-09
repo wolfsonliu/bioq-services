@@ -9,7 +9,14 @@
 #
 # REINVENT4 is a pure pip package (torch 2.12 cu126) — uv venv skeleton, not conda.
 # Priors load from NAS at /data/models/reinvent (REINVENT_PRIOR_BASE), never baked.
-ARG BASE_IMAGE=nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04
+#
+# Base image: 12.4.1 is fine even though torch is a cu126 build — pip torch wheels
+# bundle their own CUDA + cuDNN runtime (nvidia-*-cu12 deps) and never use the base
+# image's CUDA libs; CUDA minor-version compat means cu126 code runs on any 12.x
+# driver (>= r525). reinvent has no non-torch CUDA code, so the base CUDA version
+# is irrelevant. -runtime (not -devel) suffices: torch/chemprop are prebuilt wheels,
+# no nvcc needed. Override with --build-arg BASE_IMAGE=... if desired.
+ARG BASE_IMAGE=nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 
 # ---- Stage 1: builder ----
 FROM ${BASE_IMAGE} AS builder
