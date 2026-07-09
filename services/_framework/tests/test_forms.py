@@ -51,6 +51,14 @@ class RequiredFields(BaseModel):
     motif_names: list[str] = Field(..., min_length=1)
 
 
+class WithBareContainers(BaseModel):
+    """Bare, unparameterized ``dict``/``list`` annotations (no ``get_origin()``)."""
+
+    name: str = "run"
+    bias: Optional[dict] = None
+    lengths: Optional[list] = None
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -131,6 +139,22 @@ def test_complex_dict_field_accepts_json_string():
 
 def test_complex_list_field_accepts_json_string():
     client = _make_app(WithComplex)
+    r = client.post("/x", data={"lengths": "[80, 100, 120]"})
+    assert r.status_code == 200, r.text
+    assert r.json()["params"]["lengths"] == [80, 100, 120]
+
+
+def test_bare_dict_field_accepts_json_string():
+    """Bare ``dict`` (no type args) must be treated as complex → decoded from JSON."""
+    client = _make_app(WithBareContainers)
+    r = client.post("/x", data={"bias": '{"D": 1.5, "E": 1.5}'})
+    assert r.status_code == 200, r.text
+    assert r.json()["params"]["bias"] == {"D": 1.5, "E": 1.5}
+
+
+def test_bare_list_field_accepts_json_string():
+    """Bare ``list`` (no type args) must be treated as complex → decoded from JSON."""
+    client = _make_app(WithBareContainers)
     r = client.post("/x", data={"lengths": "[80, 100, 120]"})
     assert r.status_code == 200, r.text
     assert r.json()["params"]["lengths"] == [80, 100, 120]
