@@ -39,19 +39,20 @@ decoded server-side.
 
 | Dot-key | Prior file | Default for |
 |---|---|---|
-| `.reinvent` | `reinvent.prior` | `reinvent` |
+| `.reinvent` | `reinvent_pubchem.prior` | `reinvent` |
 | `.libinvent` | `libinvent.prior` | `libinvent` |
+| `.libinvent_transformer` | `libinvent_transformer_pubchem.prior` | |
 | `.linkinvent` | `linkinvent.prior` | `linkinvent` |
-| `.m2m_high` | `mol2mol_high_similarity.prior` | |
-| `.m2m_medium` | `mol2mol_medium_similarity.prior` | `mol2mol` |
-| `.m2m_mmp` | `mol2mol_mmp.prior` | |
-| `.m2m_scaffold` | `mol2mol_scaffold.prior` | |
-| `.m2m_scaffold_generic` | `mol2mol_scaffold_generic.prior` | |
+| `.linkinvent_transformer` | `linkinvent_transformer_pubchem.prior` | |
+| `.mol2mol` | `pubchem_ecfp4_with_count_with_rank_reinvent4_dict_voc.prior` | `mol2mol` |
 | `.pepinvent` | `pepinvent.prior` | `pepinvent` |
 
-Priors are **not baked** into the image. The 9 files ship from Zenodo
-(DOI 10.5281/zenodo.15641296) and load at runtime from NAS via
-`REINVENT_PRIOR_BASE=/data/models/reinvent` (FC NAS mount / SIF `--bind`).
+Priors are **not baked** into the image. The 7 files ship from Zenodo record
+`20701824` ("REINVENT4 priors", concept DOI 10.5281/zenodo.15641296; ~535 MB)
+and load at runtime from NAS via `REINVENT_PRIOR_BASE=/data/models/reinvent`
+(FC NAS mount / SIF `--bind`). This release ships a single Mol2Mol prior (the
+PubChem ECFP4 similarity model); the `.libinvent_transformer` /
+`.linkinvent_transformer` priors pair with REINVENT's Transformer generators.
 
 ## Vendor + Build
 
