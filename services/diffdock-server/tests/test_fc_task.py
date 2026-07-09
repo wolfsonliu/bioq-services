@@ -117,14 +117,21 @@ def staged_pdb_uris(client: httpx.Client) -> tuple[str, str]:
     if PRESTAGED_PROTEIN and PRESTAGED_LIGAND:
         return f"file://{PRESTAGED_PROTEIN}", f"file://{PRESTAGED_LIGAND}"
 
-    with open(PROTEIN_PDB, "rb") as fp, open(LIGAND_SDF, "rb") as fl:
+    protein_bytes = PROTEIN_PDB.read_bytes()
+    ligand_bytes = LIGAND_SDF.read_bytes()
+
+    # Retry on 429 — the account-wide GPU quota (fc.gpu.tesla.1) can be
+    # transiently exhausted by other instances / warm smoke instances.
+    # ``ResourceExhausted`` frees up as jobs scale down; back off and retry.
+    r = None
+    for attempt in range(12):
         r = client.post(
             "/api/dock",
             # Stable filenames — framework saves upload.filename, so we
             # control the resulting NAS path.
             files={
-                "protein": ("protein.pdb", fp.read(), "chemical/x-pdb"),
-                "ligand": ("ligand.sdf", fl.read(), "chemical/x-mdl-sdfile"),
+                "protein": ("protein.pdb", protein_bytes, "chemical/x-pdb"),
+                "ligand": ("ligand.sdf", ligand_bytes, "chemical/x-mdl-sdfile"),
             },
             data={
                 "complex_name": "bootstrap",
@@ -135,8 +142,12 @@ def staged_pdb_uris(client: httpx.Client) -> tuple[str, str]:
                 "seed": "0",
             },
         )
-    assert r.status_code == 200, (
-        f"bootstrap sync upload failed: {r.status_code} {r.text!r}"
+        if r.status_code != 429:
+            break
+        time.sleep(30)
+    assert r is not None and r.status_code == 200, (
+        f"bootstrap sync upload failed: {r.status_code} {r.text!r} "
+        f"(429 = account GPU quota exhausted; free up fc.gpu quota and rerun)"
     )
     job_id = r.json()["job_id"]
     base = f"file://{JOBS_BASE_DIR_ON_FC}/{job_id}/input"

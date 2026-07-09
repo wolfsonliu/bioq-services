@@ -58,7 +58,13 @@ RUN mkdir -p /root/.config/pip \
 channels:
   - defaults
 show_channel_urls: true
-channel_priority: strict
+# flexible (not strict): the TUNA `defaults` channel has no cp311 build of
+# numpy=1.26.3 — under strict priority the solver falls to its cp312 build
+# and collides with pytorch's py3.11 requirement.  flexible lets numpy /
+# scipy / pandas resolve from conda-forge (which ships cp311).  pytorch is
+# still nailed to the CUDA build via its exact build string below, so
+# flexible does NOT risk a silent CPU variant.
+channel_priority: flexible
 default_channels:
   - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
   - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r
@@ -94,15 +100,15 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
         "pytorch::pytorch=2.2.0=py3.11_cuda12.1_cudnn8.9.2_0" \
         pytorch-cuda=12.1 \
         pytorch::pytorch-mutex=1.0=cuda \
-        numpy=1.26.3 \
-        scipy=1.12.0 \
-        pandas=2.2.0 \
+        conda-forge::numpy=1.26.3 \
+        conda-forge::scipy=1.12.0 \
+        conda-forge::pandas=2.2.0 \
         conda-forge::rdkit=2023.09.5 \
         conda-forge::ittapi \
-        "mkl<2024.1" \
-        "intel-openmp<2024.1" \
-        tqdm=4.66.1 \
-        pyyaml=6.0.1
+        conda-forge::"mkl<2024.1" \
+        conda-forge::"intel-openmp<2024.1" \
+        conda-forge::tqdm=4.66.1 \
+        conda-forge::pyyaml=6.0.1
 
 # Pip-only deps.  openbabel-wheel provides `from openbabel import pybel`
 # (scriptutil top-level import) without conda openbabel build pain.
