@@ -68,7 +68,6 @@ default_channels:
 custom_channels:
   conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
   pytorch: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
-  nvidia: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
 EOF
 
 # ---------------------------------------------------------------------------
