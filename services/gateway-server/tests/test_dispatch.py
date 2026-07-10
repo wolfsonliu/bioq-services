@@ -33,3 +33,44 @@ def test_submit_treats_409_as_ok():
 def test_status_normalizes():
     d = HttpDispatch(_client(lambda req: httpx.Response(200, json={"status": "completed"})))
     assert d.status("https://svc.local", "job-1")["status"] == "completed"
+
+
+def test_submit_sets_job_id_header_and_str_forms():
+    seen = {}
+
+    def handler(request):
+        seen["job"] = request.headers.get("x-bioagent-job-id")
+        seen["body"] = request.content
+        return httpx.Response(202, json={})
+
+    d = HttpDispatch(_client(handler))
+    d.submit("https://svc.local", "score", "job-9", {"nreps": 1})
+    assert seen["job"] == "job-9"
+    assert b"nreps=1" in seen["body"]
+
+
+def test_status_sends_affinity_header():
+    seen = {}
+
+    def handler(request):
+        seen["aff"] = request.headers.get("x-bioagent-session-id")
+        return httpx.Response(200, json={"status": "running"})
+
+    d = HttpDispatch(_client(handler))
+    d.status("https://svc.local", "job-7")
+    assert seen["aff"] == "job-7"
+
+
+def test_download_writes_file_with_affinity(tmp_path):
+    seen = {}
+
+    def handler(request):
+        seen["aff"] = request.headers.get("x-bioagent-session-id")
+        return httpx.Response(200, content=b"ZIPBYTES")
+
+    d = HttpDispatch(_client(handler))
+    dest = tmp_path / "sub" / "job-3.zip"
+    out = d.download("https://svc.local", "job-3", dest)
+    assert out == dest
+    assert dest.read_bytes() == b"ZIPBYTES"
+    assert seen["aff"] == "job-3"
