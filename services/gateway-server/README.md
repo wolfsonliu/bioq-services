@@ -51,13 +51,29 @@ the secret is stored only as a sha256 hash. There is no admin UI (MVP) — seed
 keys with the stdlib-only helper `scripts/seed_key.py`.
 
 The gateway must have started at least once (so it created the schema) before
-seeding. Run against the bind-mounted DB file (default `deploy/data/`):
+seeding. All commands below run against the bind-mounted DB file (default
+`deploy/data/`).
+
+**Create a new user** — there is no separate "create user" step: a user is
+created as a side effect of issuing their first key (a user with no key can't
+authenticate). Just pass a new `--principal`:
 
 ```bash
 python services/gateway-server/scripts/seed_key.py \
     --db services/gateway-server/deploy/data/gateway/gateway.db \
     --principal alice
-# prints:  key_id + secret  (store the secret — only its hash is persisted)
+# inserts user "alice" (INSERT OR IGNORE) + a new API key;
+# prints key_id + secret  (store the secret — only its sha256 hash is persisted)
+```
+
+**Add another key to an existing user** (rotation / per-client keys) — same
+principal, a distinct `--key-id`:
+
+```bash
+python services/gateway-server/scripts/seed_key.py \
+    --db services/gateway-server/deploy/data/gateway/gateway.db \
+    --principal alice --key-id gk_alice_ci
+# user row is INSERT OR IGNORE'd (no-op); a second key is added
 ```
 
 Options: `--secret` (default: random), `--key-id` (default: `gk_<random>`),
