@@ -1,0 +1,27 @@
+# gateway-server — persistent ECS deployment.
+# Run on the ECS host from this directory:  ./deploy.sh   (or: docker compose up -d)
+#
+# Image ENV defaults (set in the Dockerfile) already provide:
+#   GATEWAY_DB_URL=sqlite:////data/gateway/gateway.db
+#   GATEWAY_JOBS_BASE_DIR=/data/gateway_jobs
+#   GATEWAY_REGISTRY_PATH=/opt/gateway/aliyun_fc_url.md
+#   GATEWAY_SESSION_HEADER_NAME=bioagent-session-id
+# so only secrets + OSS/JWT config need to be supplied via .env.
+services:
+  gateway:
+    image: ${GATEWAY_IMAGE:-gateway-server:latest}
+    container_name: gateway-server
+    restart: always
+    ports:
+      - "${GATEWAY_PORT:-9000}:9000"
+    env_file:
+      - .env
+    volumes:
+      # Persistent state: SQLite DB (/data/gateway) + job scratch (/data/gateway_jobs).
+      - ${GATEWAY_DATA_DIR:-./data}:/data
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:9000/healthz')\" || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
