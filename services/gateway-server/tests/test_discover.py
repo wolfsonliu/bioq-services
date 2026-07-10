@@ -57,3 +57,21 @@ def test_describe_ttl_expiry_refetches():
     disc.describe("s", "https://svc.local")
     disc.describe("s", "https://svc.local")
     assert calls["n"] == 4  # 2 describes x (manifest + openapi), no caching at ttl=0
+
+
+def test_describe_does_not_cache_total_failure():
+    state = {"fail": True, "calls": 0}
+
+    def handler(request):
+        state["calls"] += 1
+        if state["fail"]:
+            return httpx.Response(500)
+        return httpx.Response(200, json={"service": "x"} if request.url.path == "/api/manifest" else {"paths": {}})
+
+    disc = Discovery(client=_client(handler), ttl_sec=300)
+    first = disc.describe("s", "https://svc.local")
+    assert first["manifest"] == {} and first["openapi"] == {}
+    # recovery: downstream now healthy; describe must re-fetch (previous failure not cached)
+    state["fail"] = False
+    second = disc.describe("s", "https://svc.local")
+    assert second["manifest"] == {"service": "x"}

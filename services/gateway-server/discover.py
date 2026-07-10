@@ -23,7 +23,8 @@ class Discovery:
         manifest = self._get_json(f"{base_url}/api/manifest")
         openapi = self._get_json(f"{base_url}/openapi.json")
         info = {"service": svc, "manifest": manifest, "openapi": openapi}
-        self._cache[svc] = (info, now + self._ttl)
+        if manifest or openapi:  # don't cache a fully-failed fetch (avoids TTL poisoning)
+            self._cache[svc] = (info, now + self._ttl)
         return info
 
     def _get_json(self, url: str) -> dict[str, Any]:
