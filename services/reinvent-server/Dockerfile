@@ -23,13 +23,19 @@ FROM ${BASE_IMAGE} AS builder
 ENV DEBIAN_FRONTEND=noninteractive PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 ENV UV_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple/
 ENV UV_HTTP_TIMEOUT=600
+# NB: do NOT use ubuntu22.04's apt `python3.11` — Jammy ships it as 3.11.0rc1,
+# which predates `sys.get_int_max_str_digits` and makes `import torch` (2.12)
+# crash with AttributeError. Instead uv provisions a proper standalone CPython
+# into a fixed dir we copy into the runtime stage (the venv symlinks into it).
+ENV UV_PYTHON_INSTALL_DIR=/opt/uv-python
+ENV UV_PYTHON_PREFERENCE=only-managed
 # git required: iSIM is a git+ VCS specifier (uv 0.11+ shells out to git CLI).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        python3.11 python3.11-venv python3.11-dev ca-certificates git build-essential \
+        ca-certificates git build-essential \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
 WORKDIR /opt/reinvent-server
-RUN uv venv --python 3.11 .venv
+RUN uv python install 3.11 && uv venv --python 3.11 .venv
 ENV PATH=/opt/reinvent-server/.venv/bin:$PATH
 
 # Heavy torch first (cu126 index) — cache-friendly layer.
@@ -69,8 +75,12 @@ RUN set -e; \
 FROM ${BASE_IMAGE}
 ENV DEBIAN_FRONTEND=noninteractive PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        python3.11 ca-certificates libgomp1 \
+        ca-certificates libgomp1 \
     && rm -rf /var/lib/apt/lists/*
+# The venv's python symlinks into the uv-managed standalone CPython, so copy it
+# too (no system python in the runtime stage). Path must match the builder's
+# UV_PYTHON_INSTALL_DIR.
+COPY --from=builder /opt/uv-python /opt/uv-python
 COPY --from=builder /opt/reinvent-server/.venv /opt/reinvent-server/.venv
 COPY --from=builder /opt/reinvent-server/upstream/REINVENT4 /opt/reinvent-server/upstream/REINVENT4
 ENV PATH=/opt/reinvent-server/.venv/bin:$PATH
