@@ -18,7 +18,7 @@ def _md(tmp_path):
 
 def test_list_and_get(tmp_path):
     reg = ServiceRegistry(_md(tmp_path))
-    assert set(reg.list()) == {"openbpmd-server", "dockq-server"}
+    assert reg.list() == ["dockq-server", "openbpmd-server"]
     assert reg.base_url("dockq-server") == "https://fc-dockq-y.cn-hangzhou-vpc.fcapp.run"
 
 
