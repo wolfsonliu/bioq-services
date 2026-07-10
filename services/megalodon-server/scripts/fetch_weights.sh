@@ -31,7 +31,7 @@
 #         MEGALODON_QM9_SRC=/path/to/NV-Megalodon-QM9-v1 \
 #         MEGALODON_DRUGS_SRC=/path/to/NV-Megalodon-GEOM-Drugs-v1 \
 #             ./scripts/fetch_weights.sh
-#   (b) let the script download via huggingface-cli (needs `pip install -U
+#   (b) let the script download via hf (needs `pip install -U
 #       huggingface_hub` and network):
 #         ./scripts/fetch_weights.sh          # downloads both repos
 #
@@ -94,16 +94,16 @@ for ds in "${MODELS[@]}"; do
     src="${SRC_DIR[$ds]}"
     if [[ -z "$src" ]]; then
         # Download the HF snapshot into a staging dir.
-        if ! command -v huggingface-cli >/dev/null 2>&1; then
-            echo "ERROR: huggingface-cli not found and MEGALODON_${ds^^}_SRC unset." >&2
+        if ! command -v hf >/dev/null 2>&1; then
+            echo "ERROR: hf not found and MEGALODON_${ds^^}_SRC unset." >&2
             echo "       Install (pip install -U huggingface_hub) or point at a" >&2
             echo "       pre-downloaded snapshot dir." >&2
             exit 1
         fi
         src="$DST/_hf_$ds"
         echo "Downloading ${HF_REPO[$ds]} -> $src"
-        huggingface-cli download "${HF_REPO[$ds]}" \
-            --local-dir "$src" --local-dir-use-symlinks False
+        hf download "${HF_REPO[$ds]}" \
+            --local-dir "$src"
     else
         echo "Using pre-downloaded snapshot: $src"
     fi
