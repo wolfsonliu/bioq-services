@@ -36,3 +36,24 @@ def test_describe_cached():
     disc.describe("s", "https://svc.local")
     disc.describe("s", "https://svc.local")
     assert calls["n"] == 2  # one manifest + one openapi; second describe served from cache
+
+
+def test_describe_errors_degrade():
+    disc = Discovery(client=_client(lambda req: httpx.Response(500)), ttl_sec=60)
+    info = disc.describe("s", "https://svc.local")
+    assert info["service"] == "s"
+    assert info["manifest"] == {}
+    assert info["openapi"] == {}
+
+
+def test_describe_ttl_expiry_refetches():
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        return httpx.Response(200, json={})
+
+    disc = Discovery(client=_client(handler), ttl_sec=0)  # 0 => always expired
+    disc.describe("s", "https://svc.local")
+    disc.describe("s", "https://svc.local")
+    assert calls["n"] == 4  # 2 describes x (manifest + openapi), no caching at ttl=0
