@@ -14,7 +14,8 @@ from .auth.deps import AuthIdentity, require_auth
 from .db.store import GatewayDB
 from .discover import Discovery
 from .dispatch import HttpDispatch
-from .models import JobView
+from .models import JobView, PresignRequest, PresignResponse
+from .presign import Presigner, build_oss_client
 from .registry import ServiceRegistry
 from .settings import GatewaySettings
 
@@ -116,6 +117,23 @@ def cancel_job(job_id: str, request: Request,
     _owned_job(request, job_id, ident)
     request.app.state.db.update_job(job_id, status="cancelled")  # MVP: local mark only
     return {"job_id": job_id, "status": "cancelled"}
+
+
+def _get_presigner(request: Request) -> Presigner:
+    p = getattr(request.app.state, "presigner", None)
+    if p is None:
+        s = request.app.state.settings
+        p = Presigner(client=build_oss_client(s.oss_region),
+                      bucket=s.oss_bucket, region=s.oss_region,
+                      expiry_sec=s.presign_expiry_sec)
+        request.app.state.presigner = p
+    return p
+
+
+@app.post("/v1/uploads/presign", response_model=PresignResponse)
+def presign_upload(request: Request, body: PresignRequest,
+                   ident: AuthIdentity = Depends(require_auth)) -> PresignResponse:
+    return _get_presigner(request).presign_put(ident.principal, body.filename, body.sha256)
 
 
 attach_mcp(app)

@@ -98,3 +98,24 @@ def test_tenant_isolation(client):
     c = client.post(f"/v1/jobs/{job_id}/cancel", headers=alice)
     assert c.status_code == 200
     assert c.json()["status"] == "cancelled"
+
+
+def test_presign_route(client):
+    import server.app as appmod
+    _seed_key(appmod, principal="alice", secret="p-sec", key_id="gk_p")
+    from server.models import PresignResponse
+
+    class _FakePresigner:
+        def presign_put(self, principal, filename, sha256):
+            return PresignResponse(uri=f"oss://b/users/{principal}/inputs/{sha256}/{filename}",
+                                   exists=False, url="https://oss.put/signed")
+
+    appmod.app.state.presigner = _FakePresigner()
+    hdr = {"x-api-key": "p-sec", "host": "public.example.com"}
+    r = client.post("/v1/uploads/presign",
+                    json={"filename": "x.rst7", "sha256": "abc"}, headers=hdr)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["url"] == "https://oss.put/signed"
+    assert body["uri"] == "oss://b/users/alice/inputs/abc/x.rst7"
+    assert body["exists"] is False
