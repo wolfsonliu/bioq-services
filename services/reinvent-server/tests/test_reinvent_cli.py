@@ -56,7 +56,7 @@ def test_stage_and_build_writes_config(tmp_path, monkeypatch):
     assert (out / "config.toml").exists()
 
 
-def test_nonzero_rc_skips_collect(tmp_path, monkeypatch):
+def test_nonzero_rc_collects_diagnostics_not_json_echo(tmp_path, monkeypatch):
     from server import reinvent_cli
     work = tmp_path / "work"
     out = tmp_path / "output"
@@ -68,6 +68,10 @@ def test_nonzero_rc_skips_collect(tmp_path, monkeypatch):
     smi.write_text("CCO\n")
 
     def fake_run(argv, **kwargs):
+        # Simulate reinvent writing its -l log then failing.
+        (work / "reinvent.log").write_text("Traceback: boom\n")
+        (work / "_scoring.json").write_text("{}")
+
         class R:
             returncode = 7
         return R()
@@ -79,4 +83,8 @@ def test_nonzero_rc_skips_collect(tmp_path, monkeypatch):
         files={"smiles_file": smi},
     )
     assert rc == 7
-    assert not (out / "config.toml").exists()  # collect skipped on failure
+    # On failure we STILL copy config.toml + reinvent.log for diagnosis,
+    # but not the (meaningless) JSON config echo.
+    assert (out / "config.toml").exists()
+    assert (out / "reinvent.log").read_text() == "Traceback: boom\n"
+    assert not (out / "_scoring.json").exists()

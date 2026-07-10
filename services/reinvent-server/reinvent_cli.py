@@ -69,12 +69,12 @@ def run(*, run_type: str, params_json: Path, work_dir: Path, output_dir: Path,
     env = dict(os.environ)
     env["REINVENT_PRIOR_BASE"] = str(prior_base)
     argv = [str(reinvent_bin), "-l", str(work_dir / "reinvent.log"), str(config_path)]
-    log_path = work_dir / "subprocess.log"
-    with open(log_path, "w") as logf:
-        r = subprocess.run(argv, cwd=work_dir, env=env, stdout=logf,
-                           stderr=subprocess.STDOUT)
-    if r.returncode == 0:
-        _collect(work_dir, output_dir)
+    # Inherit stdout/stderr so reinvent's output flows up to the framework's
+    # job log (SubprocessRunner tees THIS process's streams to log_path). Do NOT
+    # redirect to a file here — that swallowed the error and left failed jobs
+    # undiagnosable via /api/jobs/<id>/log (error_tail was empty).
+    r = subprocess.run(argv, cwd=work_dir, env=env)
+    _collect(work_dir, output_dir, success=(r.returncode == 0))
     return r.returncode
 
 
@@ -84,17 +84,21 @@ def _dump_toml(cfg: dict, path: Path) -> None:
         tomli_w.dump(cfg, f)
 
 
-def _collect(work_dir: Path, output_dir: Path) -> None:
-    """Copy audit artifacts (config + reinvent's JSON echo) to output/.
+def _collect(work_dir: Path, output_dir: Path, *, success: bool) -> None:
+    """Copy audit artifacts to output/.
 
-    Primary results already land in output/ (config uses absolute output paths).
+    config.toml + reinvent.log are copied on BOTH success and failure so a
+    failed job is diagnosable via /api/jobs/<id>/files (reinvent's own -l log).
+    The JSON config echo (_*.json) is only meaningful on success. Primary
+    results already land in output/ (config uses absolute output paths).
     """
     for name in ("config.toml", "reinvent.log"):
         src = work_dir / name
         if src.exists():
             shutil.copy2(src, output_dir / name)
-    for js in work_dir.glob("_*.json"):
-        shutil.copy2(js, output_dir / js.name)
+    if success:
+        for js in work_dir.glob("_*.json"):
+            shutil.copy2(js, output_dir / js.name)
 
 
 def main():
