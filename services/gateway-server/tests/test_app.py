@@ -66,3 +66,35 @@ def test_run_unknown_service_404(client):
     hdr = {"x-api-key": "k2", "host": "public.example.com"}
     r = client.post("/v1/run/nope/score", json={}, headers=hdr)
     assert r.status_code == 404
+
+
+def test_tenant_isolation(client):
+    import server.app as appmod
+    _seed_key(appmod, principal="alice", secret="alice-sec", key_id="gk_alice")
+    _seed_key(appmod, principal="bob", secret="bob-sec", key_id="gk_bob")
+    appmod.app.state.registry._urls = {"openbpmd-server": "https://svc.local"}
+
+    class _Disp:
+        def submit(self, base, ep, job_id, data):
+            pass
+
+        def status(self, base, job_id):
+            return {"status": "running"}
+
+    appmod.app.state.dispatch = _Disp()
+
+    alice = {"x-api-key": "alice-sec", "host": "public.example.com"}
+    bob = {"x-api-key": "bob-sec", "host": "public.example.com"}
+
+    r = client.post("/v1/run/openbpmd-server/score", json={}, headers=alice)
+    assert r.status_code == 202
+    job_id = r.json()["job_id"]
+
+    # bob must NOT see or act on alice's job
+    assert client.get(f"/v1/jobs/{job_id}", headers=bob).status_code == 404
+    assert client.post(f"/v1/jobs/{job_id}/cancel", headers=bob).status_code == 404
+
+    # alice can cancel her own job; response status is consistent
+    c = client.post(f"/v1/jobs/{job_id}/cancel", headers=alice)
+    assert c.status_code == 200
+    assert c.json()["status"] == "cancelled"

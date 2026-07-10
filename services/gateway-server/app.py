@@ -114,7 +114,7 @@ def download_job(job_id: str, request: Request,
 def cancel_job(job_id: str, request: Request,
                ident: AuthIdentity = Depends(require_auth)) -> dict:
     _owned_job(request, job_id, ident)
-    request.app.state.db.update_job(job_id, status="failed")  # MVP: mark cancelled locally
+    request.app.state.db.update_job(job_id, status="cancelled")  # MVP: local mark only
     return {"job_id": job_id, "status": "cancelled"}
 
 
