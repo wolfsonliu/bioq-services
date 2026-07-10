@@ -27,11 +27,15 @@
 #             + rdkit + lightning + hydra + framework + cleanup.
 #   runtime = lean: conda env from builder + Megalodon source + server code.
 #
-# Base: nvidia/cuda 12.6 -runtime, matching upstream requirements.txt cu126
-# find-links.  FC GPU T4 / A10 / L20 / Ada compatible.  Blackwell (sm_120,
-# needs CUDA >= 12.8) would require cu128 wheels — out of scope for v0.0.1.
+# Base: nvidia/cuda 12.4.1 -runtime — the pip torch 2.7 cu126 wheels bundle
+# their own CUDA userspace libs, so the base image CUDA version only needs a
+# forward-compatible host driver (CUDA minor-version compat).  12.4.1 is
+# already pulled across the project's other GPU services (e.g. pocketxmol),
+# so reusing it unifies the base layer and avoids an extra registry pull.
+# FC GPU T4 / A10 / L20 / Ada compatible.  Blackwell (sm_120, needs CUDA
+# >= 12.8) would require cu128 wheels — out of scope for v0.0.1.
 
-ARG BASE_IMAGE=nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04
+ARG BASE_IMAGE=nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 ARG MICROMAMBA_IMAGE=mambaorg/micromamba:2.6.2
 
 
