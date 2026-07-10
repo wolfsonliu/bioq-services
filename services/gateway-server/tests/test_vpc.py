@@ -16,3 +16,16 @@ def test_vpc_host_localhost_and_none():
     assert is_vpc_host("127.0.0.1") is True
     assert is_vpc_host(None) is False
     assert is_vpc_host("") is False
+
+
+def test_vpc_host_127_with_port():
+    assert is_vpc_host("127.0.0.1:8080") is True
+
+
+def test_vpc_host_case_insensitive():
+    assert is_vpc_host("FC-Gateway-X.CN-Hangzhou-VPC.fcapp.run") is True
+    assert is_vpc_host("LOCALHOST") is True
+
+
+def test_vpc_host_whitespace_only():
+    assert is_vpc_host("   ") is False
