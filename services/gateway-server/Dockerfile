@@ -23,11 +23,11 @@ COPY services/gateway-server/__init__.py services/gateway-server/settings.py \
 COPY services/gateway-server/auth/ /opt/gateway/server/auth/
 COPY services/gateway-server/db/ /opt/gateway/server/db/
 
-# downstream registry (svc -> vpc url)
-COPY services/aliyun_fc_url.md /opt/gateway/aliyun_fc_url.md
+# downstream registry (svc -> ServiceRecord)
+COPY services/services.yaml /opt/gateway/services.yaml
 
 ENV GATEWAY_SESSION_HEADER_NAME=bioagent-session-id
-ENV GATEWAY_REGISTRY_PATH=/opt/gateway/aliyun_fc_url.md
+ENV GATEWAY_REGISTRY_PATH=/opt/gateway/services.yaml
 ENV GATEWAY_DB_URL=sqlite:////data/gateway/gateway.db
 ENV GATEWAY_JOBS_BASE_DIR=/data/gateway_jobs
 ENV PORT=9000

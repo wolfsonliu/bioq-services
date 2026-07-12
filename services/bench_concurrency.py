@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -30,17 +29,13 @@ import httpx
 # ---------------------------------------------------------------------------
 
 SESSION_HEADER = "bioagent-session-id"
-_URL_RE = re.compile(r"^([A-Za-z0-9_-]+):\s*(https?://\S+)\s*$")
 _SERVICES_DIR = Path(__file__).resolve().parent
 
 
 def _fc_url(service: str) -> str:
-    md = _SERVICES_DIR / "aliyun_fc_url.md"
-    for line in md.read_text().splitlines():
-        m = _URL_RE.match(line.strip())
-        if m and m.group(1) == service:
-            return m.group(2).rstrip("/")
-    raise KeyError(f"{service} not found in {md}")
+    from bioagent_service.service_registry import fc_url
+
+    return fc_url(service, start=Path(__file__))
 
 
 # ---------------------------------------------------------------------------

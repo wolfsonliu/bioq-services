@@ -21,7 +21,7 @@ to this module via:
         skip_fc_tests_unless_enabled(config, items)
 
 The `fc_url(service_name)` helper resolves a service's deployed URL from
-`services/aliyun_fc_url.md` (the single source of truth — keep that file in
+`services/services.yaml` (the single source of truth — keep that file in
 sync with FC console). `poll_job(...)` polls a job to terminal status.
 """
 
@@ -33,12 +33,13 @@ from typing import Any
 
 import httpx
 
-# Registry parsers moved to `service_registry` (no pytest dependency) so they can
+# Registry helpers live in `service_registry` (no pytest dependency) so they can
 # be used from production code; re-exported here for backward compatibility.
 from .service_registry import (  # noqa: F401
-    find_aliyun_fc_url_md,
+    ServiceRecord,
     fc_url,
-    parse_fc_urls,
+    find_services_yaml,
+    load_services,
 )
 
 
@@ -189,10 +190,11 @@ def skip_fc_tests_unless_enabled(config: Any, items: list[Any]) -> None:
 
 __all__ = [
     "Retry429Transport",
+    "ServiceRecord",
     "fc_url",
-    "find_aliyun_fc_url_md",
+    "find_services_yaml",
+    "load_services",
     "make_retrying_client",
-    "parse_fc_urls",
     "poll_job",
     "register_fc_marker",
     "skip_fc_tests_unless_enabled",

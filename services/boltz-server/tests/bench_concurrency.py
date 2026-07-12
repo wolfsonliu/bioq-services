@@ -21,18 +21,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import httpx
-import re
-
-_URL_RE = re.compile(r"^([A-Za-z0-9_-]+):\s*(https?://\S+)\s*$")
 
 
 def _fc_url(service: str) -> str:
-    md = Path(__file__).resolve().parents[2] / "aliyun_fc_url.md"
-    for line in md.read_text().splitlines():
-        m = _URL_RE.match(line.strip())
-        if m and m.group(1) == service:
-            return m.group(2).rstrip("/")
-    raise KeyError(f"{service} not found in {md}")
+    from bioagent_service.service_registry import fc_url
+
+    return fc_url(service, start=Path(__file__))
 
 
 def _poll_job(client: httpx.Client, base_url: str, job_id: str,

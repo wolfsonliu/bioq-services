@@ -1,4 +1,4 @@
-"""fc_testing — URL md parser + helpers."""
+"""service_registry (via fc_testing re-exports) — YAML loader + helpers."""
 
 from __future__ import annotations
 
@@ -8,47 +8,51 @@ import pytest
 
 from bioagent_service.fc_testing import (
     fc_url,
-    find_aliyun_fc_url_md,
-    parse_fc_urls,
+    find_services_yaml,
+    load_services,
     poll_job,
 )
 
 
-def test_parse_fc_urls_strips_trailing_slash(tmp_path: Path) -> None:
-    md = tmp_path / "aliyun_fc_url.md"
-    md.write_text(
-        "ppiflow-server: https://fc-ppiflow.example.com/\n"
-        "genie3-server: https://fc-genie.example.com\n"
-        "\n"
-        "# a comment line\n"
-        "noise without colon\n"
-    )
-    urls = parse_fc_urls(md)
-    assert urls == {
-        "ppiflow-server": "https://fc-ppiflow.example.com",
-        "genie3-server": "https://fc-genie.example.com",
-    }
-
-
-def test_find_aliyun_fc_url_md_walks_up(tmp_path: Path) -> None:
+def test_load_services_parses_records_and_strips_slash(tmp_path: Path) -> None:
     (tmp_path / "services").mkdir()
-    target = tmp_path / "services" / "aliyun_fc_url.md"
-    target.write_text("foo: https://example.com\n")
+    (tmp_path / "services" / "services.yaml").write_text(
+        "services:\n"
+        "  ppiflow-server:\n"
+        "    url: https://fc-ppiflow.example.com/\n"
+        "    tier: hot\n"
+        "  genie3-server:\n"
+        "    url: https://fc-genie.example.com\n",
+        encoding="utf-8",
+    )
+    svcs = load_services(tmp_path / "services" / "services.yaml")
+    assert svcs["ppiflow-server"].url == "https://fc-ppiflow.example.com"
+    assert svcs["ppiflow-server"].tier == "hot"
+    assert svcs["genie3-server"].url == "https://fc-genie.example.com"
+    assert svcs["genie3-server"].region == "cn-hangzhou"  # default
+    assert svcs["genie3-server"].tier == "warm"           # default
+
+
+def test_find_services_yaml_walks_up(tmp_path: Path) -> None:
+    (tmp_path / "services").mkdir()
+    target = tmp_path / "services" / "services.yaml"
+    target.write_text("services:\n  foo: {url: https://example.com}\n")
     nested = tmp_path / "services" / "fooserver" / "tests"
     nested.mkdir(parents=True)
-    assert find_aliyun_fc_url_md(start=nested) == target.resolve()
+    assert find_services_yaml(start=nested) == target.resolve()
 
 
 def test_find_raises_when_not_found(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
-        find_aliyun_fc_url_md(start=tmp_path)
+        find_services_yaml(start=tmp_path)
 
 
-def test_fc_url_raises_on_unknown_service(tmp_path: Path) -> None:
+def test_fc_url_resolves_and_raises_on_unknown(tmp_path: Path) -> None:
     (tmp_path / "services").mkdir()
-    (tmp_path / "services" / "aliyun_fc_url.md").write_text(
-        "ppiflow-server: https://example.com\n"
+    (tmp_path / "services" / "services.yaml").write_text(
+        "services:\n  ppiflow-server: {url: https://example.com}\n"
     )
+    assert fc_url("ppiflow-server", start=tmp_path) == "https://example.com"
     with pytest.raises(KeyError, match="bogus-server"):
         fc_url("bogus-server", start=tmp_path)
 

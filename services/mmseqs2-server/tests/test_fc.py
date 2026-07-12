@@ -4,7 +4,7 @@ Marked ``@pytest.mark.fc``, skipped by default. Run with::
 
     pytest -m fc services/mmseqs2-server/tests/test_fc.py
 
-Base URL is read from ``services/aliyun_fc_url.md`` — update that file after
+Base URL is read from ``services/services.yaml`` — update that file after
 deploying a new tag.
 
 This file covers the **sync** side (ColabFold protocol) of the service:

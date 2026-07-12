@@ -5,7 +5,7 @@ Marked `@pytest.mark.fc`, skipped by default.  Run with:
     RUN_FC_TESTS=1 uv run python -m pytest -m fc \\
         services/drughive-server/tests/test_fc.py -v
 
-URL resolves via `services/aliyun_fc_url.md`.
+URL resolves via `services/services.yaml`.
 
 Inference-heavy tests live in ``test_fc_task.py`` (async task mode) —
 this file only covers cheap health + manifest smoke, plus 422 input

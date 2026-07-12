@@ -4,7 +4,7 @@ Marked `@pytest.mark.fc`, skipped by default. Run with:
 
     pytest -m fc services/proteinmpnn-server/tests/test_fc.py
 
-URL resolves via `services/aliyun_fc_url.md`. Test PDB ships in `tests/data/`
+URL resolves via `services/services.yaml`. Test PDB ships in `tests/data/`
 (monomer example 5L33, ~180 residues — copied from upstream ProteinMPNN so the
 suite is self-contained). Each inference call generates 2 sequences max.
 """

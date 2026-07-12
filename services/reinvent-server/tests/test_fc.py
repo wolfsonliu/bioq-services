@@ -6,7 +6,7 @@ Marked ``@pytest.mark.fc``, skipped by default. Run with::
     # or
     RUN_FC_TESTS=1 pytest services/reinvent-server/tests/test_fc.py
 
-URL is read from ``services/aliyun_fc_url.md`` via ``bioagent_service.fc_testing``
+URL is read from ``services/services.yaml`` via ``bioagent_service.fc_testing``
 (mirrors dockq-server/tests/test_fc.py). These tests use only the ``reinvent``
 generator with a small ``num_smiles`` — no file upload, tiny payload — so they
 exercise the sync submit/poll path without needing large priors staged.

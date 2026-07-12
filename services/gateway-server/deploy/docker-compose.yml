@@ -4,7 +4,7 @@
 # Image ENV defaults (set in the Dockerfile) already provide:
 #   GATEWAY_DB_URL=sqlite:////data/gateway/gateway.db
 #   GATEWAY_JOBS_BASE_DIR=/data/gateway_jobs
-#   GATEWAY_REGISTRY_PATH=/opt/gateway/aliyun_fc_url.md
+#   GATEWAY_REGISTRY_PATH=/opt/gateway/services.yaml
 #   GATEWAY_SESSION_HEADER_NAME=bioagent-session-id
 # so only secrets + OSS/JWT config need to be supplied via .env.
 services:

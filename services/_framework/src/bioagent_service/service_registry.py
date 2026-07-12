@@ -1,67 +1,91 @@
-"""Service registry helpers — parse `services/aliyun_fc_url.md` (svc -> url).
+"""Service registry — load `services/services.yaml` (svc -> ServiceRecord).
 
-These are **general-purpose** utilities (production code may use them to resolve
-downstream service URLs), so they live in their own module with no test-only
-dependencies. `bioagent_service.fc_testing` re-exports them for backward
-compatibility, but new production code should import from here directly.
+General-purpose utilities (production code may resolve downstream service URLs
+via these), so this module has no test-only dependencies.
+`bioagent_service.fc_testing` re-exports the helpers for backward compatibility.
 
-File format: lines `<service-name>: https://...`; `#` comments and blank lines
-skipped; trailing slashes stripped so callers can do `f"{url}/api/..."`.
+`services/services.yaml` schema::
+
+    services:
+      <name>-server:
+        url: https://fc-...-vpc.fcapp.run   # required — VPC HTTP trigger URL
+        region: cn-hangzhou                 # default: cn-hangzhou
+        tier: warm                          # hot | warm | cold (default: warm)
+        function: fc-...                    # optional — FC function name (for
+                                            #   FC OpenAPI / GetAsyncTask)
+        gpu: fc.gpu.tesla.1                 # optional — GPU card class
+
+Only `url` is required. `function` / `gpu` are optional and may be omitted until
+the values are known (they live in the Aliyun FC console, not the repo).
 """
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
-_URL_LINE_RE = re.compile(r"^([A-Za-z0-9_-]+):\s*(https?://\S+)\s*$")
+import yaml
+from pydantic import BaseModel, ConfigDict
 
 
-def find_aliyun_fc_url_md(start: Path | None = None) -> Path:
-    """Walk up from `start` (or cwd) until `services/aliyun_fc_url.md` is found.
+class ServiceRecord(BaseModel):
+    """One downstream service's deployment metadata."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    url: str
+    region: str = "cn-hangzhou"
+    tier: str = "warm"            # hot | warm | cold
+    function: str | None = None   # FC function name (optional)
+    gpu: str | None = None        # GPU card class (optional)
+
+
+def find_services_yaml(start: Path | None = None) -> Path:
+    """Walk up from `start` (or cwd) until `services/services.yaml` is found.
 
     Raises FileNotFoundError if not found — typically means the caller is
     running from outside the bioagent repo.
     """
     base = (start or Path.cwd()).resolve()
     for candidate in [base, *base.parents]:
-        target = candidate / "services" / "aliyun_fc_url.md"
+        target = candidate / "services" / "services.yaml"
         if target.is_file():
             return target
-    raise FileNotFoundError(f"services/aliyun_fc_url.md not found above {base!r}")
+    raise FileNotFoundError(f"services/services.yaml not found above {base!r}")
 
 
-def parse_fc_urls(md_path: Path) -> dict[str, str]:
-    """Parse `services/aliyun_fc_url.md` into a `{service: url}` dict.
+def load_services(
+    path: Path | None = None, *, start: Path | None = None
+) -> dict[str, "ServiceRecord"]:
+    """Load `services.yaml` into a `{service_name: ServiceRecord}` dict.
 
-    Lines of the form `<service>: https://...` are extracted; comments and
-    blank lines are skipped. Trailing slashes are stripped from URLs.
+    Pass `path` to read a specific file, or `start` to anchor the upward walk
+    (e.g. `Path(__file__)` from a test). Trailing slashes on `url` are stripped
+    so callers can do `f"{url}/api/..."`.
     """
-    out: dict[str, str] = {}
-    for raw in Path(md_path).read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        m = _URL_LINE_RE.match(line)
-        if m:
-            out[m.group(1)] = m.group(2).rstrip("/")
+    yaml_path = Path(path) if path is not None else find_services_yaml(start=start)
+    data = yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
+    raw = data.get("services") or {}
+    out: dict[str, ServiceRecord] = {}
+    for name, rec in raw.items():
+        rec = dict(rec or {})
+        if isinstance(rec.get("url"), str):
+            rec["url"] = rec["url"].rstrip("/")
+        out[name] = ServiceRecord(**rec)
     return out
 
 
 def fc_url(service_name: str, *, start: Path | None = None) -> str:
-    """Resolve the deployed FC URL for `service_name`.
+    """Resolve the deployed URL for `service_name` from `services.yaml`.
 
-    `start` controls where the upward walk for `aliyun_fc_url.md` begins —
-    pass `Path(__file__)` from a test/conftest to anchor it at the service.
+    `start` anchors the upward walk — pass `Path(__file__)` from a test.
     """
-    md = find_aliyun_fc_url_md(start=start)
-    urls = parse_fc_urls(md)
-    if service_name not in urls:
+    services = load_services(start=start)
+    if service_name not in services:
         raise KeyError(
-            f"service {service_name!r} not listed in {md}; "
-            f"known services: {sorted(urls)}"
+            f"service {service_name!r} not in services.yaml; "
+            f"known services: {sorted(services)}"
         )
-    return urls[service_name]
+    return services[service_name].url
 
 
-__all__ = ["fc_url", "find_aliyun_fc_url_md", "parse_fc_urls"]
+__all__ = ["ServiceRecord", "fc_url", "find_services_yaml", "load_services"]

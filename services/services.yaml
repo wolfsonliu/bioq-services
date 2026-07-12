@@ -1,0 +1,101 @@
+# Deployed service registry — the single source of truth for downstream
+# service URLs and deployment metadata. Loaded by
+# bioagent_service.service_registry (load_services / fc_url) and the gateway.
+#
+# Schema per entry (only `url` is required):
+#   url:      VPC HTTP trigger URL (https://fc-...-vpc.fcapp.run)
+#   region:   Aliyun region (default cn-hangzhou)
+#   tier:     hot | warm | cold — deployment tier (default warm)
+#             hot  = keep warm / provisioned (frequent, latency-sensitive)
+#             warm = FC scale-to-zero (default for most services)
+#             cold = batch-only / rarely called
+#   function: FC function name — OPTIONAL, fill in when wiring FC OpenAPI /
+#             GetAsyncTask (lives in the Aliyun console, not the repo).
+#   gpu:      GPU card class (e.g. fc.gpu.tesla.1) — OPTIONAL.
+#
+# Keep this file in sync with the FC console after each (re)deploy.
+services:
+  alphafold-server:
+    url: https://fc-alphafold-fcizetpnjc.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+  genie3-server:
+    url: https://fc-genie-icjpnieeiz.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+  rfantibody-server:
+    url: https://fc-rfantibody-guekbpucdo.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+  ppiflow-server:
+    url: https://fc-ppiflow-lufflhmlaw.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+  rfdiffusion-server:
+    url: https://fc-rfdiffusion-cdskxiqtnk.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+  rfdiffusion2-server:
+    url: https://fc-rfdiffusion-xaxngakbwo.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+  proteinmpnn-server:
+    url: https://fc-proteinmpnn-pahlhbttzb.cn-hangzhou-vpc.fcapp.run
+    tier: hot
+  boltz-server:
+    url: https://fc-boltz-kbioniejif.cn-hangzhou-vpc.fcapp.run
+    tier: hot
+  boltzgen-server:
+    url: https://fc-boltzgen-karzusdoih.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+  immunebuilder-server:
+    url: https://fc-immuebuilder-mhxbldkfhc.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+  dockq-server:
+    url: https://fc-dockq-tzqvjemokb.cn-hangzhou-vpc.fcapp.run
+    tier: cold
+  deeprank-ab-server:
+    url: https://fc-deeprank-ab-lxzlfasfol.cn-hangzhou-vpc.fcapp.run
+    tier: cold
+  esmfold2-server:
+    url: https://fc-esmfold-spayusioug.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+  promera-server:
+    url: https://fc-promera-adkrlhmlcq.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+  ensemble-server:
+    url: https://fc-ensemble-vnugpsiojy.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+  mmseqs2-server:
+    url: https://fc-mmseqs-ijlwlhpldm.cn-hangzhou-vpc.fcapp.run
+    tier: hot
+  diffdock-pp-server:
+    url: https://fc-diffdock-pp-xbbyfajnci.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+  diffusion-hopping-server:
+    url: https://fc-diff-hopping-xefuosyhju.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+  chembounce-server:
+    url: https://fc-chembounce-vhjhvjexpd.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+  drughive-server:
+    url: https://fc-drughive-tifmpsjove.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+  openadmet-server:
+    url: https://fc-openadmet-dckbxdfnvj.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+  diffdock-server:
+    url: https://fc-diffdock-seztzsjoon.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+  flowmol-server:
+    url: https://fc-flowmol-avfulhilcq.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+  pocketxmol-server:
+    url: https://fc-pocketxmol-dfjozirckm.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+  openbpmd-server:
+    url: https://fc-openbpmd-acghosooxo.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+  semlaflow-server:
+    url: https://fc-semlaflow-bciahabnab.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+  reinvent-server:
+    url: https://fc-reinvent-awteesnocc.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+  megalodon-server:
+    url: https://fc-megalodon-wzbshjdnal.cn-hangzhou-vpc.fcapp.run
+    tier: warm

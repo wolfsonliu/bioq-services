@@ -4,7 +4,7 @@ Marked `@pytest.mark.fc`, skipped by default.  Run with:
 
     pytest -m fc services/ensemble-server/tests/test_fc.py
 
-The base URL is read from `services/aliyun_fc_url.md`.  The URL listed there
+The base URL is read from `services/services.yaml`.  The URL listed there
 is the *VPC internal* URL (`*-vpc.fcapp.run`) — these tests must be executed
 from a machine on the VPC (e.g. via VPN), not from the public internet.
 

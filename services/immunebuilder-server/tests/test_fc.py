@@ -4,7 +4,7 @@ Marked `@pytest.mark.fc`, skipped by default. Run with:
 
     pytest -m fc services/immunebuilder-server/tests/test_fc.py
 
-URL resolves via `services/aliyun_fc_url.md`.
+URL resolves via `services/services.yaml`.
 """
 
 from __future__ import annotations

@@ -25,7 +25,7 @@ Three-layer: VPC bypass (internal) → JWT (`Authorization: Bearer`) → API key
 ## Local dev
 ```bash
 GATEWAY_DB_URL=sqlite:///$PWD/gw.db \
-GATEWAY_REGISTRY_PATH=$PWD/services/aliyun_fc_url.md \
+GATEWAY_REGISTRY_PATH=$PWD/services/services.yaml \
 uv run python -m uvicorn server.app:app --port 9000
 ```
 

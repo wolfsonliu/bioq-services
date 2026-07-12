@@ -47,8 +47,8 @@ class GatewaySettings(ServiceSettings):
     oss_region: str = Field(default="cn-hangzhou")
     presign_expiry_sec: int = Field(default=900, ge=60)
 
-    # downstream service registry (svc -> vpc http_base_url)
-    registry_path: Path = Field(default=Path("/opt/gateway/aliyun_fc_url.md"))
+    # downstream service registry (svc -> ServiceRecord)
+    registry_path: Path = Field(default=Path("/opt/gateway/services.yaml"))
 
     # downstream HTTP dispatch
     dispatch_timeout_sec: float = Field(default=60.0, ge=5)

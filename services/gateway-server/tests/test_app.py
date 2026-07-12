@@ -9,9 +9,9 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("GATEWAY_JOBS_BASE_DIR", str(tmp_path / "jobs"))
     monkeypatch.setenv("GATEWAY_DB_URL", f"sqlite:///{tmp_path/'gw.db'}")
     monkeypatch.setenv("GATEWAY_UPLOADS_BASE_DIR", str(tmp_path / "uploads"))
-    registry_md = tmp_path / "registry.md"
-    registry_md.write_text("", encoding="utf-8")
-    monkeypatch.setenv("GATEWAY_REGISTRY_PATH", str(registry_md))
+    registry_yaml = tmp_path / "services.yaml"
+    registry_yaml.write_text("services: {}\n", encoding="utf-8")
+    monkeypatch.setenv("GATEWAY_REGISTRY_PATH", str(registry_yaml))
     # Re-import app fresh with env applied.
     import importlib
     import server.app as appmod
@@ -38,7 +38,10 @@ def test_v1_requires_auth(client):
 def test_run_and_status_happy(client):
     import server.app as appmod
     _seed_key(appmod)
-    appmod.app.state.registry._urls = {"openbpmd-server": "https://svc.local"}
+    from bioagent_service.service_registry import ServiceRecord
+    appmod.app.state.registry._services = {
+        "openbpmd-server": ServiceRecord(url="https://svc.local")
+    }
 
     class _Disp:
         def submit(self, base, ep, job_id, data):
@@ -72,7 +75,10 @@ def test_tenant_isolation(client):
     import server.app as appmod
     _seed_key(appmod, principal="alice", secret="alice-sec", key_id="gk_alice")
     _seed_key(appmod, principal="bob", secret="bob-sec", key_id="gk_bob")
-    appmod.app.state.registry._urls = {"openbpmd-server": "https://svc.local"}
+    from bioagent_service.service_registry import ServiceRecord
+    appmod.app.state.registry._services = {
+        "openbpmd-server": ServiceRecord(url="https://svc.local")
+    }
 
     class _Disp:
         def submit(self, base, ep, job_id, data):
