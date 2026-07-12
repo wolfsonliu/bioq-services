@@ -160,19 +160,24 @@ import lightning, hydra, omegaconf, einops, pandas; print('lightning/hydra/omega
 from megalodon.models.module import Graph3DInterpolantModel; \
 from megalodon.metrics.molecule import get_molecules; \
 from megalodon.data.statistics import Statistics; \
+from megalodon.metrics.molecule_evaluation_callback import MoleculeEvaluationCallback; \
+import numpy.testing; \
 print('megalodon module chain OK, cuda=' + torch.version.cuda)"
 
 # ---------------------------------------------------------------------------
 # Cleanup dead weight from the conda env.
+#
+# NB: do NOT blanket-delete every `tests`/`test` dir under site-packages —
+# numpy 2.x ships `numpy/_core/tests/_natype.py`, imported at runtime by
+# `numpy.testing._private.utils` (pulled in via lightning → torchmetrics →
+# scipy.signal). Removing it raises `ModuleNotFoundError: numpy._core.tests`
+# on first real import.  The tests dirs save little; skip that deletion.
 # ---------------------------------------------------------------------------
 RUN find /opt/conda/envs/megalodon/lib -name '*.a' -delete \
     && rm -rf \
         /opt/conda/envs/megalodon/share/doc \
         /opt/conda/envs/megalodon/share/man \
         /opt/conda/envs/megalodon/share/locale \
-    && find /opt/conda/envs/megalodon/lib/python3.10/site-packages \
-        -depth -type d \( -name 'tests' -o -name 'test' \) \
-        -exec rm -rf {} + \
     && find /opt/conda/envs/megalodon -depth -type d \
         -name '__pycache__' -exec rm -rf {} + \
     && find /opt/conda/envs/megalodon -name '*.pyc' -delete
