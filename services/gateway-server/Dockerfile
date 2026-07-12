@@ -11,7 +11,8 @@ RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
     --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
         "/tmp/service-framework[mcp]" \
-        "httpx>=0.28" "pyjwt[crypto]>=2.8" "sqlalchemy>=2.0" alibabacloud-oss-v2
+        "httpx>=0.28" "pyjwt[crypto]>=2.8" "sqlalchemy>=2.0" alibabacloud-oss-v2 \
+        "alibabacloud_fc20230330>=4.0" "alibabacloud_tea_openapi>=0.3.0" alibabacloud_tea_util
 
 # gateway code into /opt/gateway/server/  (imported as `server.app`)
 COPY services/gateway-server/__init__.py services/gateway-server/settings.py \

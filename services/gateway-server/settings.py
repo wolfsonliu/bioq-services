@@ -53,4 +53,12 @@ class GatewaySettings(ServiceSettings):
     # downstream HTTP dispatch
     dispatch_timeout_sec: float = Field(default=60.0, ge=5)
 
+    # FC OpenAPI (GetAsyncTask status polling). AK/SK read from ALI_AK/ALI_SK
+    # (FCDispatcher convention). When unset, the gateway falls back to HTTP
+    # status polling. fc_endpoint overrides "{region}.fc.aliyuncs.com" (e.g. a
+    # VPC/internal endpoint) when the ECS host lacks public egress to FC OpenAPI.
+    ali_access_key_id: str = Field(default="", validation_alias="ALI_AK")
+    ali_access_key_secret: str = Field(default="", validation_alias="ALI_SK")
+    fc_endpoint: str = Field(default="")
+
     auth: AuthSettings = Field(default_factory=AuthSettings)
