@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from unittest.mock import MagicMock
 
 from server.presign import Presigner
@@ -31,3 +32,8 @@ def test_presign_returns_url_when_missing():
     assert resp.exists is False
     assert resp.url == "https://oss.put/signed"
     assert resp.uri == "oss://b/users/alice/inputs/sha1/f.dat"
+    # Must pass `expires` (a timedelta duration), NOT `expiration` (a datetime) —
+    # the OSS v2 signer raises on a timedelta expiration.
+    kwargs = client.presign.call_args.kwargs
+    assert isinstance(kwargs.get("expires"), timedelta)
+    assert "expiration" not in kwargs

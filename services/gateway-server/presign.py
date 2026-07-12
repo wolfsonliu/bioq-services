@@ -50,8 +50,10 @@ class Presigner:
         uri = self.uri_for(key)
         if self._exists(key):
             return PresignResponse(uri=uri, exists=True, url=None)
+        # `expires` = a timedelta duration. (`expiration` would be an absolute
+        # datetime — passing a timedelta there raises inside the SDK.)
         result = self._client.presign(
             oss.models.PutObjectRequest(bucket=self._bucket, key=key),
-            expiration=timedelta(seconds=self._expiry),
+            expires=timedelta(seconds=self._expiry),
         )
         return PresignResponse(uri=uri, exists=False, url=result.url)
