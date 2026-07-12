@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
+import httpx
 from bioagent_service import attach_mcp, create_app, read_version_file
 from fastapi import Body, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -89,16 +90,22 @@ def get_job(job_id: str, request: Request,
             ident: AuthIdentity = Depends(require_auth)) -> JobView:
     job = _owned_job(request, job_id, ident)
     reg = request.app.state.registry
+    detail = None
     try:
         down = request.app.state.dispatch.status(reg.base_url(job.svc), job.fc_task_id or job_id)
         new_status = down.get("status", job.status)
         if new_status != job.status:
             request.app.state.db.update_job(job_id, status=new_status)
             job = request.app.state.db.get_job(job_id)
-    except Exception:  # noqa: BLE001 — return last-known status on transient errors
-        pass
+    except httpx.HTTPStatusError as exc:
+        # Surface (don't silently swallow) why the downstream status refresh failed
+        # — otherwise a job is stuck at its last-known status with no explanation.
+        detail = f"downstream status refresh: HTTP {exc.response.status_code}"
+    except Exception as exc:  # noqa: BLE001 — transient network/parse issues
+        detail = f"downstream status refresh error: {type(exc).__name__}: {exc}"
     return JobView(job_id=job.job_id, principal=job.principal, svc=job.svc,
-                   endpoint=job.endpoint, status=job.status, output_prefix=job.output_prefix)
+                   endpoint=job.endpoint, status=job.status,
+                   output_prefix=job.output_prefix, detail=detail)
 
 
 @app.get("/v1/jobs/{job_id}/download")
@@ -107,7 +114,13 @@ def download_job(job_id: str, request: Request,
     job = _owned_job(request, job_id, ident)
     reg = request.app.state.registry
     dest = Path(settings.jobs_base_dir) / job_id / f"{job_id}.zip"
-    request.app.state.dispatch.download(reg.base_url(job.svc), job.fc_task_id or job_id, dest)
+    try:
+        request.app.state.dispatch.download(reg.base_url(job.svc), job.fc_task_id or job_id, dest)
+    except httpx.HTTPStatusError as exc:
+        body = exc.response.text[:200]
+        raise HTTPException(502, f"downstream download HTTP {exc.response.status_code}: {body}")
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(502, f"download failed: {type(exc).__name__}: {exc}")
     return FileResponse(str(dest), filename=f"{job_id}.zip", media_type="application/zip")
 
 

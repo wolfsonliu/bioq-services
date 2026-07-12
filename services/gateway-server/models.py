@@ -14,6 +14,7 @@ class JobView(BaseModel):
     endpoint: str
     status: str
     output_prefix: Optional[str] = None
+    detail: Optional[str] = None  # e.g. why a downstream status refresh failed
 
 
 class PresignRequest(BaseModel):
