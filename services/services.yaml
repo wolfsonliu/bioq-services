@@ -9,8 +9,9 @@
 #             hot  = keep warm / provisioned (frequent, latency-sensitive)
 #             warm = FC scale-to-zero (default for most services)
 #             cold = batch-only / rarely called
-#   function: FC function name — OPTIONAL, fill in when wiring FC OpenAPI /
-#             GetAsyncTask (lives in the Aliyun console, not the repo).
+#   function: FC function name (from the Aliyun FC console) — used by the
+#             gateway for FC OpenAPI GetAsyncTask status polling. Leave unset
+#             until known; the gateway falls back to HTTP status for those.
 #   gpu:      GPU card class (e.g. fc.gpu.tesla.1) — OPTIONAL.
 #
 # Keep this file in sync with the FC console after each (re)deploy.
@@ -18,84 +19,112 @@ services:
   alphafold-server:
     url: https://fc-alphafold-fcizetpnjc.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    function: fc_alphafold
   genie3-server:
     url: https://fc-genie-icjpnieeiz.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    # function: TODO — FC console name not provided
   rfantibody-server:
     url: https://fc-rfantibody-guekbpucdo.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    function: fc_rfantibody
   ppiflow-server:
     url: https://fc-ppiflow-lufflhmlaw.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    function: fc_ppiflow
   rfdiffusion-server:
     url: https://fc-rfdiffusion-cdskxiqtnk.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    function: fc_rfdiffusion
   rfdiffusion2-server:
     url: https://fc-rfdiffusion-xaxngakbwo.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    function: fc_rfdiffusion2
   proteinmpnn-server:
     url: https://fc-proteinmpnn-pahlhbttzb.cn-hangzhou-vpc.fcapp.run
     tier: hot
+    # function: TODO — FC console name not provided (needed for the e2e test)
   boltz-server:
     url: https://fc-boltz-kbioniejif.cn-hangzhou-vpc.fcapp.run
     tier: hot
+    function: fc_boltz2
   boltzgen-server:
     url: https://fc-boltzgen-karzusdoih.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    function: fc_boltzgen
   immunebuilder-server:
     url: https://fc-immuebuilder-mhxbldkfhc.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    function: fc_immunebuilder
   dockq-server:
     url: https://fc-dockq-tzqvjemokb.cn-hangzhou-vpc.fcapp.run
     tier: cold
+    function: fc_dockq
   deeprank-ab-server:
     url: https://fc-deeprank-ab-lxzlfasfol.cn-hangzhou-vpc.fcapp.run
     tier: cold
+    # function: TODO — FC console name not provided
   esmfold2-server:
     url: https://fc-esmfold-spayusioug.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    # function: TODO — FC console name not provided
   promera-server:
     url: https://fc-promera-adkrlhmlcq.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    function: fc_promera
   ensemble-server:
     url: https://fc-ensemble-vnugpsiojy.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    function: fc_ensemble
   mmseqs2-server:
     url: https://fc-mmseqs-ijlwlhpldm.cn-hangzhou-vpc.fcapp.run
     tier: hot
+    function: fc_mmseqs2
   diffdock-pp-server:
     url: https://fc-diffdock-pp-xbbyfajnci.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    function: fc_diffdock-pp
   diffusion-hopping-server:
     url: https://fc-diff-hopping-xefuosyhju.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    # function: TODO — FC console name not provided
   chembounce-server:
     url: https://fc-chembounce-vhjhvjexpd.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    # function: TODO — FC console name not provided
   drughive-server:
     url: https://fc-drughive-tifmpsjove.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    # function: TODO — FC console name not provided
   openadmet-server:
     url: https://fc-openadmet-dckbxdfnvj.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    function: fc_openadmet
   diffdock-server:
     url: https://fc-diffdock-seztzsjoon.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    function: fc_diffdock
   flowmol-server:
     url: https://fc-flowmol-avfulhilcq.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    function: fc_flowmol
   pocketxmol-server:
     url: https://fc-pocketxmol-dfjozirckm.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    function: fc_pocketxmol
   openbpmd-server:
     url: https://fc-openbpmd-acghosooxo.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    function: fc_openbpmd
   semlaflow-server:
     url: https://fc-semlaflow-bciahabnab.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    function: fc_semlaflow
   reinvent-server:
     url: https://fc-reinvent-awteesnocc.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    # function: TODO — FC console name not provided
   megalodon-server:
     url: https://fc-megalodon-wzbshjdnal.cn-hangzhou-vpc.fcapp.run
     tier: warm
+    # function: TODO — FC console name not provided
