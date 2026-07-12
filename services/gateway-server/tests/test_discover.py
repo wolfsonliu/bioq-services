@@ -51,12 +51,33 @@ def test_describe_ttl_expiry_refetches():
 
     def handler(request):
         calls["n"] += 1
-        return httpx.Response(200, json={})
+        if request.url.path == "/api/manifest":
+            return httpx.Response(200, json={"service": "x"})
+        return httpx.Response(200, json={"paths": {}})
 
-    disc = Discovery(client=_client(handler), ttl_sec=0)  # 0 => always expired
+    disc = Discovery(client=_client(handler), ttl_sec=0)  # 0 => cached entry always expired
     disc.describe("s", "https://svc.local")
     disc.describe("s", "https://svc.local")
-    assert calls["n"] == 4  # 2 describes x (manifest + openapi), no caching at ttl=0
+    assert calls["n"] == 4  # 2 describes x (manifest + openapi); expired each time
+
+
+def test_describe_does_not_cache_partial_failure():
+    """A partial result (one sub-call fails) must NOT be cached — next describe retries."""
+    state = {"manifest_fail": True}
+
+    def handler(request):
+        if request.url.path == "/api/manifest":
+            if state["manifest_fail"]:
+                return httpx.Response(500)
+            return httpx.Response(200, json={"service": "x"})
+        return httpx.Response(200, json={"paths": {"/api/score": {}}})
+
+    disc = Discovery(client=_client(handler), ttl_sec=300)
+    first = disc.describe("s", "https://svc.local")
+    assert first["manifest"] == {} and first["openapi"]  # partial: manifest failed
+    state["manifest_fail"] = False
+    second = disc.describe("s", "https://svc.local")  # must re-fetch, not serve cached partial
+    assert second["manifest"] == {"service": "x"}
 
 
 def test_describe_does_not_cache_total_failure():

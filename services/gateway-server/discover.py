@@ -9,8 +9,13 @@ import httpx
 
 
 class Discovery:
-    def __init__(self, *, client: httpx.Client | None = None, ttl_sec: int = 300) -> None:
-        self._client = client or httpx.Client(timeout=15.0)
+    def __init__(
+        self, *, client: httpx.Client | None = None, ttl_sec: int = 300,
+        timeout_sec: float = 60.0,
+    ) -> None:
+        # Timeout is generous: the first describe of a scaled-to-zero service
+        # triggers a cold start that can exceed 15s (heavy conda images).
+        self._client = client or httpx.Client(timeout=timeout_sec)
         self._ttl = ttl_sec
         self._cache: dict[str, tuple[dict[str, Any], float]] = {}
 
@@ -23,7 +28,10 @@ class Discovery:
         manifest = self._get_json(f"{base_url}/api/manifest")
         openapi = self._get_json(f"{base_url}/openapi.json")
         info = {"service": svc, "manifest": manifest, "openapi": openapi}
-        if manifest or openapi:  # don't cache a fully-failed fetch (avoids TTL poisoning)
+        # Only cache a fully-successful fetch. A partial result (e.g. a cold-start
+        # timeout on one sub-call) would otherwise be stuck for the whole TTL;
+        # leaving it uncached makes the next describe retry.
+        if manifest and openapi:
             self._cache[svc] = (info, now + self._ttl)
         return info
 
