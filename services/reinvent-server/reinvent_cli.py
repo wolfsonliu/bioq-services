@@ -41,6 +41,30 @@ def parse_args(argv=None):
     return p.parse_args(argv)
 
 
+def _resolve_device(device: str) -> str:
+    """Fall back to CPU when a CUDA device is requested but unavailable.
+
+    Keeps the service usable on CPU-only instances (REINVENT sampling/scoring run
+    fine on CPU) instead of crashing; still uses the GPU when one is present.
+    """
+    if device.startswith("cuda"):
+        try:
+            import torch
+
+            if not torch.cuda.is_available():
+                print(
+                    f"[reinvent_cli] device {device!r} requested but CUDA is "
+                    f"unavailable; falling back to cpu",
+                    file=sys.stderr,
+                )
+                return "cpu"
+        except Exception as exc:  # torch import/probe failure → be safe, use cpu
+            print(f"[reinvent_cli] CUDA probe failed ({exc!r}); using cpu",
+                  file=sys.stderr)
+            return "cpu"
+    return device
+
+
 def _stage(files: dict[str, Path], work: Path, params: dict) -> None:
     """Copy each provided input file into work/ and set params[<key>] to it."""
     for flag, path in files.items():
@@ -59,7 +83,7 @@ def run(*, run_type: str, params_json: Path, work_dir: Path, output_dir: Path,
     output_dir.mkdir(parents=True, exist_ok=True)
 
     params = json.loads(Path(params_json).read_text())
-    params["device"] = device
+    params["device"] = _resolve_device(device)
     _stage(files, work_dir, params)
 
     cfg = BUILDERS[run_type](params, output_dir, prior_base)

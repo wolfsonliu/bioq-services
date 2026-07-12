@@ -1,5 +1,28 @@
 import json
+import sys
+import types
 from pathlib import Path
+
+
+def test_resolve_device_cpu_passthrough():
+    from server import reinvent_cli
+    assert reinvent_cli._resolve_device("cpu") == "cpu"
+
+
+def test_resolve_device_cuda_falls_back_when_unavailable(monkeypatch):
+    from server import reinvent_cli
+    fake_torch = types.SimpleNamespace(
+        cuda=types.SimpleNamespace(is_available=lambda: False))
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    assert reinvent_cli._resolve_device("cuda:0") == "cpu"
+
+
+def test_resolve_device_cuda_kept_when_available(monkeypatch):
+    from server import reinvent_cli
+    fake_torch = types.SimpleNamespace(
+        cuda=types.SimpleNamespace(is_available=lambda: True))
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    assert reinvent_cli._resolve_device("cuda:0") == "cuda:0"
 
 
 def _write_params(work: Path, params: dict) -> Path:
