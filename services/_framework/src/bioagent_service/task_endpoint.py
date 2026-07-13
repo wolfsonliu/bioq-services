@@ -38,6 +38,7 @@ from bioagent_service.errors import finalize_job
 from bioagent_service.forms import model_form_depends
 from bioagent_service.jobs import cleanup_job, evict_finished_until_under_limit
 from bioagent_service.models import JobInfo, JobStatus, utcnow
+from bioagent_service.oss_export import mirror_job_dir_to_oss
 from bioagent_service.runner import SubprocessRunner
 
 logger = logging.getLogger(__name__)
@@ -77,6 +78,7 @@ def execute_task(
     params: BaseModel,
     build_argv: BuildArgvForTask,
     save_inputs: Optional[Callable[[BaseModel, Path], None]] = None,
+    oss_prefix: Optional[str] = None,
 ) -> JobInfo:
     """Run one pipeline synchronously inside the request thread.
 
@@ -174,7 +176,23 @@ def execute_task(
         label,
         error_tail_chars=settings.error_tail_chars,
     )
-    return store.get(job_id)  # type: ignore[return-value]
+    final = store.get(job_id)
+    # Output-sink: mirror the job dir to the mounted OSS prefix on ANY terminal
+    # status (success OR failure) — a failed job's logs/intermediates on OSS are
+    # exactly what's needed for debugging. mirror_job_dir_to_oss only writes
+    # results.zip when output/ is non-empty. Non-fatal: a mirror failure must not
+    # change the job's terminal status.
+    if final is not None and oss_prefix:
+        try:
+            mirror_job_dir_to_oss(
+                job_dir=job_dir,
+                output_dir=adapter.output_dir(job_dir),
+                oss_prefix=oss_prefix,
+                mount=settings.oss_output_mount,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("oss output-sink failed for task %s (non-fatal)", job_id)
+    return final  # type: ignore[return-value]
 
 
 def register_task_endpoint(
@@ -223,6 +241,7 @@ def register_task_endpoint(
         params: request_model = Depends(model_form_depends(request_model)),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias=primary_header),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
+        x_bioagent_oss_prefix: Optional[str] = Header(default=None, alias="X-Bioagent-Oss-Prefix"),
     ) -> JobInfo:
         job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
         return execute_task(
@@ -232,6 +251,7 @@ def register_task_endpoint(
             params=params,
             build_argv=build_argv,
             save_inputs=save_inputs,
+            oss_prefix=x_bioagent_oss_prefix,
         )
 
     app.add_api_route(
