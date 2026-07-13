@@ -184,12 +184,19 @@ def execute_task(
     # change the job's terminal status.
     if final is not None and oss_prefix:
         try:
-            mirror_job_dir_to_oss(
+            dest = mirror_job_dir_to_oss(
                 job_dir=job_dir,
                 output_dir=adapter.output_dir(job_dir),
                 oss_prefix=oss_prefix,
                 mount=settings.oss_output_mount,
             )
+            if dest:
+                logger.info("output-sink: mirrored task %s to %s", job_id, dest)
+            else:
+                logger.info(
+                    "output-sink: skipped task %s — mount %r not present (or empty prefix)",
+                    job_id, settings.oss_output_mount,
+                )
         except Exception:  # noqa: BLE001
             logger.exception("oss output-sink failed for task %s (non-fatal)", job_id)
     return final  # type: ignore[return-value]
