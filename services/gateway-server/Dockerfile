@@ -19,7 +19,8 @@ COPY services/gateway-server/__init__.py services/gateway-server/settings.py \
      services/gateway-server/adapter.py services/gateway-server/app.py \
      services/gateway-server/models.py services/gateway-server/registry.py \
      services/gateway-server/discover.py services/gateway-server/dispatch.py \
-     services/gateway-server/presign.py services/gateway-server/VERSION \
+     services/gateway-server/fc_status.py services/gateway-server/presign.py \
+     services/gateway-server/VERSION \
      /opt/gateway/server/
 COPY services/gateway-server/auth/ /opt/gateway/server/auth/
 COPY services/gateway-server/db/ /opt/gateway/server/db/
