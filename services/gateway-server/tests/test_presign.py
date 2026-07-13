@@ -6,34 +6,43 @@ from unittest.mock import MagicMock
 from server.presign import Presigner
 
 
-def test_key_derivation_per_user():
+def test_input_key_is_job_centric():
     p = Presigner(client=MagicMock(), bucket="b", region="cn-hangzhou", expiry_sec=900)
-    key = p.input_key("alice", "solvated.rst7", "abc123")
-    assert key == "users/alice/inputs/abc123/solvated.rst7"
+    assert p.input_key("alice", "job1", "x.pdb") == "users/alice/job1/input/x.pdb"
 
 
-def test_presign_skips_when_object_exists():
+def test_output_key_is_job_centric():
+    p = Presigner(client=MagicMock(), bucket="b", region="cn-hangzhou", expiry_sec=900)
+    assert p.output_key("alice", "job1", "results.zip") == "users/alice/job1/results.zip"
+
+
+def test_presign_put_skips_when_exists():
     client = MagicMock()
-    client.head_object.return_value = MagicMock()  # no exception => exists
+    client.head_object.return_value = MagicMock()  # exists
     p = Presigner(client=client, bucket="b", region="cn-hangzhou", expiry_sec=900)
-    resp = p.presign_put("alice", "f.dat", "sha1")
-    assert resp.exists is True
-    assert resp.url is None
-    assert resp.uri == "oss://b/users/alice/inputs/sha1/f.dat"
+    resp = p.presign_put("alice", "job1", "x.pdb")
+    assert resp.exists is True and resp.url is None
+    assert resp.uri == "oss://b/users/alice/job1/input/x.pdb"
     client.presign.assert_not_called()
 
 
-def test_presign_returns_url_when_missing():
+def test_presign_put_returns_url_when_missing():
     client = MagicMock()
     client.head_object.side_effect = Exception("NoSuchKey")
     client.presign.return_value = MagicMock(url="https://oss.put/signed")
     p = Presigner(client=client, bucket="b", region="cn-hangzhou", expiry_sec=900)
-    resp = p.presign_put("alice", "f.dat", "sha1")
-    assert resp.exists is False
-    assert resp.url == "https://oss.put/signed"
-    assert resp.uri == "oss://b/users/alice/inputs/sha1/f.dat"
-    # Must pass `expires` (a timedelta duration), NOT `expiration` (a datetime) —
-    # the OSS v2 signer raises on a timedelta expiration.
-    kwargs = client.presign.call_args.kwargs
-    assert isinstance(kwargs.get("expires"), timedelta)
-    assert "expiration" not in kwargs
+    resp = p.presign_put("alice", "job1", "x.pdb")
+    assert resp.exists is False and resp.url == "https://oss.put/signed"
+    assert resp.uri == "oss://b/users/alice/job1/input/x.pdb"
+    assert isinstance(client.presign.call_args.kwargs.get("expires"), timedelta)
+
+
+def test_presign_get_if_exists_hit_and_miss():
+    client = MagicMock()
+    client.presign.return_value = MagicMock(url="https://oss.get/signed")
+    p = Presigner(client=client, bucket="b", region="cn-hangzhou", expiry_sec=900)
+    client.head_object.side_effect = None
+    client.head_object.return_value = MagicMock()
+    assert p.presign_get_if_exists("alice", "job1", "results.zip") == "https://oss.get/signed"
+    client.head_object.side_effect = Exception("NoSuchKey")
+    assert p.presign_get_if_exists("alice", "job1", "results.zip") is None

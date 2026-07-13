@@ -18,9 +18,9 @@ class JobView(BaseModel):
 
 
 class PresignRequest(BaseModel):
+    job_id: str
     filename: str
-    sha256: str
-    size: Optional[int] = None
+    sha256: Optional[str] = None
 
 
 class PresignResponse(BaseModel):

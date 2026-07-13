@@ -30,8 +30,11 @@ class Presigner:
         self._region = region
         self._expiry = expiry_sec
 
-    def input_key(self, principal: str, filename: str, sha256: str) -> str:
-        return f"users/{principal}/inputs/{sha256}/{filename}"
+    def input_key(self, principal: str, job_id: str, filename: str) -> str:
+        return f"users/{principal}/{job_id}/input/{filename}"
+
+    def output_key(self, principal: str, job_id: str, filename: str) -> str:
+        return f"users/{principal}/{job_id}/{filename}"
 
     def uri_for(self, key: str) -> str:
         return f"oss://{self._bucket}/{key}"
@@ -41,19 +44,29 @@ class Presigner:
         try:
             self._client.head_object(oss.models.HeadObjectRequest(bucket=self._bucket, key=key))
             return True
-        except Exception:  # noqa: BLE001 — any error (incl. NoSuchKey) => treat as absent
+        except Exception:  # noqa: BLE001 — any error (incl. NoSuchKey) => absent
             return False
 
-    def presign_put(self, principal: str, filename: str, sha256: str) -> PresignResponse:
+    def presign_put(self, principal: str, job_id: str, filename: str,
+                    sha256: str | None = None) -> PresignResponse:
         import alibabacloud_oss_v2 as oss
-        key = self.input_key(principal, filename, sha256)
+        key = self.input_key(principal, job_id, filename)
         uri = self.uri_for(key)
         if self._exists(key):
             return PresignResponse(uri=uri, exists=True, url=None)
-        # `expires` = a timedelta duration. (`expiration` would be an absolute
-        # datetime — passing a timedelta there raises inside the SDK.)
         result = self._client.presign(
             oss.models.PutObjectRequest(bucket=self._bucket, key=key),
             expires=timedelta(seconds=self._expiry),
         )
         return PresignResponse(uri=uri, exists=False, url=result.url)
+
+    def presign_get_if_exists(self, principal: str, job_id: str, filename: str) -> str | None:
+        import alibabacloud_oss_v2 as oss
+        key = self.output_key(principal, job_id, filename)
+        if not self._exists(key):
+            return None
+        result = self._client.presign(
+            oss.models.GetObjectRequest(bucket=self._bucket, key=key),
+            expires=timedelta(seconds=self._expiry),
+        )
+        return result.url
