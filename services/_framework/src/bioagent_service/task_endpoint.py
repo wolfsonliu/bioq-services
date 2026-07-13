@@ -182,6 +182,12 @@ def execute_task(
     # exactly what's needed for debugging. mirror_job_dir_to_oss only writes
     # results.zip when output/ is non-empty. Non-fatal: a mirror failure must not
     # change the job's terminal status.
+    # oss_prefix may be passed explicitly (register_task_endpoint) or arrive as a
+    # header on the request — bespoke per-service task handlers forward `request`
+    # to execute_task without oss_prefix, so read it here too. This makes the
+    # output-sink work for all services with no per-service handler change.
+    if oss_prefix is None:
+        oss_prefix = request.headers.get("X-Bioagent-Oss-Prefix")
     if final is not None and oss_prefix:
         try:
             dest = mirror_job_dir_to_oss(

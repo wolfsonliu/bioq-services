@@ -24,7 +24,7 @@ class _Params(BaseModel):
     x: int = 1
 
 
-def _request(tmp_path: Path):
+def _request(tmp_path: Path, headers: dict | None = None):
     settings = _Settings(
         jobs_base_dir=tmp_path / "jobs",
         uploads_base_dir=tmp_path / "uploads",
@@ -33,8 +33,10 @@ def _request(tmp_path: Path):
     (tmp_path / "mnt").mkdir()
     adapter = _Adapter(settings=settings)
     store = JobStore(persist_dir=settings.jobs_base_dir)
-    return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
+    req = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
         job_store=store, adapter=adapter, settings=settings)))
+    req.headers = headers or {}
+    return req
 
 
 def _build_argv(_p, _job_id, job_dir):
@@ -77,3 +79,16 @@ def test_execute_task_mirrors_on_failure(tmp_path):
     d = tmp_path / "mnt" / "users" / "alice" / "j3"
     assert (d / "logs" / "run.log").exists()   # logs mirrored even on failure
     assert not (d / "results.zip").exists()    # no output/ => no results.zip
+
+
+def test_execute_task_mirrors_from_request_header_when_prefix_not_passed(tmp_path):
+    # Bespoke per-service handlers call execute_task WITHOUT oss_prefix; the
+    # prefix arrives as the X-Bioagent-Oss-Prefix header on the request.
+    req = _request(tmp_path, headers={"X-Bioagent-Oss-Prefix": "users/alice/jh/"})
+    info = execute_task(
+        req, job_id="jh", label="t", params=_Params(), build_argv=_build_argv,
+    )  # note: no oss_prefix kwarg
+    assert info.status == JobStatus.COMPLETED
+    d = tmp_path / "mnt" / "users" / "alice" / "jh"
+    assert (d / "output" / "r.txt").exists()
+    assert (d / "results.zip").exists()
