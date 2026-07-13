@@ -60,22 +60,40 @@ def _strip_route(router, path: str, method: str) -> None:
 _strip_route(app.router, "/healthz/detail", "GET")
 
 
-def _probe_cuda() -> bool:
+def _probe_gpus() -> list[str]:
+    """Names of attached NVIDIA GPUs via nvidia-smi.
+
+    Uses nvidia-smi (fast, injected by the FC GPU runtime) instead of a cold
+    `import torch` subprocess: the torch probe took 10-15s and its 30s timeout
+    fired on the health path, so cuda_available read False even though jobs got
+    the GPU (reinvent.log showed "Using GPU device:0 Tesla T4"). Cached per
+    process — GPU topology is fixed for an instance's lifetime.
+    """
+    global _GPU_CACHE
+    if _GPU_CACHE is not None:
+        return _GPU_CACHE
+    gpus: list[str] = []
     try:
         r = subprocess.run(
-            [str(settings.python), "-c",
-             "import torch; print(torch.cuda.is_available())"],
-            capture_output=True, text=True, timeout=30,
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=10,
         )
-        return r.stdout.strip() == "True"
+        if r.returncode == 0:
+            gpus = [ln.strip() for ln in r.stdout.splitlines() if ln.strip()]
     except Exception:
-        return False
+        gpus = []
+    _GPU_CACHE = gpus
+    return gpus
+
+
+_GPU_CACHE: list[str] | None = None
 
 
 @app.get("/healthz/detail")
 def healthz_detail(request: Request) -> dict:
     priors = {k: settings.prior_base / v for k, v in PRIOR_FILES.items()}
     missing = {k: str(p) for k, p in priors.items() if not p.exists()}
+    gpus = _probe_gpus()
     return {
         "status": "ok",
         "service": adapter.name,
@@ -83,7 +101,8 @@ def healthz_detail(request: Request) -> dict:
         "prior_base": str(settings.prior_base),
         "priors_loaded": not missing,
         "priors_missing": missing,
-        "cuda_available": _probe_cuda(),
+        "cuda_available": bool(gpus),
+        "gpus": gpus,
         "active_jobs": request.app.state.runner.active_job_count,
         "max_concurrent_jobs": settings.max_concurrent_jobs,
         "task_endpoints_enabled": settings.task_endpoints_enabled,

@@ -30,6 +30,32 @@ def test_healthz_detail_reports_missing_priors(client):
     assert body["priors_loaded"] is False
     assert ".reinvent" in body["priors_missing"]
     assert body["task_endpoints_enabled"] is True
+    # cuda_available derives from the GPU list; no nvidia-smi in the test env.
+    assert body["cuda_available"] is False
+    assert body["gpus"] == []
+
+
+def test_probe_gpus_parses_nvidia_smi(client, monkeypatch):
+    app_mod = sys.modules["server.app"]
+
+    class _R:
+        returncode = 0
+        stdout = "Tesla T4\nTesla T4\n"
+
+    monkeypatch.setattr(app_mod, "_GPU_CACHE", None)
+    monkeypatch.setattr(app_mod.subprocess, "run", lambda *a, **k: _R())
+    assert app_mod._probe_gpus() == ["Tesla T4", "Tesla T4"]
+
+
+def test_probe_gpus_empty_when_nvidia_smi_absent(client, monkeypatch):
+    app_mod = sys.modules["server.app"]
+
+    def _boom(*a, **k):
+        raise FileNotFoundError("nvidia-smi")
+
+    monkeypatch.setattr(app_mod, "_GPU_CACHE", None)
+    monkeypatch.setattr(app_mod.subprocess, "run", _boom)
+    assert app_mod._probe_gpus() == []
 
 
 def test_manifest_lists_endpoints_and_tasks(client):
