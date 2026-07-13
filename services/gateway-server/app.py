@@ -7,8 +7,8 @@ from pathlib import Path
 
 import httpx
 from bioagent_service import attach_mcp, create_app, read_version_file
-from fastapi import Body, Depends, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi import Body, Depends, Header, HTTPException, Request
+from fastapi.responses import FileResponse, RedirectResponse
 
 from .adapter import GatewayAdapter
 from .auth.deps import AuthIdentity, require_auth
@@ -64,20 +64,23 @@ def describe_service(svc: str, request: Request,
 @app.post("/v1/run/{svc}/{endpoint}", status_code=202)
 def run(svc: str, endpoint: str, request: Request,
         body: dict = Body(default_factory=dict),
+        x_bioagent_job_id: str | None = Header(default=None, alias="X-Bioagent-Job-Id"),
         ident: AuthIdentity = Depends(require_auth)) -> dict:
     reg = request.app.state.registry
     try:
         base = reg.base_url(svc)
     except KeyError:
         raise HTTPException(404, f"unknown service {svc!r}")
-    job_id = uuid.uuid4().hex[:20]
-    output_prefix = f"users/{ident.principal}/outputs/{job_id}/"
+    job_id = x_bioagent_job_id or uuid.uuid4().hex[:20]
     db = request.app.state.db
+    if db.get_job(job_id) is not None:
+        raise HTTPException(409, f"job {job_id!r} already exists")
+    oss_prefix = f"users/{ident.principal}/{job_id}/"
     db.create_user(ident.principal)
     db.create_job(job_id=job_id, principal=ident.principal, svc=svc, endpoint=endpoint,
-                  input_params=body, output_prefix=output_prefix)
+                  input_params=body, output_prefix=oss_prefix)
     try:
-        request.app.state.dispatch.submit(base, endpoint, job_id, body)
+        request.app.state.dispatch.submit(base, endpoint, job_id, body, oss_prefix=oss_prefix)
     except Exception as exc:  # noqa: BLE001
         db.update_job(job_id, status="failed")
         raise HTTPException(502, f"dispatch failed: {exc}")
@@ -130,18 +133,24 @@ def get_job(job_id: str, request: Request,
 
 @app.get("/v1/jobs/{job_id}/download")
 def download_job(job_id: str, request: Request,
-                 ident: AuthIdentity = Depends(require_auth)) -> FileResponse:
+                 ident: AuthIdentity = Depends(require_auth)):
     job = _owned_job(request, job_id, ident)
     reg = request.app.state.registry
+    try:
+        url = _get_presigner(request).presign_get_if_exists(ident.principal, job_id, "results.zip")
+    except Exception:  # noqa: BLE001 — OSS not configured / transient => fall back
+        url = None
+    if url:
+        return RedirectResponse(url, status_code=302)
     dest = Path(settings.jobs_base_dir) / job_id / f"{job_id}.zip"
     try:
         request.app.state.dispatch.download(reg.base_url(job.svc), job.fc_task_id or job_id, dest)
     except httpx.HTTPStatusError as exc:
         try:
-            body = exc.response.text[:200]
-        except Exception:  # noqa: BLE001 — streamed body may be unread
-            body = "<unavailable>"
-        raise HTTPException(502, f"downstream download HTTP {exc.response.status_code}: {body}")
+            detail = exc.response.text[:200]
+        except Exception:  # noqa: BLE001
+            detail = "<unavailable>"
+        raise HTTPException(502, f"downstream download HTTP {exc.response.status_code}: {detail}")
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(502, f"download failed: {type(exc).__name__}: {exc}")
     return FileResponse(str(dest), filename=f"{job_id}.zip", media_type="application/zip")
@@ -169,7 +178,9 @@ def _get_presigner(request: Request) -> Presigner:
 @app.post("/v1/uploads/presign", response_model=PresignResponse)
 def presign_upload(request: Request, body: PresignRequest,
                    ident: AuthIdentity = Depends(require_auth)) -> PresignResponse:
-    return _get_presigner(request).presign_put(ident.principal, body.filename, body.sha256)
+    return _get_presigner(request).presign_put(
+        ident.principal, body.job_id, body.filename, body.sha256
+    )
 
 
 attach_mcp(app)

@@ -11,6 +11,7 @@ concurrency.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -24,13 +25,24 @@ class HttpDispatch:
         self._client = client or httpx.Client(timeout=60.0)
 
     def submit(self, base_url: str, endpoint: str, job_id: str,
-               data: dict[str, Any]) -> None:
+               data: dict[str, Any], oss_prefix: str | None = None) -> None:
         headers = {
             "X-Fc-Invocation-Type": "Async",
             "X-Fc-Async-Task-Id": job_id,
             "X-Bioagent-Job-Id": job_id,
         }
-        form = {k: str(v) for k, v in data.items()}
+        if oss_prefix:
+            headers["X-Bioagent-Oss-Prefix"] = oss_prefix
+        # Form-encode: str as-is; list/dict -> JSON (so multi-file-under-one-field
+        # and structured params survive — downstream form parsing expects JSON,
+        # not Python repr); other scalars -> str; drop None.
+        form: dict[str, str] = {}
+        for k, v in data.items():
+            if v is None:
+                continue
+            form[k] = v if isinstance(v, str) else (
+                json.dumps(v) if isinstance(v, (list, dict)) else str(v)
+            )
         r = self._client.post(f"{base_url}/api/tasks/{endpoint}", data=form, headers=headers)
         if r.status_code == 409:
             return  # duplicate task id — idempotent, already submitted

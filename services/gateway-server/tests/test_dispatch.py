@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from urllib.parse import parse_qs
+
 import httpx
 
 from server.dispatch import HttpDispatch
@@ -86,3 +89,32 @@ def test_download_writes_file_with_affinity(tmp_path):
     assert out == dest
     assert dest.read_bytes() == b"ZIPBYTES"
     assert seen["aff"] == "job-3"
+
+
+def test_submit_sends_oss_prefix_header():
+    seen = {}
+
+    def handler(request):
+        seen["prefix"] = request.headers.get("x-bioagent-oss-prefix")
+        return httpx.Response(202, json={})
+
+    d = HttpDispatch(_client(handler))
+    d.submit("https://svc.local", "score", "job-1", {}, oss_prefix="users/alice/job-1/")
+    assert seen["prefix"] == "users/alice/job-1/"
+
+
+def test_submit_json_encodes_structured_fields_and_drops_none():
+    seen = {}
+
+    def handler(request):
+        seen["form"] = parse_qs(request.content.decode())
+        return httpx.Response(202, json={})
+
+    d = HttpDispatch(_client(handler))
+    d.submit("https://svc.local", "design", "j1",
+             {"chains": ["A", "B"], "bias": {"A": 0.1}, "n": 2, "name": "x", "skip": None})
+    f = seen["form"]
+    assert json.loads(f["chains"][0]) == ["A", "B"]
+    assert json.loads(f["bias"][0]) == {"A": 0.1}
+    assert f["n"] == ["2"] and f["name"] == ["x"]
+    assert "skip" not in f

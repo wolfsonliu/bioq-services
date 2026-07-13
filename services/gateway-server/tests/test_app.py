@@ -44,7 +44,7 @@ def test_run_and_status_happy(client):
     }
 
     class _Disp:
-        def submit(self, base, ep, job_id, data):
+        def submit(self, base, ep, job_id, data, oss_prefix=None):
             self.last = (base, ep, job_id, data)
 
         def status(self, base, job_id):
@@ -81,7 +81,7 @@ def test_tenant_isolation(client):
     }
 
     class _Disp:
-        def submit(self, base, ep, job_id, data):
+        def submit(self, base, ep, job_id, data, oss_prefix=None):
             pass
 
         def status(self, base, job_id):
@@ -112,16 +112,48 @@ def test_presign_route(client):
     from server.models import PresignResponse
 
     class _FakePresigner:
-        def presign_put(self, principal, filename, sha256):
-            return PresignResponse(uri=f"oss://b/users/{principal}/inputs/{sha256}/{filename}",
-                                   exists=False, url="https://oss.put/signed")
+        def presign_put(self, principal, job_id, filename, sha256=None):
+            return PresignResponse(
+                uri=f"oss://b/users/{principal}/{job_id}/input/{filename}",
+                exists=False, url="https://oss.put/signed")
 
     appmod.app.state.presigner = _FakePresigner()
     hdr = {"x-api-key": "p-sec", "host": "public.example.com"}
     r = client.post("/v1/uploads/presign",
-                    json={"filename": "x.rst7", "sha256": "abc"}, headers=hdr)
+                    json={"job_id": "job1", "filename": "x.rst7"}, headers=hdr)
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["url"] == "https://oss.put/signed"
-    assert body["uri"] == "oss://b/users/alice/inputs/abc/x.rst7"
+    assert body["uri"] == "oss://b/users/alice/job1/input/x.rst7"
     assert body["exists"] is False
+
+
+def test_download_redirects_to_oss_when_present(client):
+    import server.app as appmod
+    _seed_key(appmod, principal="alice", secret="d-sec", key_id="gk_d")
+    from bioagent_service.service_registry import ServiceRecord
+    appmod.app.state.registry._services = {"openbpmd-server": ServiceRecord(url="https://svc.local")}
+
+    class _Disp:
+        def submit(self, base, ep, job_id, data, oss_prefix=None):
+            pass
+
+        def status(self, base, job_id):
+            return {"status": "completed"}
+
+    appmod.app.state.dispatch = _Disp()
+
+    class _Presigner:
+        def presign_get_if_exists(self, principal, job_id, filename):
+            return "https://oss.get/signed-results"
+
+    appmod.app.state.presigner = _Presigner()
+
+    hdr = {"x-api-key": "d-sec", "host": "public.example.com"}
+    r = client.post("/v1/run/openbpmd-server/score",
+                    json={}, headers={**hdr, "x-bioagent-job-id": "cjob1"})
+    assert r.status_code == 202
+    assert r.json()["job_id"] == "cjob1"
+
+    r2 = client.get("/v1/jobs/cjob1/download", headers=hdr, follow_redirects=False)
+    assert r2.status_code == 302
+    assert r2.headers["location"] == "https://oss.get/signed-results"
