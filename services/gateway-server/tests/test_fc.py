@@ -227,7 +227,14 @@ class TestEndToEndProteinMPNN:
             time.sleep(RUN_POLL_INTERVAL_S)
         assert body.get("status") == "completed", f"job {job_id} ended: {body}"
 
-        dl = client.get(f"/v1/jobs/{job_id}/download", follow_redirects=True)
+        # Assert the download is served via OSS (302 presigned GET), i.e. the
+        # output-sink mirrored results.zip — NOT the downstream proxy fallback.
+        red = client.get(f"/v1/jobs/{job_id}/download", follow_redirects=False)
+        assert red.status_code == 302, (
+            f"expected OSS 302 (output-sink mirror), got {red.status_code}: {red.text}"
+        )
+        assert "results.zip" in red.headers["location"]
+        dl = httpx.get(red.headers["location"], timeout=TIMEOUT)  # pull straight from OSS
         assert dl.status_code == 200, dl.text
         names = zipfile.ZipFile(io.BytesIO(dl.content)).namelist()
         assert any(n.endswith((".fa", ".fasta")) for n in names), f"no FASTA in {names}"
