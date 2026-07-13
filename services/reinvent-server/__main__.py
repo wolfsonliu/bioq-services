@@ -97,4 +97,4 @@ endpoints = {
 }
 
 if __name__ == "__main__":
-    create_cli(adapter, settings, endpoints, version="0.0.1")
+    create_cli(adapter, settings, endpoints, version="0.0.2")
