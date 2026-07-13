@@ -37,6 +37,7 @@ class ServiceRecord(BaseModel):
     tier: str = "warm"            # hot | warm | cold
     function: str | None = None   # FC function name (optional)
     gpu: str | None = None        # GPU card class (optional)
+    oss_mount: bool = False       # downstream mounts the data-plane OSS bucket at /mnt/oss
 
 
 def find_services_yaml(start: Path | None = None) -> Path:

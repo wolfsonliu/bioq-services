@@ -46,6 +46,7 @@ class GatewaySettings(ServiceSettings):
     oss_bucket: str = Field(default="bioagent-inputs")
     oss_region: str = Field(default="cn-hangzhou")
     presign_expiry_sec: int = Field(default=900, ge=60)
+    downstream_oss_mount: str = Field(default="/mnt/oss")
 
     # downstream service registry (svc -> ServiceRecord)
     registry_path: Path = Field(default=Path("/opt/gateway/services.yaml"))

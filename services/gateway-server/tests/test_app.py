@@ -193,3 +193,64 @@ def test_download_falls_back_to_proxy_when_not_on_oss(client):
     r2 = client.get("/v1/jobs/fjob1/download", headers=hdr)
     assert r2.status_code == 200
     assert r2.content == b"PROXYZIP"
+
+
+def test_run_rewrites_oss_inputs_to_mount_for_mounted_service(client):
+    import server.app as appmod
+    _seed_key(appmod, principal="alice", secret="m-sec", key_id="gk_m")
+    from bioagent_service.service_registry import ServiceRecord
+    appmod.app.state.registry._services = {
+        "openbpmd-server": ServiceRecord(url="https://svc.local", oss_mount=True),
+    }
+
+    captured = {}
+
+    class _Disp:
+        def submit(self, base, ep, job_id, data, oss_prefix=None):
+            captured["data"] = data
+
+        def status(self, base, job_id):
+            return {"status": "running"}
+
+    appmod.app.state.dispatch = _Disp()
+
+    hdr = {"x-api-key": "m-sec", "host": "public.example.com"}
+    r = client.post(
+        "/v1/run/openbpmd-server/score",
+        headers={**hdr, "x-bioagent-job-id": "mjob1"},
+        json={"structure_uri": "oss://bioagent-inputs/users/alice/mjob1/input/x.rst7",
+              "nreps": 1},
+    )
+    assert r.status_code == 202, r.text
+    # default GATEWAY_OSS_BUCKET is "bioagent-inputs"
+    assert captured["data"]["structure_uri"] == "/mnt/oss/users/alice/mjob1/input/x.rst7"
+    assert captured["data"]["nreps"] == 1
+
+
+def test_run_keeps_oss_uris_for_unmounted_service(client):
+    import server.app as appmod
+    _seed_key(appmod, principal="alice", secret="u-sec", key_id="gk_u")
+    from bioagent_service.service_registry import ServiceRecord
+    appmod.app.state.registry._services = {
+        "openbpmd-server": ServiceRecord(url="https://svc.local"),  # oss_mount defaults False
+    }
+
+    captured = {}
+
+    class _Disp:
+        def submit(self, base, ep, job_id, data, oss_prefix=None):
+            captured["data"] = data
+
+        def status(self, base, job_id):
+            return {"status": "running"}
+
+    appmod.app.state.dispatch = _Disp()
+
+    hdr = {"x-api-key": "u-sec", "host": "public.example.com"}
+    r = client.post(
+        "/v1/run/openbpmd-server/score",
+        headers={**hdr, "x-bioagent-job-id": "ujob1"},
+        json={"structure_uri": "oss://bioagent-inputs/users/alice/ujob1/input/x.rst7"},
+    )
+    assert r.status_code == 202
+    assert captured["data"]["structure_uri"] == "oss://bioagent-inputs/users/alice/ujob1/input/x.rst7"

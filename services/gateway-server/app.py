@@ -17,6 +17,7 @@ from .discover import Discovery
 from .dispatch import HttpDispatch
 from .fc_status import FcStatusClient
 from .models import JobView, PresignRequest, PresignResponse
+from .oss_map import map_oss_inputs_to_mount
 from .presign import Presigner, build_oss_client
 from .registry import ServiceRegistry
 from .settings import GatewaySettings
@@ -76,6 +77,11 @@ def run(svc: str, endpoint: str, request: Request,
     if db.get_job(job_id) is not None:
         raise HTTPException(409, f"job {job_id!r} already exists")
     oss_prefix = f"users/{ident.principal}/{job_id}/"
+    rec = reg.record(svc)
+    if rec.oss_mount:
+        body = map_oss_inputs_to_mount(
+            body, bucket=settings.oss_bucket, mount=settings.downstream_oss_mount
+        )
     db.create_user(ident.principal)
     db.create_job(job_id=job_id, principal=ident.principal, svc=svc, endpoint=endpoint,
                   input_params=body, output_prefix=oss_prefix)

@@ -44,6 +44,7 @@ services:
     url: https://fc-proteinmpnn-pahlhbttzb.cn-hangzhou-vpc.fcapp.run
     tier: hot
     function: fc_proteinmpnn
+    oss_mount: true
   boltz-server:
     url: https://fc-boltz-kbioniejif.cn-hangzhou-vpc.fcapp.run
     tier: hot
