@@ -14,14 +14,11 @@ RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
         "httpx>=0.28" "pyjwt[crypto]>=2.8" "sqlalchemy>=2.0" alibabacloud-oss-v2 \
         "alibabacloud_fc20230330>=4.0" "alibabacloud_tea_openapi>=0.3.0" alibabacloud_tea_util
 
-# gateway code into /opt/gateway/server/  (imported as `server.app`)
-COPY services/gateway-server/__init__.py services/gateway-server/settings.py \
-     services/gateway-server/adapter.py services/gateway-server/app.py \
-     services/gateway-server/models.py services/gateway-server/registry.py \
-     services/gateway-server/discover.py services/gateway-server/dispatch.py \
-     services/gateway-server/fc_status.py services/gateway-server/presign.py \
-     services/gateway-server/VERSION \
-     /opt/gateway/server/
+# gateway code into /opt/gateway/server/  (imported as `server.app`).
+# Glob all top-level modules (+ VERSION) so a new module can't be forgotten;
+# `*.py` is non-recursive, so tests/ / scripts/ are excluded. auth/ + db/ are
+# subpackages, copied explicitly.
+COPY services/gateway-server/*.py services/gateway-server/VERSION /opt/gateway/server/
 COPY services/gateway-server/auth/ /opt/gateway/server/auth/
 COPY services/gateway-server/db/ /opt/gateway/server/db/
 
