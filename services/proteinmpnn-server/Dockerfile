@@ -60,8 +60,11 @@ COPY services/proteinmpnn-server/upstream/helper_scripts/        ./helper_script
 COPY services/proteinmpnn-server/AbMPNN_model_weights/  ./AbMPNN_model_weights/
 
 # Shared bioagent service framework + remote-fetch deps (late layer).
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
-    --mount=type=cache,target=/root/.cache/uv \
+# COPY (not --mount=type=bind) so a framework SOURCE change busts this layer's
+# cache: BuildKit does not include bind-mount content in the cache key, which
+# would otherwise ship a stale framework even after the framework is updated.
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
 # Server code last — explicit file list so test/doc changes don't bust cache.
