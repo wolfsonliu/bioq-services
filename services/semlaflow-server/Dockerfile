@@ -180,8 +180,8 @@ RUN find /opt/conda/envs/semlaflow/lib -name '*.a' -delete \
 # Shared service framework — independent layer so framework bumps don't
 # invalidate the conda env layer above.
 # ---------------------------------------------------------------------------
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
-    --mount=type=cache,target=/root/.cache/uv \
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/semlaflow/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
@@ -235,6 +235,13 @@ ENV PYTHONPATH=/opt/semlaflow
 ENV SEMLAFLOW_ROOT=/opt/semlaflow
 ENV SEMLAFLOW_PYTHON=/opt/conda/envs/semlaflow/bin/python
 ENV SEMLAFLOW_INFERENCE_SCRIPT=/opt/semlaflow/server/inference.py
+# Output-sink: when gateway sends X-Bioagent-Oss-Prefix, framework mirrors the
+# job dir (generated molecules) here. Requires the data-plane OSS bucket mounted
+# at /mnt/oss RW in the FC console. Absent mount => no-op (NAS only). Default is
+# already /mnt/oss; explicit for self-documentation. (No input direct-read: the
+# request carries only scalar generation params, so there are no oss:// input
+# URIs to rewrite and no `oss_mount: true` / uris.py is needed for this service.)
+ENV SEMLAFLOW_OSS_OUTPUT_MOUNT=/mnt/oss
 ENV SEMLAFLOW_JOBS_BASE_DIR=/data/semlaflow_jobs
 
 # Weights + reference datasets externalized — NAS mount injected by FC config

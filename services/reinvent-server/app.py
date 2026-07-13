@@ -5,7 +5,6 @@
 """
 from __future__ import annotations
 
-import shutil
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -32,6 +31,7 @@ from .tools import (
     enumeration_argv, sampling_argv, scoring_argv,
     staged_learning_argv, transfer_learning_argv,
 )
+from .uris import maybe_resolve_input, resolve_input
 
 settings = ReinventSettings()
 adapter = ReinventAdapter(settings=settings)
@@ -110,19 +110,80 @@ def healthz_detail(request: Request) -> dict:
 
 
 # ---- helpers ----
+#
+# Every file input accepts EITHER a multipart upload OR a `*_uri` (job/oss/file/
+# http scheme) resolved via uris.py — same pattern as boltz / diffdock / drughive.
+# `_dest` keeps the on-disk filename stable (upload name → URI basename → fallback)
+# so reinvent_cli's flag values point at a sensibly-named file.
 
-def _persist(upload: UploadFile, dst: Path) -> Path:
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    with dst.open("wb") as f:
-        shutil.copyfileobj(upload.file, f)
-    return dst
+def _dest(job_dir: Path, upload: Optional[UploadFile], uri: Optional[str], fallback: str) -> Path:
+    name = None
+    if upload is not None and upload.filename:
+        name = Path(upload.filename).name
+    elif uri:
+        name = uri.rstrip("/").split("/")[-1] or None
+    return job_dir / "inputs" / (name or fallback)
 
 
-def _files_sampling(job_dir, smiles_file):
-    d = {}
-    if smiles_file is not None:
-        d["smiles_file"] = _persist(smiles_file, job_dir / "inputs" / smiles_file.filename)
-    return d
+def _resolve(job_dir: Path, upload: Optional[UploadFile], uri: Optional[str],
+             fallback: str, *, required: bool) -> Optional[Path]:
+    dest = _dest(job_dir, upload, uri, fallback)
+    if required:
+        return resolve_input(upload, uri, dest, settings)
+    return maybe_resolve_input(upload, uri, dest, settings)
+
+
+# Per-mode `files` builders — map reinvent_cli flags → resolved on-disk paths.
+# Shared by the sync (/api/*) and FC async task (/api/tasks/*) endpoints so both
+# accept uploads and `*_uri` inputs identically.
+
+def _files_sampling(job_dir, params, smiles_file):
+    f = {}
+    p = _resolve(job_dir, smiles_file, params.smiles_file_uri, "input.smi", required=False)
+    if p is not None:
+        f["smiles_file"] = p
+    return f
+
+
+def _files_scoring(job_dir, params, smiles_file):
+    return {"smiles_file": _resolve(job_dir, smiles_file, params.smiles_file_uri,
+                                    "input.smi", required=True)}
+
+
+def _files_enumeration(job_dir, params, peptide_smiles, amino_acid_library):
+    return {
+        "smiles_file": _resolve(job_dir, peptide_smiles, params.peptide_smiles_uri,
+                                "peptides.smi", required=True),
+        "amino_acid_library": _resolve(job_dir, amino_acid_library, params.amino_acid_library_uri,
+                                       "amino_acids.csv", required=True),
+    }
+
+
+def _files_transfer(job_dir, params, smiles_file, validation_smiles_file, input_model_upload):
+    f = {"smiles_file": _resolve(job_dir, smiles_file, params.smiles_file_uri,
+                                 "input.smi", required=True)}
+    p = _resolve(job_dir, validation_smiles_file, params.validation_smiles_file_uri,
+                 "validation.smi", required=False)
+    if p is not None:
+        f["validation_smiles_file"] = p
+    p = _resolve(job_dir, input_model_upload, params.input_model_uri, "input.model", required=False)
+    if p is not None:
+        f["model_file"] = p
+    return f
+
+
+def _files_staged(job_dir, params, smiles_file, prior_upload, agent_upload):
+    f = {}
+    p = _resolve(job_dir, smiles_file, params.smiles_file_uri, "input.smi", required=False)
+    if p is not None:
+        f["smiles_file"] = p
+    p = _resolve(job_dir, prior_upload, params.prior_file_uri, "prior.model", required=False)
+    if p is not None:
+        f["prior_file"] = p
+    p = _resolve(job_dir, agent_upload, params.agent_file_uri, "agent.model", required=False)
+    if p is not None:
+        f["agent_file"] = p
+    return f
 
 
 # ---- sync endpoints ----
@@ -133,7 +194,7 @@ def sampling(
     smiles_file: Optional[UploadFile] = File(None),
 ) -> JobInfo:
     def _build(job_id, job_dir):
-        return sampling_argv(params, _files_sampling(job_dir, smiles_file), job_dir, settings)
+        return sampling_argv(params, _files_sampling(job_dir, params, smiles_file), job_dir, settings)
     return app.state.runner.submit(build_argv=_build, label="sampling",
                                    input_params=params.model_dump(mode="json"))
 
@@ -141,11 +202,10 @@ def sampling(
 @app.post("/api/scoring", response_model=JobInfo)
 def scoring(
     params: ScoringRequest = Depends(model_form_depends(ScoringRequest)),
-    smiles_file: UploadFile = File(...),
+    smiles_file: Optional[UploadFile] = File(None),
 ) -> JobInfo:
     def _build(job_id, job_dir):
-        f = {"smiles_file": _persist(smiles_file, job_dir / "inputs" / smiles_file.filename)}
-        return scoring_argv(params, f, job_dir, settings)
+        return scoring_argv(params, _files_scoring(job_dir, params, smiles_file), job_dir, settings)
     return app.state.runner.submit(build_argv=_build, label="scoring",
                                    input_params=params.model_dump(mode="json"))
 
@@ -153,15 +213,13 @@ def scoring(
 @app.post("/api/enumeration", response_model=JobInfo)
 def enumeration(
     params: EnumerationRequest = Depends(model_form_depends(EnumerationRequest)),
-    peptide_smiles: UploadFile = File(...),
-    amino_acid_library: UploadFile = File(...),
+    peptide_smiles: Optional[UploadFile] = File(None),
+    amino_acid_library: Optional[UploadFile] = File(None),
 ) -> JobInfo:
     def _build(job_id, job_dir):
-        f = {
-            "smiles_file": _persist(peptide_smiles, job_dir / "inputs" / peptide_smiles.filename),
-            "amino_acid_library": _persist(amino_acid_library, job_dir / "inputs" / amino_acid_library.filename),
-        }
-        return enumeration_argv(params, f, job_dir, settings)
+        return enumeration_argv(
+            params, _files_enumeration(job_dir, params, peptide_smiles, amino_acid_library),
+            job_dir, settings)
     return app.state.runner.submit(build_argv=_build, label="enumeration",
                                    input_params=params.model_dump(mode="json"))
 
@@ -169,19 +227,15 @@ def enumeration(
 @app.post("/api/transfer-learning", response_model=JobInfo)
 def transfer_learning(
     params: TransferLearningRequest = Depends(model_form_depends(TransferLearningRequest)),
-    smiles_file: UploadFile = File(...),
+    smiles_file: Optional[UploadFile] = File(None),
     validation_smiles_file: Optional[UploadFile] = File(None),
     input_model_upload: Optional[UploadFile] = File(None),
 ) -> JobInfo:
     def _build(job_id, job_dir):
-        f = {"smiles_file": _persist(smiles_file, job_dir / "inputs" / smiles_file.filename)}
-        if validation_smiles_file is not None:
-            f["validation_smiles_file"] = _persist(
-                validation_smiles_file, job_dir / "inputs" / validation_smiles_file.filename)
-        if input_model_upload is not None:
-            f["model_file"] = _persist(
-                input_model_upload, job_dir / "inputs" / input_model_upload.filename)
-        return transfer_learning_argv(params, f, job_dir, settings)
+        return transfer_learning_argv(
+            params,
+            _files_transfer(job_dir, params, smiles_file, validation_smiles_file, input_model_upload),
+            job_dir, settings)
     return app.state.runner.submit(build_argv=_build, label="transfer_learning",
                                    input_params=params.model_dump(mode="json"))
 
@@ -194,14 +248,9 @@ def staged_learning(
     agent_upload: Optional[UploadFile] = File(None),
 ) -> JobInfo:
     def _build(job_id, job_dir):
-        f = {}
-        if smiles_file is not None:
-            f["smiles_file"] = _persist(smiles_file, job_dir / "inputs" / smiles_file.filename)
-        if prior_upload is not None:
-            f["prior_file"] = _persist(prior_upload, job_dir / "inputs" / prior_upload.filename)
-        if agent_upload is not None:
-            f["agent_file"] = _persist(agent_upload, job_dir / "inputs" / agent_upload.filename)
-        return staged_learning_argv(params, f, job_dir, settings)
+        return staged_learning_argv(
+            params, _files_staged(job_dir, params, smiles_file, prior_upload, agent_upload),
+            job_dir, settings)
     return app.state.runner.submit(build_argv=_build, label="staged_learning",
                                    input_params=params.model_dump(mode="json"))
 
@@ -221,7 +270,7 @@ if settings.task_endpoints_enabled:
         job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
 
         def _build(req, _job_id, job_dir):
-            return sampling_argv(req, _files_sampling(job_dir, smiles_file), job_dir, settings)
+            return sampling_argv(req, _files_sampling(job_dir, req, smiles_file), job_dir, settings)
         return execute_task(request, job_id=job_id, label="sampling",
                             params=params, build_argv=_build)
 
@@ -229,15 +278,14 @@ if settings.task_endpoints_enabled:
     def task_scoring(
         request: Request,
         params: ScoringRequest = Depends(model_form_depends(ScoringRequest)),
-        smiles_file: UploadFile = File(...),
+        smiles_file: Optional[UploadFile] = File(None),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias=settings.task_job_id_header),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
     ) -> JobInfo:
         job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
 
         def _build(req, _job_id, job_dir):
-            f = {"smiles_file": _persist(smiles_file, job_dir / "inputs" / smiles_file.filename)}
-            return scoring_argv(req, f, job_dir, settings)
+            return scoring_argv(req, _files_scoring(job_dir, req, smiles_file), job_dir, settings)
         return execute_task(request, job_id=job_id, label="scoring",
                             params=params, build_argv=_build)
 
@@ -245,19 +293,17 @@ if settings.task_endpoints_enabled:
     def task_enumeration(
         request: Request,
         params: EnumerationRequest = Depends(model_form_depends(EnumerationRequest)),
-        peptide_smiles: UploadFile = File(...),
-        amino_acid_library: UploadFile = File(...),
+        peptide_smiles: Optional[UploadFile] = File(None),
+        amino_acid_library: Optional[UploadFile] = File(None),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias=settings.task_job_id_header),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
     ) -> JobInfo:
         job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
 
         def _build(req, _job_id, job_dir):
-            f = {
-                "smiles_file": _persist(peptide_smiles, job_dir / "inputs" / peptide_smiles.filename),
-                "amino_acid_library": _persist(amino_acid_library, job_dir / "inputs" / amino_acid_library.filename),
-            }
-            return enumeration_argv(req, f, job_dir, settings)
+            return enumeration_argv(
+                req, _files_enumeration(job_dir, req, peptide_smiles, amino_acid_library),
+                job_dir, settings)
         return execute_task(request, job_id=job_id, label="enumeration",
                             params=params, build_argv=_build)
 
@@ -265,7 +311,7 @@ if settings.task_endpoints_enabled:
     def task_transfer_learning(
         request: Request,
         params: TransferLearningRequest = Depends(model_form_depends(TransferLearningRequest)),
-        smiles_file: UploadFile = File(...),
+        smiles_file: Optional[UploadFile] = File(None),
         validation_smiles_file: Optional[UploadFile] = File(None),
         input_model_upload: Optional[UploadFile] = File(None),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias=settings.task_job_id_header),
@@ -274,14 +320,10 @@ if settings.task_endpoints_enabled:
         job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
 
         def _build(req, _job_id, job_dir):
-            f = {"smiles_file": _persist(smiles_file, job_dir / "inputs" / smiles_file.filename)}
-            if validation_smiles_file is not None:
-                f["validation_smiles_file"] = _persist(
-                    validation_smiles_file, job_dir / "inputs" / validation_smiles_file.filename)
-            if input_model_upload is not None:
-                f["model_file"] = _persist(
-                    input_model_upload, job_dir / "inputs" / input_model_upload.filename)
-            return transfer_learning_argv(req, f, job_dir, settings)
+            return transfer_learning_argv(
+                req,
+                _files_transfer(job_dir, req, smiles_file, validation_smiles_file, input_model_upload),
+                job_dir, settings)
         return execute_task(request, job_id=job_id, label="transfer_learning",
                             params=params, build_argv=_build)
 
@@ -298,14 +340,9 @@ if settings.task_endpoints_enabled:
         job_id = resolve_task_id(x_bioagent_job_id, x_fc_async_task_id)
 
         def _build(req, _job_id, job_dir):
-            f = {}
-            if smiles_file is not None:
-                f["smiles_file"] = _persist(smiles_file, job_dir / "inputs" / smiles_file.filename)
-            if prior_upload is not None:
-                f["prior_file"] = _persist(prior_upload, job_dir / "inputs" / prior_upload.filename)
-            if agent_upload is not None:
-                f["agent_file"] = _persist(agent_upload, job_dir / "inputs" / agent_upload.filename)
-            return staged_learning_argv(req, f, job_dir, settings)
+            return staged_learning_argv(
+                req, _files_staged(job_dir, req, smiles_file, prior_upload, agent_upload),
+                job_dir, settings)
         return execute_task(request, job_id=job_id, label="staged_learning",
                             params=params, build_argv=_build)
 

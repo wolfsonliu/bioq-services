@@ -94,8 +94,12 @@ RUN .venv/bin/python -c "import torch, cuequivariance_torch, boltzgen; \
 
 # Shared bioagent service framework + remote-fetch deps (late layer so the
 # framework changing doesn't invalidate the BoltzGen install/weight layers).
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
-    --mount=type=cache,target=/root/.cache/uv \
+#
+# COPY (not bind-mount): BuildKit does not include bind-mount content in the
+# layer cache key, so a bind would ship a stale framework even after the
+# framework source is updated (would silently drop the output-sink fix).
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2 pyyaml
 
@@ -120,6 +124,11 @@ ENV BOLTZGEN_WEIGHTS_DIR=/data/models/boltzgen/weights
 ENV BOLTZGEN_MOLDIR=/data/models/boltzgen/moldir
 ENV BOLTZGEN_JOBS_BASE_DIR=/data/boltzgen_jobs
 RUN mkdir -p /data/boltzgen_jobs
+
+# Output-sink: when the gateway sends X-Bioagent-Oss-Prefix, the framework
+# mirrors the finished job dir to this mount. Requires an OSS mount at /mnt/oss
+# in the FC console (storage config). Absent mount => no-op (NAS-only).
+ENV BOLTZGEN_OSS_OUTPUT_MOUNT=/mnt/oss
 
 # Keepalive pings this URL through FC's gateway so the instance stays alive
 # during long GPU jobs. Override at deploy time if the URL changes.

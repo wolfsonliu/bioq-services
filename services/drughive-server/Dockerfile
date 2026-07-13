@@ -220,9 +220,13 @@ RUN /opt/conda/envs/drughive/bin/pip uninstall -y \
 # ---------------------------------------------------------------------------
 # Shared service framework — independent layer so framework bumps don't
 # invalidate the conda env layer above.
+#
+# COPY (not bind-mount): BuildKit does not include bind-mount content in the
+# layer cache key, so a bind would ship a stale framework even after the
+# framework source is updated (would silently drop the output-sink fix).
 # ---------------------------------------------------------------------------
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
-    --mount=type=cache,target=/root/.cache/uv \
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/drughive/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
@@ -274,6 +278,11 @@ ENV DRUGHIVE_PYTHON=/opt/conda/envs/drughive/bin/python
 ENV DRUGHIVE_GENERATE_SCRIPT=/opt/drughive/generate_molecules.py
 ENV DRUGHIVE_OPTIMIZE_SCRIPT=/opt/drughive/generate_optimize.py
 ENV DRUGHIVE_JOBS_BASE_DIR=/data/drughive_jobs
+
+# Output-sink: when the gateway sends X-Bioagent-Oss-Prefix, the framework
+# mirrors the finished job dir to this mount. Requires an OSS mount at /mnt/oss
+# in the FC console (storage config). Absent mount => no-op (NAS-only).
+ENV DRUGHIVE_OSS_OUTPUT_MOUNT=/mnt/oss
 
 # Weights externalized — NAS mount injected by FC config / SIF --bind.
 ENV DRUGHIVE_WEIGHTS_DIR=/data/models/drughive/checkpoints

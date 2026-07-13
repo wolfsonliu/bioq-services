@@ -54,9 +54,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         "/opt/reinvent-server/upstream/REINVENT4[chemprop2]" \
         "iSIM@git+https://github.com/mqcomplab/iSIM.git"
 
-# Shared framework + toml writer (separate layer).
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
-    --mount=type=cache,target=/root/.cache/uv \
+# Shared framework + toml writer (separate layer). COPY (not bind) so framework
+# source changes bust this layer's cache — a bind mount's content is not part of
+# the BuildKit layer cache key and would ship a stale framework (missing
+# output-sink fixes).
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2 tomli-w
 
 # ---- Stage 2: runtime ----
@@ -85,6 +88,7 @@ COPY services/reinvent-server/__init__.py \
      services/reinvent-server/models.py \
      services/reinvent-server/settings.py \
      services/reinvent-server/tools.py \
+     services/reinvent-server/uris.py \
      services/reinvent-server/config_builder.py \
      services/reinvent-server/reinvent_cli.py \
      /opt/reinvent-server/server/
@@ -116,6 +120,10 @@ RUN set -e; \
 # follow-up requests to the same instance.
 ENV REINVENT_SESSION_HEADER_NAME=bioagent-session-id
 ENV REINVENT_MAX_CONCURRENT_JOBS=1
+# Output-sink: when gateway sends X-Bioagent-Oss-Prefix, framework mirrors the job dir
+# to this mount. FC console must mount the data-plane OSS bucket to /mnt/oss (RW).
+# Missing mount => no-op (NAS only).
+ENV REINVENT_OSS_OUTPUT_MOUNT=/mnt/oss
 
 ENV PORT=9000
 EXPOSE 9000

@@ -78,9 +78,11 @@ COPY services/promera-server/upstream/LigandMPNN/openfold       /opt/promera/Lig
 # expects to the NAS-mounted dir.
 RUN ln -s /data/models/promera/ligandmpnn /opt/promera/LigandMPNN/model_params
 
-# Shared bioagent service framework + remote-fetch deps.
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
-    --mount=type=cache,target=/root/.cache/uv \
+# Shared bioagent service framework + remote-fetch deps. COPY (not bind) so framework
+# source changes bust this layer's cache — a bind mount's content is not part of the
+# BuildKit layer cache key and would ship a stale framework (missing output-sink fixes).
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
     "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2 pyyaml
 
@@ -105,6 +107,10 @@ ENV PROMERA_LIGANDMPNN_DIR=/opt/promera/LigandMPNN
 ENV PROMERA_TEMPLATES_DIR=/opt/promera/promera_src/examples/templates
 ENV PROMERA_JOBS_BASE_DIR=/data/promera_jobs
 ENV PROMERA_SESSION_HEADER_NAME=bioagent-session-id
+# Output-sink: when gateway sends X-Bioagent-Oss-Prefix, framework mirrors the job dir
+# to this mount. FC console must mount the data-plane OSS bucket to /mnt/oss (RW).
+# Missing mount => no-op (NAS only).
+ENV PROMERA_OSS_OUTPUT_MOUNT=/mnt/oss
 # tinyprot/init.py reads TINYPROT_CACHE at import time (falls back to
 # ~/.cache/tinyprot which isn't populated on ephemeral FC instances).
 ENV TINYPROT_CACHE=/data/models/promera/tinyprot

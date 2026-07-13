@@ -215,8 +215,8 @@ RUN /opt/conda/envs/openadmet-models/bin/pip uninstall -y \
 # ---------------------------------------------------------------------------
 # bioagent service framework — separate layer for cache locality.
 # ---------------------------------------------------------------------------
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
-    --mount=type=cache,target=/root/.cache/uv \
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/openadmet-models/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
@@ -261,6 +261,11 @@ ENV OPENADMET_ROOT=/opt/openadmet/upstream
 ENV OPENADMET_PYTHON=/opt/conda/envs/openadmet-models/bin/python
 ENV OPENADMET_JOBS_BASE_DIR=/data/openadmet_jobs
 ENV OPENADMET_WEIGHTS_DIR=/data/models/openadmet
+# Output-sink: when gateway sends X-Bioagent-Oss-Prefix, framework mirrors the
+# job dir here. Requires the data-plane OSS bucket mounted at /mnt/oss RW in the
+# FC console. Absent mount => no-op (NAS only). Default already /mnt/oss;
+# explicit for self-documentation.
+ENV OPENADMET_OSS_OUTPUT_MOUNT=/mnt/oss
 
 # HOME override — upstream chemprop.py caches CheMeleon foundation under
 # `Path.home() / ".chemprop"`.  Point HOME at the NAS-mounted foundations

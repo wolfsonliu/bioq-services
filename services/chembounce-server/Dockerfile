@@ -117,8 +117,8 @@ RUN /opt/conda/envs/chembounce/bin/pip uninstall -y \
 # chembounce conda env (py3.8, pinned by upstream) because the framework
 # requires py>=3.10 and uses `X | None` unions at runtime.
 # ---------------------------------------------------------------------------
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
-    --mount=type=cache,target=/root/.cache/uv \
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/uv \
     python3.11 -m venv /opt/server-venv \
     && uv pip install --python /opt/server-venv/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
@@ -173,6 +173,10 @@ ENV CHEMBOUNCE_JOBS_BASE_DIR=/data/chembounce_jobs
 ENV CHEMBOUNCE_WEIGHTS_DIR=/data/models/chembounce/data
 
 RUN mkdir -p /data/chembounce_jobs
+
+# Output-sink: 当 gateway 传 X-Bioagent-Oss-Prefix 时，framework 把 job dir 镜像到此挂载点。
+# 需在 FC 控制台把数据面 OSS bucket 挂到 /mnt/oss。缺挂载 => no-op（仅 NAS）。
+ENV CHEMBOUNCE_OSS_OUTPUT_MOUNT=/mnt/oss
 
 # FC session affinity header.
 ENV CHEMBOUNCE_SESSION_HEADER_NAME=bioagent-session-id

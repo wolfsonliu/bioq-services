@@ -184,8 +184,8 @@ RUN /opt/conda/envs/diffusion_hopping/bin/pip uninstall -y \
 # Shared service framework — independent layer so framework bumps don't
 # invalidate the conda env layer above.
 # ---------------------------------------------------------------------------
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
-    --mount=type=cache,target=/root/.cache/uv \
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/diffusion_hopping/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
@@ -236,6 +236,11 @@ ENV DIFFUSION_HOPPING_ROOT=/opt/diffusion-hopping
 ENV DIFFUSION_HOPPING_PYTHON=/opt/conda/envs/diffusion_hopping/bin/python
 ENV DIFFUSION_HOPPING_INFERENCE_SCRIPT=/opt/diffusion-hopping/server/inference.py
 ENV DIFFUSION_HOPPING_JOBS_BASE_DIR=/data/diffusion_hopping_jobs
+# Output-sink: when gateway sends X-Bioagent-Oss-Prefix, framework mirrors the
+# job dir here. Requires the data-plane OSS bucket mounted at /mnt/oss RW in the
+# FC console. Absent mount => no-op (NAS only). Default already /mnt/oss;
+# explicit for self-documentation.
+ENV DIFFUSION_HOPPING_OSS_OUTPUT_MOUNT=/mnt/oss
 
 # Weights externalized — NAS mount injected by FC config / SIF --bind.
 ENV DIFFUSION_HOPPING_WEIGHTS_DIR=/data/models/diffusion-hopping/checkpoints

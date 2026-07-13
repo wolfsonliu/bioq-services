@@ -202,8 +202,8 @@ RUN /opt/conda/envs/flowmol/bin/pip uninstall -y \
 # Shared service framework — independent layer so framework bumps don't
 # invalidate the conda env layer above.
 # ---------------------------------------------------------------------------
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
-    --mount=type=cache,target=/root/.cache/uv \
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/flowmol/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
@@ -264,6 +264,10 @@ ENV FLOWMOL_JOBS_BASE_DIR=/data/flowmol_jobs
 ENV FLOWMOL_WEIGHTS_DIR=/data/models/flowmol
 
 RUN mkdir -p /data/flowmol_jobs
+
+# Output-sink: 当 gateway 传 X-Bioagent-Oss-Prefix 时，framework 把 job dir 镜像到此挂载点。
+# 需在 FC 控制台把数据面 OSS bucket 挂到 /mnt/oss。缺挂载 => no-op（仅 NAS）。
+ENV FLOWMOL_OSS_OUTPUT_MOUNT=/mnt/oss
 
 # FC session affinity: inject this header in POST responses so FC binds
 # follow-up requests to the same instance.

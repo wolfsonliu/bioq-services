@@ -121,8 +121,8 @@ RUN /opt/conda/envs/deeprank-ab/bin/pip uninstall -y \
 # Shared service framework — independent layer so framework changes don't
 # invalidate the (slow) conda env + cleanup above.
 # ---------------------------------------------------------------------------
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
-    --mount=type=cache,target=/root/.cache/uv \
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/deeprank-ab/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
@@ -201,6 +201,10 @@ ENV REG_WEIGHT_PATH=/data/models/deeprank-ab/esm/esm2_t33_650M_UR50D-contact-reg
 ENV PYTHONPATH=/opt/deeprank-ab:/opt/deeprank-ab/DeepRank-Ab/src:/opt/deeprank-ab/DeepRank-Ab
 
 RUN mkdir -p /data/deeprank_ab_jobs
+
+# Output-sink: 当 gateway 传 X-Bioagent-Oss-Prefix 时，framework 把 job dir 镜像到此挂载点。
+# 需在 FC 控制台把数据面 OSS bucket 挂到 /mnt/oss。缺挂载 => no-op（仅 NAS）。
+ENV DEEPRANK_AB_OSS_OUTPUT_MOUNT=/mnt/oss
 
 # Keepalive pings this URL through FC's gateway so the instance stays alive
 # during long GPU jobs. Override at deploy time if the URL changes.

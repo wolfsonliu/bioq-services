@@ -46,8 +46,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # Shared bioagent service framework + remote-fetch deps (late layer so the
 # framework changing doesn't invalidate the DockQ install layer above).
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
-    --mount=type=cache,target=/root/.cache/uv \
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
@@ -69,6 +69,11 @@ ENV PYTHONPATH=/opt/dockq
 ENV DOCKQ_BINARY=/opt/dockq/.venv/bin/DockQ
 ENV DOCKQ_ROOT=/opt/dockq
 ENV DOCKQ_JOBS_BASE_DIR=/data/dockq_jobs
+# Output-sink: when gateway sends X-Bioagent-Oss-Prefix, framework mirrors the
+# job dir here. Requires the data-plane OSS bucket mounted at /mnt/oss in the FC
+# console. Absent mount => no-op (NAS only). Default already /mnt/oss; explicit
+# for self-documentation.
+ENV DOCKQ_OSS_OUTPUT_MOUNT=/mnt/oss
 RUN mkdir -p /data/dockq_jobs
 
 # Keepalive pings this URL through FC's gateway so the instance stays alive

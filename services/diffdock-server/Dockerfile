@@ -283,8 +283,11 @@ RUN /opt/conda/envs/diffdock/bin/pip uninstall -y \
 # Shared service framework — independent layer so framework bumps don't
 # invalidate the conda env layer above.
 # ---------------------------------------------------------------------------
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
-    --mount=type=cache,target=/root/.cache/uv \
+# COPY (not bind) so framework source changes bust this layer's cache — a bind mount's
+# content is not part of the BuildKit layer cache key and would ship a stale framework
+# (missing output-sink fixes).
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/diffdock/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
@@ -374,6 +377,10 @@ print('script-dir models/ shadow handled OK')"
 # follow-up requests to the same instance.
 ENV DIFFDOCK_SESSION_HEADER_NAME=bioagent-session-id
 ENV DIFFDOCK_MAX_CONCURRENT_JOBS=1
+# Output-sink: when gateway sends X-Bioagent-Oss-Prefix, framework mirrors the job dir
+# to this mount. FC console must mount the data-plane OSS bucket to /mnt/oss (RW).
+# Missing mount => no-op (NAS only).
+ENV DIFFDOCK_OSS_OUTPUT_MOUNT=/mnt/oss
 
 ENV PORT=9000
 EXPOSE 9000

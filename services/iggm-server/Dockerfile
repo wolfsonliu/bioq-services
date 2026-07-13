@@ -175,9 +175,13 @@ RUN find /opt/conda/envs/iggm/lib -name '*.a' -delete \
 
 # ---------------------------------------------------------------------------
 # Shared service framework — independent layer.
+#
+# COPY (not bind-mount): BuildKit does not include bind-mount content in the
+# layer cache key, so a bind would ship a stale framework even after the
+# framework source is updated (would silently drop the output-sink fix).
 # ---------------------------------------------------------------------------
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
-    --mount=type=cache,target=/root/.cache/uv \
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/iggm/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
@@ -240,6 +244,11 @@ ENV IGGM_PYTHON=/opt/conda/envs/iggm/bin/python
 ENV IGGM_DESIGN_SCRIPT=/opt/iggm/server/run_design.py
 ENV IGGM_EPITOPE_SCRIPT=/opt/iggm/server/epitope.py
 ENV IGGM_JOBS_BASE_DIR=/data/iggm_jobs
+
+# Output-sink: when the gateway sends X-Bioagent-Oss-Prefix, the framework
+# mirrors the finished job dir to this mount. Requires an OSS mount at /mnt/oss
+# in the FC console (storage config). Absent mount => no-op (NAS-only).
+ENV IGGM_OSS_OUTPUT_MOUNT=/mnt/oss
 
 # Weights externalized — NAS mount injected by FC config / SIF --bind.
 ENV IGGM_WEIGHTS_DIR=/data/models/iggm

@@ -150,8 +150,8 @@ RUN /opt/conda/envs/immunebuilder/bin/pip uninstall -y \
 # Shared service framework — independent layer so framework changes don't
 # invalidate the (slow) conda env + cleanup above.
 # ---------------------------------------------------------------------------
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
-    --mount=type=cache,target=/root/.cache/uv \
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/immunebuilder/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
@@ -195,6 +195,10 @@ ENV IMMUNEBUILDER_JOBS_BASE_DIR=/data/immunebuilder_jobs
 ENV IMMUNEBUILDER_VENV_BIN=/opt/conda/envs/immunebuilder/bin
 ENV IMMUNEBUILDER_WEIGHTS_DIR=/data/models/immunebuilder/trained_model
 RUN mkdir -p /data/immunebuilder_jobs
+
+# Output-sink: 当 gateway 传 X-Bioagent-Oss-Prefix 时，framework 把 job dir 镜像到此挂载点。
+# 需在 FC 控制台把数据面 OSS bucket 挂到 /mnt/oss。缺挂载 => no-op（仅 NAS）。
+ENV IMMUNEBUILDER_OSS_OUTPUT_MOUNT=/mnt/oss
 
 
 # Keepalive pings this URL through FC's gateway so the instance stays alive

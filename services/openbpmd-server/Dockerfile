@@ -187,6 +187,10 @@ ENV OPENBPMD_UPSTREAM_DIR=/opt/openbpmd/upstream
 ENV OPENBPMD_JOBS_BASE_DIR=/data/openbpmd_jobs
 ENV OPENBPMD_PLATFORM=CUDA
 
+# Output-sink: 当 gateway 传 X-Bioagent-Oss-Prefix 时，framework 把 job dir 镜像到此挂载点。
+# 需在 FC 控制台把数据面 OSS bucket 挂到 /mnt/oss。缺挂载 => no-op（仅 NAS）。
+ENV OPENBPMD_OSS_OUTPUT_MOUNT=/mnt/oss
+
 # Weights placeholder — OpenBPMD has no NN weights; NAS mount optional.
 ENV OPENBPMD_WEIGHTS_DIR=/data/models/openbpmd
 ENV OPENBPMD_MAX_CONCURRENT_JOBS=1

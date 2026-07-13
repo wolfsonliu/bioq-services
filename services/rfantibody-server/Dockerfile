@@ -75,10 +75,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python -e .
 
 # Shared bioagent service framework (HTTP/job/error layer, pydantic models, NAS-aware
-# read-through cache). Bind mount avoids a COPY layer — framework dir is available
-# during RUN but never stored in the image.
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
-    --mount=type=cache,target=/root/.cache/uv \
+# read-through cache). COPY (not bind) so framework source changes bust this layer's
+# cache — a bind mount's content is not part of the BuildKit layer cache key and would
+# ship a stale framework (missing output-sink fixes).
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
 # Server code last — explicit file list so test/doc changes don't bust cache.
@@ -97,6 +98,10 @@ COPY services/rfantibody-server/__init__.py \
 # The RFANTIBODY_ prefix is read by pydantic-settings; defaults match the image layout.
 ENV PYTHONPATH=/opt/rfantibody
 ENV RFANTIBODY_ROOT=/opt/rfantibody
+# Output-sink: when gateway sends X-Bioagent-Oss-Prefix, framework mirrors the job dir
+# to this mount. FC console must mount the data-plane OSS bucket to /mnt/oss (RW).
+# Missing mount => no-op (NAS only).
+ENV RFANTIBODY_OSS_OUTPUT_MOUNT=/mnt/oss
 ENV RFANTIBODY_WEIGHTS_DIR=/data/models/rfantibody/weights
 ENV RFANTIBODY_SCRIPTS_DIR=/opt/rfantibody/scripts
 ENV RFANTIBODY_JOBS_BASE_DIR=/data/rfantibody_jobs

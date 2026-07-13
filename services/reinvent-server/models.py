@@ -13,6 +13,12 @@ from pydantic import BaseModel, Field
 Generator = Literal["reinvent", "libinvent", "linkinvent", "mol2mol", "pepinvent"]
 SampleStrategy = Literal["multinomial", "beamsearch"]
 
+_URI_DESC = (
+    "URI reference to the {what} (scheme in {{job, oss, file, http, https}}); "
+    "alternative to the multipart upload. With oss_mount the gateway rewrites "
+    "oss:// to a /mnt/oss path read straight off the mounted bucket."
+)
+
 
 class SamplingRequest(BaseModel):
     generator: Generator = "reinvent"
@@ -27,6 +33,9 @@ class SamplingRequest(BaseModel):
     temperature: float = 1.0
     sample_strategy: SampleStrategy = "multinomial"
     device: Optional[str] = None
+    smiles_file_uri: Optional[str] = Field(
+        default=None, description=_URI_DESC.format(what="input SMILES file"),
+    )
 
 
 class ScoringRequest(BaseModel):
@@ -35,6 +44,9 @@ class ScoringRequest(BaseModel):
     parallel: int = Field(default=1, ge=1)
     scoring: dict = Field(..., description="[scoring] section (JSON): type + component list.")
     device: Optional[str] = None
+    smiles_file_uri: Optional[str] = Field(
+        default=None, description=_URI_DESC.format(what="SMILES file to score"),
+    )
 
 
 class EnumerationRequest(BaseModel):
@@ -43,6 +55,12 @@ class EnumerationRequest(BaseModel):
     smiles_column: str = "Smiles"
     scoring: dict = Field(..., description="[scoring] section (JSON).")
     device: Optional[str] = None
+    peptide_smiles_uri: Optional[str] = Field(
+        default=None, description=_URI_DESC.format(what="peptide SMILES file"),
+    )
+    amino_acid_library_uri: Optional[str] = Field(
+        default=None, description=_URI_DESC.format(what="amino-acid library file"),
+    )
 
 
 class TransferLearningRequest(BaseModel):
@@ -58,6 +76,15 @@ class TransferLearningRequest(BaseModel):
         default=None, description="Mol2Mol similarity pairing (JSON), → pairs.* in [parameters].",
     )
     device: Optional[str] = None
+    smiles_file_uri: Optional[str] = Field(
+        default=None, description=_URI_DESC.format(what="training SMILES file"),
+    )
+    validation_smiles_file_uri: Optional[str] = Field(
+        default=None, description=_URI_DESC.format(what="validation SMILES file"),
+    )
+    input_model_uri: Optional[str] = Field(
+        default=None, description=_URI_DESC.format(what="input model (.model) file"),
+    )
 
 
 class StageSpec(BaseModel):
@@ -87,3 +114,12 @@ class StagedLearningRequest(BaseModel):
     inception: Optional[dict] = None
     stages: list[StageSpec] = Field(..., min_length=1)
     device: Optional[str] = None
+    smiles_file_uri: Optional[str] = Field(
+        default=None, description=_URI_DESC.format(what="input SMILES file"),
+    )
+    prior_file_uri: Optional[str] = Field(
+        default=None, description=_URI_DESC.format(what="prior (.model) file"),
+    )
+    agent_file_uri: Optional[str] = Field(
+        default=None, description=_URI_DESC.format(what="agent (.model) file"),
+    )

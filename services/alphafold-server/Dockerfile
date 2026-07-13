@@ -131,8 +131,8 @@ RUN find /opt/conda/envs/af2/lib -name '*.a' -delete \
 # ---------------------------------------------------------------------------
 # Shared service framework.
 # ---------------------------------------------------------------------------
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
-    --mount=type=cache,target=/root/.cache/uv \
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/af2/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
@@ -190,6 +190,10 @@ ENV ALPHAFOLD_ROOT=/opt/alphafold
 ENV ALPHAFOLD_PYTHON=/opt/conda/envs/af2/bin/python
 ENV ALPHAFOLD_JOBS_BASE_DIR=/data/alphafold_jobs
 ENV ALPHAFOLD_DATA_DIR=/data/models/alphafold
+# Output-sink: when the gateway passes X-Bioagent-Oss-Prefix, the framework
+# mirrors the finished job dir to this mount. Requires an OSS mount at /mnt/oss
+# in the FC console (storage config). Absent mount => no-op (NAS-only).
+ENV ALPHAFOLD_OSS_OUTPUT_MOUNT=/mnt/oss
 ENV ALPHAFOLD_N_CPU=8
 ENV ALPHAFOLD_MAX_CONCURRENT_JOBS=1
 ENV TF_FORCE_UNIFIED_MEMORY=1

@@ -20,26 +20,32 @@ services:
     url: https://fc-alphafold-fcizetpnjc.cn-hangzhou-vpc.fcapp.run
     tier: warm
     function: fc_alphafold
+    oss_mount: true
   genie3-server:
     url: https://fc-genie-icjpnieeiz.cn-hangzhou-vpc.fcapp.run
     tier: warm
     function: fc_genie3
+    oss_mount: true
   rfantibody-server:
     url: https://fc-rfantibody-guekbpucdo.cn-hangzhou-vpc.fcapp.run
     tier: warm
     function: fc_rfantibody
+    oss_mount: true
   ppiflow-server:
     url: https://fc-ppiflow-lufflhmlaw.cn-hangzhou-vpc.fcapp.run
     tier: warm
     function: fc_ppiflow
+    oss_mount: true
   rfdiffusion-server:
     url: https://fc-rfdiffusion-cdskxiqtnk.cn-hangzhou-vpc.fcapp.run
     tier: warm
     function: fc_rfdiffusion
+    oss_mount: true
   rfdiffusion2-server:
     url: https://fc-rfdiffusion-xaxngakbwo.cn-hangzhou-vpc.fcapp.run
     tier: warm
     function: fc_rfdiffusion2
+    oss_mount: true
   proteinmpnn-server:
     url: https://fc-proteinmpnn-pahlhbttzb.cn-hangzhou-vpc.fcapp.run
     tier: hot
@@ -49,10 +55,12 @@ services:
     url: https://fc-boltz-kbioniejif.cn-hangzhou-vpc.fcapp.run
     tier: hot
     function: fc_boltz2
+    oss_mount: true
   boltzgen-server:
     url: https://fc-boltzgen-karzusdoih.cn-hangzhou-vpc.fcapp.run
     tier: warm
     function: fc_boltzgen
+    oss_mount: true
   immunebuilder-server:
     url: https://fc-immuebuilder-mhxbldkfhc.cn-hangzhou-vpc.fcapp.run
     tier: warm
@@ -61,18 +69,22 @@ services:
     url: https://fc-dockq-tzqvjemokb.cn-hangzhou-vpc.fcapp.run
     tier: cold
     function: fc_dockq
+    oss_mount: true
   deeprank-ab-server:
     url: https://fc-deeprank-ab-lxzlfasfol.cn-hangzhou-vpc.fcapp.run
     tier: cold
     function: fc_deeprank-ab
+    oss_mount: true
   esmfold2-server:
     url: https://fc-esmfold-spayusioug.cn-hangzhou-vpc.fcapp.run
     tier: warm
     function: fc_esmfold2
+    oss_mount: true
   promera-server:
     url: https://fc-promera-adkrlhmlcq.cn-hangzhou-vpc.fcapp.run
     tier: warm
     function: fc_promera
+    oss_mount: true
   ensemble-server:
     url: https://fc-ensemble-vnugpsiojy.cn-hangzhou-vpc.fcapp.run
     tier: warm
@@ -85,26 +97,32 @@ services:
     url: https://fc-diffdock-pp-xbbyfajnci.cn-hangzhou-vpc.fcapp.run
     tier: warm
     function: fc_diffdock-pp
+    oss_mount: true
   diffusion-hopping-server:
     url: https://fc-diff-hopping-xefuosyhju.cn-hangzhou-vpc.fcapp.run
     tier: warm
     function: fc_diffusion-hopping
+    oss_mount: true
   chembounce-server:
     url: https://fc-chembounce-vhjhvjexpd.cn-hangzhou-vpc.fcapp.run
     tier: warm
     function: fc_chembounce
+    oss_mount: true
   drughive-server:
     url: https://fc-drughive-tifmpsjove.cn-hangzhou-vpc.fcapp.run
     tier: warm
     function: fc_drughive
+    oss_mount: true
   openadmet-server:
     url: https://fc-openadmet-dckbxdfnvj.cn-hangzhou-vpc.fcapp.run
     tier: warm
     function: fc_openadmet
+    oss_mount: true
   diffdock-server:
     url: https://fc-diffdock-seztzsjoon.cn-hangzhou-vpc.fcapp.run
     tier: warm
     function: fc_diffdock
+    oss_mount: true
   flowmol-server:
     url: https://fc-flowmol-avfulhilcq.cn-hangzhou-vpc.fcapp.run
     tier: warm
@@ -113,10 +131,12 @@ services:
     url: https://fc-pocketxmol-dfjozirckm.cn-hangzhou-vpc.fcapp.run
     tier: warm
     function: fc_pocketxmol
+    oss_mount: true
   openbpmd-server:
     url: https://fc-openbpmd-acghosooxo.cn-hangzhou-vpc.fcapp.run
     tier: warm
     function: fc_openbpmd
+    oss_mount: true
   semlaflow-server:
     url: https://fc-semlaflow-bciahabnab.cn-hangzhou-vpc.fcapp.run
     tier: warm
@@ -125,7 +145,13 @@ services:
     url: https://fc-reinvent-awteesnocc.cn-hangzhou-vpc.fcapp.run
     tier: warm
     function: fc_reinvent
+    oss_mount: true
   megalodon-server:
     url: https://fc-megalodon-wzbshjdnal.cn-hangzhou-vpc.fcapp.run
     tier: warm
     function: fc_megalodon
+  iggm-server:
+    url: https://fc-iggm-febajccatx.cn-hangzhou-vpc.fcapp.run
+    tier: warm
+    function: fc_iggm
+    oss_mount: true

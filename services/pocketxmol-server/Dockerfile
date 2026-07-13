@@ -214,9 +214,13 @@ RUN /opt/conda/envs/pocketxmol/bin/pip uninstall -y \
 # ---------------------------------------------------------------------------
 # Shared service framework — independent layer so framework bumps don't
 # invalidate the conda env layer above.
+#
+# COPY (not bind-mount): BuildKit does not include bind-mount content in the
+# layer cache key, so a bind would ship a stale framework even after the
+# framework source is updated (would silently drop the output-sink fix).
 # ---------------------------------------------------------------------------
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
-    --mount=type=cache,target=/root/.cache/uv \
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/pocketxmol/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
@@ -267,6 +271,11 @@ ENV POCKETXMOL_PYTHON=/opt/conda/envs/pocketxmol/bin/python
 ENV POCKETXMOL_SAMPLE_SCRIPT=/opt/pocketxmol/scripts/sample_use.py
 ENV POCKETXMOL_CONFIDENCE_SCRIPT=/opt/pocketxmol/scripts/believe_use_pdb.py
 ENV POCKETXMOL_JOBS_BASE_DIR=/data/pocketxmol_jobs
+
+# Output-sink: when the gateway sends X-Bioagent-Oss-Prefix, the framework
+# mirrors the finished job dir to this mount. Requires an OSS mount at /mnt/oss
+# in the FC console (storage config). Absent mount => no-op (NAS-only).
+ENV POCKETXMOL_OSS_OUTPUT_MOUNT=/mnt/oss
 
 # Weights externalized — NAS mount injected by FC config / SIF --bind.
 ENV POCKETXMOL_WEIGHTS_DIR=/data/models/pocketxmol

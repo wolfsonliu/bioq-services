@@ -95,3 +95,46 @@ def test_sampling_task_endpoint_registered(client):
     # bin in test env) -> 200 with status FAILED, but the route must exist (not 404).
     r = client.post("/api/tasks/sampling", data={"generator": "reinvent", "num_smiles": "5"})
     assert r.status_code != 404, r.text
+
+
+# ---- *_uri input resolution (oss_mount migration) ----
+
+def test_scoring_accepts_smiles_file_uri(client, tmp_path):
+    src = tmp_path / "lib.smi"
+    src.write_text("CCO\nCCC\n")
+    r = client.post(
+        "/api/scoring",
+        data={"scoring": '{"type":"geometric_mean","component":[]}',
+              "smiles_file_uri": f"file://{src}"},
+    )
+    assert r.status_code == 200, r.text
+
+
+def test_scoring_rejects_missing_required_input(client):
+    # Neither upload nor *_uri for the required smiles_file -> 422 from resolve_input.
+    r = client.post(
+        "/api/scoring",
+        data={"scoring": '{"type":"geometric_mean","component":[]}'},
+    )
+    assert r.status_code == 422, r.text
+
+
+def test_scoring_uri_missing_file_is_404(client, tmp_path):
+    r = client.post(
+        "/api/scoring",
+        data={"scoring": '{"type":"geometric_mean","component":[]}',
+              "smiles_file_uri": f"file://{tmp_path / 'nope.smi'}"},
+    )
+    assert r.status_code == 404, r.text
+
+
+def test_staged_learning_accepts_prior_uri(client, tmp_path):
+    prior = tmp_path / "prior.model"
+    prior.write_bytes(b"\x00stub")
+    r = client.post(
+        "/api/staged-learning",
+        data={"generator": "reinvent",
+              "prior_file_uri": f"file://{prior}",
+              "stages": '[{"chkpt_name":"s1.chkpt","scoring":{"type":"geometric_mean","component":[]}}]'},
+    )
+    assert r.status_code == 200, r.text

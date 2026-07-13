@@ -62,11 +62,12 @@ ENV PATH=/opt/mmseqs-gpu/bin:$PATH
 # DO NOT pip-install ColabFold — orchestrator is vendored (see Task 2.0).
 
 # -----------------------------------------------------------------------------
-# Shared bioagent service framework + runtime deps. Bind-mount the framework
-# source so each rebuild of the framework doesn't bloat the layer.
+# Shared bioagent service framework + runtime deps. COPY (not bind-mount) so a
+# framework source change correctly busts this layer's cache and the output-sink
+# fix ships (BuildKit bind-mount contents don't enter the layer cache key).
 # -----------------------------------------------------------------------------
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
-    --mount=type=cache,target=/root/.cache/uv \
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/mmseqs2/.venv/bin/python \
         /tmp/service-framework \
         "fastapi>=0.115" \
@@ -92,6 +93,13 @@ ENV PYTHONPATH=/opt:/opt/mmseqs2
 # -----------------------------------------------------------------------------
 ENV MMSEQS2_DB_DIR=/data/models/mmseqs2
 ENV MMSEQS2_JOBS_BASE_DIR=/data/mmseqs2_jobs
+# Output-sink: when gateway sends X-Bioagent-Oss-Prefix, framework mirrors the
+# job dir (MSA outputs) here. Requires the data-plane OSS bucket mounted at
+# /mnt/oss RW in the FC console. Absent mount => no-op (NAS only). Default is
+# already /mnt/oss; explicit for self-documentation. (No input direct-read: the
+# query is an inline `q` form field, so there are no oss:// input URIs to rewrite
+# and no `oss_mount: true` / uris.py is needed for this service.)
+ENV MMSEQS2_OSS_OUTPUT_MOUNT=/mnt/oss
 # FC session affinity: inject this header in POST responses so FC binds
 # follow-up requests to the same instance. Requires FC console config too.
 ENV MMSEQS2_SESSION_HEADER_NAME=bioagent-session-id

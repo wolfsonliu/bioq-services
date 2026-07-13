@@ -241,8 +241,8 @@ RUN rm -f /opt/ppiflow/models/layer_norm/fastfold_layer_norm_cuda.so \
 # conda env's interpreter — faster than conda env's bundled pip and benefits
 # from Huawei mirror (UV_INDEX_URL set above).
 # ---------------------------------------------------------------------------
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
-    --mount=type=cache,target=/root/.cache/uv \
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/ppiflow/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
@@ -265,6 +265,10 @@ ENV PPIFLOW_CKPT_DIR=/data/models/ppiflow/checkpoint
 ENV PPIFLOW_CONFIG_DIR=/opt/ppiflow/configs
 ENV PPIFLOW_JOBS_BASE_DIR=/data/ppiflow_jobs
 RUN mkdir -p /data/ppiflow_jobs
+
+# Output-sink: 当 gateway 传 X-Bioagent-Oss-Prefix 时，framework 把 job dir 镜像到此挂载点。
+# 需在 FC 控制台把数据面 OSS bucket 挂到 /mnt/oss。缺挂载 => no-op（仅 NAS）。
+ENV PPIFLOW_OSS_OUTPUT_MOUNT=/mnt/oss
 
 # Alibaba Cloud FC plumbing.
 

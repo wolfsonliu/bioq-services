@@ -117,8 +117,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Shared service framework — independent layer so framework changes don't
 # invalidate the (slow) editable install + cleanup above.
 # ---------------------------------------------------------------------------
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
-    --mount=type=cache,target=/root/.cache/uv \
+COPY services/_framework /tmp/service-framework
+RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 
@@ -165,6 +165,11 @@ ENV GENIE3_ROOT=/opt/genie3
 ENV GENIE3_BIN=/opt/genie3/.venv/bin/genie3
 ENV GENIE3_PRETRAINED_DIR=/data/models/genie3/pretrained/v1
 ENV GENIE3_JOBS_BASE_DIR=/data/genie3_jobs
+# Output-sink: when gateway sends X-Bioagent-Oss-Prefix, framework mirrors the
+# job dir here. Requires the data-plane OSS bucket mounted at /mnt/oss in the FC
+# console. Absent mount => no-op (NAS only). Default already /mnt/oss; explicit
+# for self-documentation.
+ENV GENIE3_OSS_OUTPUT_MOUNT=/mnt/oss
 RUN mkdir -p /data/genie3_jobs
 
 # --- Alibaba Cloud FC configuration ---
