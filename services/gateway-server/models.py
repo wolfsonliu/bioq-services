@@ -24,6 +24,6 @@ class PresignRequest(BaseModel):
 
 
 class PresignResponse(BaseModel):
-    uri: str                 # oss://bucket/users/<principal>/inputs/<sha256>/<name>
+    uri: str                 # oss://bucket/users/<principal>/<job_id>/input/<name>
     exists: bool             # True => already uploaded, skip PUT
     url: Optional[str] = None  # presigned PUT URL when exists is False

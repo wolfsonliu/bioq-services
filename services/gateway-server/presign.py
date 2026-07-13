@@ -3,8 +3,9 @@
 MVP: sign with the gateway's own OSS credentials
 (EnvironmentVariableCredentialsProvider — OSS_ACCESS_KEY_ID / _SECRET). Each
 presigned URL is scoped to exactly one object key, so no STS is needed for
-tenant isolation. Keys are per-user + content-addressed:
-    users/<principal>/inputs/<sha256>/<filename>
+tenant isolation. Keys are job-centric: input key
+users/<principal>/<job_id>/input/<filename>, output key
+users/<principal>/<job_id>/<filename>.
 """
 
 from __future__ import annotations
