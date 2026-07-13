@@ -143,34 +143,29 @@ class TestDiscovery:
 @_needs
 class TestPresign:
     def test_presign_mint(self, client):
-        sha = uuid.uuid4().hex
+        job_id = uuid.uuid4().hex[:20]
         r = client.post(
             "/v1/uploads/presign",
-            json={"filename": "smoke.txt", "sha256": sha},
+            json={"job_id": job_id, "filename": "smoke.txt", "sha256": uuid.uuid4().hex},
         )
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["exists"] is False
         assert body["url"], "no presigned URL returned"
         if PRINCIPAL:
-            assert f"users/{PRINCIPAL}/inputs/{sha}/smoke.txt" in body["uri"]
+            assert f"users/{PRINCIPAL}/{job_id}/input/smoke.txt" in body["uri"]
 
     def test_presign_upload_and_dedup(self, client):
         """presign -> PUT to OSS -> re-presign sees the object (exists=True)."""
-        sha = uuid.uuid4().hex
-        first = client.post(
-            "/v1/uploads/presign",
-            json={"filename": "smoke.txt", "sha256": sha},
-        ).json()
+        job_id = uuid.uuid4().hex[:20]
+        payload = {"job_id": job_id, "filename": "smoke.txt", "sha256": uuid.uuid4().hex}
+        first = client.post("/v1/uploads/presign", json=payload).json()
         assert first["exists"] is False and first["url"]
 
         put = httpx.put(first["url"], content=b"hello-gateway", timeout=TIMEOUT)
         assert put.status_code in (200, 201), f"OSS PUT failed: {put.status_code} {put.text!r}"
 
-        second = client.post(
-            "/v1/uploads/presign",
-            json={"filename": "smoke.txt", "sha256": sha},
-        ).json()
+        second = client.post("/v1/uploads/presign", json=payload).json()
         assert second["exists"] is True, "dedup: object should be found after upload"
         assert second["url"] is None
         assert second["uri"] == first["uri"]
