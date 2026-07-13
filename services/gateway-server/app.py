@@ -137,7 +137,10 @@ def download_job(job_id: str, request: Request,
     try:
         request.app.state.dispatch.download(reg.base_url(job.svc), job.fc_task_id or job_id, dest)
     except httpx.HTTPStatusError as exc:
-        body = exc.response.text[:200]
+        try:
+            body = exc.response.text[:200]
+        except Exception:  # noqa: BLE001 — streamed body may be unread
+            body = "<unavailable>"
         raise HTTPException(502, f"downstream download HTTP {exc.response.status_code}: {body}")
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(502, f"download failed: {type(exc).__name__}: {exc}")

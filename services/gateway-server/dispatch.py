@@ -49,7 +49,11 @@ class HttpDispatch:
         dest.parent.mkdir(parents=True, exist_ok=True)
         with self._client.stream("GET", f"{base_url}/api/jobs/{job_id}/download",
                                  headers={SESSION_AFFINITY_HEADER: job_id}) as r:
-            r.raise_for_status()
+            if r.status_code >= 400:
+                # Read the streamed body so raise_for_status()'s exception
+                # carries .text (otherwise callers hit httpx.ResponseNotRead).
+                r.read()
+                r.raise_for_status()
             with open(dest, "wb") as fh:
                 for chunk in r.iter_bytes():
                     fh.write(chunk)

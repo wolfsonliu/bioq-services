@@ -61,6 +61,18 @@ def test_status_sends_affinity_header():
     assert seen["aff"] == "job-7"
 
 
+def test_download_error_has_readable_body(tmp_path):
+    # Downstream returns 404 during a streamed download; the raised
+    # HTTPStatusError must carry a readable body (not ResponseNotRead).
+    d = HttpDispatch(_client(lambda req: httpx.Response(404, text="job not found")))
+    try:
+        d.download("https://svc.local", "job-x", tmp_path / "out.zip")
+        raise AssertionError("expected HTTPStatusError")
+    except httpx.HTTPStatusError as exc:
+        assert exc.response.status_code == 404
+        assert "job not found" in exc.response.text  # must not raise ResponseNotRead
+
+
 def test_download_writes_file_with_affinity(tmp_path):
     seen = {}
 
