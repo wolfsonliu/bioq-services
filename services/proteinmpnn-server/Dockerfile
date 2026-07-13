@@ -82,6 +82,11 @@ ENV PROTEINMPNN_WEIGHTS_DIR=/opt/proteinmpnn
 ENV PROTEINMPNN_JOBS_BASE_DIR=/data/proteinmpnn_jobs
 RUN mkdir -p /data/proteinmpnn_jobs
 
+# Output-sink: when the gateway passes X-Bioagent-Oss-Prefix, the framework
+# mirrors the finished job dir to this mount. Requires an OSS mount at /mnt/oss
+# in the FC console (storage config). Absent mount => no-op (NAS-only).
+ENV PROTEINMPNN_OSS_OUTPUT_MOUNT=/mnt/oss
+
 
 # Keepalive pings this URL through FC's gateway so the instance stays alive
 # during long GPU jobs. Override at deploy time if the URL changes.
