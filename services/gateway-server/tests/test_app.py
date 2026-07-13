@@ -157,3 +157,39 @@ def test_download_redirects_to_oss_when_present(client):
     r2 = client.get("/v1/jobs/cjob1/download", headers=hdr, follow_redirects=False)
     assert r2.status_code == 302
     assert r2.headers["location"] == "https://oss.get/signed-results"
+
+
+def test_download_falls_back_to_proxy_when_not_on_oss(client):
+    import server.app as appmod
+    _seed_key(appmod, principal="alice", secret="f-sec", key_id="gk_f")
+    from bioagent_service.service_registry import ServiceRecord
+    appmod.app.state.registry._services = {"openbpmd-server": ServiceRecord(url="https://svc.local")}
+
+    class _Disp:
+        def submit(self, base, ep, job_id, data, oss_prefix=None):
+            pass
+
+        def status(self, base, job_id):
+            return {"status": "completed"}
+
+        def download(self, base, job_id, dest):
+            from pathlib import Path
+            Path(dest).parent.mkdir(parents=True, exist_ok=True)
+            Path(dest).write_bytes(b"PROXYZIP")
+            return dest
+
+    appmod.app.state.dispatch = _Disp()
+
+    class _Presigner:
+        def presign_get_if_exists(self, principal, job_id, filename):
+            return None  # not on OSS => fall back to proxying the downstream
+
+    appmod.app.state.presigner = _Presigner()
+
+    hdr = {"x-api-key": "f-sec", "host": "public.example.com"}
+    r = client.post("/v1/run/openbpmd-server/score",
+                    json={}, headers={**hdr, "x-bioagent-job-id": "fjob1"})
+    assert r.status_code == 202
+    r2 = client.get("/v1/jobs/fjob1/download", headers=hdr)
+    assert r2.status_code == 200
+    assert r2.content == b"PROXYZIP"
