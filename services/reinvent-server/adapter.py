@@ -1,14 +1,18 @@
-"""ReinventAdapter — per-label detect_outputs + manifest metadata."""
+"""ReinventAdapter — output detection + manifest metadata."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Callable
 
 from bioagent_service import EndpointExample, JobAdapter
 
 from .config_builder import PRIOR_FILES
 from .settings import ReinventSettings
+
+# Files reinvent_cli copies to output/ for diagnosis even on FAILURE — must NOT
+# count as a successful result. Everything else non-empty in output/ is a real
+# artifact (sampling.csv / score_results.csv / peptide_enumeration.csv / *.model
+# / *.chkpt / <prefix>_<n>.csv). `_*.json` are reinvent's config echoes.
+_AUDIT_FILES = {"config.toml", "reinvent.log"}
 
 
 class ReinventAdapter(JobAdapter):
@@ -22,38 +26,23 @@ class ReinventAdapter(JobAdapter):
     def subprocess_cwd(self) -> Path | None:
         return self.settings.root
 
-    def _read_label(self, job_dir: Path) -> str | None:
-        try:
-            return json.loads((job_dir / "manifest.json").read_text()).get("label")
-        except (FileNotFoundError, ValueError):
-            return None
-
     def detect_outputs(self, job_dir: Path) -> bool:
-        label = self._read_label(job_dir)
-        checkers: dict[str, Callable[[Path], bool]] = {
-            "sampling":          self._csv("sampling.csv"),
-            "scoring":           self._csv("score_results.csv"),
-            "enumeration":       self._csv("peptide_enumeration.csv"),
-            "transfer_learning": self._detect_tl,
-            "staged_learning":   self._detect_rl,
-        }
-        checker = checkers.get(label or "")
-        return checker(self.output_dir(job_dir)) if checker else False
+        """Label-agnostic: any non-empty result file in output/ means success.
 
-    def _csv(self, name: str) -> Callable[[Path], bool]:
-        def _check(out: Path) -> bool:
-            p = out / name
-            return p.exists() and p.stat().st_size > 0
-        return _check
-
-    def _detect_tl(self, out: Path) -> bool:
-        models = [p for p in out.glob("*.model") if p.stat().st_size > 0]
-        return bool(models)
-
-    def _detect_rl(self, out: Path) -> bool:
-        csvs = [p for p in out.glob("*_*.csv") if p.stat().st_size > 0]
-        chkpts = list(out.glob("*.chkpt"))
-        return bool(csvs) and bool(chkpts)
+        The framework calls this with only `job_dir` (no label; it never writes a
+        per-job manifest), so detection cannot depend on the run mode. Excludes
+        the audit files reinvent_cli copies on failure so a crashed job isn't
+        mistaken for a successful one.
+        """
+        out = self.output_dir(job_dir)
+        if not out.is_dir():
+            return False
+        for p in out.iterdir():
+            if (p.is_file() and p.stat().st_size > 0
+                    and p.name not in _AUDIT_FILES
+                    and not p.name.startswith("_")):
+                return True
+        return False
 
     def manifest_extras(self) -> dict:
         return {
