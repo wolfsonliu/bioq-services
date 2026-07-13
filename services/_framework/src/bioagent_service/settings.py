@@ -42,6 +42,14 @@ class ServiceSettings(BaseSettings):
         default=Path("/data/uploads"),
         description="Root directory under which POST /api/uploads stages files.",
     )
+    oss_output_mount: str = Field(
+        default="/mnt/oss",
+        description=(
+            "Path where the data-plane OSS bucket is mounted (FC storage config). "
+            "When present + an OSS prefix is passed, completed jobs are mirrored "
+            "here. Absent => output-sink is a no-op (NAS-only)."
+        ),
+    )
     # When total bytes under jobs_base_dir exceed this, completed jobs are evicted.
     disk_limit_mb: int = Field(
         default=8000,

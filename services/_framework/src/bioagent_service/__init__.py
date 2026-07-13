@@ -51,6 +51,7 @@ from bioagent_service.errors import FailureKind, extract_error_summary, finalize
 from bioagent_service.forms import model_form_depends
 from bioagent_service.manifest import EndpointExample, ServiceManifest
 from bioagent_service.models import JobInfo, JobStatus, UploadInfo
+from bioagent_service.oss_export import mirror_job_dir_to_oss
 from bioagent_service.settings import ServiceSettings
 from bioagent_service.task_endpoint import execute_task, register_task_endpoint, resolve_task_id
 
@@ -89,6 +90,7 @@ __all__ = [
     "execute_task",
     "extract_error_summary",
     "finalize_job",
+    "mirror_job_dir_to_oss",
     "model_form_depends",
     "read_version_file",
     "register_task_endpoint",
