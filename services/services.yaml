@@ -23,7 +23,7 @@ services:
   genie3-server:
     url: https://fc-genie-icjpnieeiz.cn-hangzhou-vpc.fcapp.run
     tier: warm
-    # function: TODO — FC console name not provided
+    function: fc_genie3
   rfantibody-server:
     url: https://fc-rfantibody-guekbpucdo.cn-hangzhou-vpc.fcapp.run
     tier: warm
@@ -43,7 +43,7 @@ services:
   proteinmpnn-server:
     url: https://fc-proteinmpnn-pahlhbttzb.cn-hangzhou-vpc.fcapp.run
     tier: hot
-    # function: TODO — FC console name not provided (needed for the e2e test)
+    function: fc_proteinmpnn
   boltz-server:
     url: https://fc-boltz-kbioniejif.cn-hangzhou-vpc.fcapp.run
     tier: hot
@@ -63,11 +63,11 @@ services:
   deeprank-ab-server:
     url: https://fc-deeprank-ab-lxzlfasfol.cn-hangzhou-vpc.fcapp.run
     tier: cold
-    # function: TODO — FC console name not provided
+    function: fc_deeprank-ab
   esmfold2-server:
     url: https://fc-esmfold-spayusioug.cn-hangzhou-vpc.fcapp.run
     tier: warm
-    # function: TODO — FC console name not provided
+    function: fc_esmfold2
   promera-server:
     url: https://fc-promera-adkrlhmlcq.cn-hangzhou-vpc.fcapp.run
     tier: warm
@@ -87,15 +87,15 @@ services:
   diffusion-hopping-server:
     url: https://fc-diff-hopping-xefuosyhju.cn-hangzhou-vpc.fcapp.run
     tier: warm
-    # function: TODO — FC console name not provided
+    function: fc_diffusion-hopping
   chembounce-server:
     url: https://fc-chembounce-vhjhvjexpd.cn-hangzhou-vpc.fcapp.run
     tier: warm
-    # function: TODO — FC console name not provided
+    function: fc_chembounce
   drughive-server:
     url: https://fc-drughive-tifmpsjove.cn-hangzhou-vpc.fcapp.run
     tier: warm
-    # function: TODO — FC console name not provided
+    function: fc_drughive
   openadmet-server:
     url: https://fc-openadmet-dckbxdfnvj.cn-hangzhou-vpc.fcapp.run
     tier: warm
@@ -123,8 +123,8 @@ services:
   reinvent-server:
     url: https://fc-reinvent-awteesnocc.cn-hangzhou-vpc.fcapp.run
     tier: warm
-    # function: TODO — FC console name not provided
+    function: fc_reinvent
   megalodon-server:
     url: https://fc-megalodon-wzbshjdnal.cn-hangzhou-vpc.fcapp.run
     tier: warm
-    # function: TODO — FC console name not provided
+    function: fc_megalodon

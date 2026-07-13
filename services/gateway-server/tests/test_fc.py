@@ -19,8 +19,12 @@ not exercised here.
 
 from __future__ import annotations
 
+import hashlib
+import io
 import os
+import time
 import uuid
+import zipfile
 from pathlib import Path
 
 import httpx
@@ -170,3 +174,71 @@ class TestPresign:
         assert second["exists"] is True, "dedup: object should be found after upload"
         assert second["url"] is None
         assert second["uri"] == first["uri"]
+
+
+# ===================================================================
+# End-to-end: real job through the gateway (proteinmpnn — fast)
+# ===================================================================
+
+_PDB = (
+    Path(__file__).resolve().parents[2]
+    / "proteinmpnn-server" / "tests" / "data" / "5L33.pdb"
+)
+
+RUN_POLL_TIMEOUT_S = 900
+RUN_POLL_INTERVAL_S = 10
+
+
+def _upload_via_presign(client, filename: str, data: bytes) -> str:
+    """presign -> PUT to OSS (skip if already there) -> return oss:// uri."""
+    sha = hashlib.sha256(data).hexdigest()
+    pre = client.post(
+        "/v1/uploads/presign", json={"filename": filename, "sha256": sha}
+    ).json()
+    if not pre["exists"]:
+        put = httpx.put(pre["url"], content=data, timeout=TIMEOUT)
+        assert put.status_code in (200, 201), f"OSS PUT failed: {put.status_code} {put.text!r}"
+    return pre["uri"]
+
+
+@pytest.mark.fc
+@_needs
+@pytest.mark.skipif(not _PDB.exists(), reason=f"fixture missing: {_PDB}")
+class TestEndToEndProteinMPNN:
+    """Full path: upload PDB -> submit design -> poll -> download FASTA."""
+
+    def test_design_end_to_end(self, client):
+        pdb_uri = _upload_via_presign(client, "5L33.pdb", _PDB.read_bytes())
+
+        # submit (gateway forwards JSON body as form to downstream /api/tasks/design)
+        r = client.post(
+            "/v1/run/proteinmpnn-server/design",
+            json={
+                "pdb_uri": pdb_uri,
+                "name": "gwtest",
+                "num_seq_per_target": 2,
+                "model_variant": "vanilla",
+                "model_name": "v_48_020",
+                "sampling_temp": "0.1",
+                "seed": 37,
+            },
+        )
+        assert r.status_code == 202, r.text
+        job_id = r.json()["job_id"]
+
+        # poll gateway job to terminal
+        body = {}
+        deadline = time.time() + RUN_POLL_TIMEOUT_S
+        while time.time() < deadline:
+            body = client.get(f"/v1/jobs/{job_id}").json()
+            if body["status"] in ("completed", "failed", "cancelled"):
+                break
+            time.sleep(RUN_POLL_INTERVAL_S)
+        assert body.get("status") == "completed", f"job {job_id} ended: {body}"
+        assert body["principal"] == PRINCIPAL
+
+        # download result zip and verify a designed FASTA is present
+        dl = client.get(f"/v1/jobs/{job_id}/download")
+        assert dl.status_code == 200, dl.text
+        names = zipfile.ZipFile(io.BytesIO(dl.content)).namelist()
+        assert any(n.endswith((".fa", ".fasta")) for n in names), f"no FASTA in {names}"
