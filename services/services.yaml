@@ -65,6 +65,7 @@ services:
     url: https://fc-immuebuilder-mhxbldkfhc.cn-hangzhou-vpc.fcapp.run
     tier: warm
     function: fc_immunebuilder
+    oss_mount: true
   dockq-server:
     url: https://fc-dockq-tzqvjemokb.cn-hangzhou-vpc.fcapp.run
     tier: cold
@@ -93,6 +94,7 @@ services:
     url: https://fc-mmseqs-ijlwlhpldm.cn-hangzhou-vpc.fcapp.run
     tier: hot
     function: fc_mmseqs2
+    oss_mount: true
   diffdock-pp-server:
     url: https://fc-diffdock-pp-xbbyfajnci.cn-hangzhou-vpc.fcapp.run
     tier: warm
@@ -141,6 +143,7 @@ services:
     url: https://fc-semlaflow-bciahabnab.cn-hangzhou-vpc.fcapp.run
     tier: warm
     function: fc_semlaflow
+    oss_mount: true
   reinvent-server:
     url: https://fc-reinvent-awteesnocc.cn-hangzhou-vpc.fcapp.run
     tier: warm
@@ -150,6 +153,7 @@ services:
     url: https://fc-megalodon-wzbshjdnal.cn-hangzhou-vpc.fcapp.run
     tier: warm
     function: fc_megalodon
+    oss_mount: true
   iggm-server:
     url: https://fc-iggm-febajccatx.cn-hangzhou-vpc.fcapp.run
     tier: warm
