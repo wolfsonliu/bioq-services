@@ -26,7 +26,7 @@ from .adapter import DeepRankAbAdapter
 from .models import ScoreRequest
 from .settings import DeepRankAbSettings
 from .argv import score_argv
-from .uris import resolve_input
+from bioagent_service.uris import resolve_input
 
 logging.basicConfig(
     level=logging.INFO,

@@ -18,6 +18,8 @@ from typing import Optional
 
 from fastapi import HTTPException, UploadFile
 
+from bioagent_service.uris import resolve_uri
+
 from .settings import BindFlowSettings
 
 
@@ -48,7 +50,7 @@ def resolve_single_file(
         return dest
 
     if uri:
-        return _fetch_uri(uri, dest, settings)
+        return resolve_uri(uri, dest, settings)
 
     if required:
         raise HTTPException(
@@ -91,7 +93,7 @@ def resolve_ligands(
 
     if zip_uri:
         zip_tmp = dest_dir.parent / "ligands.zip"
-        _fetch_uri(zip_uri, zip_tmp, settings)
+        resolve_uri(zip_uri, zip_tmp, settings)
         _unzip_flat(zip_tmp, dest_dir)
         zip_tmp.unlink(missing_ok=True)
         return dest_dir
@@ -122,7 +124,7 @@ def resolve_dir_zip(
             shutil.copyfileobj(upload.file, f)
     elif zip_uri:
         zip_path = dest_dir.parent / f"{field_name}.zip"
-        _fetch_uri(zip_uri, zip_path, settings)
+        resolve_uri(zip_uri, zip_path, settings)
 
     if zip_path is None:
         return None
@@ -136,93 +138,6 @@ def resolve_dir_zip(
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
-
-
-def _fetch_uri(uri: str, dest: Path, settings: BindFlowSettings) -> Path:
-    """Fetch a URI and write its bytes to `dest`.  Return `dest`."""
-    dest.parent.mkdir(parents=True, exist_ok=True)
-
-    if uri.startswith("job://"):
-        body = uri[len("job://"):]
-        try:
-            job_id, filename = body.split("/", 1)
-        except ValueError:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Invalid job URI; expected job://<job_id>/<filename>: {uri}",
-            ) from None
-        src = settings.jobs_base_dir / job_id / "output" / filename
-        if not src.exists():
-            raise HTTPException(
-                status_code=404, detail=f"File not found in job: {src}",
-            )
-        shutil.copy(src, dest)
-        return dest
-
-    if uri.startswith("file://") or uri.startswith("/"):
-        src_path = Path(uri[len("file://"):] if uri.startswith("file://") else uri)
-        if not src_path.exists():
-            raise HTTPException(status_code=404, detail=f"File not found: {src_path}")
-        shutil.copy(src_path, dest)
-        return dest
-
-    if uri.startswith("http://") or uri.startswith("https://"):
-        _download_http(uri, dest)
-        return dest
-
-    if uri.startswith("oss://"):
-        _download_oss(uri, dest, settings)
-        return dest
-
-    raise HTTPException(status_code=422, detail=f"Unsupported URI scheme: {uri}")
-
-
-def _download_http(uri: str, dest: Path) -> None:
-    import httpx
-    try:
-        with httpx.Client(timeout=300) as c:
-            with c.stream("GET", uri, follow_redirects=True) as r:
-                r.raise_for_status()
-                with dest.open("wb") as f:
-                    for chunk in r.iter_bytes(chunk_size=1 << 16):
-                        f.write(chunk)
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Failed to fetch {uri}: HTTP {e.response.status_code}",
-        ) from None
-    except (httpx.ConnectError, httpx.TimeoutException) as e:
-        raise HTTPException(
-            status_code=502, detail=f"Failed to fetch {uri}: {e}",
-        ) from None
-
-
-def _download_oss(uri: str, dest: Path, settings: BindFlowSettings) -> None:
-    try:
-        import alibabacloud_oss_v2 as oss
-    except ImportError:
-        raise HTTPException(
-            status_code=501,
-            detail="alibabacloud-oss-v2 not installed; cannot resolve oss:// URIs.",
-        ) from None
-    body = uri[len("oss://"):]
-    try:
-        bucket, key = body.split("/", 1)
-    except ValueError:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Invalid OSS URI; expected oss://<bucket>/<key>: {uri}",
-        ) from None
-    credentials_provider = oss.credentials.EnvironmentVariableCredentialsProvider()
-    cfg = oss.config.load_default()
-    cfg.credentials_provider = credentials_provider
-    cfg.region = settings.oss_region
-    client = oss.Client(cfg)
-    request = oss.models.GetObjectRequest(bucket=bucket, key=key)
-    response = client.get_object(request)
-    with dest.open("wb") as f:
-        for chunk in response.body.iter_bytes():
-            f.write(chunk)
 
 
 def _safe_filename(name: str, *, field: str) -> str:

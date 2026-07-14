@@ -50,7 +50,3 @@ class RFdiffusionSettings(ServiceSettings):
     # is a #!/usr/bin/env python3 script but we invoke it via the venv interpreter
     # so PATH lookup never gets in the way. Env: RFDIFFUSION_PYTHON
     python: Path = Field(default=Path("/opt/rfdiffusion/.venv/bin/python"))
-
-    # OSS download region — only consulted by `oss://` URI resolution.
-    # Env: RFDIFFUSION_OSS_REGION
-    oss_region: str = Field(default="cn-hangzhou")

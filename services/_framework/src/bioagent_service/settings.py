@@ -50,6 +50,11 @@ class ServiceSettings(BaseSettings):
             "here. Absent => output-sink is a no-op (NAS-only)."
         ),
     )
+    # Region for the data-plane OSS bucket, used by `bioagent_service.uris` when
+    # resolving `oss://` input URIs via the SDK (the mount path is separate; see
+    # oss_output_mount). Every service ships the same default; override via
+    # <PREFIX>_OSS_REGION only for a differently-regioned bucket.
+    oss_region: str = Field(default="cn-hangzhou")
     # When total bytes under jobs_base_dir exceed this, completed jobs are evicted.
     disk_limit_mb: int = Field(
         default=8000,

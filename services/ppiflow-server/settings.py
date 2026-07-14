@@ -43,7 +43,3 @@ class PPIFlowSettings(ServiceSettings):
     # Default inference configs shipped with upstream PPIFlow. Endpoints can
     # override on a per-request basis if you need a custom YAML.
     config_dir: Path = Field(default=Path("/opt/ppiflow/configs"))
-
-    # OSS region for downloading inputs via `oss://` URIs (matches the other
-    # bioagent services' convention).
-    oss_region: str = Field(default="cn-hangzhou")

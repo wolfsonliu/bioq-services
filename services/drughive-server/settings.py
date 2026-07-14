@@ -75,8 +75,6 @@ class DrughiveSettings(ServiceSettings):
     # especially GPU/CPU-hungry (QVina2 docking on N thousand mols).
     max_concurrent_jobs: int = Field(default=1, ge=1, le=4)
 
-    oss_region: str = Field(default="cn-hangzhou")
-
     @property
     def checkpoint_path(self) -> Path:
         return self.weights_dir / self.checkpoint_filename

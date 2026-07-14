@@ -46,5 +46,3 @@ class DeepRankAbSettings(ServiceSettings):
         default=Path("/data/models/deeprank-ab/esm"),
         description="ESM-2 weights root (esm2_t33_650M_UR50D.pt + contact-regression.pt).",
     )
-
-    oss_region: str = Field(default="cn-hangzhou")

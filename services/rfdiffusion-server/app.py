@@ -48,7 +48,7 @@ from .tools import (
     symmetry_argv,
     unconditional_argv,
 )
-from .uris import resolve_input
+from bioagent_service.uris import resolve_input
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)

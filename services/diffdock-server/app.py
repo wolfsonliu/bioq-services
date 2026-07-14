@@ -31,7 +31,7 @@ from .adapter import DiffdockAdapter
 from .models import DockRequest
 from .settings import DiffdockSettings
 from .tools import dock_argv
-from .uris import maybe_resolve_input
+from bioagent_service.uris import maybe_resolve_input
 
 logger = logging.getLogger(__name__)
 

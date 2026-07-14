@@ -55,7 +55,3 @@ class RFdiffusion2Settings(ServiceSettings):
     # resolution. Both happen via `subprocess_cwd()` + the runner's env merge.
     # Env: RFDIFFUSION2_PYTHONPATH
     pythonpath: Path = Field(default=Path("/opt/rfdiffusion2-server/upstream"))
-
-    # OSS download region — only consulted by `oss://` URI resolution.
-    # Env: RFDIFFUSION2_OSS_REGION
-    oss_region: str = Field(default="cn-hangzhou")

@@ -26,7 +26,7 @@ from .adapter import ESMFold2Adapter
 from .models import FoldRequest
 from .settings import ESMFold2Settings
 from .tools import build_input_json, fold_argv
-from .uris import save_upload
+from bioagent_service.uris import save_upload
 
 logging.basicConfig(
     level=logging.INFO,

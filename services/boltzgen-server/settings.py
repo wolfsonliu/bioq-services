@@ -51,5 +51,3 @@ class BoltzGenSettings(ServiceSettings):
             "CCD molecule directory (unpacked mols.zip).  Externalized to NAS."
         ),
     )
-
-    oss_region: str = Field(default="cn-hangzhou")

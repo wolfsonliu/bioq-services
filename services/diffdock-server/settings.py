@@ -80,8 +80,6 @@ class DiffdockSettings(ServiceSettings):
 
     max_concurrent_jobs: int = Field(default=1, ge=1, le=4)
 
-    oss_region: str = Field(default="cn-hangzhou")
-
     @property
     def score_model_dir(self) -> Path:
         return self.weights_dir / self.score_model_subdir

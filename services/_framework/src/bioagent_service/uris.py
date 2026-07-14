@@ -1,14 +1,21 @@
-"""Input URI resolution for reinvent-server.
+"""Shared input-URI resolution for all services.
 
-Standard 5-scheme resolver (upload / job:// / file:// / oss:// / http(s)://)
-mirrored across boltz / diffdock / diffdock-pp / drughive.  Every reinvent
-file input (SMILES sets, prior/agent .model files, amino-acid libraries) goes
-through the same helper, so callers can pass a multipart upload OR a URI.
+Every service takes file inputs either as a multipart upload or as a URI string;
+these helpers cover both and land the bytes at a caller-chosen `dest` (typically
+`<job_dir>/input/<name>`), keeping each job's inputs self-contained.
 
-With `oss_mount: true` in services.yaml the gateway rewrites `oss://<bucket>/<key>`
-inputs to `<mount>/<key>` (a path on the FC-mounted OSS bucket), which this
-resolver reads via the `file://` / bare-`/` branch — no OSS credentials needed
-downstream.
+One scheme set is used across all services so an agent learns the convention once:
+
+  * upload                — client multiparts a file
+  * ``job://<id>/<file>`` — pull from a previous job's ``output/`` on the same NAS
+  * ``file:///abs/path``  — copy a local NAS path (also accepts a bare ``/abs/path``)
+  * ``oss://<bucket>/<key>`` — download via the OSS SDK (needs alibabacloud-oss-v2)
+  * ``http(s)://...``     — stream a remote URL
+
+Only two settings fields are read: ``jobs_base_dir`` (for ``job://``) and
+``oss_region`` (for ``oss://``) — both on `ServiceSettings`, so services pass
+their own settings subclass unchanged. The ``oss`` / ``httpx`` imports are lazy
+so services that never resolve those schemes don't need the dependencies.
 """
 
 from __future__ import annotations
@@ -19,10 +26,11 @@ from typing import Optional
 
 from fastapi import HTTPException, UploadFile
 
-from .settings import ReinventSettings
+from bioagent_service.settings import ServiceSettings
 
 
 def save_upload(upload: UploadFile, dest: Path) -> Path:
+    """Stream an UploadFile to disk in 1 MB chunks (creating parent dirs)."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     with open(dest, "wb") as f:
         while True:
@@ -37,34 +45,47 @@ def resolve_input(
     upload: Optional[UploadFile],
     input_uri: Optional[str],
     dest: Path,
-    settings: ReinventSettings,
+    settings: ServiceSettings,
+    field_name: Optional[str] = None,
 ) -> Path:
+    """Materialize an input file from either a multipart upload or a URI string.
+
+    Raises HTTP 422 if neither is provided. `field_name`, when given, is prefixed
+    to the 422 detail so multi-input endpoints can say which field was missing.
+    """
     if input_uri:
-        return _resolve_uri(input_uri, dest, settings)
+        return resolve_uri(input_uri, dest, settings)
     if upload is not None:
         return save_upload(upload, dest)
-    raise HTTPException(
-        status_code=422, detail="Either an upload or URI is required.",
+    detail = (
+        f"{field_name}: either an upload or a URI is required."
+        if field_name
+        else "Either an upload or input_uri is required."
     )
+    raise HTTPException(status_code=422, detail=detail)
 
 
 def maybe_resolve_input(
     upload: Optional[UploadFile],
     input_uri: Optional[str],
     dest: Path,
-    settings: ReinventSettings,
+    settings: ServiceSettings,
+    field_name: Optional[str] = None,
 ) -> Optional[Path]:
-    """Same as resolve_input but returns None (instead of raising) when
-    neither upload nor URI is provided — for optional inputs."""
+    """Like `resolve_input` but returns None (instead of raising) when neither
+    an upload nor a URI is given — for inputs that have an alternative
+    representation (e.g. an inline sequence / SMILES on the same request)."""
     if input_uri is None and upload is None:
         return None
-    return resolve_input(upload, input_uri, dest, settings)
+    return resolve_input(upload, input_uri, dest, settings, field_name)
 
 
-def _resolve_uri(uri: str, dest: Path, settings: ReinventSettings) -> Path:
+def resolve_uri(uri: str, dest: Path, settings: ServiceSettings) -> Path:
+    """Resolve a single URI to a local file at `dest`. Caller picks the path."""
     dest.parent.mkdir(parents=True, exist_ok=True)
 
     if uri.startswith("job://"):
+        # job://<job_id>/<filename> — pull from a job's output dir on this NAS.
         body = uri[len("job://"):]
         try:
             job_id, filename = body.split("/", 1)
@@ -75,9 +96,7 @@ def _resolve_uri(uri: str, dest: Path, settings: ReinventSettings) -> Path:
             ) from None
         src = settings.jobs_base_dir / job_id / "output" / filename
         if not src.exists():
-            raise HTTPException(
-                status_code=404, detail=f"File not found in job: {src}",
-            )
+            raise HTTPException(status_code=404, detail=f"File not found in job: {src}")
         shutil.copy2(src, dest)
         return dest
 
@@ -99,6 +118,7 @@ def _resolve_uri(uri: str, dest: Path, settings: ReinventSettings) -> Path:
 
 def _download_http(uri: str, dest: Path) -> Path:
     import httpx
+
     try:
         with httpx.stream("GET", uri, follow_redirects=True, timeout=600) as resp:
             resp.raise_for_status()
@@ -111,13 +131,11 @@ def _download_http(uri: str, dest: Path) -> Path:
             detail=f"Failed to fetch {uri}: HTTP {e.response.status_code}",
         ) from None
     except (httpx.ConnectError, httpx.TimeoutException) as e:
-        raise HTTPException(
-            status_code=502, detail=f"Failed to fetch {uri}: {e}",
-        ) from None
+        raise HTTPException(status_code=502, detail=f"Failed to fetch {uri}: {e}") from None
     return dest
 
 
-def _download_oss(uri: str, dest: Path, settings: ReinventSettings) -> Path:
+def _download_oss(uri: str, dest: Path, settings: ServiceSettings) -> Path:
     try:
         import alibabacloud_oss_v2 as oss
     except ImportError:
@@ -147,3 +165,11 @@ def _download_oss(uri: str, dest: Path, settings: ReinventSettings) -> Path:
         for chunk in response.body.iter_bytes():
             f.write(chunk)
     return dest
+
+
+__all__ = [
+    "maybe_resolve_input",
+    "resolve_input",
+    "resolve_uri",
+    "save_upload",
+]

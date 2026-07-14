@@ -27,7 +27,6 @@ class ReinventSettings(ServiceSettings):
     reinvent_bin: Path = Field(default=Path("/opt/reinvent-server/.venv/bin/reinvent"))
     prior_base: Path = Field(default=Path("/data/models/reinvent"))
     device: str = "cuda:0"
-    oss_region: str = Field(default="cn-hangzhou")
     max_concurrent_jobs: int = 2
     task_endpoints_enabled: bool = True
 

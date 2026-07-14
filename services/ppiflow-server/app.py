@@ -44,7 +44,7 @@ from .tools import (
     nanobody_argv,
     scaffolding_argv,
 )
-from .uris import resolve_input
+from bioagent_service.uris import resolve_input
 
 logging.basicConfig(
     level=logging.INFO,

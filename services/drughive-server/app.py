@@ -41,7 +41,7 @@ from .configs import (
 from .models import GenerateRequest, GenerateSpatialRequest, OptimizeRequest
 from .settings import DrughiveSettings
 from .tools import generate_argv, optimize_argv
-from .uris import maybe_resolve_input, resolve_input
+from bioagent_service.uris import maybe_resolve_input, resolve_input
 
 logger = logging.getLogger(__name__)
 

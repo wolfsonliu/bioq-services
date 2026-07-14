@@ -48,5 +48,3 @@ class ODesignSettings(ServiceSettings):
         default=Path("/data/models/odesign/data"),
         description="Directory containing CCD data (components.cif + rdkit_mol.pkl).",
     )
-
-    oss_region: str = Field(default="cn-hangzhou")

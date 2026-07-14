@@ -26,7 +26,7 @@ from .adapter import BoltzAdapter
 from .models import PredictAffinityRequest, PredictStructureRequest
 from .settings import BoltzSettings
 from .tools import build_yaml, predict_argv
-from .uris import resolve_uri, save_upload
+from bioagent_service.uris import resolve_uri, save_upload
 
 logging.basicConfig(
     level=logging.INFO,

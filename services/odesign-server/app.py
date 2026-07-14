@@ -26,7 +26,8 @@ from .adapter import ODesignAdapter
 from .models import DesignRequest
 from .settings import ODesignSettings
 from .tools import design_argv
-from .uris import resolve_input, rewrite_ref_files, save_upload
+from .uris import rewrite_ref_files
+from bioagent_service.uris import resolve_input, save_upload
 
 logging.basicConfig(
     level=logging.INFO,

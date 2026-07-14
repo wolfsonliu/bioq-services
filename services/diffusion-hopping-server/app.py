@@ -104,7 +104,7 @@ def _save_inputs(
     """Persist + URI-resolve the two required input files."""
     # Import here so test discovery isn't blocked by missing optional deps
     # when these closures aren't reached.
-    from .uris import resolve_input
+    from bioagent_service.uris import resolve_input
 
     input_dir.mkdir(parents=True, exist_ok=True)
 

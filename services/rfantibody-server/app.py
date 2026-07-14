@@ -36,7 +36,7 @@ from .adapter import RFantibodyAdapter
 from .models import ProteinMPNNRequest, RF2Request, RFdiffusionRequest
 from .settings import RFantibodySettings
 from .tools import proteinmpnn_argv, rf2_argv, rfdiffusion_argv
-from .uris import resolve_input
+from bioagent_service.uris import resolve_input
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)

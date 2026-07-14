@@ -42,5 +42,3 @@ class DockQSettings(ServiceSettings):
     # because DockQ already saturates all cores on a single job. Override via
     # `DOCKQ_MAX_CONCURRENT_JOBS`; capped at 8 to keep memory bounded.
     max_concurrent_jobs: int = Field(default=2, ge=1, le=8)
-
-    oss_region: str = Field(default="cn-hangzhou")

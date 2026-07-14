@@ -28,5 +28,3 @@ class ProteinMPNNSettings(ServiceSettings):
     # `ca_model_weights/`, `AbMPNN_model_weights/`. Kept separate from `root`
     # so future deployments can mount weights from NAS.
     weights_dir: Path = Field(default=Path("/opt/proteinmpnn"))
-
-    oss_region: str = Field(default="cn-hangzhou")

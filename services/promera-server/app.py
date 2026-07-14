@@ -28,7 +28,7 @@ from .tools import (
     design_argv,
     write_design_config,
 )
-from .uris import resolve_input, save_upload
+from bioagent_service.uris import resolve_input, save_upload
 
 settings = PromeraSettings()
 adapter = PromeraAdapter(settings=settings)

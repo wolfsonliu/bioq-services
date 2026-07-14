@@ -45,7 +45,7 @@ from .tools import (
     split_inline_smiles,
     write_alias_csv,
 )
-from .uris import resolve_input, save_upload
+from bioagent_service.uris import resolve_input, save_upload
 
 logger = logging.getLogger(__name__)
 

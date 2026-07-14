@@ -43,5 +43,3 @@ class BoltzSettings(ServiceSettings):
     # Single-GPU FC instances run jobs serially. Higher values would require
     # multi-GPU scheduling that boltz doesn't currently support out of the box.
     max_concurrent_jobs: int = Field(default=1, ge=1, le=8)
-
-    oss_region: str = Field(default="cn-hangzhou")

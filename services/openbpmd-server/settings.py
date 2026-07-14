@@ -57,6 +57,3 @@ class OpenBPMDSettings(ServiceSettings):
     # Hard ceiling for a single subprocess. 48h covers 10 reps x 10 ns on a
     # slow GPU; FC's own 24h async ceiling is the real constraint there.
     subprocess_timeout_s: int = Field(default=48 * 3600, ge=60)
-
-    # OSS region for URI resolution.
-    oss_region: str = Field(default="cn-hangzhou")

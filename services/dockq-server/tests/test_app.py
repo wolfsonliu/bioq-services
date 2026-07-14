@@ -329,7 +329,7 @@ def test_batch_driver_summarize_dockq2_global_key():
 
 def test_uri_resolve_file(tmp_path):
     from server.settings import DockQSettings
-    from server.uris import resolve_input
+    from bioagent_service.uris import resolve_input
 
     class _Off(DockQSettings):
         model_config = SettingsConfigDict(env_prefix="DOCKQ_TEST_", env_file=None, extra="ignore")
@@ -344,7 +344,7 @@ def test_uri_resolve_file(tmp_path):
 def test_uri_requires_input(tmp_path):
     from fastapi import HTTPException
     from server.settings import DockQSettings
-    from server.uris import resolve_input
+    from bioagent_service.uris import resolve_input
 
     class _Off(DockQSettings):
         model_config = SettingsConfigDict(env_prefix="DOCKQ_TEST_", env_file=None, extra="ignore")

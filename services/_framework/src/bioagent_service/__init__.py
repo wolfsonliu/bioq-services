@@ -54,6 +54,12 @@ from bioagent_service.models import JobInfo, JobStatus, UploadInfo
 from bioagent_service.oss_export import mirror_job_dir_to_oss
 from bioagent_service.settings import ServiceSettings
 from bioagent_service.task_endpoint import execute_task, register_task_endpoint, resolve_task_id
+from bioagent_service.uris import (
+    maybe_resolve_input,
+    resolve_input,
+    resolve_uri,
+    save_upload,
+)
 
 
 def read_version_file(caller_file: str, default: str = "0.0.0") -> str:
@@ -90,9 +96,13 @@ __all__ = [
     "execute_task",
     "extract_error_summary",
     "finalize_job",
+    "maybe_resolve_input",
     "mirror_job_dir_to_oss",
     "model_form_depends",
     "read_version_file",
     "register_task_endpoint",
+    "resolve_input",
     "resolve_task_id",
+    "resolve_uri",
+    "save_upload",
 ]

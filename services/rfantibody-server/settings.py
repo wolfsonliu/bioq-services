@@ -42,7 +42,3 @@ class RFantibodySettings(ServiceSettings):
 
     # CLI entry points that wrap each of the three tools. Env: RFANTIBODY_SCRIPTS_DIR
     scripts_dir: Path = Field(default=Path("/opt/rfantibody/scripts"))
-
-    # OSS download region — only consulted when an `oss://` URI is resolved.
-    # Env: RFANTIBODY_OSS_REGION
-    oss_region: str = Field(default="cn-hangzhou")

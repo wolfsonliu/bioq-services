@@ -55,7 +55,7 @@ from .models import (
 )
 from .settings import PocketXMolSettings
 from .tools import confidence_argv, sample_argv
-from .uris import maybe_resolve_input, resolve_input
+from bioagent_service.uris import maybe_resolve_input, resolve_input
 
 logger = logging.getLogger(__name__)
 

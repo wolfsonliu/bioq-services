@@ -32,7 +32,7 @@ from .models import (
     TemplateEntry,
 )
 from .settings import BoltzSettings
-from .uris import resolve_uri
+from bioagent_service.uris import resolve_uri
 
 
 RequestT = Union[PredictStructureRequest, PredictAffinityRequest]

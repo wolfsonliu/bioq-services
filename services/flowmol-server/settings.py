@@ -61,5 +61,3 @@ class FlowMolSettings(ServiceSettings):
 
     # Single-GPU FC instances run jobs serially.
     max_concurrent_jobs: int = Field(default=1, ge=1, le=4)
-
-    oss_region: str = Field(default="cn-hangzhou")

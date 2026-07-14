@@ -26,7 +26,7 @@ from .adapter import BoltzGenAdapter
 from .models import DesignRequest, InverseFoldRequest
 from .settings import BoltzGenSettings
 from .tools import design_argv, inverse_fold_argv
-from .uris import resolve_input, save_upload
+from bioagent_service.uris import resolve_input, save_upload
 
 logging.basicConfig(
     level=logging.INFO,

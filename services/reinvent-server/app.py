@@ -31,7 +31,7 @@ from .tools import (
     enumeration_argv, sampling_argv, scoring_argv,
     staged_learning_argv, transfer_learning_argv,
 )
-from .uris import maybe_resolve_input, resolve_input
+from bioagent_service.uris import maybe_resolve_input, resolve_input
 
 settings = ReinventSettings()
 adapter = ReinventAdapter(settings=settings)

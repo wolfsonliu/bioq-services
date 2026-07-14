@@ -42,5 +42,3 @@ class PromeraSettings(ServiceSettings):
     tinyprot_cache: Path = Field(default=Path("/data/models/promera/tinyprot"))
 
     max_concurrent_jobs: int = Field(default=1, ge=1, le=8)
-
-    oss_region: str = Field(default="cn-hangzhou")

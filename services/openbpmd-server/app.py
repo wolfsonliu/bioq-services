@@ -26,7 +26,7 @@ from .adapter import OpenBPMDAdapter
 from .models import ScoreRequest
 from .settings import OpenBPMDSettings
 from .tools import score_argv
-from .uris import resolve_input
+from bioagent_service.uris import resolve_input
 
 logger = logging.getLogger(__name__)
 

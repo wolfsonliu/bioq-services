@@ -45,7 +45,3 @@ class Genie3Settings(ServiceSettings):
         default=Path("/data/models/genie3/pretrained/v1"),
         description="Genie3 pretrained v1 checkpoints + config.yaml (~512 MB).",
     )
-
-    # OSS download region — only consulted by `oss://` URI resolution.
-    # Env: GENIE3_OSS_REGION
-    oss_region: str = Field(default="cn-hangzhou")

@@ -35,5 +35,3 @@ class ImmuneBuilderSettings(ServiceSettings):
         default=Path("/data/models/immunebuilder/trained_model"),
         description="ABody/Nano/TCR weight files (16 .pt files, ~600 MB).",
     )
-
-    oss_region: str = Field(default="cn-hangzhou")

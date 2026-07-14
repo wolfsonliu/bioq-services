@@ -26,7 +26,7 @@ from .adapter import DockQAdapter
 from .models import ScoreBatchRequest, ScoreRequest
 from .settings import DockQSettings
 from .tools import batch_argv, score_argv
-from .uris import resolve_input, save_upload
+from bioagent_service.uris import resolve_input, save_upload
 
 logging.basicConfig(
     level=logging.INFO,

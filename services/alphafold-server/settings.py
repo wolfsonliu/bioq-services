@@ -31,5 +31,3 @@ class AlphaFoldSettings(ServiceSettings):
     n_cpu: int = Field(default=8, ge=1, le=64)
 
     max_concurrent_jobs: int = Field(default=1, ge=1, le=4)
-
-    oss_region: str = Field(default="cn-hangzhou")

@@ -26,7 +26,7 @@ from .adapter import ProteinMPNNAdapter
 from .models import DesignRequest, ProbsRequest, ScoreRequest
 from .settings import ProteinMPNNSettings
 from .tools import design_argv, prepare_inputs, probs_argv, score_argv
-from .uris import resolve_input
+from bioagent_service.uris import resolve_input
 
 logging.basicConfig(
     level=logging.INFO,

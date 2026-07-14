@@ -269,7 +269,7 @@ def test_design_argv_partial_diff(tmp_path):
 
 def test_uri_resolve_file(tmp_path):
     from server.settings import ODesignSettings
-    from server.uris import resolve_input
+    from bioagent_service.uris import resolve_input
 
     class _Off(ODesignSettings):
         model_config = SettingsConfigDict(env_prefix="ODESIGN_TEST_", env_file=None, extra="ignore")
@@ -284,7 +284,7 @@ def test_uri_resolve_file(tmp_path):
 def test_uri_requires_input(tmp_path):
     from fastapi import HTTPException
     from server.settings import ODesignSettings
-    from server.uris import resolve_input
+    from bioagent_service.uris import resolve_input
 
     class _Off(ODesignSettings):
         model_config = SettingsConfigDict(env_prefix="ODESIGN_TEST_", env_file=None, extra="ignore")

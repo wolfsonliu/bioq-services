@@ -31,7 +31,7 @@ from .adapter import IgGMAdapter
 from .models import AffinityMaturationRequest, DesignRequest, EpitopeRequest
 from .settings import IgGMSettings
 from .tools import design_argv, epitope_argv
-from .uris import resolve_input
+from bioagent_service.uris import resolve_input
 
 logging.basicConfig(
     level=logging.INFO,

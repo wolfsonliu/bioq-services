@@ -76,5 +76,3 @@ class ChemBounceSettings(ServiceSettings):
     # CPU-bound; FC CPU function defaults to single concurrent job per
     # instance.  Set via env if you want more.
     max_concurrent_jobs: int = Field(default=1, ge=1, le=4)
-
-    oss_region: str = Field(default="cn-hangzhou")

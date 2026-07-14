@@ -41,7 +41,7 @@ from .tools import (
     custom_argv,
     small_molecule_binder_argv,
 )
-from .uris import resolve_input
+from bioagent_service.uris import resolve_input
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)

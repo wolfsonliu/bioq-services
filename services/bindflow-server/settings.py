@@ -62,6 +62,3 @@ class BindFlowSettings(ServiceSettings):
     # Hard ceiling for a single subprocess.  Default 7 days covers the longest
     # FEP campaigns; sbatch time limit is the real constraint on HPC.
     subprocess_timeout_s: int = Field(default=7 * 24 * 3600, ge=60)
-
-    # OSS region for URI resolution.
-    oss_region: str = Field(default="cn-hangzhou")

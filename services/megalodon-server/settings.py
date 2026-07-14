@@ -92,8 +92,6 @@ class MegalodonSettings(ServiceSettings):
 
     max_concurrent_jobs: int = Field(default=1, ge=1, le=4)
 
-    oss_region: str = Field(default="cn-hangzhou")
-
     # ---- Model registry ----
 
     def ckpt_path(self, dataset: str, ckpt_file: str) -> Path:

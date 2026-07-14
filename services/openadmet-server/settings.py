@@ -121,8 +121,6 @@ class OpenAdmetSettings(ServiceSettings):
     # GPU single-card; FC session affinity handles per-instance concurrency.
     max_concurrent_jobs: int = Field(default=1, ge=1, le=8)
 
-    oss_region: str = Field(default="cn-hangzhou")
-
     session_header_name: str = Field(default="bioagent-session-id")
 
     # ---- Computed weight-dir paths ----

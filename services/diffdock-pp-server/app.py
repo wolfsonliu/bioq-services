@@ -126,7 +126,7 @@ def _save_inputs(
     input_dir: Path,
 ) -> tuple[Path, Path]:
     """Persist + URI-resolve the two required PDB inputs."""
-    from .uris import resolve_input
+    from bioagent_service.uris import resolve_input
 
     input_dir.mkdir(parents=True, exist_ok=True)
 

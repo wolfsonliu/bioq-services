@@ -26,7 +26,7 @@ from .adapter import AlphaFoldAdapter
 from .models import FoldRequest
 from .settings import AlphaFoldSettings
 from .tools import fold_argv
-from .uris import resolve_input
+from bioagent_service.uris import resolve_input
 
 logging.basicConfig(
     level=logging.INFO,
