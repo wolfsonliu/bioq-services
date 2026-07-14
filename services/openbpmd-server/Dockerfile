@@ -172,7 +172,6 @@ COPY services/openbpmd-server/__init__.py \
      services/openbpmd-server/models.py \
      services/openbpmd-server/settings.py \
      services/openbpmd-server/tools.py \
-     services/openbpmd-server/uris.py \
      /opt/openbpmd/server/
 
 WORKDIR /opt/openbpmd

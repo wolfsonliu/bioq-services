@@ -112,7 +112,6 @@ COPY services/boltzgen-server/__init__.py \
      services/boltzgen-server/models.py \
      services/boltzgen-server/settings.py \
      services/boltzgen-server/tools.py \
-     services/boltzgen-server/uris.py \
      /opt/boltzgen/server/
 
 # Service settings — mirror services/boltzgen-server/settings.py (BoltzGenSettings).

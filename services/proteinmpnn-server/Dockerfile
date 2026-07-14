@@ -76,7 +76,6 @@ COPY services/proteinmpnn-server/__init__.py \
      services/proteinmpnn-server/models.py \
      services/proteinmpnn-server/settings.py \
      services/proteinmpnn-server/tools.py \
-     services/proteinmpnn-server/uris.py \
      /opt/proteinmpnn/server/
 
 ENV PYTHONPATH=/opt/proteinmpnn

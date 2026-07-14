@@ -191,7 +191,6 @@ COPY services/turbohopp-server/__init__.py \
      services/turbohopp-server/models.py \
      services/turbohopp-server/settings.py \
      services/turbohopp-server/tools.py \
-     services/turbohopp-server/uris.py \
      services/turbohopp-server/inference.py \
      /opt/turbohopp-server/server/
 

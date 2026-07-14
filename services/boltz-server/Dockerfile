@@ -100,7 +100,6 @@ COPY services/boltz-server/__init__.py \
      services/boltz-server/models.py \
      services/boltz-server/settings.py \
      services/boltz-server/tools.py \
-     services/boltz-server/uris.py \
      /opt/boltz/server/
 
 # Service settings; mirror `services/boltz-server/settings.py` (BoltzSettings).

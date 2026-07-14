@@ -257,7 +257,6 @@ COPY services/pocketxmol-server/__init__.py \
      services/pocketxmol-server/models.py \
      services/pocketxmol-server/settings.py \
      services/pocketxmol-server/tools.py \
-     services/pocketxmol-server/uris.py \
      /opt/pocketxmol/server/
 
 WORKDIR /opt/pocketxmol

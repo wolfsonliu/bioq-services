@@ -61,7 +61,6 @@ COPY services/dockq-server/__init__.py \
      services/dockq-server/models.py \
      services/dockq-server/settings.py \
      services/dockq-server/tools.py \
-     services/dockq-server/uris.py \
      /opt/dockq/server/
 
 # DockQ CLI installed under .venv/bin/DockQ — make it the resolved binary.

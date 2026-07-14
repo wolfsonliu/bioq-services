@@ -88,7 +88,6 @@ COPY services/reinvent-server/__init__.py \
      services/reinvent-server/models.py \
      services/reinvent-server/settings.py \
      services/reinvent-server/tools.py \
-     services/reinvent-server/uris.py \
      services/reinvent-server/config_builder.py \
      services/reinvent-server/reinvent_cli.py \
      /opt/reinvent-server/server/

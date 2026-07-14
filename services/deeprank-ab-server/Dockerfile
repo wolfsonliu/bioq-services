@@ -178,7 +178,6 @@ COPY services/deeprank-ab-server/__init__.py \
      services/deeprank-ab-server/models.py \
      services/deeprank-ab-server/settings.py \
      services/deeprank-ab-server/argv.py \
-     services/deeprank-ab-server/uris.py \
      services/deeprank-ab-server/run_inference.py \
      /opt/deeprank-ab/server/
 

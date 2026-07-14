@@ -71,7 +71,6 @@ COPY services/esmfold2-server/__init__.py \
      services/esmfold2-server/models.py \
      services/esmfold2-server/settings.py \
      services/esmfold2-server/tools.py \
-     services/esmfold2-server/uris.py \
      /opt/esmfold2/server/
 
 ENV PYTHONPATH=/opt/esmfold2

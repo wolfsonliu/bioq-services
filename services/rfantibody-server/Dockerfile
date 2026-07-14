@@ -91,7 +91,6 @@ COPY services/rfantibody-server/__init__.py \
      services/rfantibody-server/models.py \
      services/rfantibody-server/settings.py \
      services/rfantibody-server/tools.py \
-     services/rfantibody-server/uris.py \
      /opt/rfantibody/server/
 
 # Env-driven settings — see services/rfantibody-server/settings.py (RFantibodySettings).

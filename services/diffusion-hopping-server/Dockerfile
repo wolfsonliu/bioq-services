@@ -222,7 +222,6 @@ COPY services/diffusion-hopping-server/__init__.py \
      services/diffusion-hopping-server/models.py \
      services/diffusion-hopping-server/settings.py \
      services/diffusion-hopping-server/tools.py \
-     services/diffusion-hopping-server/uris.py \
      services/diffusion-hopping-server/inference.py \
      /opt/diffusion-hopping/server/
 

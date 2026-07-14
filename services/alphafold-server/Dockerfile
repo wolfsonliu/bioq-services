@@ -179,7 +179,6 @@ COPY services/alphafold-server/__init__.py \
      services/alphafold-server/models.py \
      services/alphafold-server/adapter.py \
      services/alphafold-server/tools.py \
-     services/alphafold-server/uris.py \
      services/alphafold-server/app.py \
      services/alphafold-server/__main__.py \
      services/alphafold-server/VERSION \

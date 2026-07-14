@@ -250,7 +250,6 @@ COPY services/openadmet-server/__init__.py \
      services/openadmet-server/models.py \
      services/openadmet-server/settings.py \
      services/openadmet-server/tools.py \
-     services/openadmet-server/uris.py \
      /opt/openadmet/server/
 
 WORKDIR /opt/openadmet

@@ -219,7 +219,6 @@ COPY services/rfdiffusion-server/__init__.py \
      services/rfdiffusion-server/models.py \
      services/rfdiffusion-server/settings.py \
      services/rfdiffusion-server/tools.py \
-     services/rfdiffusion-server/uris.py \
      /opt/rfdiffusion/server/
 
 # Settings (env-driven; see services/rfdiffusion-server/settings.py).

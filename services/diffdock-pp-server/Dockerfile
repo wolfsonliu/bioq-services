@@ -302,7 +302,6 @@ COPY services/diffdock-pp-server/__init__.py \
      services/diffdock-pp-server/models.py \
      services/diffdock-pp-server/settings.py \
      services/diffdock-pp-server/tools.py \
-     services/diffdock-pp-server/uris.py \
      services/diffdock-pp-server/inference.py \
      services/diffdock-pp-server/single_pair_inference.yaml \
      /opt/diffdock-pp/server/

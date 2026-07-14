@@ -95,7 +95,6 @@ COPY services/promera-server/__init__.py \
      services/promera-server/models.py \
      services/promera-server/settings.py \
      services/promera-server/tools.py \
-     services/promera-server/uris.py \
      /opt/promera/server/
 
 ENV PYTHONPATH=/opt/promera

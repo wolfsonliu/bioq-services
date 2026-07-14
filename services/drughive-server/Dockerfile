@@ -263,7 +263,6 @@ COPY services/drughive-server/__init__.py \
      services/drughive-server/models.py \
      services/drughive-server/settings.py \
      services/drughive-server/tools.py \
-     services/drughive-server/uris.py \
      /opt/drughive/server/
 
 WORKDIR /opt/drughive

@@ -224,7 +224,6 @@ COPY services/iggm-server/__init__.py \
      services/iggm-server/models.py \
      services/iggm-server/settings.py \
      services/iggm-server/tools.py \
-     services/iggm-server/uris.py \
      services/iggm-server/run_design.py \
      services/iggm-server/epitope.py \
      /opt/iggm/server/

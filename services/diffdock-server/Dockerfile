@@ -324,7 +324,6 @@ COPY services/diffdock-server/__init__.py \
      services/diffdock-server/models.py \
      services/diffdock-server/settings.py \
      services/diffdock-server/tools.py \
-     services/diffdock-server/uris.py \
      services/diffdock-server/run_inference.py \
      services/diffdock-server/default_inference_args.yaml \
      /opt/diffdock/server/

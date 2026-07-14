@@ -255,7 +255,6 @@ COPY services/ppiflow-server/__init__.py \
      services/ppiflow-server/models.py \
      services/ppiflow-server/settings.py \
      services/ppiflow-server/tools.py \
-     services/ppiflow-server/uris.py \
      /opt/ppiflow/server/
 
 # Settings via env (see services/ppiflow-server/settings.py).
