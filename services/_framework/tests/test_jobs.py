@@ -29,6 +29,21 @@ def test_create_get_update_round_trip() -> None:
     assert store.get("abc123") == updated
 
 
+def test_create_records_service_and_endpoint() -> None:
+    store = JobStore()
+    job = store.create("j", service="rfantibody", endpoint="rfdiffusion")
+    assert job.service == "rfantibody"
+    assert job.endpoint == "rfdiffusion"
+    assert store.get("j").service == "rfantibody"
+
+
+def test_create_service_endpoint_default_none() -> None:
+    store = JobStore()
+    job = store.create("j")
+    assert job.service is None
+    assert job.endpoint is None
+
+
 def test_update_validates_field_values() -> None:
     store = JobStore()
     store.create("j")

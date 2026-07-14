@@ -131,11 +131,13 @@ class JobAdapter:
             return JobInfo(
                 job_id=job_id,
                 status=JobStatus.COMPLETED,
+                service=self.name,
                 message="Recovered from disk (outputs present)",
             )
         return JobInfo(
             job_id=job_id,
             status=JobStatus.FAILED,
+            service=self.name,
             message="Recovered from disk (no outputs)",
         )
 

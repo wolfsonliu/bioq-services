@@ -126,7 +126,12 @@ def execute_task(
     (job_dir / "output").mkdir(exist_ok=True)
     adapter.log_path(job_dir).parent.mkdir(parents=True, exist_ok=True)
     try:
-        store.create(job_id=job_id, input_params=params.model_dump(mode="json"))
+        store.create(
+            job_id=job_id,
+            input_params=params.model_dump(mode="json"),
+            service=adapter.name,
+            endpoint=label,
+        )
     except ValueError:
         # Lost a concurrent-create race; the winner's record is now in store.
         # Return it to keep idempotent semantics (matches duplicate-job check above).

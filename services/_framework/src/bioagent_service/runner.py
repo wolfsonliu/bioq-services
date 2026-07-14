@@ -138,6 +138,7 @@ class JobRunner:
         `input_params` is an opaque dict echoed back in JobInfo for debugging.
         """
         adapter = self.adapter
+        resolved_label = label or adapter.name
         # Admission control — atomic check-and-reserve to prevent TOCTOU races
         # where concurrent requests all see _active_count == 0 and slip through.
         with self._active_lock:
@@ -151,7 +152,11 @@ class JobRunner:
                 self.store, self.settings.jobs_base_dir, self.settings.disk_limit_mb
             )
 
-            job = self.store.create(input_params=input_params)
+            job = self.store.create(
+                input_params=input_params,
+                service=adapter.name,
+                endpoint=resolved_label,
+            )
             job_id = job.job_id
             job_dir = adapter.job_dir(job_id)
             job_dir.mkdir(parents=True, exist_ok=True)
@@ -171,7 +176,6 @@ class JobRunner:
                 cleanup_job(self.store, self.settings.jobs_base_dir, job_id)
                 raise
 
-            resolved_label = label or adapter.name
             resolved_env = {**adapter.subprocess_env(), **(env or {})}
             resolved_cwd = cwd if cwd is not None else adapter.subprocess_cwd()
         except Exception:

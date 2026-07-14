@@ -133,6 +133,8 @@ class JobStore:
         job_id: str | None = None,
         *,
         input_params: dict[str, Any] | None = None,
+        service: str | None = None,
+        endpoint: str | None = None,
     ) -> JobInfo:
         if job_id is None:
             job_id = new_job_id()
@@ -140,6 +142,8 @@ class JobStore:
             job_id=job_id,
             status=JobStatus.PENDING,
             created_at=utcnow(),
+            service=service,
+            endpoint=endpoint,
             input_params=input_params,
             instance_id=self.instance_id,
         )

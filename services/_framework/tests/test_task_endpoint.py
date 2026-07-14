@@ -66,6 +66,10 @@ def test_task_endpoint_blocks_until_completion(client: TestClient) -> None:
     body = r.json()
     assert body["status"] == JobStatus.COMPLETED.value
     assert body["output_count"] == 1
+    # Task path records which service + endpoint produced the job so a
+    # gateway-collected job.json can be traced back to its tool.
+    assert body["service"] == "echo"
+    assert body["endpoint"] == "echo"
     # Follow-up GET should see the persisted COMPLETED state (not a
     # transient cached value), confirming the JobStore wrote the
     # terminal lifecycle through.

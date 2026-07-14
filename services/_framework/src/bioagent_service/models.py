@@ -63,6 +63,14 @@ class JobInfo(BaseModel):
 
     job_id: str = Field(..., min_length=1)
     status: JobStatus
+    # Service (Docker image / tool) that ran this job — the adapter's `name`
+    # (e.g. "rfantibody", "boltz"). Lets a job.json sidecar identify its origin
+    # when results from many services are collected together via the gateway.
+    service: Optional[str] = None
+    # Specific endpoint / algorithm within the service (the submit `label`,
+    # e.g. "rfdiffusion", "proteinmpnn", "rf2"). Distinguishes tools inside a
+    # multi-endpoint service; equals `service` when the endpoint has no label.
+    endpoint: Optional[str] = None
     message: Optional[str] = None
     progress: Optional[str] = None
     created_at: Optional[datetime] = None
