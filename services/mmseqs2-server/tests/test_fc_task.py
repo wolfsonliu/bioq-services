@@ -50,8 +50,13 @@ PAIRED_Q = (
 )
 
 # mmseqs MSA cold-start ~60s; short-seq search runs 3-10 min on the GPU
-# subset DB.  Allow 40 min per task to absorb cold start + slow paths.
-POLL_TIMEOUT_S = 2400
+# subset DB.  The paired pipeline (9-step search + expandaln against the
+# 350M-seq UniRef DB) is heavier and can approach 40 min even running solo,
+# so allow 50 min per task as a safety margin over the observed solo time.
+# (The pair task is also serialized behind the msa task — see
+# ``pair_submit_response`` — so the two never contend for the single account
+# GPU, which previously pushed pair to ~46 min.)
+POLL_TIMEOUT_S = 3000
 POLL_INTERVAL_S = 20
 
 TIMEOUT = httpx.Timeout(connect=30, read=300, write=60, pool=30)
@@ -173,8 +178,15 @@ def msa_task(
 
 @pytest.fixture(scope="module")
 def pair_submit_response(
-    client: httpx.Client, pair_task_id: str,
+    client: httpx.Client, pair_task_id: str, msa_task: dict,
 ) -> httpx.Response:
+    # Depend on ``msa_task`` (the *completed* msa job) so the pair task is only
+    # submitted after msa has finished.  The account has a single
+    # ``fc.gpu.tesla.1`` GPU; submitting both tasks concurrently makes them
+    # contend for it (and for NAS db-load-mode-2 mmap I/O), which pushed the
+    # pair job to ~46 min > the poll timeout.  Serializing lets each task run
+    # solo — representative of real single-GPU deployment and reliably within
+    # POLL_TIMEOUT_S.
     return client.post(
         "/api/tasks/pair",
         data={"q": PAIRED_Q, "mode": "pairgreedy"},

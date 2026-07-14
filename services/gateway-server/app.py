@@ -62,7 +62,10 @@ def describe_service(svc: str, request: Request,
     return request.app.state.discover.describe(svc, base)
 
 
-@app.post("/v1/run/{svc}/{endpoint}", status_code=202)
+# `endpoint:path` so nested downstream task endpoints route through the gateway
+# (e.g. rfdiffusion "generate/motif", ppiflow "sample/binder", genie3
+# "generate/unconditional"). It is forwarded verbatim to POST /api/tasks/<endpoint>.
+@app.post("/v1/run/{svc}/{endpoint:path}", status_code=202)
 def run(svc: str, endpoint: str, request: Request,
         body: dict = Body(default_factory=dict),
         x_bioagent_job_id: str | None = Header(default=None, alias="X-Bioagent-Job-Id"),
