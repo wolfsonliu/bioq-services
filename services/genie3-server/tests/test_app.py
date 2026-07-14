@@ -265,3 +265,37 @@ def test_motif_task_endpoint_rejects_bad_zip(
             files={"dataset": ("junk.zip", f, "application/zip")},
         )
     assert r.status_code == 422
+
+
+def test_motif_task_endpoint_accepts_dataset_uri(
+    real_app_client: TestClient, tmp_path: Path
+) -> None:
+    """Gateway path: dataset supplied as a URI (file://) instead of multipart.
+
+    The gateway maps oss://<bucket>/<key> → /mnt/oss/<key> for oss_mount
+    services and passes it as `dataset_uri`; here we use a local file:// URI so
+    the same resolve_input branch runs offline. /bin/true produces no outputs
+    so the job reaches a terminal FAILED state, but reaching a terminal state
+    (not a 422 "upload or URI required") proves the zip was resolved from the
+    URI and extracted.
+    """
+    data_dir = Path(__file__).resolve().parent / "data" / "motifbench"
+    zpath = tmp_path / "motif.zip"
+    with zipfile.ZipFile(zpath, "w") as zf:
+        zf.write(data_dir / "problems" / "01_1LDB.json", "problems/01_1LDB.json")
+        zf.write(data_dir / "motifs" / "01_1LDB.pdb", "motifs/01_1LDB.pdb")
+    r = real_app_client.post(
+        "/api/tasks/generate/motif",
+        data={"dataset_uri": f"file://{zpath}", "selections": "01_1LDB"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] in {"completed", "failed"}
+
+
+def test_motif_task_endpoint_requires_dataset_or_uri(
+    real_app_client: TestClient,
+) -> None:
+    """Neither a multipart dataset nor a dataset_uri → 422 from resolve_input."""
+    r = real_app_client.post("/api/tasks/generate/motif", data={"selections": "x"})
+    assert r.status_code == 422
+    assert "dataset" in r.json()["detail"].lower()

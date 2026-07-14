@@ -29,6 +29,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+import yaml
 
 
 def _load_env(path: Path) -> None:
@@ -201,22 +202,21 @@ def _fixture(svc: str, name: str) -> bytes:
     return (Path(__file__).resolve().parents[2] / svc / "tests" / "data" / name).read_bytes()
 
 
-def _run_poll_download(
+def _run_poll_zip(
     client,
     *,
     svc: str,
     endpoint: str,
     job_id: str,
     body: dict,
-    output_suffixes: tuple[str, ...],
     poll_timeout_s: int,
     poll_interval_s: int = 30,
-) -> None:
-    """Shared run -> poll -> 302-OSS-download assertion for gateway e2e tests.
+) -> bytes:
+    """Shared run -> poll -> 302-OSS-download for gateway e2e tests.
 
-    Asserts: 202 submit, terminal status=completed, the download is an OSS 302
-    (output-sink mirror, NOT the downstream proxy fallback), and results.zip
-    carries a file whose name ends with one of `output_suffixes`.
+    Asserts: 202 submit, terminal status=completed, and the download is an OSS
+    302 (output-sink mirror, NOT the downstream proxy fallback). Returns the raw
+    results.zip bytes so callers can assert on / extract from its contents.
     """
     r = client.post(
         f"/v1/run/{svc}/{endpoint}",
@@ -242,10 +242,38 @@ def _run_poll_download(
     assert "results.zip" in red.headers["location"]
     dl = httpx.get(red.headers["location"], timeout=TIMEOUT)  # pull straight from OSS
     assert dl.status_code == 200, dl.text
-    names = zipfile.ZipFile(io.BytesIO(dl.content)).namelist()
+    return dl.content
+
+
+def _run_poll_download(
+    client,
+    *,
+    svc: str,
+    endpoint: str,
+    job_id: str,
+    body: dict,
+    output_suffixes: tuple[str, ...],
+    poll_timeout_s: int,
+    poll_interval_s: int = 30,
+) -> None:
+    """Run -> poll -> 302-OSS-download, asserting results.zip carries a file
+    whose name ends with one of `output_suffixes`."""
+    content = _run_poll_zip(
+        client, svc=svc, endpoint=endpoint, job_id=job_id, body=body,
+        poll_timeout_s=poll_timeout_s, poll_interval_s=poll_interval_s,
+    )
+    names = zipfile.ZipFile(io.BytesIO(content)).namelist()
     assert any(n.endswith(output_suffixes) for n in names), (
         f"no {output_suffixes} in results.zip: {names}"
     )
+
+
+def _zip_member(content: bytes, needle: str) -> bytes:
+    """Extract the first results.zip member whose name contains `needle`."""
+    zf = zipfile.ZipFile(io.BytesIO(content))
+    name = next((n for n in zf.namelist() if needle in n), None)
+    assert name is not None, f"no member matching {needle!r} in {zf.namelist()}"
+    return zf.read(name)
 
 
 @pytest.mark.fc
@@ -481,6 +509,40 @@ class TestEndToEndRFdiffusion2:
 @pytest.mark.fc
 @_needs
 class TestEndToEndRFantibody:
+    """RFantibody is a 3-stage pipeline through the gateway:
+
+      rfdiffusion (target + framework PDB) -> 1_rfdiffusion.qv
+      proteinmpnn (1_rfdiffusion.qv)       -> 2_proteinmpnn.qv
+      rf2         (2_proteinmpnn.qv)        -> 3_rf2.qv
+
+    The service's own tests chain the stages via ``job://`` URIs. Here each
+    stage's ``.qv`` is pulled from the gateway's OSS results.zip and re-uploaded
+    via presign as the next stage's ``oss://`` input, so proteinmpnn and rf2 are
+    exercised through the gateway (upload -> run -> poll -> 302 OSS download)
+    without job:// cross-job coupling.
+    """
+
+    def _rfdiffusion_qv(self, client) -> bytes:
+        """Run stage 1 and return the 1_rfdiffusion.qv bytes."""
+        job_id = uuid.uuid4().hex[:20]
+        target_uri = _upload_via_presign(
+            client, job_id, "rsv_site3.pdb", _fixture("rfantibody-server", "rsv_site3.pdb")
+        )
+        framework_uri = _upload_via_presign(
+            client, job_id, "hu-4D5-8_Fv.pdb", _fixture("rfantibody-server", "hu-4D5-8_Fv.pdb")
+        )
+        content = _run_poll_zip(
+            client, svc="rfantibody-server", endpoint="rfdiffusion", job_id=job_id,
+            body={
+                "target_uri": target_uri, "framework_uri": framework_uri,
+                "num_designs": 1, "diffuser_t": 25,
+                "design_loops": "L1:8-13,L2:7,L3:9-11,H1:7,H2:6,H3:5-13",
+                "hotspots": "T305,T456", "deterministic": True,
+            },
+            poll_timeout_s=1800,
+        )
+        return _zip_member(content, "1_rfdiffusion.qv")
+
     def test_rfdiffusion_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
         target_uri = _upload_via_presign(
@@ -500,10 +562,40 @@ class TestEndToEndRFantibody:
             output_suffixes=(".qv",), poll_timeout_s=1800,
         )
 
+    def test_pipeline_proteinmpnn_rf2_end_to_end(self, client):
+        # stage 1: rfdiffusion -> 1_rfdiffusion.qv (re-uploaded for stage 2)
+        rfd_qv = self._rfdiffusion_qv(client)
+
+        # stage 2: proteinmpnn (1_rfdiffusion.qv -> 2_proteinmpnn.qv)
+        mpnn_job = uuid.uuid4().hex[:20]
+        mpnn_input_uri = _upload_via_presign(client, mpnn_job, "1_rfdiffusion.qv", rfd_qv)
+        mpnn_zip = _run_poll_zip(
+            client, svc="rfantibody-server", endpoint="proteinmpnn", job_id=mpnn_job,
+            body={"input_uri": mpnn_input_uri, "seqs_per_struct": 1, "deterministic": True},
+            poll_timeout_s=1800,
+        )
+        mpnn_qv = _zip_member(mpnn_zip, "2_proteinmpnn.qv")
+
+        # stage 3: rf2 (2_proteinmpnn.qv -> 3_rf2.qv)
+        rf2_job = uuid.uuid4().hex[:20]
+        rf2_input_uri = _upload_via_presign(client, rf2_job, "2_proteinmpnn.qv", mpnn_qv)
+        _run_poll_download(
+            client, svc="rfantibody-server", endpoint="rf2", job_id=rf2_job,
+            body={"input_uri": rf2_input_uri, "num_recycles": 2},
+            output_suffixes=(".qv",), poll_timeout_s=1800,
+        )
+
 
 @pytest.mark.fc
 @_needs
 class TestEndToEndPPIflow:
+    """PPIFlow has 5 sample modes. The gateway can reach the 4 with a
+    ``tasks/`` variant (binder / antibody / nanobody / monomer); scaffolding is
+    omitted because its motif CSV references PDBs that must be pre-staged on NAS
+    (not self-contained). File inputs are uploaded via presign so the antigen's
+    128 KiB async-payload cap doesn't apply — the run body carries only URIs.
+    """
+
     def test_sample_binder_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
         target_uri = _upload_via_presign(
@@ -517,6 +609,56 @@ class TestEndToEndPPIflow:
                 "samples_min_length": 60, "samples_max_length": 70,
                 "samples_per_target": 1, "name": "gw_binder",
             },
+            output_suffixes=(".pdb",), poll_timeout_s=1800,
+        )
+
+    def test_sample_antibody_end_to_end(self, client):
+        job_id = uuid.uuid4().hex[:20]
+        antigen_uri = _upload_via_presign(
+            client, job_id, "1IJZ_IL13.pdb", _fixture("ppiflow-server", "1IJZ_IL13.pdb")
+        )
+        framework_uri = _upload_via_presign(
+            client, job_id, "6nou_scfv_framework.pdb",
+            _fixture("ppiflow-server", "6nou_scfv_framework.pdb"),
+        )
+        _run_poll_download(
+            client, svc="ppiflow-server", endpoint="sample/antibody", job_id=job_id,
+            body={
+                "antigen_uri": antigen_uri, "framework_uri": framework_uri,
+                "antigen_chain": "C", "heavy_chain": "A", "light_chain": "B",
+                "specified_hotspots": "C11,C14,C15",
+                "cdr_length": "CDRH1,8-8,CDRH2,8-8,CDRH3,10-10,CDRL1,7-7,CDRL2,3-3,CDRL3,9-9",
+                "samples_per_target": 1, "name": "gw_antibody",
+            },
+            output_suffixes=(".pdb",), poll_timeout_s=1800,
+        )
+
+    def test_sample_nanobody_end_to_end(self, client):
+        job_id = uuid.uuid4().hex[:20]
+        antigen_uri = _upload_via_presign(
+            client, job_id, "1IJZ_IL13.pdb", _fixture("ppiflow-server", "1IJZ_IL13.pdb")
+        )
+        framework_uri = _upload_via_presign(
+            client, job_id, "7eow_nanobody_framework.pdb",
+            _fixture("ppiflow-server", "7eow_nanobody_framework.pdb"),
+        )
+        _run_poll_download(
+            client, svc="ppiflow-server", endpoint="sample/nanobody", job_id=job_id,
+            body={
+                "antigen_uri": antigen_uri, "framework_uri": framework_uri,
+                "antigen_chain": "C", "heavy_chain": "A",
+                "specified_hotspots": "C11,C14,C15",
+                "cdr_length": "CDRH1,8-8,CDRH2,8-8,CDRH3,10-10",
+                "samples_per_target": 1, "name": "gw_nanobody",
+            },
+            output_suffixes=(".pdb",), poll_timeout_s=1800,
+        )
+
+    def test_sample_monomer_end_to_end(self, client):
+        job_id = uuid.uuid4().hex[:20]
+        _run_poll_download(
+            client, svc="ppiflow-server", endpoint="sample/monomer", job_id=job_id,
+            body={"length_subset": [40], "samples_per_target": 1, "name": "gw_monomer"},
             output_suffixes=(".pdb",), poll_timeout_s=1800,
         )
 
@@ -797,9 +939,47 @@ class TestEndToEndProMera:
         )
 
 
+def _build_zip(files: dict[str, str]) -> bytes:
+    """Zip mapping archive paths -> on-disk fixture paths (in genie3-server/data)."""
+    buf = io.BytesIO()
+    base = Path(__file__).resolve().parents[2] / "genie3-server" / "tests" / "data"
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for arcname, rel in files.items():
+            zf.write(base / rel, arcname=arcname)
+    return buf.getvalue()
+
+
+def _genie3_motif_zip() -> bytes:
+    return _build_zip({
+        "problems/01_1LDB.json": "motifbench/problems/01_1LDB.json",
+        "motifs/01_1LDB.pdb": "motifbench/motifs/01_1LDB.pdb",
+    })
+
+
+def _genie3_binder_zip() -> bytes:
+    return _build_zip({
+        "problems/01_bhrf1.json": "binder/problems/01_bhrf1.json",
+        "targets/pdb/01_bhrf1.pdb": "binder/targets/pdb/01_bhrf1.pdb",
+        "targets/pdb/01_bhrf1-chain_B.pdb": "binder/targets/pdb/01_bhrf1-chain_B.pdb",
+        "targets/fasta/01_bhrf1.fasta": "binder/targets/fasta/01_bhrf1.fasta",
+        "targets/fasta/01_bhrf1-chain_B.fasta": "binder/targets/fasta/01_bhrf1-chain_B.fasta",
+        "targets/msa/01_bhrf1.a3m": "binder/targets/msa/01_bhrf1.a3m",
+        "targets/msa/01_bhrf1-chain_B.a3m": "binder/targets/msa/01_bhrf1-chain_B.a3m",
+    })
+
+
 @pytest.mark.fc
 @_needs
 class TestEndToEndGenie3:
+    """Full-function coverage of genie3's four generation endpoints via the gateway.
+
+    unconditional + custom carry all inputs inline in the run body, so they work
+    over the gateway's form-only dispatch directly. motif + binder need a dataset
+    zip: it is uploaded via presign to OSS, then referenced by `dataset_uri`
+    (oss://...); the gateway rewrites it to /mnt/oss/... and genie3 reads it from
+    the mounted bucket (needs genie3-server >= v0.0.20).
+    """
+
     def test_generate_unconditional_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
         _run_poll_download(
@@ -807,6 +987,55 @@ class TestEndToEndGenie3:
             body={"n_sample": 1, "min_length": 50, "max_length": 50, "length_step": 50},
             output_suffixes=(".pdb",), poll_timeout_s=1800,
         )
+
+    def test_generate_motif_end_to_end(self, client):
+        job_id = uuid.uuid4().hex[:20]
+        dataset_uri = _upload_via_presign(
+            client, job_id, "motif.zip", _genie3_motif_zip()
+        )
+        _run_poll_download(
+            client, svc="genie3-server", endpoint="generate/motif", job_id=job_id,
+            body={"dataset_uri": dataset_uri, "n_sample": 1, "batch_size": 1,
+                  "selections": "01_1LDB"},
+            output_suffixes=(".pdb",), poll_timeout_s=1800,
+        )
+
+    def test_generate_binder_end_to_end(self, client):
+        job_id = uuid.uuid4().hex[:20]
+        dataset_uri = _upload_via_presign(
+            client, job_id, "binder.zip", _genie3_binder_zip()
+        )
+        _run_poll_download(
+            client, svc="genie3-server", endpoint="generate/binder", job_id=job_id,
+            body={"dataset_uri": dataset_uri, "n_sample": 1, "batch_size": 1,
+                  "selections": "01_bhrf1"},
+            output_suffixes=(".pdb",), poll_timeout_s=1800,
+        )
+
+    def test_generate_custom_end_to_end(self, client):
+        job_id = uuid.uuid4().hex[:20]
+        config_yaml = yaml.safe_dump({
+            "experiment": {"name": "gw_custom"},
+            "paths": {"rootdir": "PLACEHOLDER_OVERRIDDEN_BY_SERVER"},
+            "generation": {
+                "dataset": {
+                    "source": "unconditional",
+                    "min_length": 50, "max_length": 50, "length_step": 50, "n_sample": 1,
+                },
+                "sampler": {"sampler": {"direction_scale": 0.8}},
+            },
+            "evaluation": {"version": "unconditional", "folding": {"model_name": "esmfold"}},
+        })
+        _run_poll_download(
+            client, svc="genie3-server", endpoint="generate", job_id=job_id,
+            body={"config_yaml": config_yaml},
+            output_suffixes=(".pdb",), poll_timeout_s=1800,
+        )
+
+
+_ESMFOLD2_SEQ = (
+    "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG"
+)
 
 
 @pytest.mark.fc
@@ -818,9 +1047,33 @@ class TestEndToEndESMFold2:
             client, svc="esmfold2-server", endpoint="fold", job_id=job_id,
             body={
                 "sequences": [{
-                    "type": "protein", "id": "A",
-                    "sequence": "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG",
+                    "type": "protein", "id": "A", "sequence": _ESMFOLD2_SEQ,
                 }],
+                "num_sampling_steps": 10, "num_loops": 1,
+            },
+            output_suffixes=(".cif",), poll_timeout_s=1800,
+        )
+
+    def test_fold_with_msa_zip_uri_end_to_end(self, client):
+        """MSA-conditioned fold via a presigned a3m zip (needs esmfold2 >= v0.0.7).
+
+        The gateway can't multipart-upload msa_files, so the per-chain A3M zip is
+        uploaded to OSS via presign and referenced by `msa_zip_uri`; the gateway
+        rewrites oss:// → /mnt/oss and esmfold2 extracts it. The a3m is keyed by
+        filename stem (= chain id "A").
+        """
+        job_id = uuid.uuid4().hex[:20]
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("A.a3m", f">A\n{_ESMFOLD2_SEQ}\n")
+        msa_zip_uri = _upload_via_presign(client, job_id, "msa.zip", buf.getvalue())
+        _run_poll_download(
+            client, svc="esmfold2-server", endpoint="fold", job_id=job_id,
+            body={
+                "sequences": [{
+                    "type": "protein", "id": "A", "sequence": _ESMFOLD2_SEQ,
+                }],
+                "msa_zip_uri": msa_zip_uri,
                 "num_sampling_steps": 10, "num_loops": 1,
             },
             output_suffixes=(".cif",), poll_timeout_s=1800,

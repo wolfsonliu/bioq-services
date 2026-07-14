@@ -442,3 +442,63 @@ def test_fold_task_endpoint_honors_job_id_header(client):
     )
     assert resp.status_code == 200
     assert resp.json()["job_id"] == "esmfold-task-001"
+
+
+# ---- MSA via zip URI (gateway path) ----
+
+
+def test_extract_msa_zip_from_file_uri(client, tmp_path):
+    """`_extract_msa_zip` resolves a zip URI and lands per-chain a3m keyed by stem.
+
+    This is the gateway path: instead of multipart `msa_files`, a zip of A3M
+    files is referenced by URI (oss:// through the gateway; file:// here).
+    """
+    import importlib
+    import zipfile
+
+    server_app = importlib.import_module("server.app")
+    zpath = tmp_path / "msa.zip"
+    with zipfile.ZipFile(zpath, "w") as zf:
+        zf.writestr("A.a3m", ">A\nMKT\n")
+        zf.writestr("B.a3m", ">B\nGGG\n")
+
+    input_dir = tmp_path / "job" / "input"
+    saved = server_app._extract_msa_zip(f"file://{zpath}", input_dir)
+
+    assert set(saved) == {"A", "B"}
+    assert saved["A"].read_text().startswith(">A")
+    assert (input_dir / "msa" / "A.a3m").exists()
+
+
+def test_fold_task_endpoint_accepts_msa_zip_uri(client, tmp_path):
+    """The task endpoint accepts an MSA zip via `msa_zip_uri` (no multipart)."""
+    import zipfile
+
+    zpath = tmp_path / "msa.zip"
+    with zipfile.ZipFile(zpath, "w") as zf:
+        zf.writestr("A.a3m", ">A\nMKT\n")
+
+    resp = client.post(
+        "/api/tasks/fold",
+        data={
+            "sequences": '[{"type":"protein","id":"A","sequence":"MKT"}]',
+            "msa_zip_uri": f"file://{zpath}",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] in {"completed", "failed"}
+
+
+def test_fold_task_endpoint_rejects_bad_msa_zip_uri(client, tmp_path):
+    """A non-zip referenced by msa_zip_uri surfaces 422 (not 500)."""
+    bad = tmp_path / "junk.zip"
+    bad.write_bytes(b"not a zip")
+
+    resp = client.post(
+        "/api/tasks/fold",
+        data={
+            "sequences": '[{"type":"protein","id":"A","sequence":"MKT"}]',
+            "msa_zip_uri": f"file://{bad}",
+        },
+    )
+    assert resp.status_code == 422

@@ -30,8 +30,10 @@ from bioagent_service import (
     attach_mcp,
     create_app,
     execute_task,
+    maybe_resolve_input,
     model_form_depends,
     read_version_file,
+    resolve_input,
     resolve_task_id,
 )
 from fastapi import Depends, File, Form, Header, HTTPException, Request, UploadFile
@@ -295,7 +297,12 @@ if settings.task_endpoints_enabled:
     @app.post("/api/tasks/generate/motif", response_model=JobInfo)
     def generate_motif_task(
         request: Request,
-        dataset: UploadFile = File(..., description="Zip with problems/ + motifs/."),
+        dataset: Optional[UploadFile] = File(None, description="Zip with problems/ + motifs/."),
+        dataset_uri: Optional[str] = Form(
+            None,
+            description="URI to the dataset zip (oss://, file://, job://, http(s)://) "
+                        "as an alternative to a multipart upload — used by the gateway.",
+        ),
         params: MotifRequest = Depends(model_form_depends(MotifRequest)),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
@@ -305,7 +312,9 @@ if settings.task_endpoints_enabled:
         dataset_state: dict[str, Path] = {}
 
         def _save(_req, input_dir: Path) -> None:
-            zip_path = _save_upload(dataset, input_dir / "dataset.zip")
+            zip_path = resolve_input(
+                dataset, dataset_uri, input_dir / "dataset.zip", settings, "dataset",
+            )
             try:
                 dataset_state["root"] = extract_dataset(zip_path, input_dir / "dataset")
             except (zipfile.BadZipFile, ValueError) as e:
@@ -330,7 +339,12 @@ if settings.task_endpoints_enabled:
     @app.post("/api/tasks/generate/binder", response_model=JobInfo)
     def generate_binder_task(
         request: Request,
-        dataset: UploadFile = File(..., description="Zip with problems/ + targets/."),
+        dataset: Optional[UploadFile] = File(None, description="Zip with problems/ + targets/."),
+        dataset_uri: Optional[str] = Form(
+            None,
+            description="URI to the dataset zip (oss://, file://, job://, http(s)://) "
+                        "as an alternative to a multipart upload — used by the gateway.",
+        ),
         params: BinderRequest = Depends(model_form_depends(BinderRequest)),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
@@ -340,7 +354,9 @@ if settings.task_endpoints_enabled:
         dataset_state: dict[str, Path] = {}
 
         def _save(_req, input_dir: Path) -> None:
-            zip_path = _save_upload(dataset, input_dir / "dataset.zip")
+            zip_path = resolve_input(
+                dataset, dataset_uri, input_dir / "dataset.zip", settings, "dataset",
+            )
             try:
                 dataset_state["root"] = extract_dataset(zip_path, input_dir / "dataset")
             except (zipfile.BadZipFile, ValueError) as e:
@@ -367,6 +383,11 @@ if settings.task_endpoints_enabled:
         request: Request,
         config_yaml: str = Form(..., description="Full experiment YAML as a string."),
         dataset: Optional[UploadFile] = File(None),
+        dataset_uri: Optional[str] = Form(
+            None,
+            description="URI to an optional dataset zip (oss://, file://, job://, "
+                        "http(s)://) as an alternative to a multipart upload.",
+        ),
         num_devices: Optional[int] = Form(None),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
@@ -397,8 +418,10 @@ if settings.task_endpoints_enabled:
         params_echo = _CustomEcho(num_devices=num_devices)
 
         def _save(_req, input_dir: Path) -> None:
-            if dataset is not None:
-                zip_path = _save_upload(dataset, input_dir / "dataset.zip")
+            zip_path = maybe_resolve_input(
+                dataset, dataset_uri, input_dir / "dataset.zip", settings, "dataset",
+            )
+            if zip_path is not None:
                 try:
                     dataset_state["root"] = extract_dataset(zip_path, input_dir / "dataset")
                 except (zipfile.BadZipFile, ValueError) as e:
