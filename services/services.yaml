@@ -95,6 +95,14 @@ services:
     tier: hot
     function: fc_mmseqs2
     oss_mount: true
+  # diamond-server: CPU sequence aligner/clusterer/MSA. Not deployed yet — fill
+  # url + function after the first FC deploy (see
+  # engineering/decisions/2026-07-14-diamond-server-design.md).
+  # diamond-server:
+  #   url: https://fc-diamond-XXXXXX.cn-hangzhou-vpc.fcapp.run
+  #   tier: cold
+  #   function: fc_diamond
+  #   oss_mount: true
   diffdock-pp-server:
     url: https://fc-diffdock-pp-xbbyfajnci.cn-hangzhou-vpc.fcapp.run
     tier: warm
