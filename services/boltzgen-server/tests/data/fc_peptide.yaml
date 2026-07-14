@@ -1,0 +1,10 @@
+entities:
+  # Designed peptide binder (12-18 residues) — exercises the peptide-anything
+  # protocol (auto-filters Cys, stricter RMSD) without any external structure.
+  - protein:
+      id: A
+      sequence: 12..18
+  # Fixed target chain, given by sequence.
+  - protein:
+      id: B
+      sequence: GGGILPWKWPWWPWRRGGG

@@ -71,6 +71,12 @@ class BoltzGenAdapter(JobAdapter):
             },
             "input_uri_schemes": {
                 "upload": "multipart/form-data fields `design_yaml` and `ref_files`.",
+                "design_yaml_uri": "URI to the design spec YAML (instead of a `design_yaml` upload).",
+                "ref_files_zip_uri": (
+                    "URI to a zip of the CIF/PDB files the YAML references, extracted "
+                    "flat next to the spec. Use this when `ref_files` can't be uploaded "
+                    "(e.g. via the gateway, which dispatches form fields only)."
+                ),
                 "job://<id>/<file>": "Re-use a file from a prior job on the same NAS.",
                 "file:///abs/path": "Direct NAS path.",
                 "oss://<bucket>/<key>": "Alibaba Cloud OSS object.",

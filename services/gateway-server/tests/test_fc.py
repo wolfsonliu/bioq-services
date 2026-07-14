@@ -19,8 +19,10 @@ not exercised here.
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import io
+import json
 import os
 import time
 import uuid
@@ -331,10 +333,23 @@ _AF_FASTA = (
     b"MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG\n"
 )
 
+# Small heterodimer (ubiquitin + a short helical peptide), ~130 residues total —
+# same pair alphafold-server's own multimer test uses. Multimer runs an extra
+# Jackhmmer pass against uniprot.fasta (must be staged on NAS) for paired MSAs.
+_AF_MULTIMER_FASTA = (
+    b">chainA\n"
+    b"MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG\n"
+    b">chainB\n"
+    b"GSHMGSAEYELDPKQIDDLEKEIATLEKERLALEKERLALEKERLALEKERLALEK\n"
+)
+
 # AlphaFold (MSA search + inference) is far slower than proteinmpnn; give it up
 # to an hour before declaring the job stuck.
 AF_RUN_POLL_TIMEOUT_S = 3600
 AF_RUN_POLL_INTERVAL_S = 30
+
+# Multimer adds a UniProt Jackhmmer pass + paired MSA; allow up to 2h.
+AF_MULTIMER_POLL_TIMEOUT_S = 7200
 
 
 @pytest.mark.fc
@@ -386,6 +401,24 @@ class TestEndToEndAlphaFold:
         assert dl.status_code == 200, dl.text
         names = zipfile.ZipFile(io.BytesIO(dl.content)).namelist()
         assert any(n.endswith(".pdb") for n in names), f"no predicted PDB in {names}"
+
+    def test_fold_multimer_end_to_end(self, client):
+        """Multimer preset over a small heterodimer. Requires the uniprot.fasta
+        Jackhmmer DB on NAS (extra paired-MSA pass monomer presets skip)."""
+        job_id = uuid.uuid4().hex[:20]
+        fasta_uri = _upload_via_presign(client, job_id, "input.fasta", _AF_MULTIMER_FASTA)
+        _run_poll_download(
+            client, svc="alphafold-server", endpoint="fold", job_id=job_id,
+            body={
+                "input_fasta_uri": fasta_uri,
+                "model_preset": "multimer",
+                "db_preset": "reduced_dbs",
+                "models_to_relax": "none",
+                "num_multimer_predictions_per_model": 1,
+                "random_seed": 37,
+            },
+            output_suffixes=(".pdb",), poll_timeout_s=AF_MULTIMER_POLL_TIMEOUT_S,
+        )
 
 
 # ===================================================================
@@ -465,7 +498,11 @@ class TestEndToEndMMseqs2:
 @pytest.mark.fc
 @_needs
 class TestEndToEndRFdiffusion:
-    def test_generate_end_to_end(self, client):
+    """RFdiffusion exposes 5 generation modes. The gateway can reach the 3 with
+    a ``tasks/`` variant (motif / binder / generate-custom); unconditional and
+    symmetry have no ``tasks/`` route, so they can't be dispatched here."""
+
+    def test_generate_motif_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
         input_uri = _upload_via_presign(
             client, job_id, "5TPN.pdb", _fixture("rfdiffusion-server", "5TPN.pdb")
@@ -475,6 +512,33 @@ class TestEndToEndRFdiffusion:
             body={
                 "input_uri": input_uri,
                 "contigs": "10-40/A163-181/10-40",
+                "num_designs": 1, "diffuser_t": 25,
+            },
+            output_suffixes=(".pdb",), poll_timeout_s=1800,
+        )
+
+    def test_generate_binder_end_to_end(self, client):
+        job_id = uuid.uuid4().hex[:20]
+        input_uri = _upload_via_presign(
+            client, job_id, "insulin_target.pdb",
+            _fixture("rfdiffusion-server", "insulin_target.pdb"),
+        )
+        _run_poll_download(
+            client, svc="rfdiffusion-server", endpoint="generate/binder", job_id=job_id,
+            body={
+                "input_uri": input_uri,
+                "contigs": "A1-150/0 70-70", "hotspots": "A59,A83,A91",
+                "num_designs": 1, "diffuser_t": 25,
+            },
+            output_suffixes=(".pdb",), poll_timeout_s=1800,
+        )
+
+    def test_generate_custom_end_to_end(self, client):
+        job_id = uuid.uuid4().hex[:20]
+        _run_poll_download(
+            client, svc="rfdiffusion-server", endpoint="generate", job_id=job_id,
+            body={
+                "contigs": "60-60", "config_name": "base",
                 "num_designs": 1, "diffuser_t": 25,
             },
             output_suffixes=(".pdb",), poll_timeout_s=1800,
@@ -687,7 +751,45 @@ class TestEndToEndIgGM:
 @pytest.mark.fc
 @_needs
 class TestEndToEndDockQ:
+    """Full-endpoint coverage of dockq's two task endpoints via the gateway.
+
+      * `score`        — single (model, native) pair; both files uploaded via
+        presign and passed as `model_uri` / `native_uri`.
+      * `score_batch`  — 1 native + N models. The gateway can't multipart-upload
+        the `models` list, so the models are bundled into a zip, uploaded via
+        presign, and passed as `models_zip_uri` (oss://...); the gateway rewrites
+        it to /mnt/oss/... and dockq extracts it as the models set (needs
+        dockq-server >= v0.0.12). Mirrors genie3's `dataset_uri` zip pattern.
+
+    Assertions dig into the mirrored results.zip (DockQ JSON fields, scores.csv
+    ordering, per_model JSONs) rather than just checking a file suffix — the
+    same checks dockq-server's own test_fc.py makes on its native outputs.
+    """
+
     def test_score_end_to_end(self, client):
+        """Single score; assert the DockQ JSON in results.zip carries a valid
+        headline score + best_result with DockQ in [0, 1]."""
+        job_id = uuid.uuid4().hex[:20]
+        model_uri = _upload_via_presign(
+            client, job_id, "model.pdb", _fixture("dockq-server", "model.pdb")
+        )
+        native_uri = _upload_via_presign(
+            client, job_id, "native.pdb", _fixture("dockq-server", "native.pdb")
+        )
+        content = _run_poll_zip(
+            client, svc="dockq-server", endpoint="score", job_id=job_id,
+            body={"model_uri": model_uri, "native_uri": native_uri, "name": "fc_smoke"},
+            poll_timeout_s=600,
+        )
+        data = json.loads(_zip_member(content, "fc_smoke.json"))
+        assert any(k in data for k in ("GlobalDockQ", "total_DockQ", "DockQ")), data.keys()
+        assert data.get("best_result"), f"no best_result: {data.keys()}"
+        for iface in data["best_result"].values():
+            assert 0.0 <= iface["DockQ"] <= 1.0, iface
+            assert isinstance(iface["iRMSD"], (int, float))
+
+    def test_score_no_align_end_to_end(self, client):
+        """--no_align flag path — trusts residue numbering, still produces JSON."""
         job_id = uuid.uuid4().hex[:20]
         model_uri = _upload_via_presign(
             client, job_id, "model.pdb", _fixture("dockq-server", "model.pdb")
@@ -697,9 +799,43 @@ class TestEndToEndDockQ:
         )
         _run_poll_download(
             client, svc="dockq-server", endpoint="score", job_id=job_id,
-            body={"model_uri": model_uri, "native_uri": native_uri, "name": "fc_smoke"},
+            body={
+                "model_uri": model_uri, "native_uri": native_uri,
+                "name": "fc_noalign", "no_align": True,
+            },
             output_suffixes=(".json",), poll_timeout_s=600,
         )
+
+    def test_score_batch_end_to_end(self, client):
+        """Batch of 2 models via models_zip_uri; assert scores.csv (2 rows,
+        sorted by DockQ desc) and per-model JSONs in results.zip."""
+        job_id = uuid.uuid4().hex[:20]
+        native_uri = _upload_via_presign(
+            client, job_id, "native.pdb", _fixture("dockq-server", "native.pdb")
+        )
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("model.pdb", _fixture("dockq-server", "model.pdb"))
+            zf.writestr("model_alt.pdb", _fixture("dockq-server", "model_alt.pdb"))
+        models_zip_uri = _upload_via_presign(client, job_id, "models.zip", buf.getvalue())
+        content = _run_poll_zip(
+            client, svc="dockq-server", endpoint="score_batch", job_id=job_id,
+            body={
+                "native_uri": native_uri, "models_zip_uri": models_zip_uri,
+                "sort_by": "DockQ", "name": "fc_batch",
+            },
+            poll_timeout_s=1800,
+        )
+        names = zipfile.ZipFile(io.BytesIO(content)).namelist()
+        assert "scores.csv" in names, names
+        assert sum(n.startswith("per_model/") and n.endswith(".json") for n in names) == 2, names
+
+        rows = list(csv.DictReader(io.StringIO(_zip_member(content, "scores.csv").decode())))
+        assert len(rows) == 2, rows
+        assert {"model", "DockQ", "iRMSD", "n_interfaces"} <= set(rows[0].keys())
+        dockq_vals = [float(r["DockQ"]) for r in rows]
+        assert all(0.0 <= v <= 1.0 for v in dockq_vals), dockq_vals
+        assert dockq_vals == sorted(dockq_vals, reverse=True), f"not DockQ-desc: {dockq_vals}"
 
 
 @pytest.mark.fc
@@ -787,7 +923,11 @@ class TestEndToEndOpenBPMD:
 @pytest.mark.fc
 @_needs
 class TestEndToEndDiffusionHopping:
-    def test_generate_end_to_end(self, client):
+    """Single `generate` endpoint, two checkpoint sets: gvp_conditional (DiffHopp
+    paper main variant) and egnn_conditional. Same protein + reference-ligand
+    inputs; only model_variant differs."""
+
+    def _run_variant(self, client, variant: str) -> None:
         job_id = uuid.uuid4().hex[:20]
         protein_uri = _upload_via_presign(
             client, job_id, "1a0q_protein.pdb",
@@ -801,10 +941,16 @@ class TestEndToEndDiffusionHopping:
             client, svc="diffusion-hopping-server", endpoint="generate", job_id=job_id,
             body={
                 "protein_uri": protein_uri, "reference_ligand_uri": reference_ligand_uri,
-                "num_samples": 3, "model_variant": "gvp_conditional",
+                "num_samples": 3, "model_variant": variant,
             },
             output_suffixes=(".sdf",), poll_timeout_s=1200,
         )
+
+    def test_generate_end_to_end(self, client):
+        self._run_variant(client, "gvp_conditional")
+
+    def test_generate_egnn_end_to_end(self, client):
+        self._run_variant(client, "egnn_conditional")
 
 
 @pytest.mark.fc
@@ -902,22 +1048,113 @@ class TestEndToEndBoltz:
             output_suffixes=(".cif",), poll_timeout_s=1800,
         )
 
+    def test_predict_affinity_end_to_end(self, client):
+        """Protein + SMILES ligand complex; binder_id points at the ligand chain.
+        Asserts the affinity JSON (the distinctive predict_affinity output)."""
+        job_id = uuid.uuid4().hex[:20]
+        content = _run_poll_zip(
+            client, svc="boltz-server", endpoint="predict_affinity", job_id=job_id,
+            body={
+                "name": "fc_affinity", "binder_id": "B", "msa_mode": "empty",
+                "diffusion_samples": 1, "recycling_steps": 1, "sampling_steps": 50,
+                "diffusion_samples_affinity": 1, "sampling_steps_affinity": 50,
+                "sequences": [
+                    {
+                        "type": "protein", "id": "A",
+                        "sequence": "QLEDSEVEAVAKGLEEMYANGVTEDNFKNYVKNNFAQQEISSVEEELNVNISDSC",
+                        "msa_uri": "empty",
+                    },
+                    {"type": "ligand", "id": "B", "smiles": "c1ccccc1"},
+                ],
+            },
+            poll_timeout_s=1800,
+        )
+        names = zipfile.ZipFile(io.BytesIO(content)).namelist()
+        assert any("affinity" in n and n.endswith(".json") for n in names), (
+            f"no affinity json in results.zip: {names}"
+        )
+
 
 @pytest.mark.fc
 @_needs
 class TestEndToEndBoltzGen:
+    """Full-endpoint coverage of boltzgen's two task endpoints via the gateway.
+
+    Both endpoints take a design-spec YAML plus (optionally) reference structure
+    files.  The gateway dispatches form fields only — it can't multipart-upload
+    the `ref_files` list — so:
+
+      * `design`        — the fc_design / fc_peptide specs are fully self-
+        contained (inline `protein:` entities), so only `design_yaml_uri`
+        (presigned) is needed.
+      * `inverse_fold`  — the 1brs spec references a backbone CIF by path; that
+        CIF is bundled into a zip, uploaded via presign, and passed as
+        `ref_files_zip_uri` (oss://...).  The gateway rewrites it to /mnt/oss/...
+        and boltzgen extracts it next to the spec (needs boltzgen-server
+        >= v0.0.13).  This mirrors genie3's `dataset_uri` zip pattern.
+
+    Design runs at num_designs=2/budget=2 (~20-40 min on T4); inverse_fold skips
+    the diffusion step but still folds + analyzes the backbone.
+    """
+
     def test_design_end_to_end(self, client):
+        """protein-anything design; assert results.zip carries a structure AND
+        the analysis metrics CSV (not just any single output)."""
         job_id = uuid.uuid4().hex[:20]
         design_yaml_uri = _upload_via_presign(
             client, job_id, "design_spec.yaml", _fixture("boltzgen-server", "fc_design.yaml")
         )
-        _run_poll_download(
+        content = _run_poll_zip(
             client, svc="boltzgen-server", endpoint="design", job_id=job_id,
             body={
                 "design_yaml_uri": design_yaml_uri,
                 "protocol": "protein-anything", "num_designs": 2, "budget": 2,
             },
+            poll_timeout_s=5400,
+        )
+        names = zipfile.ZipFile(io.BytesIO(content)).namelist()
+        assert any(n.endswith((".pdb", ".cif")) for n in names), f"no structure in {names}"
+        assert any(n.endswith(".csv") for n in names), f"no metrics CSV in {names}"
+
+    def test_design_peptide_end_to_end(self, client):
+        """peptide-anything protocol — a distinct filter/analysis path (auto-Cys
+        filtering, stricter RMSD) over a short designed peptide."""
+        job_id = uuid.uuid4().hex[:20]
+        design_yaml_uri = _upload_via_presign(
+            client, job_id, "design_spec.yaml", _fixture("boltzgen-server", "fc_peptide.yaml")
+        )
+        _run_poll_download(
+            client, svc="boltzgen-server", endpoint="design", job_id=job_id,
+            body={
+                "design_yaml_uri": design_yaml_uri,
+                "protocol": "peptide-anything", "num_designs": 2, "budget": 2,
+            },
             output_suffixes=(".pdb", ".cif"), poll_timeout_s=5400,
+        )
+
+    def test_inverse_fold_end_to_end(self, client):
+        """inverse-fold-only over a real backbone (barnase+barstar, 1BRS).
+
+        The spec references 1brs.cif by path; the CIF is bundled into a zip and
+        passed via `ref_files_zip_uri` since the gateway can't upload ref_files.
+        """
+        job_id = uuid.uuid4().hex[:20]
+        design_yaml_uri = _upload_via_presign(
+            client, job_id, "design_spec.yaml", _fixture("boltzgen-server", "1brs.yaml")
+        )
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("1brs.cif", _fixture("boltzgen-server", "1brs.cif"))
+        ref_zip_uri = _upload_via_presign(client, job_id, "ref_files.zip", buf.getvalue())
+        _run_poll_download(
+            client, svc="boltzgen-server", endpoint="inverse_fold", job_id=job_id,
+            body={
+                "design_yaml_uri": design_yaml_uri,
+                "ref_files_zip_uri": ref_zip_uri,
+                "protocol": "protein-anything",
+                "budget": 2, "inverse_fold_num_sequences": 2,
+            },
+            output_suffixes=(".pdb", ".cif"), poll_timeout_s=3600,
         )
 
 
@@ -1093,6 +1330,42 @@ class TestEndToEndImmuneBuilder:
                     "RFTISRDNAKNTVYLQMNSLKPEDTAVYYCAKDGYGGSFDYWGQGTQVTVSS"
                 ),
                 "name": "async_nb", "save_all_models": True,
+            },
+            output_suffixes=(".pdb",), poll_timeout_s=600,
+        )
+
+    def test_predict_antibody_end_to_end(self, client):
+        job_id = uuid.uuid4().hex[:20]
+        _run_poll_download(
+            client, svc="immunebuilder-server", endpoint="predict_antibody", job_id=job_id,
+            body={
+                "heavy_sequence": (
+                    "EVQLVESGGGLVQPGGSLRLSCAASGFNIKDTYIHWVRQAPGKGLEWVARIYPTNGYT"
+                    "RYADSVKGRFTISADTSKNTAYLQMNSLRAEDTAVYYCSRWGGDGFYAMDYWGQGTLVTVSS"
+                ),
+                "light_sequence": (
+                    "DIQMTQSPSSLSASVGDRVTITCRASQDVNTAVAWYQQKPGKAPKLLIYSASFLYSGVPS"
+                    "RFSGSRSGTDFTLTISSLQPEDFATYYCQQHYTTPPTFGQGTKVEIK"
+                ),
+                "name": "gw_ab", "save_all_models": True,
+            },
+            output_suffixes=(".pdb",), poll_timeout_s=600,
+        )
+
+    def test_predict_tcr_end_to_end(self, client):
+        job_id = uuid.uuid4().hex[:20]
+        _run_poll_download(
+            client, svc="immunebuilder-server", endpoint="predict_tcr", job_id=job_id,
+            body={
+                "alpha_sequence": (
+                    "METLLGVSLVILWLQLARVNSQQGEEDPQALSIQEGENATMNCSYKTSINNLQWYRQNSGR"
+                    "GLVHLILIRSNEREKHSGRLRVTLDTSKKSSSLLITASRAADTASYFCAVNFGGGKLIFGQGTELSVKP"
+                ),
+                "beta_sequence": (
+                    "NAGVTQTPKFQVLKTGQSMTLQCAQDMNHEYMSWYRQDPGMGLRLIHYSVGAGITDQGEVP"
+                    "NGYNVSRSTTEDFPLRLLSAAPSQTSVYFCASSFSTCSANYGYTFGSGTRLTVVEDL"
+                ),
+                "name": "gw_tcr", "save_all_models": True,
             },
             output_suffixes=(".pdb",), poll_timeout_s=600,
         )

@@ -459,3 +459,67 @@ def test_score_batch_task_endpoint_rejects_empty_models(client):
         files={"native": ("native.pdb", pdb_bytes, "chemical/x-pdb")},
     )
     assert resp.status_code == 422
+
+
+# ----- models_zip_uri (gateway can't multipart-upload the models list) -----
+
+def test_score_batch_accepts_models_zip_uri(client, tmp_path):
+    """A zip referenced by models_zip_uri is extracted flat into input/models.
+
+    Nested paths flatten to basename; non-structure members are skipped.
+    """
+    import zipfile
+
+    data_dir = Path(__file__).resolve().parent / "data"
+    zip_path = tmp_path / "models.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.write(data_dir / "model.pdb", "m1.pdb")
+        zf.write(data_dir / "model_alt.pdb", "nested/dir/m2.pdb")
+        zf.writestr("notes.txt", "ignored\n")
+
+    with open(data_dir / "native.pdb", "rb") as fn:
+        resp = client.post(
+            "/api/tasks/score_batch",
+            data={"sort_by": "DockQ", "models_zip_uri": f"file://{zip_path}"},
+            files={"native": ("native.pdb", fn, "chemical/x-pdb")},
+            headers={"X-Bioagent-Job-Id": "dockq-zip-001"},
+        )
+    assert resp.status_code == 200, resp.text
+    models_dir = tmp_path / "jobs" / resp.json()["job_id"] / "input" / "models"
+    assert (models_dir / "m1.pdb").exists()
+    assert (models_dir / "m2.pdb").exists()  # nested path flattened to basename
+    assert not (models_dir / "notes.txt").exists()  # non-structure skipped
+    assert not (models_dir.parent / "_models.zip").exists()  # temp zip cleaned up
+
+
+def test_score_batch_models_zip_uri_bad_zip_422(client, tmp_path):
+    """A models_zip_uri pointing at a non-zip fails setup with HTTP 422."""
+    bad = tmp_path / "bad.zip"
+    bad.write_bytes(b"this is not a zip archive")
+    data_dir = Path(__file__).resolve().parent / "data"
+    with open(data_dir / "native.pdb", "rb") as fn:
+        resp = client.post(
+            "/api/tasks/score_batch",
+            data={"models_zip_uri": f"file://{bad}"},
+            files={"native": ("native.pdb", fn, "chemical/x-pdb")},
+            headers={"X-Bioagent-Job-Id": "dockq-zip-bad-001"},
+        )
+    assert resp.status_code == 422, resp.text
+
+
+def test_score_batch_models_zip_uri_no_structures_422(client, tmp_path):
+    """A models zip with no .pdb/.cif/.gz members is rejected with HTTP 422."""
+    import zipfile
+
+    z = tmp_path / "empty.zip"
+    with zipfile.ZipFile(z, "w") as zf:
+        zf.writestr("readme.txt", "no structures here\n")
+    data_dir = Path(__file__).resolve().parent / "data"
+    with open(data_dir / "native.pdb", "rb") as fn:
+        resp = client.post(
+            "/api/tasks/score_batch",
+            data={"models_zip_uri": f"file://{z}"},
+            files={"native": ("native.pdb", fn, "chemical/x-pdb")},
+            headers={"X-Bioagent-Job-Id": "dockq-zip-empty-001"},
+        )
+    assert resp.status_code == 422, resp.text

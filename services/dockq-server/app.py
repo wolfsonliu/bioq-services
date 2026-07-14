@@ -8,6 +8,7 @@ come from `bioagent_service.create_app`.
 from __future__ import annotations
 
 import logging
+import zipfile
 from pathlib import Path
 from typing import Optional
 
@@ -26,7 +27,7 @@ from .adapter import DockQAdapter
 from .models import ScoreBatchRequest, ScoreRequest
 from .settings import DockQSettings
 from .tools import batch_argv, score_argv
-from bioagent_service.uris import resolve_input, save_upload
+from bioagent_service.uris import resolve_input, resolve_uri, save_upload
 
 logging.basicConfig(
     level=logging.INFO,
@@ -43,6 +44,42 @@ app = create_app(
     title="DockQ Server",
     version=read_version_file(__file__, default="0.0.1"),
 )
+
+
+def _extract_models_zip(zip_uri: str, models_dir: Path) -> int:
+    """Resolve a zip of candidate models and extract them flat into models_dir.
+
+    The gateway dispatches form fields only and can't multipart-upload the
+    `models` list, so it passes a single zip via `models_zip_uri` instead.
+    Members land by basename (nested paths flattened; zip-slip neutralized) and
+    only DockQ-scoreable suffixes (.pdb/.cif/.gz) are kept. Returns the count so
+    the caller can enforce max_batch_size / non-empty. Raises HTTP 422 on a bad
+    zip or when no scoreable structures are present.
+    """
+    zip_dest = models_dir.parent / "_models.zip"
+    resolve_uri(zip_uri, zip_dest, settings)
+    count = 0
+    try:
+        with zipfile.ZipFile(zip_dest, "r") as zf:
+            for member in zf.infolist():
+                if member.is_dir():
+                    continue
+                name = Path(member.filename).name
+                if not name or Path(name).suffix.lower() not in (".pdb", ".cif", ".gz"):
+                    continue
+                (models_dir / name).write_bytes(zf.read(member))
+                count += 1
+    except zipfile.BadZipFile as exc:
+        raise HTTPException(422, f"Invalid models zip: {exc}") from exc
+    finally:
+        zip_dest.unlink(missing_ok=True)
+    if count == 0:
+        raise HTTPException(422, "models zip contained no .pdb/.cif/.gz structures.")
+    if count > settings.max_batch_size:
+        raise HTTPException(
+            422, f"Batch size {count} exceeds max_batch_size={settings.max_batch_size}."
+        )
+    return count
 
 
 @app.post("/api/score", response_model=JobInfo)
@@ -79,20 +116,25 @@ def post_score_batch(
     native: Optional[UploadFile] = File(None),
     native_uri: Optional[str] = Form(None),
     models: Optional[list[UploadFile]] = File(None),
+    models_zip_uri: Optional[str] = Form(None),
 ) -> JobInfo:
     """Score N candidate models against 1 reference native.
+
+    Models come either as repeated `models` uploads OR as a single zip
+    referenced by `models_zip_uri` (oss://, file://, job://, http(s)://) — the
+    gateway uses the zip form since it can't multipart-upload the `models` list.
 
     Per-model JSONs land in `output/per_model/<basename>.json`; the sorted
     summary is `output/scores.csv`. Models that errored show up in
     `output/failed.csv` (job still completes successfully if at least one
     model produced a valid score).
     """
-    if not models:
+    if not models and not models_zip_uri:
         raise HTTPException(
             status_code=422,
-            detail="At least one `models` upload is required (use repeated -F models=@...).",
+            detail="Provide `models` uploads (repeated -F models=@...) or `models_zip_uri`.",
         )
-    if len(models) > settings.max_batch_size:
+    if models and len(models) > settings.max_batch_size:
         raise HTTPException(
             status_code=422,
             detail=f"Batch size {len(models)} exceeds max_batch_size={settings.max_batch_size}.",
@@ -103,10 +145,13 @@ def post_score_batch(
         native_path = resolve_input(native, native_uri, input_dir / "native.pdb", settings)
         models_dir = input_dir / "models"
         models_dir.mkdir(parents=True, exist_ok=True)
-        for i, upload in enumerate(models):
-            # Sanitize filename: keep stem, force .pdb / .cif / .cif.gz suffix.
-            basename = Path(upload.filename or f"model_{i:04d}.pdb").name
-            save_upload(upload, models_dir / basename)
+        if models:
+            for i, upload in enumerate(models):
+                # Sanitize filename: keep stem, force .pdb / .cif / .cif.gz suffix.
+                basename = Path(upload.filename or f"model_{i:04d}.pdb").name
+                save_upload(upload, models_dir / basename)
+        else:
+            _extract_models_zip(models_zip_uri, models_dir)
         return batch_argv(
             params,
             job_dir=job_dir,
@@ -117,7 +162,10 @@ def post_score_batch(
 
     return app.state.runner.submit(
         build_argv=_build, label="score_batch",
-        input_params={**params.model_dump(mode="json"), "num_models": len(models)},
+        input_params={
+            **params.model_dump(mode="json"),
+            "num_models": len(models) if models else None,
+        },
     )
 
 
@@ -168,16 +216,21 @@ if settings.task_endpoints_enabled:
         native: Optional[UploadFile] = File(None),
         native_uri: Optional[str] = Form(None),
         models: Optional[list[UploadFile]] = File(None),
+        models_zip_uri: Optional[str] = Form(None),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
     ) -> JobInfo:
-        """Score N candidate models against 1 native as a single atomic task."""
-        if not models:
+        """Score N candidate models against 1 native as a single atomic task.
+
+        Models come as repeated `models` uploads OR a single `models_zip_uri`
+        zip (used by the gateway, which can't multipart-upload the list).
+        """
+        if not models and not models_zip_uri:
             raise HTTPException(
                 status_code=422,
-                detail="At least one `models` upload is required (use repeated -F models=@...).",
+                detail="Provide `models` uploads (repeated -F models=@...) or `models_zip_uri`.",
             )
-        if len(models) > settings.max_batch_size:
+        if models and len(models) > settings.max_batch_size:
             raise HTTPException(
                 status_code=422,
                 detail=f"Batch size {len(models)} exceeds max_batch_size={settings.max_batch_size}.",
@@ -190,9 +243,12 @@ if settings.task_endpoints_enabled:
             paths["native"] = resolve_input(native, native_uri, input_dir / "native.pdb", settings)
             models_dir = input_dir / "models"
             models_dir.mkdir(parents=True, exist_ok=True)
-            for i, upload in enumerate(models):
-                basename = Path(upload.filename or f"model_{i:04d}.pdb").name
-                save_upload(upload, models_dir / basename)
+            if models:
+                for i, upload in enumerate(models):
+                    basename = Path(upload.filename or f"model_{i:04d}.pdb").name
+                    save_upload(upload, models_dir / basename)
+            else:
+                _extract_models_zip(models_zip_uri, models_dir)
             paths["models_dir"] = models_dir
 
         def _build(req, _job_id: str, job_dir: Path) -> list[str]:

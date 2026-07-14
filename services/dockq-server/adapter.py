@@ -55,6 +55,12 @@ class DockQAdapter(JobAdapter):
             },
             "input_uri_schemes": {
                 "upload": "multipart/form-data (single endpoint: fields `model` + `native`; batch: `native` + repeated `models`).",
+                "model_uri / native_uri": "URI alternatives to the single-endpoint `model` / `native` uploads.",
+                "models_zip_uri": (
+                    "Batch only: URI to a zip of candidate model structures (.pdb/.cif/.gz), "
+                    "extracted flat as the `models` set. Use when `models` can't be uploaded "
+                    "(e.g. via the gateway, which dispatches form fields only)."
+                ),
                 "job://<id>/<file>": "Re-use a file from a prior dockq job (or any other bioagent service that wrote to NAS).",
                 "file:///abs/path": "Direct NAS path; works across services on the shared mount.",
                 "oss://<bucket>/<key>": "Alibaba Cloud OSS object (needs OSS_ACCESS_KEY_ID / _SECRET env vars).",

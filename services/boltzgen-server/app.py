@@ -8,6 +8,7 @@ come from `bioagent_service.create_app`.
 from __future__ import annotations
 
 import logging
+import zipfile
 from pathlib import Path
 from typing import List, Optional
 
@@ -20,13 +21,13 @@ from bioagent_service import (
     read_version_file,
     resolve_task_id,
 )
-from fastapi import Depends, File, Form, Header, Request, UploadFile
+from fastapi import Depends, File, Form, Header, HTTPException, Request, UploadFile
 
 from .adapter import BoltzGenAdapter
 from .models import DesignRequest, InverseFoldRequest
 from .settings import BoltzGenSettings
 from .tools import design_argv, inverse_fold_argv
-from bioagent_service.uris import resolve_input, save_upload
+from bioagent_service.uris import resolve_input, resolve_uri, save_upload
 
 logging.basicConfig(
     level=logging.INFO,
@@ -95,10 +96,36 @@ def healthz_detail(request: Request) -> dict:
     }
 
 
+def _extract_ref_zip(zip_uri: str, input_dir: Path) -> None:
+    """Resolve a zip of reference structures and extract it flat into input_dir.
+
+    The gateway dispatches form fields only and cannot multipart-upload the
+    `ref_files` list, so it passes a single zip via `ref_files_zip_uri` instead.
+    Members are written by basename next to design_spec.yaml because boltzgen
+    resolves `file: path:` relative to the spec's own directory (schema.py:
+    base_file_path=path.parent). Flat extraction also neutralizes zip-slip.
+    """
+    zip_dest = input_dir / "_ref_files.zip"
+    resolve_uri(zip_uri, zip_dest, settings)
+    try:
+        with zipfile.ZipFile(zip_dest, "r") as zf:
+            for member in zf.infolist():
+                if member.is_dir():
+                    continue
+                name = Path(member.filename).name
+                if name:
+                    (input_dir / name).write_bytes(zf.read(member))
+    except zipfile.BadZipFile as exc:
+        raise HTTPException(422, f"Invalid ref_files zip: {exc}") from exc
+    finally:
+        zip_dest.unlink(missing_ok=True)
+
+
 def _save_inputs(
     design_yaml: Optional[UploadFile],
     design_yaml_uri: Optional[str],
     ref_files: List[UploadFile],
+    ref_files_zip_uri: Optional[str],
     input_dir: Path,
 ) -> Path:
     """Save the design spec YAML and reference files to the job input dir."""
@@ -110,6 +137,9 @@ def _save_inputs(
         if rf.filename:
             save_upload(rf, input_dir / rf.filename)
 
+    if ref_files_zip_uri:
+        _extract_ref_zip(ref_files_zip_uri, input_dir)
+
     return yaml_path
 
 
@@ -119,19 +149,24 @@ def post_design(
     design_yaml: Optional[UploadFile] = File(None),
     design_yaml_uri: Optional[str] = Form(None),
     ref_files: List[UploadFile] = File([]),
+    ref_files_zip_uri: Optional[str] = Form(None),
 ) -> JobInfo:
     """Run the full BoltzGen binder design pipeline.
 
     Requires a design specification YAML describing the target structure and
     designed region. Reference CIF/PDB files referenced in the YAML should be
-    uploaded via `ref_files`.
+    uploaded via `ref_files`, or bundled into a zip referenced by
+    `ref_files_zip_uri` (oss://, file://, job://, http(s)://) — the gateway
+    uses the zip form since it can't multipart-upload the `ref_files` list.
 
     Pipeline: design -> inverse_folding -> folding -> [design_folding] ->
     [affinity] -> analysis -> filtering.
     """
 
     def _build(_job_id: str, job_dir: Path) -> list[str]:
-        yaml_path = _save_inputs(design_yaml, design_yaml_uri, ref_files, job_dir / "input")
+        yaml_path = _save_inputs(
+            design_yaml, design_yaml_uri, ref_files, ref_files_zip_uri, job_dir / "input"
+        )
         return design_argv(params, job_dir=job_dir, yaml_path=yaml_path, settings=settings)
 
     return app.state.runner.submit(
@@ -147,15 +182,20 @@ def post_inverse_fold(
     design_yaml: Optional[UploadFile] = File(None),
     design_yaml_uri: Optional[str] = Form(None),
     ref_files: List[UploadFile] = File([]),
+    ref_files_zip_uri: Optional[str] = Form(None),
 ) -> JobInfo:
     """Run BoltzGen in inverse-fold-only mode.
 
     Skips the design diffusion step; runs inverse_folding -> folding ->
-    analysis -> filtering on a provided backbone structure.
+    analysis -> filtering on a provided backbone structure. The backbone CIF/PDB
+    referenced by the YAML comes via `ref_files` (upload) or `ref_files_zip_uri`
+    (zip URI — used by the gateway).
     """
 
     def _build(_job_id: str, job_dir: Path) -> list[str]:
-        yaml_path = _save_inputs(design_yaml, design_yaml_uri, ref_files, job_dir / "input")
+        yaml_path = _save_inputs(
+            design_yaml, design_yaml_uri, ref_files, ref_files_zip_uri, job_dir / "input"
+        )
         return inverse_fold_argv(params, job_dir=job_dir, yaml_path=yaml_path, settings=settings)
 
     return app.state.runner.submit(
@@ -173,6 +213,7 @@ if settings.task_endpoints_enabled:
         design_yaml: Optional[UploadFile] = File(None),
         design_yaml_uri: Optional[str] = Form(None),
         ref_files: List[UploadFile] = File([]),
+        ref_files_zip_uri: Optional[str] = Form(None),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
     ) -> JobInfo:
@@ -190,7 +231,9 @@ if settings.task_endpoints_enabled:
         yaml_paths: list[Path] = []
 
         def _save(_req, input_dir: Path) -> None:
-            yaml_paths.append(_save_inputs(design_yaml, design_yaml_uri, ref_files, input_dir))
+            yaml_paths.append(
+                _save_inputs(design_yaml, design_yaml_uri, ref_files, ref_files_zip_uri, input_dir)
+            )
 
         def _build(req, _job_id: str, job_dir: Path) -> list[str]:
             return design_argv(req, job_dir=job_dir, yaml_path=yaml_paths[0], settings=settings)
@@ -211,6 +254,7 @@ if settings.task_endpoints_enabled:
         design_yaml: Optional[UploadFile] = File(None),
         design_yaml_uri: Optional[str] = Form(None),
         ref_files: List[UploadFile] = File([]),
+        ref_files_zip_uri: Optional[str] = Form(None),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
     ) -> JobInfo:
@@ -224,7 +268,9 @@ if settings.task_endpoints_enabled:
         yaml_paths: list[Path] = []
 
         def _save(_req, input_dir: Path) -> None:
-            yaml_paths.append(_save_inputs(design_yaml, design_yaml_uri, ref_files, input_dir))
+            yaml_paths.append(
+                _save_inputs(design_yaml, design_yaml_uri, ref_files, ref_files_zip_uri, input_dir)
+            )
 
         def _build(req, _job_id: str, job_dir: Path) -> list[str]:
             return inverse_fold_argv(req, job_dir=job_dir, yaml_path=yaml_paths[0], settings=settings)

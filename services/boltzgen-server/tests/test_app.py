@@ -317,6 +317,58 @@ def test_uri_requires_input(tmp_path):
     assert exc.value.status_code == 422
 
 
+# ----- ref_files_zip_uri (gateway can't multipart-upload ref_files) -----
+
+def test_ref_files_zip_uri_extracts_flat(client, tmp_path):
+    """A zip referenced by ref_files_zip_uri is extracted flat into input/.
+
+    Members land by basename next to design_spec.yaml (boltzgen resolves
+    `file: path:` relative to the spec dir), and nested paths are flattened.
+    """
+    import zipfile
+
+    zip_path = tmp_path / "refs.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("target.cif", "data_stub\n")
+        zf.writestr("nested/dir/other.pdb", "ATOM  stub\n")
+
+    with open(DATA_DIR / "vanilla.yaml", "rb") as fh:
+        resp = client.post(
+            "/api/tasks/design",
+            data={
+                "protocol": "protein-anything",
+                "num_designs": "10",
+                "budget": "5",
+                "ref_files_zip_uri": f"file://{zip_path}",
+            },
+            files={"design_yaml": ("vanilla.yaml", fh, "application/x-yaml")},
+            headers={"X-Bioagent-Job-Id": "boltzgen-refzip-001"},
+        )
+    assert resp.status_code == 200, resp.text
+    input_dir = tmp_path / "jobs" / resp.json()["job_id"] / "input"
+    assert (input_dir / "design_spec.yaml").exists()
+    assert (input_dir / "target.cif").read_text() == "data_stub\n"
+    assert (input_dir / "other.pdb").exists()  # nested path flattened to basename
+    assert not (input_dir / "_ref_files.zip").exists()  # temp zip cleaned up
+
+
+def test_ref_files_zip_uri_bad_zip_422(client, tmp_path):
+    """A ref_files_zip_uri pointing at a non-zip fails setup with HTTP 422."""
+    bad = tmp_path / "bad.zip"
+    bad.write_bytes(b"this is not a zip archive")
+    with open(DATA_DIR / "vanilla.yaml", "rb") as fh:
+        resp = client.post(
+            "/api/tasks/design",
+            data={
+                "protocol": "protein-anything",
+                "ref_files_zip_uri": f"file://{bad}",
+            },
+            files={"design_yaml": ("vanilla.yaml", fh, "application/x-yaml")},
+            headers={"X-Bioagent-Job-Id": "boltzgen-refzip-bad-001"},
+        )
+    assert resp.status_code == 422, resp.text
+
+
 # ----- endpoint smoke (no real pipeline) -----
 
 def test_design_endpoint_returns_job(client):
