@@ -177,3 +177,12 @@ services:
   #   tier: cold
   #   function: fc_haddock3
   #   oss_mount: true
+  # lightdock-server: CPU protein-protein / peptide / DNA docking (Glowworm
+  # Swarm Optimization). No weights, no license gate. Not deployed yet — fill
+  # url + function after the first FC deploy (see
+  # engineering/decisions/2026-07-15-lightdock-server-design.md).
+  # lightdock-server:
+  #   url: https://fc-lightdock-XXXXXX.cn-hangzhou-vpc.fcapp.run
+  #   tier: cold
+  #   function: fc_lightdock
+  #   oss_mount: true
