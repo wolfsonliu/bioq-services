@@ -27,9 +27,11 @@ def test_job_lifecycle(tmp_path):
     db.create_job(job_id="j1", principal="bob", svc="openbpmd",
                   endpoint="score", input_params={"nreps": 1},
                   output_prefix="users/bob/outputs/j1/")
-    job = db.get_job("j1")
+    job = db.get_job("bob", "j1")
     assert job.principal == "bob" and job.status == "pending"
-    db.update_job("j1", status="completed", fc_task_id="j1")
-    assert db.get_job("j1").status == "completed"
+    db.update_job("bob", "j1", status="completed", fc_task_id="bob-j1")
+    assert db.get_job("bob", "j1").status == "completed"
     assert [j.job_id for j in db.list_jobs("bob")] == ["j1"]
     assert db.list_jobs("carol") == []
+    # job_id is namespaced per principal: carol reusing "j1" is a distinct row.
+    assert db.get_job("carol", "j1") is None

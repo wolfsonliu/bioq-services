@@ -57,15 +57,15 @@ class GatewayDB:
             s.add(Job(job_id=job_id, principal=principal, svc=svc, endpoint=endpoint,
                       input_params=input_params, output_prefix=output_prefix))
 
-    def get_job(self, job_id: str) -> Job | None:
+    def get_job(self, principal: str, job_id: str) -> Job | None:
         with self._Session() as s:
-            return s.get(Job, job_id)
+            return s.get(Job, (principal, job_id))
 
-    def update_job(self, job_id: str, **fields) -> None:
+    def update_job(self, principal: str, job_id: str, **fields) -> None:
         with self._Session() as s, s.begin():
-            row = s.get(Job, job_id)
+            row = s.get(Job, (principal, job_id))
             if row is None:
-                raise KeyError(job_id)
+                raise KeyError((principal, job_id))
             for k, v in fields.items():
                 setattr(row, k, v)
 
