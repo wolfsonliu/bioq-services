@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import os
 import uuid
 from pathlib import Path
 
+import anyio
 import httpx
 from bioagent_service import attach_mcp, create_app, read_version_file
 from fastapi import Body, Depends, Header, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
+from starlette.background import BackgroundTask
 
 from .adapter import GatewayAdapter
 from .auth.deps import AuthIdentity, require_auth
@@ -44,6 +47,15 @@ app.state.fc_status = FcStatusClient(
     default_region=settings.oss_region,
     endpoint=settings.fc_endpoint,
 )
+
+
+@app.on_event("startup")
+async def _raise_thread_pool_limit() -> None:
+    # All /v1 handlers are sync `def` → FastAPI runs them in anyio's default
+    # threadpool (default 40 tokens). Gateway requests are I/O-bound proxy work,
+    # so raise the ceiling to allow more concurrent in-flight requests. Must run
+    # inside the event loop (the limiter is a per-loop RunVar).
+    anyio.to_thread.current_default_thread_limiter().total_tokens = settings.thread_pool_size
 
 
 @app.get("/v1/services")
@@ -159,7 +171,13 @@ def download_job(job_id: str, request: Request,
     except Exception:  # noqa: BLE001 — OSS not configured / transient => fall back
         url = None
     if url:
+        # Fast path: object is on OSS → 302 to a presigned GET. Returns instantly
+        # and the client pulls bytes straight from OSS, so no gateway thread is
+        # held streaming the payload. This is the path all migrated services take.
         return RedirectResponse(url, status_code=302)
+    # Fallback (rare — un-migrated service or a job with no results.zip on OSS):
+    # proxy the downstream zip. This buffers to gateway disk and holds a thread,
+    # so clean the temp file up after the response is sent (persistent gateway).
     dest = Path(settings.jobs_base_dir) / job_id / f"{job_id}.zip"
     try:
         request.app.state.dispatch.download(reg.base_url(job.svc), job.fc_task_id or job_id, dest)
@@ -171,7 +189,17 @@ def download_job(job_id: str, request: Request,
         raise HTTPException(502, f"downstream download HTTP {exc.response.status_code}: {detail}")
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(502, f"download failed: {type(exc).__name__}: {exc}")
-    return FileResponse(str(dest), filename=f"{job_id}.zip", media_type="application/zip")
+    return FileResponse(
+        str(dest), filename=f"{job_id}.zip", media_type="application/zip",
+        background=BackgroundTask(_unlink_quiet, dest),
+    )
+
+
+def _unlink_quiet(path: Path) -> None:
+    try:
+        os.remove(path)
+    except OSError:
+        pass
 
 
 @app.post("/v1/jobs/{job_id}/cancel")

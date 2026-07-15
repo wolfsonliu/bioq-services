@@ -54,6 +54,15 @@ class GatewaySettings(ServiceSettings):
     # downstream HTTP dispatch
     dispatch_timeout_sec: float = Field(default=60.0, ge=5)
 
+    # anyio threadpool capacity. All /v1 handlers are sync `def` → FastAPI runs
+    # them in the threadpool (anyio default = 40 tokens). Gateway work is
+    # I/O-bound proxy work (httpx to downstream/FC + OSS + SQLite) — threads sit
+    # blocked on sockets (GIL released), so this can exceed the vCPU count. On
+    # the current 4-vCPU ECS host, 100 lifts concurrency well past the default 40
+    # without much memory cost, and matches httpx's default 100-connection pool
+    # (so threads don't just queue on the client pool). Env: GATEWAY_THREAD_POOL_SIZE.
+    thread_pool_size: int = Field(default=100, ge=8)
+
     # FC OpenAPI (GetAsyncTask status polling). AK/SK read from ALI_AK/ALI_SK
     # (FCDispatcher convention). When unset, the gateway falls back to HTTP
     # status polling. fc_endpoint overrides "{region}.fc.aliyuncs.com" (e.g. a
