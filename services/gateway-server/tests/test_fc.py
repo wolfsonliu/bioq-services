@@ -1032,6 +1032,23 @@ class TestEndToEndDeepRankAb:
 
 @pytest.mark.fc
 @_needs
+class TestEndToEndPlip:
+    def test_profile_end_to_end(self, client):
+        job_id = uuid.uuid4().hex[:20]
+        input_pdb_uri = _upload_via_presign(
+            client, job_id, "1vsn.pdb", _fixture("plip-server", "1vsn.pdb")
+        )
+        content = _run_poll_zip(
+            client, svc="plip-server", endpoint="profile", job_id=job_id,
+            body={"input_pdb_uri": input_pdb_uri, "name": "gwtest"},
+            poll_timeout_s=1200,
+        )
+        xml = _zip_member(content, "gwtest.xml").decode()
+        assert "<report" in xml
+
+
+@pytest.mark.fc
+@_needs
 class TestEndToEndDiffDock:
     def test_dock_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]

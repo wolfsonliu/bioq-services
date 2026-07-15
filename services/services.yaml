@@ -142,6 +142,14 @@ services:
     tier: warm
     function: fc_pocketxmol
     oss_mount: true
+  # plip-server: CPU protein-ligand interaction profiler. Not deployed yet — fill
+  # url + function after the first FC deploy (see
+  # engineering/decisions/2026-07-15-plip-server-design.md).
+  # plip-server:
+  #   url: https://fc-plip-XXXXXX.cn-hangzhou-vpc.fcapp.run
+  #   tier: cold
+  #   function: fc_plip
+  #   oss_mount: true
   openbpmd-server:
     url: https://fc-openbpmd-acghosooxo.cn-hangzhou-vpc.fcapp.run
     tier: warm
