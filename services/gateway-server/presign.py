@@ -15,6 +15,26 @@ from datetime import timedelta
 from .models import PresignResponse
 
 
+def _oss_error_info(exc: BaseException) -> tuple[int | None, str | None]:
+    """Best-effort (http_status, error_code) from an alibabacloud-oss-v2 error.
+
+    The SDK wraps the real error inside OperationError / RequestError (via
+    ``.unwrap()``); a ServiceError carries ``status_code`` + ``code`` (a missing
+    object is 404 / NoSuchKey), while a transport RequestError has no status.
+    """
+    cur: BaseException | None = exc
+    for _ in range(4):
+        if cur is None:
+            break
+        status = getattr(cur, "status_code", None)
+        code = getattr(cur, "code", None)
+        if isinstance(status, int) and status:
+            return status, code
+        unwrap = getattr(cur, "unwrap", None)
+        cur = unwrap() if callable(unwrap) else (cur.__cause__ or cur.__context__)
+    return None, None
+
+
 def build_oss_client(region: str):
     import alibabacloud_oss_v2 as oss  # lazy: keeps import light + testable
 
@@ -45,8 +65,16 @@ class Presigner:
         try:
             self._client.head_object(oss.models.HeadObjectRequest(bucket=self._bucket, key=key))
             return True
-        except Exception:  # noqa: BLE001 — any error (incl. NoSuchKey) => absent
-            return False
+        except Exception as exc:  # noqa: BLE001
+            # Only a genuine "object absent" (HTTP 404 / NoSuchKey) means False.
+            # Any OTHER error — auth (403), OSS 5xx, throttling, transport
+            # (RequestError, no status), or a NoSuchBucket misconfig — must
+            # propagate so callers never mistake an OSS outage for a missing
+            # object (which would silently mask the failure).
+            status, code = _oss_error_info(exc)
+            if status == 404 and code != "NoSuchBucket":
+                return False
+            raise
 
     def presign_put(self, principal: str, job_id: str, filename: str,
                     sha256: str | None = None) -> PresignResponse:

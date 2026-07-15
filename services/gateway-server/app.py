@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import uuid
 from pathlib import Path
@@ -24,6 +25,8 @@ from .oss_map import map_oss_inputs_to_mount
 from .presign import Presigner, build_oss_client
 from .registry import ServiceRegistry
 from .settings import GatewaySettings
+
+logger = logging.getLogger(__name__)
 
 settings = GatewaySettings()
 adapter = GatewayAdapter(settings=settings)
@@ -168,7 +171,13 @@ def download_job(job_id: str, request: Request,
     reg = request.app.state.registry
     try:
         url = _get_presigner(request).presign_get_if_exists(ident.principal, job_id, "results.zip")
-    except Exception:  # noqa: BLE001 — OSS not configured / transient => fall back
+    except Exception as exc:  # noqa: BLE001 — OSS not configured / down => fall back to proxy
+        # `presign_get_if_exists` returns None for a genuinely-absent object; an
+        # exception here means a real OSS problem (auth/5xx/transport). We still
+        # fall back to proxying the downstream (resilience), but log it — otherwise
+        # an OSS outage silently masquerades as "results just not on OSS".
+        logger.warning("presign GET failed for %s/%s (OSS error, proxying downstream): %r",
+                       ident.principal, job_id, exc)
         url = None
     if url:
         # Fast path: object is on OSS → 302 to a presigned GET. Returns instantly
@@ -186,9 +195,16 @@ def download_job(job_id: str, request: Request,
             detail = exc.response.text[:200]
         except Exception:  # noqa: BLE001
             detail = "<unavailable>"
-        raise HTTPException(502, f"downstream download HTTP {exc.response.status_code}: {detail}")
+        raise HTTPException(
+            502,
+            f"results.zip not on OSS and downstream download returned "
+            f"HTTP {exc.response.status_code}: {detail}",
+        )
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(502, f"download failed: {type(exc).__name__}: {exc}")
+        raise HTTPException(
+            502,
+            f"results.zip not on OSS and proxy fallback errored: {type(exc).__name__}: {exc}",
+        )
     return FileResponse(
         str(dest), filename=f"{job_id}.zip", media_type="application/zip",
         background=BackgroundTask(_unlink_quiet, dest),
