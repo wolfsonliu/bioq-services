@@ -167,3 +167,13 @@ services:
     tier: warm
     function: fc_iggm
     oss_mount: true
+  # haddock3-server: CPU integrative docking (protein-protein / scoring /
+  # restraints). Not deployed yet — fill url + function after the first FC
+  # deploy AND staging a licensed CNS binary to NAS
+  # /data/models/haddock3/cns/cns (see
+  # engineering/decisions/2026-07-15-haddock3-server-design.md).
+  # haddock3-server:
+  #   url: https://fc-haddock3-XXXXXX.cn-hangzhou-vpc.fcapp.run
+  #   tier: cold
+  #   function: fc_haddock3
+  #   oss_mount: true

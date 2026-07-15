@@ -1720,3 +1720,25 @@ class TestEndToEndOpenADMET:
             },
             output_suffixes=(".csv",), poll_timeout_s=600,
         )
+
+
+@pytest.mark.fc
+@_needs
+class TestEndToEndHaddock3:
+    """CNS-free restraints path through the gateway (docking/scoring need a
+    licensed CNS staged on the FC NAS, so they are not exercised here).
+
+    NOTE: `restraints/restrain-bodies` is a nested endpoint — requires
+    gateway >= v0.0.2 ({endpoint:path} routing)."""
+
+    def test_restrain_bodies_end_to_end(self, client):
+        job_id = uuid.uuid4().hex[:20]
+        structure_uri = _upload_via_presign(
+            client, job_id, "complex.pdb", _fixture("haddock3-server", "complex.pdb")
+        )
+        _run_poll_download(
+            client, svc="haddock3-server", endpoint="restraints/restrain-bodies",
+            job_id=job_id,
+            body={"structure_uri": structure_uri},
+            output_suffixes=(".tbl",), poll_timeout_s=600,
+        )
