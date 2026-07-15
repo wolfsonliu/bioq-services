@@ -204,6 +204,45 @@ def _fixture(svc: str, name: str) -> bytes:
     return (Path(__file__).resolve().parents[2] / svc / "tests" / "data" / name).read_bytes()
 
 
+# ---------------------------------------------------------------------------
+# Per-session download persistence — mirror each downloaded results.zip (plus
+# the terminal JobInfo and its extracted tree) under tests/fc_outputs/ so humans
+# can inspect real gateway outputs. Gitignored (see .gitignore). Grouped by
+# <svc>/<endpoint>-<job_id> since the gateway spans many downstream services.
+# ---------------------------------------------------------------------------
+
+_FC_OUTPUTS_ROOT = Path(__file__).resolve().parent / "fc_outputs"
+_FC_RUN_STAMP = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+_fc_run_dir: Path | None = None
+
+
+def _fc_outputs_dir() -> Path:
+    """Lazily create (once per session) tests/fc_outputs/run-<UTC stamp>/."""
+    global _fc_run_dir
+    if _fc_run_dir is None:
+        _fc_run_dir = _FC_OUTPUTS_ROOT / f"run-{_FC_RUN_STAMP}"
+        _fc_run_dir.mkdir(parents=True, exist_ok=True)
+        print(f"\n[fc_outputs] saving downloaded job outputs under {_fc_run_dir}")
+    return _fc_run_dir
+
+
+def _save_gateway_outputs(
+    svc: str, endpoint: str, job_id: str, job_info: dict, zip_bytes: bytes,
+) -> None:
+    """Persist a completed job's JobInfo + results.zip + extracted tree."""
+    dst = _fc_outputs_dir() / svc / f"{endpoint}-{job_id}"
+    dst.mkdir(parents=True, exist_ok=True)
+    (dst / "jobinfo.json").write_text(json.dumps(job_info, indent=2))
+    if zip_bytes:
+        (dst / f"{job_id}.zip").write_bytes(zip_bytes)
+        try:
+            with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+                zf.extractall(dst / "extracted")
+        except zipfile.BadZipFile as exc:  # noqa: BLE001
+            print(f"[fc_outputs] extract failed for {job_id}: {exc!r}")
+    print(f"[fc_outputs] saved {job_id} → {dst}")
+
+
 def _run_poll_zip(
     client,
     *,
@@ -244,6 +283,7 @@ def _run_poll_zip(
     assert "results.zip" in red.headers["location"]
     dl = httpx.get(red.headers["location"], timeout=TIMEOUT)  # pull straight from OSS
     assert dl.status_code == 200, dl.text
+    _save_gateway_outputs(svc, endpoint, job_id, status, dl.content)
     return dl.content
 
 
@@ -318,8 +358,35 @@ class TestEndToEndProteinMPNN:
         assert "results.zip" in red.headers["location"]
         dl = httpx.get(red.headers["location"], timeout=TIMEOUT)  # pull straight from OSS
         assert dl.status_code == 200, dl.text
+        _save_gateway_outputs("proteinmpnn-server", "design", job_id, body, dl.content)
         names = zipfile.ZipFile(io.BytesIO(dl.content)).namelist()
         assert any(n.endswith((".fa", ".fasta")) for n in names), f"no FASTA in {names}"
+
+    def test_score_end_to_end(self, client):
+        """Score-only path: writes per-position scores as score_only .npz."""
+        job_id = uuid.uuid4().hex[:20]
+        pdb_uri = _upload_via_presign(client, job_id, "5L33.pdb", _PDB.read_bytes())
+        content = _run_poll_zip(
+            client, svc="proteinmpnn-server", endpoint="score", job_id=job_id,
+            body={"pdb_uri": pdb_uri, "name": "gw_score", "num_seq_per_target": 2},
+            poll_timeout_s=RUN_POLL_TIMEOUT_S,
+        )
+        names = zipfile.ZipFile(io.BytesIO(content)).namelist()
+        assert any("score_only" in n for n in names), f"no score_only in {names}"
+
+    def test_probs_end_to_end(self, client):
+        """Conditional probability path: writes conditional_probs_only .npz."""
+        job_id = uuid.uuid4().hex[:20]
+        pdb_uri = _upload_via_presign(client, job_id, "5L33.pdb", _PDB.read_bytes())
+        content = _run_poll_zip(
+            client, svc="proteinmpnn-server", endpoint="probs", job_id=job_id,
+            body={"pdb_uri": pdb_uri, "name": "gw_probs", "kind": "conditional"},
+            poll_timeout_s=RUN_POLL_TIMEOUT_S,
+        )
+        names = zipfile.ZipFile(io.BytesIO(content)).namelist()
+        assert any("conditional_probs_only" in n for n in names), (
+            f"no conditional_probs_only in {names}"
+        )
 
 
 # ===================================================================
@@ -399,6 +466,7 @@ class TestEndToEndAlphaFold:
         assert "results.zip" in red.headers["location"]
         dl = httpx.get(red.headers["location"], timeout=TIMEOUT)  # pull straight from OSS
         assert dl.status_code == 200, dl.text
+        _save_gateway_outputs("alphafold-server", "fold", job_id, body, dl.content)
         names = zipfile.ZipFile(io.BytesIO(dl.content)).namelist()
         assert any(n.endswith(".pdb") for n in names), f"no predicted PDB in {names}"
 
@@ -431,6 +499,12 @@ class TestEndToEndAlphaFold:
 # uses, so the run does NOT require the colabfold_envdb to be staged on NAS.
 _MMSEQS_MONOMER = "QLEDSEVEAVAKGLEEMYANGVTEDNFKNYVKNNFAQQEISSVEEELNVN"
 _MMSEQS_Q = f">probe1\n{_MMSEQS_MONOMER}\n"
+# Two-chain heterodimer for the paired pipeline (mode="pairgreedy"), same shape
+# as mmseqs2-server's own /api/tasks/pair test.
+_MMSEQS_PAIRED_Q = (
+    f">chainA\n{_MMSEQS_MONOMER}\n"
+    ">chainB\nMQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDY\n"
+)
 
 # mmseqs MSA cold-start ~60s; short-seq search runs 3-10 min on the GPU subset
 # DB. Allow 40 min (matches the downstream's own test) to absorb cold start.
@@ -479,8 +553,18 @@ class TestEndToEndMMseqs2:
         assert "results.zip" in red.headers["location"]
         dl = httpx.get(red.headers["location"], timeout=TIMEOUT)  # pull straight from OSS
         assert dl.status_code == 200, dl.text
+        _save_gateway_outputs("mmseqs2-server", "msa", job_id, body, dl.content)
         names = zipfile.ZipFile(io.BytesIO(dl.content)).namelist()
         assert any(n.endswith(".a3m") for n in names), f"no MSA a3m in {names}"
+
+    def test_pair_end_to_end(self, client):
+        """Paired multimer MSA (mode=pairgreedy) over a 2-chain query."""
+        job_id = uuid.uuid4().hex[:20]
+        _run_poll_download(
+            client, svc="mmseqs2-server", endpoint="pair", job_id=job_id,
+            body={"q": _MMSEQS_PAIRED_Q, "mode": "pairgreedy"},
+            output_suffixes=(".a3m",), poll_timeout_s=MMSEQS_RUN_POLL_TIMEOUT_S,
+        )
 
 
 # ===================================================================
@@ -498,9 +582,10 @@ class TestEndToEndMMseqs2:
 @pytest.mark.fc
 @_needs
 class TestEndToEndRFdiffusion:
-    """RFdiffusion exposes 5 generation modes. The gateway can reach the 3 with
-    a ``tasks/`` variant (motif / binder / generate-custom); unconditional and
-    symmetry have no ``tasks/`` route, so they can't be dispatched here."""
+    """RFdiffusion exposes 5 generation modes, each with a ``tasks/`` variant
+    (motif / binder / generate-custom / unconditional / symmetry), so all 5 are
+    dispatchable through the gateway. unconditional and symmetry carry all inputs
+    inline in the run body (no file upload)."""
 
     def test_generate_motif_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
@@ -544,11 +629,33 @@ class TestEndToEndRFdiffusion:
             output_suffixes=(".pdb",), poll_timeout_s=1800,
         )
 
+    def test_generate_unconditional_end_to_end(self, client):
+        job_id = uuid.uuid4().hex[:20]
+        _run_poll_download(
+            client, svc="rfdiffusion-server", endpoint="generate/unconditional", job_id=job_id,
+            body={
+                "num_designs": 1, "diffuser_t": 25,
+                "min_length": 60, "max_length": 60,
+            },
+            output_suffixes=(".pdb",), poll_timeout_s=1800,
+        )
+
+    def test_generate_symmetry_end_to_end(self, client):
+        job_id = uuid.uuid4().hex[:20]
+        _run_poll_download(
+            client, svc="rfdiffusion-server", endpoint="generate/symmetry", job_id=job_id,
+            body={
+                "symmetry": "c2", "total_length": 80,
+                "num_designs": 1, "diffuser_t": 25,
+            },
+            output_suffixes=(".pdb",), poll_timeout_s=1800,
+        )
+
 
 @pytest.mark.fc
 @_needs
 class TestEndToEndRFdiffusion2:
-    def test_generate_end_to_end(self, client):
+    def test_generate_active_site_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
         input_uri = _upload_via_presign(
             client, job_id, "M0584_1ldm.pdb",
@@ -565,6 +672,49 @@ class TestEndToEndRFdiffusion2:
                 },
                 "ligand": "NAD,OXM", "contig_as_guidepost": True,
                 "num_designs": 1, "diffuser_t": 10,
+            },
+            output_suffixes=(".pdb",), poll_timeout_s=1800,
+        )
+
+    def test_generate_small_molecule_binder_end_to_end(self, client):
+        job_id = uuid.uuid4().hex[:20]
+        input_uri = _upload_via_presign(
+            client, job_id, "trimmed_ec2_M0151_NO_ORI_zero_com0.pdb",
+            _fixture("rfdiffusion2-server", "trimmed_ec2_M0151_NO_ORI_zero_com0.pdb"),
+        )
+        _run_poll_download(
+            client, svc="rfdiffusion2-server",
+            endpoint="generate/small_molecule_binder", job_id=job_id,
+            body={
+                "input_uri": input_uri,
+                "contigs": "50", "length": "50-50", "ligand": "PH2",
+                "rasa_active": True, "rasa_target": 0,
+                "num_designs": 1, "diffuser_t": 10,
+            },
+            output_suffixes=(".pdb",), poll_timeout_s=1800,
+        )
+
+    def test_generate_custom_end_to_end(self, client):
+        """Freeform endpoint — active-site via raw contigs + extra_overrides."""
+        job_id = uuid.uuid4().hex[:20]
+        input_uri = _upload_via_presign(
+            client, job_id, "M0584_1ldm.pdb",
+            _fixture("rfdiffusion2-server", "M0584_1ldm.pdb"),
+        )
+        _run_poll_download(
+            client, svc="rfdiffusion2-server", endpoint="generate", job_id=job_id,
+            body={
+                "input_uri": input_uri,
+                "contigs": "46,A106-106,59,A166-166,2,A169-169,23,A193-193,46",
+                "config_name": "aa", "input_pdb_required": True,
+                "ligand": "NAD,OXM", "num_designs": 1, "diffuser_t": 10,
+                "extra_overrides": {
+                    "inference.contig_as_guidepost": True,
+                    "contigmap.contig_atoms": {
+                        "A106": "NE,CD,CZ", "A166": "OD1,CG",
+                        "A169": "NH2,CZ", "A193": "NE2,CD2,CE1",
+                    },
+                },
             },
             output_suffixes=(".pdb",), poll_timeout_s=1800,
         )
@@ -747,6 +897,23 @@ class TestEndToEndIgGM:
             output_suffixes=(".pdb",), poll_timeout_s=1800,
         )
 
+    def test_epitope_end_to_end(self, client):
+        """Epitope prediction over an antibody-antigen complex -> epitope.json."""
+        job_id = uuid.uuid4().hex[:20]
+        fasta_uri = _upload_via_presign(
+            client, job_id, "complex.fasta", _fixture("iggm-server", "complex.fasta")
+        )
+        antigen_uri = _upload_via_presign(
+            client, job_id, "antigen.pdb", _fixture("iggm-server", "antigen.pdb")
+        )
+        content = _run_poll_zip(
+            client, svc="iggm-server", endpoint="epitope", job_id=job_id,
+            body={"fasta_uri": fasta_uri, "antigen_uri": antigen_uri},
+            poll_timeout_s=600,
+        )
+        names = zipfile.ZipFile(io.BytesIO(content)).namelist()
+        assert any("epitope.json" in n for n in names), f"no epitope.json in {names}"
+
 
 @pytest.mark.fc
 @_needs
@@ -808,7 +975,14 @@ class TestEndToEndDockQ:
 
     def test_score_batch_end_to_end(self, client):
         """Batch of 2 models via models_zip_uri; assert scores.csv (2 rows,
-        sorted by DockQ desc) and per-model JSONs in results.zip."""
+        sorted by DockQ desc) and per-model JSONs in results.zip.
+
+        Both models must share native.pdb's chain set (A/B/C) for DockQ to map
+        them — model_alt.pdb is a different complex (A/B/H/L) that DockQ rightly
+        refuses to score. We batch model.pdb (a real prediction, DockQ < 1) with
+        native.pdb itself (self-score, DockQ == 1) to get two mappable models
+        with distinct scores, so the descending-sort assertion is meaningful.
+        """
         job_id = uuid.uuid4().hex[:20]
         native_uri = _upload_via_presign(
             client, job_id, "native.pdb", _fixture("dockq-server", "native.pdb")
@@ -816,7 +990,7 @@ class TestEndToEndDockQ:
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.writestr("model.pdb", _fixture("dockq-server", "model.pdb"))
-            zf.writestr("model_alt.pdb", _fixture("dockq-server", "model_alt.pdb"))
+            zf.writestr("self.pdb", _fixture("dockq-server", "native.pdb"))
         models_zip_uri = _upload_via_presign(client, job_id, "models.zip", buf.getvalue())
         content = _run_poll_zip(
             client, svc="dockq-server", endpoint="score_batch", job_id=job_id,
@@ -973,6 +1147,51 @@ class TestEndToEndDrugHive:
             output_suffixes=(".sdf",), poll_timeout_s=900,
         )
 
+    def test_generate_spatial_end_to_end(self, client):
+        """Scaffold hopping via a SMARTS substructure pattern (no extra file)."""
+        job_id = uuid.uuid4().hex[:20]
+        target_uri = _upload_via_presign(
+            client, job_id, "5d3h_pocket.pdb", _fixture("drughive-server", "5d3h_pocket.pdb")
+        )
+        ligand_uri = _upload_via_presign(
+            client, job_id, "5d3h_ligand.sdf", _fixture("drughive-server", "5d3h_ligand.sdf")
+        )
+        _run_poll_download(
+            client, svc="drughive-server", endpoint="generate_spatial", job_id=job_id,
+            body={
+                "target_uri": target_uri, "ligand_uri": ligand_uri,
+                "n_samples": 5, "pdb_id": "5d3h",
+                "substruct_modify_pattern": "C(=O)N",  # amide; 1 match in 5d3h ligand
+                "zbetas": 0.3, "temps": 1.0,
+            },
+            output_suffixes=(".sdf",), poll_timeout_s=900,
+        )
+
+    def test_optimize_end_to_end(self, client):
+        """Multi-cycle QVina2 optimization; needs the target .pdbqt for docking."""
+        job_id = uuid.uuid4().hex[:20]
+        target_uri = _upload_via_presign(
+            client, job_id, "5d3h_pocket.pdb", _fixture("drughive-server", "5d3h_pocket.pdb")
+        )
+        ligand_uri = _upload_via_presign(
+            client, job_id, "5d3h_ligand.sdf", _fixture("drughive-server", "5d3h_ligand.sdf")
+        )
+        target_pdbqt_uri = _upload_via_presign(
+            client, job_id, "5d3h_pocket.pdbqt", _fixture("drughive-server", "5d3h_pocket.pdbqt")
+        )
+        _run_poll_download(
+            client, svc="drughive-server", endpoint="optimize", job_id=job_id,
+            body={
+                "target_uri": target_uri, "ligand_uri": ligand_uri,
+                "target_pdbqt_uri": target_pdbqt_uri,
+                "pdb_id": "5d3h", "key_opt": "affinity_qvina",
+                "n_cycles": 2, "n_samples_initial": 20, "n_samples": 4,
+                "n_best_parents": 2, "zbetas": 0.3, "temps": 1.0,
+                "save_name": "gw_opt",
+            },
+            output_suffixes=(".sdf",), poll_timeout_s=1800,
+        )
+
 
 @pytest.mark.fc
 @_needs
@@ -995,6 +1214,61 @@ class TestEndToEndPocketXMol:
                 "pocket_coord": [-8.257, 85.181, 19.050], "pocket_radius": 15,
             },
             output_suffixes=(".sdf",), poll_timeout_s=1800,
+        )
+
+    def test_sbdd_end_to_end(self, client):
+        """Structure-based de novo design into a pocket (protein only)."""
+        job_id = uuid.uuid4().hex[:20]
+        protein_uri = _upload_via_presign(
+            client, job_id, "2ar9_A.pdb", _fixture("pocketxmol-server", "2ar9_A.pdb")
+        )
+        _run_poll_download(
+            client, svc="pocketxmol-server", endpoint="sbdd", job_id=job_id,
+            body={
+                "protein_uri": protein_uri, "num_samples": 5, "batch_size": 5,
+                "pocket_coord": [-8.1603, 36.6972, 38.7714], "pocket_radius": 15,
+                "mode": "simple",
+            },
+            output_suffixes=(".sdf",), poll_timeout_s=1800,
+        )
+
+    def test_linking_end_to_end(self, client):
+        """Fragment growing/linking from an input fragment SDF."""
+        job_id = uuid.uuid4().hex[:20]
+        protein_uri = _upload_via_presign(
+            client, job_id, "2ar9_A.pdb", _fixture("pocketxmol-server", "2ar9_A.pdb")
+        )
+        input_ligand_uri = _upload_via_presign(
+            client, job_id, "fragment.sdf", _fixture("pocketxmol-server", "fragment.sdf")
+        )
+        _run_poll_download(
+            client, svc="pocketxmol-server", endpoint="linking", job_id=job_id,
+            body={
+                "protein_uri": protein_uri, "input_ligand_uri": input_ligand_uri,
+                "num_samples": 3, "batch_size": 3,
+                "fragments": [[0, 1, 2, 3, 4, 5, 6]], "mol_size_mean": 28,
+            },
+            output_suffixes=(".sdf",), poll_timeout_s=1800,
+        )
+
+    def test_pepdesign_end_to_end(self, client):
+        """De novo linear peptide design targeting a pocket."""
+        job_id = uuid.uuid4().hex[:20]
+        protein_uri = _upload_via_presign(
+            client, job_id, "3bik_A.pdb", _fixture("pocketxmol-server", "3bik_A.pdb")
+        )
+        ref_ligand_uri = _upload_via_presign(
+            client, job_id, "3bik_A_pocket_coord.sdf",
+            _fixture("pocketxmol-server", "3bik_A_pocket_coord.sdf"),
+        )
+        _run_poll_download(
+            client, svc="pocketxmol-server", endpoint="pepdesign", job_id=job_id,
+            body={
+                "protein_uri": protein_uri, "ref_ligand_uri": ref_ligand_uri,
+                "mode": "denovo_linear", "pep_length": 5,
+                "num_samples": 3, "batch_size": 3, "pocket_radius": 20,
+            },
+            output_suffixes=(".pdb", ".sdf"), poll_timeout_s=1800,
         )
 
 
@@ -1171,6 +1445,22 @@ class TestEndToEndProMera:
             body={
                 "input_schema_uri": input_schema_uri,
                 "num_seeds": 1, "diffusion_samples": 1, "diffusion_steps": 50,
+            },
+            output_suffixes=(".cif",), poll_timeout_s=2700,
+        )
+
+    def test_design_end_to_end(self, client):
+        """Minibinder backbone design -> backbone.cif."""
+        job_id = uuid.uuid4().hex[:20]
+        target_schema_uri = _upload_via_presign(
+            client, job_id, "target.json", _fixture("promera-server", "test_target.json")
+        )
+        _run_poll_download(
+            client, svc="promera-server", endpoint="design", job_id=job_id,
+            body={
+                "target_schema_uri": target_schema_uri,
+                "design_type": "minibinder", "num_backbones": 1,
+                "diffusion_steps": 50, "inverse_folder_type": "none",
             },
             output_suffixes=(".cif",), poll_timeout_s=2700,
         )
