@@ -11,10 +11,12 @@
 # suite). A uv venv created with --system-site-packages reuses those system
 # packages while keeping the bioagent service framework isolated in the venv.
 
-# Debian bookworm (stable): system python is 3.11.2 (NOT ubuntu jammy's 3.11.0rc1
-# which breaks torch/str-int limits — see engineering guides). Same base family
-# as upstream's `FROM debian:stable`.
-FROM debian:stable-slim
+# Debian bookworm (12): system python is 3.11.2 (NOT ubuntu jammy's 3.11.0rc1
+# which breaks torch/str-int limits — see engineering guides). Pinned to
+# bookworm on purpose: the floating `debian:stable` tag rolled to trixie (13,
+# python 3.13), and a cached `debian:stable` base whose keyring predates that
+# roll fails `apt-get update` with NO_PUBKEY GPG errors against the new repos.
+FROM debian:bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
