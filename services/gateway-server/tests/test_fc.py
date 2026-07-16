@@ -1716,15 +1716,132 @@ class TestEndToEndFlowMol:
         )
 
 
+# A minimal [scoring] section reused by the reinvent modes that need one
+# (scoring / enumeration / staged-learning). QED needs no external data files,
+# so it runs on any FC instance. Passed as a dict in the JSON body — the gateway
+# JSON-encodes it into a form field, which model_form_depends decodes server-side.
+_REINVENT_QED_SCORING = {
+    "type": "geometric_mean",
+    "component": [{"QED": {"endpoint": [{"name": "QED", "weight": 1.0}]}}],
+}
+
+
 @pytest.mark.fc
 @_needs
 class TestEndToEndReinvent:
+    """Full-pipeline gateway coverage — one test per REINVENT run mode.
+
+    Each drives the full gateway chain (JSON-body submit -> 202 + job_id -> FC
+    async /api/tasks/<mode> -> GPU compute -> results.zip mirrored to OSS -> 302
+    download). File inputs are pushed to OSS via presign and passed as the
+    matching ``*_uri`` field, since gateway dispatch is form-only (no multipart).
+    """
+
     def test_sampling_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
         _run_poll_download(
             client, svc="reinvent-server", endpoint="sampling", job_id=job_id,
             body={"generator": "reinvent", "num_smiles": 20},
             output_suffixes=(".csv",), poll_timeout_s=900,
+        )
+
+    def test_scoring_end_to_end(self, client):
+        job_id = uuid.uuid4().hex[:20]
+        smiles_uri = _upload_via_presign(
+            client, job_id, "compounds.smi",
+            b"CCO\nc1ccccc1\nCC(=O)O\nCC(=O)Oc1ccccc1C(=O)O\n",
+        )
+        _run_poll_download(
+            client, svc="reinvent-server", endpoint="scoring", job_id=job_id,
+            body={"smiles_file_uri": smiles_uri, "scoring": _REINVENT_QED_SCORING},
+            output_suffixes=(".csv",), poll_timeout_s=900,
+        )
+
+    def test_enumeration_end_to_end(self, client):
+        """PepInvent AA enumeration — masked peptide + amino-acid library CSV.
+
+        Fixtures mirror upstream ``tests/.../enumeration/mock_aa_library.csv``
+        (columns SMILES,NAME → so name/smiles columns are overridden to
+        uppercase to match).
+        """
+        job_id = uuid.uuid4().hex[:20]
+        peptide_uri = _upload_via_presign(
+            client, job_id, "peptides.smi",
+            b"N[C@@H](CS)C(=O)|?|N[C@@H](C)C(=O)|?|N[C@@H](C)C(=O)O\n",
+        )
+        library_uri = _upload_via_presign(
+            client, job_id, "amino_acids.csv",
+            b"SMILES,NAME\n"
+            b"N[C@@H](Cn1c(S)nnc1-c1ccc(F)cc1)C(=O)O,ZN9\n"
+            b"NC(=O)CC[C@H](N)C(=O)O,Q\n"
+            b"N[C@@H](CS)C(=O)O,C\n"
+            b"NCC(=O)O,G\n",
+        )
+        _run_poll_download(
+            client, svc="reinvent-server", endpoint="enumeration", job_id=job_id,
+            body={
+                "peptide_smiles_uri": peptide_uri,
+                "amino_acid_library_uri": library_uri,
+                "amino_acid_name_column": "NAME",
+                "smiles_column": "SMILES",
+                "batch_size": 5,
+                "scoring": _REINVENT_QED_SCORING,
+            },
+            output_suffixes=(".csv",), poll_timeout_s=900,
+        )
+
+    def test_transfer_learning_end_to_end(self, client):
+        """Fine-tune the reinvent prior for 1 epoch on a tiny SMILES set."""
+        job_id = uuid.uuid4().hex[:20]
+        smiles_uri = _upload_via_presign(
+            client, job_id, "tl_reinvent.smi",
+            b"Cc1ccc(-c2cc(C(F)(F)F)nn2-c2ccc(S(N)(=O)=O)cc2)cc1\n"
+            b"O=C(Nc1ccc(Oc2nccc(-c3cccnc3)n2)cc1)c1ccc(Cl)cc1\n"
+            b"CC(=O)Oc1ccccc1C(=O)O\n"
+            b"CN1C(=O)CN=C(c2ccccc2)c2cc(Cl)ccc21\n"
+            b"COc1ccc2[nH]cc(CCN)c2c1\n"
+            b"CC(C)Cc1ccc(C(C)C(=O)O)cc1\n"
+            b"CN1CCC[C@H]1c1cccnc1\n"
+            b"O=C(O)c1ccccc1O\n"
+            b"CCN(CC)CCNC(=O)c1ccc(N)cc1\n"
+            b"Clc1ccccc1C1=NCC(=O)Nc2ccccc21\n"
+            b"CC(=O)Nc1ccc(O)cc1\n"
+            b"Cn1cnc2c1c(=O)n(C)c(=O)n2C\n",
+        )
+        _run_poll_download(
+            client, svc="reinvent-server", endpoint="transfer-learning", job_id=job_id,
+            body={
+                "generator": "reinvent",
+                "smiles_file_uri": smiles_uri,
+                "output_model_name": "TL_model.model",
+                "num_epochs": 1,
+                "save_every_n_epochs": 1,
+                "batch_size": 10,
+                "num_refs": 0,
+                "sample_batch_size": 10,
+            },
+            output_suffixes=(".model",), poll_timeout_s=1800,
+        )
+
+    def test_staged_learning_end_to_end(self, client):
+        """One short RL stage off the NAS-staged reinvent prior (no file input)."""
+        job_id = uuid.uuid4().hex[:20]
+        _run_poll_download(
+            client, svc="reinvent-server", endpoint="staged-learning", job_id=job_id,
+            body={
+                "generator": "reinvent",
+                "batch_size": 8,
+                "stages": [
+                    {
+                        "chkpt_name": "stage1.chkpt",
+                        "max_score": 0.4,
+                        "min_steps": 2,
+                        "max_steps": 4,
+                        "scoring": _REINVENT_QED_SCORING,
+                    }
+                ],
+            },
+            output_suffixes=(".csv",), poll_timeout_s=1800,
         )
 
 
