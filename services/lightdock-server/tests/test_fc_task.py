@@ -6,10 +6,9 @@ Run with::
     uv run python -m pytest -m fc services/lightdock-server/tests/test_fc_task.py -v
 
 Validates /api/tasks/dock under FC async task mode (``X-Fc-Invocation-Type:
-Async``). The receptor+ligand multipart payload (~137 KB) exceeds the 128 KiB
-async task-mode limit, so the inputs are first sync-bootstrapped onto NAS via a
-regular /api/dock submit and then referenced by ``job://`` URI (a tiny
-form-only payload) in the async task.
+Async``). The 1czy protein-peptide fixture (receptor 104 KB + ligand 4 KB ≈
+108 KB total) stays under the 128 KiB async task-mode payload limit, so inputs
+upload directly via multipart — no NAS bootstrap / URI indirection needed.
 """
 
 from __future__ import annotations
@@ -56,6 +55,13 @@ def _async_headers(task_id: str) -> dict[str, str]:
     }
 
 
+def _files() -> dict:
+    return {
+        "receptor": ("receptor.pdb", RECEPTOR.read_bytes(), "chemical/x-pdb"),
+        "ligand": ("ligand.pdb", LIGAND.read_bytes(), "chemical/x-pdb"),
+    }
+
+
 def _get_with_retry(client, path, *, max_attempts=20, backoff_s=30):
     last = None
     for _ in range(max_attempts):
@@ -76,37 +82,16 @@ def _poll(client, task_id: str) -> dict:
 
 
 @pytest.fixture(scope="module")
-def bootstrap_uris(client) -> dict[str, str]:
-    """Sync-submit the inputs so they persist on NAS, then hand back job:// URIs."""
-    with open(RECEPTOR, "rb") as fr, open(LIGAND, "rb") as fl:
-        r = client.post(
-            "/api/dock",
-            files={
-                "receptor": ("receptor.pdb", fr.read(), "chemical/x-pdb"),
-                "ligand": ("ligand.pdb", fl.read(), "chemical/x-pdb"),
-            },
-            data=TINY,
-        )
-    assert r.status_code == 200, f"bootstrap submit failed: {r.status_code} {r.text!r}"
-    job_id = r.json()["job_id"]
-    # Wait until the sync job completes so its input/ files are guaranteed on NAS.
-    _poll(client, job_id)
-    return {
-        "receptor_uri": f"job://{job_id}/input/receptor.pdb",
-        "ligand_uri": f"job://{job_id}/input/ligand.pdb",
-    }
-
-
-@pytest.fixture(scope="module")
 def task_id() -> str:
     return f"fc-async-dock-{int(time.time())}-{uuid.uuid4().hex[:6]}"
 
 
 @pytest.fixture(scope="module")
-def dock_submit(client, task_id, bootstrap_uris):
+def dock_submit(client, task_id):
     return client.post(
         "/api/tasks/dock",
-        data={**TINY, **bootstrap_uris},
+        files=_files(),
+        data=TINY,
         headers=_async_headers(task_id),
     )
 
@@ -177,12 +162,13 @@ class TestJobLifecycle:
 
 @pytest.mark.fc
 class TestAsyncDuplicateDedup:
-    def test_duplicate_does_not_rerun(self, client, task_id, dock_task, bootstrap_uris):
+    def test_duplicate_does_not_rerun(self, client, task_id, dock_task):
         first_created = dock_task["created_at"]
         first_completed = dock_task["completed_at"]
         r2 = client.post(
             "/api/tasks/dock",
-            data={**TINY, **bootstrap_uris, "top": "1"},  # different — must not take effect
+            files=_files(),
+            data={**TINY, "top": "1"},  # different — must not take effect
             headers=_async_headers(task_id),
         )
         assert r2.status_code in (202, 409), f"got {r2.status_code} {r2.text!r}"

@@ -5,9 +5,9 @@ Marked ``@pytest.mark.fc``, skipped by default. Run with::
     RUN_FC_TESTS=1 \\
     uv run python -m pytest -m fc services/lightdock-server/tests/test_fc.py -v
 
-Fixtures ship in tests/data/ (2UUY receptor/ligand from LightDock's own test
-data) so the suite is self-contained. Sampling is kept tiny (swarms=2,
-glowworms=5, steps=3) so a docking run finishes in minutes, not hours.
+Fixtures ship in tests/data/ (1czy protein-peptide receptor/ligand from
+LightDock's own test data) so the suite is self-contained. Sampling is kept
+tiny (swarms=2, glowworms=5, steps=3) so a docking run finishes in seconds.
 """
 
 from __future__ import annotations

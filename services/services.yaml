@@ -145,11 +145,11 @@ services:
   # plip-server: CPU protein-ligand interaction profiler. Not deployed yet — fill
   # url + function after the first FC deploy (see
   # engineering/decisions/2026-07-15-plip-server-design.md).
-  # plip-server:
-  #   url: https://fc-plip-XXXXXX.cn-hangzhou-vpc.fcapp.run
-  #   tier: cold
-  #   function: fc_plip
-  #   oss_mount: true
+  plip-server:
+    url: https://fc-plip-atfulbgmxg.cn-hangzhou-vpc.fcapp.run
+    tier: cold
+    function: fc_plip
+    oss_mount: true
   openbpmd-server:
     url: https://fc-openbpmd-acghosooxo.cn-hangzhou-vpc.fcapp.run
     tier: warm
@@ -189,8 +189,8 @@ services:
   # Swarm Optimization). No weights, no license gate. Not deployed yet — fill
   # url + function after the first FC deploy (see
   # engineering/decisions/2026-07-15-lightdock-server-design.md).
-  # lightdock-server:
-  #   url: https://fc-lightdock-XXXXXX.cn-hangzhou-vpc.fcapp.run
-  #   tier: cold
-  #   function: fc_lightdock
-  #   oss_mount: true
+  lightdock-server:
+    url: https://fc-lightdock-nucigfgofk.cn-hangzhou-vpc.fcapp.run
+    tier: cold
+    function: fc_lightdock
+    oss_mount: true

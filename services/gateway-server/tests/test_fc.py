@@ -270,7 +270,12 @@ def _run_poll_zip(
     status: dict = {}
     deadline = time.time() + poll_timeout_s
     while time.time() < deadline:
-        status = client.get(f"/v1/jobs/{job_id}").json()
+        try:
+            status = client.get(f"/v1/jobs/{job_id}").json()
+        except httpx.TransportError as exc:  # transient network blip mid-poll
+            print(f"[poll] transient error for {job_id}, retrying: {exc!r}")
+            time.sleep(poll_interval_s)
+            continue
         if status["status"] in ("completed", "failed", "cancelled"):
             break
         time.sleep(poll_interval_s)
@@ -903,8 +908,11 @@ class TestEndToEndIgGM:
         fasta_uri = _upload_via_presign(
             client, job_id, "complex.fasta", _fixture("iggm-server", "complex.fasta")
         )
+        # complex.fasta chain A matches complex.pdb (not antigen.pdb, whose chain A
+        # is a different RBD variant); cal_ppi loads the receptor chain with the
+        # fasta sequence, so the structure and fasta must be the same complex.
         antigen_uri = _upload_via_presign(
-            client, job_id, "antigen.pdb", _fixture("iggm-server", "antigen.pdb")
+            client, job_id, "complex.pdb", _fixture("iggm-server", "complex.pdb")
         )
         content = _run_poll_zip(
             client, svc="iggm-server", endpoint="epitope", job_id=job_id,
