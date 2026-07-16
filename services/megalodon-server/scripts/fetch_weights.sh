@@ -1,56 +1,72 @@
 #!/usr/bin/env bash
-# Stage Megalodon checkpoints (+ optional statistics bundle) into the NAS
-# layout the service expects.
+# Stage EVERYTHING Megalodon needs (checkpoints + statistics) into the NAS
+# layout the service expects — with ONE command:
+#
+#     ./scripts/fetch_weights.sh
+#
+# By default this fetches BOTH datasets (qm9 + drugs) AND BOTH artifact kinds
+# (checkpoints + statistics). The statistics bundle is NOT distributed as files,
+# so this script produces it the only supported way: download the raw dataset
+# and run the upstream preprocessing (data_processing/process_{qm9,geom}.py),
+# then copy the resulting statistics into place. Everything lands under <DST>.
 #
 # Target NAS layout (matches settings.MegalodonSettings + design doc §6):
 #   <DST>/ckpts/<dataset>/*.ckpt          # <dataset> = qm9 | drugs
 #   <DST>/stats/<dataset>/<statistics files>
+#   <DST>/_staging/<dataset>/{raw,proc}   # intermediates (raw + processed/)
 #
 # The service reads this at MEGALODON_WEIGHTS_DIR — see
-# services/megalodon-server/settings.py.
+# services/megalodon-server/settings.py. Verify with:
+#   GET /healthz/detail -> models.<name>.ready == true
 #
 # ---------------------------------------------------------------------------
-# CHECKPOINTS (default step) — HuggingFace, checkpoints only
+# QUICK START
 # ---------------------------------------------------------------------------
-# Source repos (each contains only *.ckpt + README — NO statistics).
-# NOTE: the diffusion checkpoint filename DIFFERS per dataset.
+#   # Everything (ckpts + stats, qm9 + drugs) straight to NAS, using the
+#   # megalodon conda env's python for the preprocessing step:
+#   MEGALODON_PY=/opt/conda/envs/megalodon/bin/python \
+#   WEIGHTS_DST=/mnt/nas/data/models/megalodon \
+#       ./scripts/fetch_weights.sh
+#
+#   # Only qm9 (drugs still downloading elsewhere):
+#   MEGALODON_MODELS=qm9 ./scripts/fetch_weights.sh
+#
+#   # Checkpoints only (skip the heavy stats preprocessing):
+#   MEGALODON_FETCH_STATS=0 ./scripts/fetch_weights.sh
+#
+#   # Stats only (checkpoints already staged):
+#   MEGALODON_FETCH_CKPTS=0 ./scripts/fetch_weights.sh
+#
+#   # Delete the multi-GB raw/processed intermediates after staging:
+#   MEGALODON_CLEAN_STAGING=1 ./scripts/fetch_weights.sh
+#
+# ---------------------------------------------------------------------------
+# WHAT EACH STEP NEEDS
+# ---------------------------------------------------------------------------
+# CHECKPOINTS (MEGALODON_FETCH_CKPTS=1, default) — HuggingFace, checkpoints only:
 #   nvidia/NV-Megalodon-QM9-v1        -> ckpts/qm9/
 #     megalodon_diffusion.ckpt, megalodon_fm.ckpt, megalodon_small_diffusion.ckpt
 #   nvidia/NV-Megalodon-GEOM-Drugs-v1 -> ckpts/drugs/
 #     megalodon_large_diffusion.ckpt, megalodon_fm.ckpt, megalodon_small_diffusion.ckpt
+#   The model_name -> (dataset, ckpt file) mapping (see models.MODEL_REGISTRY):
+#     qm9_diffusion -> qm9/megalodon_diffusion.ckpt
+#     drugs_diffusion -> drugs/megalodon_large_diffusion.ckpt
+#     {qm9,drugs}_fm -> <dataset>/megalodon_fm.ckpt
+#     {qm9,drugs}_quick -> <dataset>/megalodon_small_diffusion.ckpt
+#   Needs `hf` (pip install -U huggingface_hub) OR a pre-downloaded snapshot dir
+#   via MEGALODON_QM9_SRC / MEGALODON_DRUGS_SRC.
 #
-# The service's model_name -> (dataset, ckpt file) mapping is:
-#   qm9_diffusion   -> qm9/megalodon_diffusion.ckpt
-#   drugs_diffusion -> drugs/megalodon_large_diffusion.ckpt
-#   {qm9,drugs}_fm    -> <dataset>/megalodon_fm.ckpt
-#   {qm9,drugs}_quick -> <dataset>/megalodon_small_diffusion.ckpt
-#
-# Two ways to provide the checkpoints:
-#   (a) point at pre-downloaded HF snapshot dirs (recommended — you already
-#       downloaded on the server):
-#         MEGALODON_QM9_SRC=/path/to/NV-Megalodon-QM9-v1 \
-#         MEGALODON_DRUGS_SRC=/path/to/NV-Megalodon-GEOM-Drugs-v1 \
-#             ./scripts/fetch_weights.sh
-#   (b) let the script download via hf (needs `pip install -U
-#       huggingface_hub` and network):
-#         ./scripts/fetch_weights.sh          # downloads both repos
-#
-# Direct to NAS:
-#   WEIGHTS_DST=/mnt/nas/data/models/megalodon ./scripts/fetch_weights.sh
-#
-# Subset (qm9 only — drugs still downloading):
-#   MEGALODON_MODELS="qm9" MEGALODON_QM9_SRC=/path/to/qm9 ./scripts/fetch_weights.sh
-#
-# ---------------------------------------------------------------------------
-# STATISTICS (optional step, MEGALODON_FETCH_STATS=1)
-# ---------------------------------------------------------------------------
-# The HF repos ship checkpoints ONLY. Sampling + the full metric suite need a
-# per-dataset statistics bundle, which is NOT distributed — it is produced by
-# the upstream preprocessing scripts (data_processing/). This is a heavy,
-# one-time offline job (downloads GB-scale raw GEOM-Drugs / QM9, runs the
-# `megalodon` conda env). Run it explicitly with MEGALODON_FETCH_STATS=1 and
-# MEGALODON_STATS_SRC pointing at an already-processed `processed/` dir, OR
-# read the documented commands below and run preprocessing yourself.
+# STATISTICS (MEGALODON_FETCH_STATS=1, default) — raw download + preprocessing:
+#   qm9:   qm9.zip (deepchem S3) -> gdb9.sdf -> process_qm9.py  -> processed/
+#   drugs: geom_raw/ (bits.csb.pitt.edu, tens of GB) -> process_geom.py -> processed/
+#   Preprocessing runs with MEGALODON_PY (a python that can import torch, rdkit,
+#   torch_geometric, pandas — i.e. the `megalodon` conda env). Needs `wget` and,
+#   for qm9, `unzip`. Model init itself loads train_atom_types_h.npy as a prior,
+#   so stats are REQUIRED, not just for metrics.
+#   Shortcut: if you already have a processed/ dir, skip the download+compute:
+#     MEGALODON_STATS_SRC_QM9=/path/to/qm9_data/processed \
+#     MEGALODON_STATS_SRC_DRUGS=/path/to/drugs_data/processed \
+#         ./scripts/fetch_weights.sh
 #
 # See design doc §6 / §12 risk 1 for the full rationale.
 set -euo pipefail
@@ -58,17 +74,37 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DST="${WEIGHTS_DST:-$SCRIPT_DIR/../weights}"
 REQ="${MEGALODON_MODELS:-qm9,drugs}"
-FETCH_STATS="${MEGALODON_FETCH_STATS:-0}"
+FETCH_CKPTS="${MEGALODON_FETCH_CKPTS:-1}"
+FETCH_STATS="${MEGALODON_FETCH_STATS:-1}"
+CLEAN_STAGING="${MEGALODON_CLEAN_STAGING:-0}"
+
+# Python that can run the upstream preprocessing (torch + rdkit + torch_geometric
+# + pandas). Prefers MEGALODON_PY, then the image's MEGALODON_PYTHON (set in the
+# Dockerfile to the megalodon conda env), then `python`.
+PREPROCESS_PY="${MEGALODON_PY:-${MEGALODON_PYTHON:-python}}"
+# Upstream preprocessing scripts live here (vendored into the image/repo).
+DATA_PROC_DIR="${MEGALODON_DATA_PROC_DIR:-$SCRIPT_DIR/../upstream/data_processing}"
+# Where raw + processed intermediates live (under DST so it's all in one place).
+STAGING="${MEGALODON_STAGING_DIR:-$DST/_staging}"
+
+# Raw dataset sources (documented upstream recipe).
+QM9_ZIP_URL="https://deepchemdata.s3-us-west-1.amazonaws.com/datasets/molnet_publish/qm9.zip"
+GEOM_RAW_URL="https://bits.csb.pitt.edu/files/geom_raw/"
 
 # HF repo per dataset kind.
 declare -A HF_REPO=(
     [qm9]="nvidia/NV-Megalodon-QM9-v1"
     [drugs]="nvidia/NV-Megalodon-GEOM-Drugs-v1"
 )
-# Pre-downloaded HF snapshot dir per dataset (skip download if set).
+# Pre-downloaded HF snapshot dir per dataset (skip ckpt download if set).
 declare -A SRC_DIR=(
     [qm9]="${MEGALODON_QM9_SRC:-}"
     [drugs]="${MEGALODON_DRUGS_SRC:-}"
+)
+# Pre-processed `processed/` dir per dataset (skip raw download + preprocess).
+declare -A STATS_SRC=(
+    [qm9]="${MEGALODON_STATS_SRC_QM9:-}"
+    [drugs]="${MEGALODON_STATS_SRC_DRUGS:-}"
 )
 
 # Canonical checkpoint file names per dataset (diffusion name differs).
@@ -77,73 +113,8 @@ declare -A EXPECTED_CKPTS=(
     [drugs]="megalodon_large_diffusion.ckpt megalodon_fm.ckpt megalodon_small_diffusion.ckpt"
 )
 
-IFS=',' read -r -a MODELS <<< "$REQ"
-
-# ---------------------------------------------------------------------------
-# 1. Checkpoints -> <DST>/ckpts/<dataset>/
-# ---------------------------------------------------------------------------
-echo "Staging Megalodon checkpoints under $DST/ckpts"
-for ds in "${MODELS[@]}"; do
-    ds="$(echo "$ds" | xargs)"; [[ -z "$ds" ]] && continue
-    if [[ -z "${HF_REPO[$ds]:-}" ]]; then
-        echo "ERROR: unknown dataset '$ds' (want qm9 | drugs)" >&2; exit 1
-    fi
-    echo ""
-    echo "===  $ds  (${HF_REPO[$ds]})  ==="
-
-    src="${SRC_DIR[$ds]}"
-    if [[ -z "$src" ]]; then
-        # Download the HF snapshot into a staging dir.
-        if ! command -v hf >/dev/null 2>&1; then
-            echo "ERROR: hf not found and MEGALODON_${ds^^}_SRC unset." >&2
-            echo "       Install (pip install -U huggingface_hub) or point at a" >&2
-            echo "       pre-downloaded snapshot dir." >&2
-            exit 1
-        fi
-        src="$DST/_hf_$ds"
-        echo "Downloading ${HF_REPO[$ds]} -> $src"
-        hf download "${HF_REPO[$ds]}" \
-            --local-dir "$src"
-    else
-        echo "Using pre-downloaded snapshot: $src"
-    fi
-    if [[ ! -d "$src" ]]; then
-        echo "ERROR: source dir not found: $src" >&2; exit 1
-    fi
-
-    dst_ckpt="$DST/ckpts/$ds"
-    mkdir -p "$dst_ckpt"
-
-    # Copy every *.ckpt (preserve names; the service maps names -> variants).
-    shopt -s nullglob
-    found=0
-    for f in "$src"/*.ckpt "$src"/**/*.ckpt; do
-        [[ -f "$f" ]] || continue
-        cp -f "$f" "$dst_ckpt/$(basename "$f")"
-        echo "  + $(basename "$f")"
-        found=$((found + 1))
-    done
-    shopt -u nullglob
-    if [[ "$found" -eq 0 ]]; then
-        echo "ERROR: no *.ckpt found under $src" >&2; exit 1
-    fi
-
-    # Warn on any missing canonical name for this dataset (non-fatal).
-    for want in ${EXPECTED_CKPTS[$ds]}; do
-        [[ -f "$dst_ckpt/$want" ]] || echo "  WARN: expected $want not present in $ds" >&2
-    done
-    du -sh "$dst_ckpt"
-done
-
-# ---------------------------------------------------------------------------
-# 2. Statistics bundle -> <DST>/stats/<dataset>/  (optional, heavy)
-# ---------------------------------------------------------------------------
 # save_statistics (data_processing/utils_data.py) writes ALL of these into
-# <processed>/ automatically, including train_charges_prior_h.npy and
-# train_n_h.pickle. The only extra step is the drugs flow-matching config,
-# which references train_charges_prior.npy (no _h) — that is the SAME marginal
-# as train_charges_prior_h.npy (identical (charge_types*atom_types).sum(0)
-# formula), so we copy it.
+# processed/. The service reads them from <DST>/stats/<dataset>/.
 STATS_FILES=(
     train_n_h.pickle
     train_atom_types_h.npy train_bond_types_h.npy train_charges_h.npy
@@ -153,9 +124,124 @@ STATS_FILES=(
     train_bond_lengths_h.pickle train_angles_h.pickle train_dihedrals_h.pickle
 )
 
+IFS=',' read -r -a MODELS <<< "$REQ"
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+
+# ---------------------------------------------------------------------------
+# Checkpoints -> <DST>/ckpts/<dataset>/
+# ---------------------------------------------------------------------------
+stage_ckpts() {
+    local ds="$1"
+    echo ""
+    echo "=== ckpts: $ds  (${HF_REPO[$ds]}) ==="
+
+    local src="${SRC_DIR[$ds]}"
+    if [[ -z "$src" ]]; then
+        if ! command -v hf >/dev/null 2>&1; then
+            die "hf not found and MEGALODON_${ds^^}_SRC unset. Install (pip install
+       -U huggingface_hub) or point at a pre-downloaded snapshot dir."
+        fi
+        src="$DST/_hf_$ds"
+        echo "Downloading ${HF_REPO[$ds]} -> $src"
+        hf download "${HF_REPO[$ds]}" --local-dir "$src"
+    else
+        echo "Using pre-downloaded snapshot: $src"
+    fi
+    [[ -d "$src" ]] || die "source dir not found: $src"
+
+    local dst_ckpt="$DST/ckpts/$ds"
+    mkdir -p "$dst_ckpt"
+
+    shopt -s nullglob
+    local found=0 f
+    for f in "$src"/*.ckpt "$src"/**/*.ckpt; do
+        [[ -f "$f" ]] || continue
+        cp -f "$f" "$dst_ckpt/$(basename "$f")"
+        echo "  + $(basename "$f")"
+        found=$((found + 1))
+    done
+    shopt -u nullglob
+    [[ "$found" -gt 0 ]] || die "no *.ckpt found under $src"
+
+    local want
+    for want in ${EXPECTED_CKPTS[$ds]}; do
+        [[ -f "$dst_ckpt/$want" ]] || echo "  WARN: expected $want not present in $ds" >&2
+    done
+    du -sh "$dst_ckpt"
+}
+
+# ---------------------------------------------------------------------------
+# Raw dataset download (idempotent) -> <raw_dir>
+# ---------------------------------------------------------------------------
+download_qm9_raw() {
+    local raw_dir="$1"
+    if [[ -f "$raw_dir/gdb9.sdf" ]]; then
+        echo "  raw present: $raw_dir/gdb9.sdf"; return
+    fi
+    command -v wget >/dev/null 2>&1 || die "wget not found (needed for qm9 raw download)"
+    command -v unzip >/dev/null 2>&1 || die "unzip not found (needed for qm9.zip)"
+    mkdir -p "$raw_dir"
+    echo "  downloading qm9.zip -> $raw_dir"
+    ( cd "$raw_dir" && wget -q --show-progress -O qm9.zip "$QM9_ZIP_URL" \
+        && unzip -o qm9.zip && rm -f qm9.zip )
+    [[ -f "$raw_dir/gdb9.sdf" ]] || die "gdb9.sdf missing after unzip in $raw_dir"
+}
+
+download_geom_raw() {
+    local raw_dir="$1"
+    if [[ -f "$raw_dir/train_data.pickle" ]]; then
+        echo "  raw present: $raw_dir/train_data.pickle"; return
+    fi
+    command -v wget >/dev/null 2>&1 || die "wget not found (needed for geom raw download)"
+    mkdir -p "$raw_dir"
+    echo "  downloading GEOM raw (tens of GB) -> $raw_dir"
+    ( cd "$raw_dir" && wget -r -np -nH --cut-dirs=2 --reject "index.html*" "$GEOM_RAW_URL" )
+    local want
+    for want in train_data.pickle val_data.pickle test_data.pickle; do
+        [[ -f "$raw_dir/$want" ]] || die "GEOM raw missing $want in $raw_dir"
+    done
+}
+
+# ---------------------------------------------------------------------------
+# Preprocessing (idempotent) -> <save_folder>/processed/
+# ---------------------------------------------------------------------------
+_preprocess_done() { [[ -f "$1/processed/train_atom_types_h.npy" ]]; }
+
+run_preprocess_qm9() {
+    local raw_dir="$1" save_folder="$2"
+    if _preprocess_done "$save_folder"; then
+        echo "  processed present: $save_folder/processed"; return
+    fi
+    echo "  preprocessing qm9 (process_qm9.py) ..."
+    ( cd "$DATA_PROC_DIR" && "$PREPROCESS_PY" process_qm9.py \
+        --qm9_sdf_path "$raw_dir/gdb9.sdf" --save_data_folder "$save_folder" )
+}
+
+run_preprocess_geom() {
+    local raw_dir="$1" save_folder="$2"
+    if _preprocess_done "$save_folder"; then
+        echo "  processed present: $save_folder/processed"; return
+    fi
+    echo "  preprocessing drugs (process_geom.py) ..."
+    ( cd "$DATA_PROC_DIR" && "$PREPROCESS_PY" process_geom.py \
+        --raw_data_dir "$raw_dir" --save_data_folder "$save_folder" )
+}
+
+# ---------------------------------------------------------------------------
+# Statistics staging -> <DST>/stats/<dataset>/
+# ---------------------------------------------------------------------------
+_stats_staged() {
+    local ds="$1" dst_stats="$DST/stats/$ds" f
+    for f in "${STATS_FILES[@]}"; do
+        [[ -f "$dst_stats/$f" ]] || return 1
+    done
+    return 0
+}
+
 stage_stats() {
     local ds="$1" processed="$2"
-    local dst_stats="$DST/stats/$ds"
+    local dst_stats="$DST/stats/$ds" f
     mkdir -p "$dst_stats"
     for f in "${STATS_FILES[@]}"; do
         if [[ -f "$processed/$f" ]]; then
@@ -164,7 +250,8 @@ stage_stats() {
             echo "  WARN: $processed/$f missing" >&2
         fi
     done
-    # drugs flow-matching variant expects train_charges_prior.npy (no _h).
+    # drugs flow-matching variant expects train_charges_prior.npy (no _h) — the
+    # SAME marginal as train_charges_prior_h.npy.
     if [[ "$ds" == "drugs" && -f "$dst_stats/train_charges_prior_h.npy" ]]; then
         cp -f "$dst_stats/train_charges_prior_h.npy" "$dst_stats/train_charges_prior.npy"
         echo "  + train_charges_prior.npy (copy of _h; drugs_fm config)"
@@ -173,52 +260,91 @@ stage_stats() {
     du -sh "$dst_stats"
 }
 
-if [[ "$FETCH_STATS" == "1" ]]; then
+# Orchestrate the stats path for one dataset: pre-processed override -> stage;
+# already staged -> skip; otherwise download raw + preprocess + stage.
+ensure_stats() {
+    local ds="$1"
     echo ""
-    echo "Staging statistics bundle under $DST/stats"
+    echo "=== stats: $ds ==="
+
+    local processed="${STATS_SRC[$ds]}"
+    if [[ -n "$processed" ]]; then
+        [[ -d "$processed" ]] || die "MEGALODON_STATS_SRC_${ds^^}=$processed not a dir"
+        echo "  using pre-processed dir: $processed"
+        stage_stats "$ds" "$processed"
+        return
+    fi
+
+    if _stats_staged "$ds"; then
+        echo "  already staged under $DST/stats/$ds — skipping"
+        return
+    fi
+
+    [[ -d "$DATA_PROC_DIR" ]] || die "data_processing dir not found: $DATA_PROC_DIR
+       (set MEGALODON_DATA_PROC_DIR to the upstream data_processing path)."
+
+    local base="$STAGING/$ds"
+    local raw_dir="$base/raw" proc_dir="$base/proc"
+    mkdir -p "$raw_dir" "$proc_dir"
+
+    case "$ds" in
+        qm9)
+            download_qm9_raw "$raw_dir"
+            run_preprocess_qm9 "$raw_dir" "$proc_dir"
+            ;;
+        drugs)
+            download_geom_raw "$raw_dir"
+            run_preprocess_geom "$raw_dir" "$proc_dir"
+            ;;
+        *) die "unknown dataset '$ds'";;
+    esac
+
+    stage_stats "$ds" "$proc_dir/processed"
+
+    if [[ "$CLEAN_STAGING" == "1" ]]; then
+        echo "  cleaning staging: $base"
+        rm -rf "$base"
+    fi
+}
+
+# Preflight: fail fast BEFORE a multi-GB download if the preprocessing env is
+# wrong (only when we actually need to preprocess).
+preflight_preprocess_env() {
+    local need_preprocess=0 ds
     for ds in "${MODELS[@]}"; do
         ds="$(echo "$ds" | xargs)"; [[ -z "$ds" ]] && continue
-        echo ""
-        echo "===  stats: $ds  ==="
-        # MEGALODON_STATS_SRC_<DS> points at an already-processed `processed/`
-        # dir. If unset, print the preprocessing recipe and skip.
-        var="MEGALODON_STATS_SRC_${ds^^}"
-        processed="${!var:-}"
-        if [[ -n "$processed" && -d "$processed" ]]; then
-            stage_stats "$ds" "$processed"
-        else
-            echo "  $var unset — no processed/ dir to stage from." >&2
-            echo "  Produce it with the upstream env (one-time, heavy):" >&2
-            if [[ "$ds" == "drugs" ]]; then
-                cat >&2 <<'EOF'
-    conda activate megalodon
-    mkdir -p drugs_data/raw && cd drugs_data/raw
-    wget -r -np -nH --cut-dirs=2 --reject "index.html*" \
-        https://bits.csb.pitt.edu/files/geom_raw/
-    cd - && python opensource/megalodon/data_processing/process_geom.py \
-        --raw_data_dir drugs_data/raw --save_data_folder drugs_data
-    # then re-run: MEGALODON_FETCH_STATS=1 MEGALODON_STATS_SRC_DRUGS=drugs_data/processed \
-    #     MEGALODON_MODELS=drugs ./scripts/fetch_weights.sh
-EOF
-            else
-                cat >&2 <<'EOF'
-    conda activate megalodon
-    mkdir -p qm9_data/raw && cd qm9_data/raw
-    wget https://deepchemdata.s3-us-west-1.amazonaws.com/datasets/molnet_publish/qm9.zip
-    unzip qm9.zip && rm qm9.zip
-    cd - && python opensource/megalodon/data_processing/process_qm9.py \
-        --qm9_sdf_path qm9_data/raw/gdb9.sdf --save_data_folder qm9_data
-    # then re-run: MEGALODON_FETCH_STATS=1 MEGALODON_STATS_SRC_QM9=qm9_data/processed \
-    #     MEGALODON_MODELS=qm9 ./scripts/fetch_weights.sh
-EOF
-            fi
-        fi
+        [[ -n "${STATS_SRC[$ds]:-}" ]] && continue
+        _stats_staged "$ds" && continue
+        need_preprocess=1
     done
-else
-    echo ""
-    echo "Statistics NOT staged (MEGALODON_FETCH_STATS!=1)."
-    echo "Sampling + metrics need <DST>/stats/<dataset>/ — see this script's header."
-fi
+    [[ "$need_preprocess" == "0" ]] && return
+    if ! "$PREPROCESS_PY" -c "import torch, rdkit, torch_geometric, pandas" 2>/dev/null; then
+        die "MEGALODON_PY=$PREPROCESS_PY cannot import torch/rdkit/torch_geometric/pandas.
+       Point MEGALODON_PY at the megalodon conda env, e.g.
+       MEGALODON_PY=/opt/conda/envs/megalodon/bin/python, or provide a
+       pre-processed dir via MEGALODON_STATS_SRC_<DS> / skip with
+       MEGALODON_FETCH_STATS=0."
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+for ds in "${MODELS[@]}"; do
+    ds="$(echo "$ds" | xargs)"; [[ -z "$ds" ]] && continue
+    [[ -n "${HF_REPO[$ds]:-}" ]] || die "unknown dataset '$ds' (want qm9 | drugs)"
+done
+
+echo "Staging Megalodon artifacts under $DST"
+echo "  datasets: $REQ | ckpts: $FETCH_CKPTS | stats: $FETCH_STATS"
+
+[[ "$FETCH_STATS" == "1" ]] && preflight_preprocess_env
+
+for ds in "${MODELS[@]}"; do
+    ds="$(echo "$ds" | xargs)"; [[ -z "$ds" ]] && continue
+    [[ "$FETCH_CKPTS" == "1" ]] && stage_ckpts "$ds"
+    [[ "$FETCH_STATS" == "1" ]] && ensure_stats "$ds"
+done
 
 echo ""
 echo "Done. NAS layout under $DST:"
@@ -226,4 +352,4 @@ echo "Done. NAS layout under $DST:"
 [[ -d "$DST/stats" ]] && du -sh "$DST"/stats/* 2>/dev/null | sed 's/^/  /'
 echo ""
 echo "rsync to NAS:  rsync -av $DST/ <nas>:/data/models/megalodon/"
-echo "Verify:        GET /healthz/detail -> weights_loaded=true"
+echo "Verify:        GET /healthz/detail -> models.<name>.ready == true"
