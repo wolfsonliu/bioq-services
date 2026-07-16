@@ -1818,7 +1818,7 @@ class TestEndToEndReinvent:
                 "save_every_n_epochs": 1,
                 "batch_size": 10,
                 "num_refs": 0,
-                "sample_batch_size": 10,
+                # sample_batch_size omitted → default 100 (upstream enforces ge=100).
             },
             output_suffixes=(".model",), poll_timeout_s=1800,
         )

@@ -93,10 +93,12 @@ def build_enumeration_config(p: dict, output_dir: Path, prior_base: Path) -> dic
         "parameters": {
             "batch_size": p["batch_size"],
             "smiles_file": p["smiles_file"],
-            # Upstream aa_enumerator.py + validation.py read amino_acid_library_file;
-            # the shipped example config's `amino_acid_library` key is stale.
+            # Upstream enumeration/validation.py::SectionParameters (extra="forbid")
+            # reads amino_acid_library_file + aa_names_column; the shipped example
+            # config's `amino_acid_library` / `amino_acid_name_column` keys are
+            # stale and get rejected outright (ValidationError → empty output).
             "amino_acid_library_file": p["amino_acid_library_file"],
-            "amino_acid_name_column": p["amino_acid_name_column"],
+            "aa_names_column": p["amino_acid_name_column"],
             "smiles_column": p["smiles_column"],
             "output_csv": str(output_dir / "peptide_enumeration.csv"),
         },

@@ -71,7 +71,10 @@ class TransferLearningRequest(BaseModel):
     save_every_n_epochs: int = Field(default=1, ge=1)
     batch_size: int = Field(default=50, ge=1)
     num_refs: int = Field(default=100, ge=0)
-    sample_batch_size: int = Field(default=100, ge=1)
+    # Upstream TL/validation.py::SectionParameters enforces ge=100; reject smaller
+    # at the API boundary rather than failing deep in the run (FC async masks that
+    # as "completed", leaving an empty-output job).
+    sample_batch_size: int = Field(default=100, ge=100)
     pairs: Optional[dict] = Field(
         default=None, description="Mol2Mol similarity pairing (JSON), → pairs.* in [parameters].",
     )

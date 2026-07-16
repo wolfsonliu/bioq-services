@@ -80,9 +80,11 @@ def test_build_enumeration_config(tmp_path):
     par = cfg["parameters"]
     assert par["batch_size"] == 20
     assert par["smiles_file"] == "/work/peptide.smi"
-    # upstream code reads amino_acid_library_file (NOT amino_acid_library)
+    # upstream SectionParameters (extra="forbid") reads amino_acid_library_file
+    # (NOT amino_acid_library) and aa_names_column (NOT amino_acid_name_column).
     assert par["amino_acid_library_file"] == "/work/library.csv"
-    assert par["amino_acid_name_column"] == "Name"
+    assert par["aa_names_column"] == "Name"
+    assert "amino_acid_name_column" not in par
     assert par["output_csv"] == str(tmp_path / "peptide_enumeration.csv")
     assert cfg["scoring"]["type"] == "geometric_mean"
 
