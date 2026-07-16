@@ -82,8 +82,19 @@ CLEAN_STAGING="${MEGALODON_CLEAN_STAGING:-0}"
 # + pandas). Prefers MEGALODON_PY, then the image's MEGALODON_PYTHON (set in the
 # Dockerfile to the megalodon conda env), then `python`.
 PREPROCESS_PY="${MEGALODON_PY:-${MEGALODON_PYTHON:-python}}"
-# Upstream preprocessing scripts live here (vendored into the image/repo).
-DATA_PROC_DIR="${MEGALODON_DATA_PROC_DIR:-$SCRIPT_DIR/../upstream/data_processing}"
+# Upstream preprocessing scripts (process_qm9.py / process_geom.py) live in the
+# vendored upstream tree. Resolve to the repo checkout when run from the repo, or
+# to /opt/megalodon/data_processing when run inside the image — both are the same
+# vendored upstream. Override with MEGALODON_DATA_PROC_DIR.
+if [[ -n "${MEGALODON_DATA_PROC_DIR:-}" ]]; then
+    DATA_PROC_DIR="$MEGALODON_DATA_PROC_DIR"
+else
+    DATA_PROC_DIR="$SCRIPT_DIR/../upstream/data_processing"
+    for _cand in "$SCRIPT_DIR/../upstream/data_processing" \
+                 "${MEGALODON_ROOT:-/opt/megalodon}/data_processing"; do
+        if [[ -d "$_cand" ]]; then DATA_PROC_DIR="$_cand"; break; fi
+    done
+fi
 # Where raw + processed intermediates live (under DST so it's all in one place).
 STAGING="${MEGALODON_STAGING_DIR:-$DST/_staging}"
 
