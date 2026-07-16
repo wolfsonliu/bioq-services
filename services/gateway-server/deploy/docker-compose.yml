@@ -7,6 +7,10 @@
 #   GATEWAY_REGISTRY_PATH=/opt/gateway/services.yaml
 #   GATEWAY_SESSION_HEADER_NAME=bioagent-session-id
 # so only secrets + OSS/JWT config need to be supplied via .env.
+#
+# The service registry (/opt/gateway/services.yaml) is bind-mounted from the
+# repo's services.yaml below, so registry edits apply on `docker compose restart
+# gateway` without an image rebuild.
 services:
   gateway:
     image: ${GATEWAY_IMAGE:-gateway-server:latest}
@@ -19,6 +23,13 @@ services:
     volumes:
       # Persistent state: SQLite DB (/data/gateway) + job scratch (/data/gateway_jobs).
       - ${GATEWAY_DATA_DIR:-./data}:/data
+      # Downstream service registry — bind-mounted from the repo's canonical
+      # services.yaml (single source of truth) so adding/updating a service only
+      # needs an edit + `docker compose restart gateway`, NOT an image rebuild.
+      # The Dockerfile still bakes a copy as a standalone fallback; this mount
+      # overrides it. The registry loads at startup, so restart to apply. Set
+      # GATEWAY_REGISTRY_FILE if the repo isn't checked out at ../../services.yaml.
+      - ${GATEWAY_REGISTRY_FILE:-../../services.yaml}:/opt/gateway/services.yaml:ro
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:9000/healthz')\" || exit 1"]
       interval: 30s
