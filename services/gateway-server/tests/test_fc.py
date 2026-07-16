@@ -1884,3 +1884,32 @@ class TestEndToEndHaddock3:
             body={"structure_uri": structure_uri},
             output_suffixes=(".tbl",), poll_timeout_s=600,
         )
+
+
+@pytest.mark.fc
+@_needs
+class TestEndToEndLightDock:
+    """Full LightDock docking path through the gateway.
+
+    Two file inputs (receptor + ligand) uploaded via presign -> oss:// URIs;
+    the gateway rewrites them to /mnt/oss/... for the oss_mount downstream. Tiny
+    sampling (swarms=2, glowworms=5, steps=3) so the CPU dock finishes fast.
+    Asserts results.zip carries a ranked pose (output/top/top_1.pdb)."""
+
+    def test_dock_end_to_end(self, client):
+        job_id = uuid.uuid4().hex[:20]
+        receptor_uri = _upload_via_presign(
+            client, job_id, "receptor.pdb", _fixture("lightdock-server", "receptor.pdb")
+        )
+        ligand_uri = _upload_via_presign(
+            client, job_id, "ligand.pdb", _fixture("lightdock-server", "ligand.pdb")
+        )
+        _run_poll_download(
+            client, svc="lightdock-server", endpoint="dock", job_id=job_id,
+            body={
+                "receptor_uri": receptor_uri,
+                "ligand_uri": ligand_uri,
+                "swarms": 2, "glowworms": 5, "steps": 3, "top": 3,
+            },
+            output_suffixes=("top_1.pdb",), poll_timeout_s=900,
+        )
