@@ -1,0 +1,6 @@
+# runtime deployment state — never commit
+.env
+# gateway job scratch (+ legacy sqlite DB)
+data/
+# bundled postgres data files
+pgdata/

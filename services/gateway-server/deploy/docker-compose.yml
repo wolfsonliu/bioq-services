@@ -22,7 +22,12 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-gateway}
     volumes:
-      - gateway-pgdata:/var/lib/postgresql/data
+      # Host bind under deploy/ (like the job scratch) so the DB files are
+      # visible/backup-able alongside the deployment. PG 18+ stores data in a
+      # major-version subdir, so mount the parent /var/lib/postgresql — NOT
+      # .../data (see docker-library/postgres#1259). The image chowns the data
+      # subdir to the postgres uid on first init.
+      - ${GATEWAY_PG_DATA_DIR:-./pgdata}:/var/lib/postgresql
     # Not published by default — the gateway reaches it over the compose network
     # as host "postgres". Uncomment to expose for debugging (psql from the host).
     # ports:
@@ -69,8 +74,3 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
-
-volumes:
-  # Named volume for postgres data (survives `docker compose down`; remove with
-  # `docker compose down -v`). Docker manages permissions, unlike a host bind.
-  gateway-pgdata:

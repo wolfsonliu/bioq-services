@@ -37,8 +37,8 @@ uv run python -m uvicorn server.app:app --port 9000
 ## Database & migrations
 The user/credential + job store is SQLAlchemy. The **docker-compose deployment
 bundles a PostgreSQL 18 service** and points the gateway at it by default (URL
-auto-composed from the `POSTGRES_*` vars in `.env`; data persists in the
-`gateway-pgdata` volume). To use a **cloud/managed PostgreSQL** (or sqlite for a
+auto-composed from the `POSTGRES_*` vars in `.env`; data persists on the host
+under `deploy/pgdata/`). To use a **cloud/managed PostgreSQL** (or sqlite for a
 single node) instead, set `GATEWAY_DB_URL` in `.env` — it overrides the bundled URL:
 
 ```
