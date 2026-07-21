@@ -39,7 +39,10 @@ class GatewaySettings(ServiceSettings):
     jobs_base_dir: Path = Field(default=Path("/data/gateway_jobs"))
     task_endpoints_enabled: bool = False   # gateway has no /api/tasks of its own
 
-    # user/credential + job DB
+    # user/credential + job DB. Default is single-file SQLite (single instance).
+    # For HA / multi-instance, point GATEWAY_DB_URL at cloud PostgreSQL, e.g.
+    #   postgresql+psycopg://<user>:<pw>@<host>:5432/<db>?sslmode=require
+    # The store auto-applies connection-pool tuning for non-sqlite URLs.
     db_url: str = Field(default="sqlite:////data/gateway/gateway.db")
 
     # OSS for presigned upload/download

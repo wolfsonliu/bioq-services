@@ -16,6 +16,9 @@ def client(tmp_path, monkeypatch):
     import importlib
     import server.app as appmod
     importlib.reload(appmod)
+    # App startup no longer create_all()s (schema is Alembic-managed in prod);
+    # bootstrap the throwaway sqlite schema for the test.
+    appmod.app.state.db.create_all()
     return TestClient(appmod.app)
 
 

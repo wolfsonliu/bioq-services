@@ -24,9 +24,38 @@ Three-layer: VPC bypass (internal) → JWT (`Authorization: Bearer`) → API key
 
 ## Local dev
 ```bash
+# create/upgrade the schema first (alembic; app startup no longer create_all()s)
+cd services/gateway-server
+GATEWAY_DB_URL=sqlite:///$PWD/gw.db uv run alembic upgrade head
+cd -
+
 GATEWAY_DB_URL=sqlite:///$PWD/gw.db \
 GATEWAY_REGISTRY_PATH=$PWD/services/services.yaml \
 uv run python -m uvicorn server.app:app --port 9000
+```
+
+## Database & migrations
+The user/credential + job store is SQLAlchemy. The **docker-compose deployment
+bundles a PostgreSQL 18 service** and points the gateway at it by default (URL
+auto-composed from the `POSTGRES_*` vars in `.env`; data persists in the
+`gateway-pgdata` volume). To use a **cloud/managed PostgreSQL** (or sqlite for a
+single node) instead, set `GATEWAY_DB_URL` in `.env` — it overrides the bundled URL:
+
+```
+GATEWAY_DB_URL=postgresql+psycopg://<user>:<pw>@<host>:5432/<db>?sslmode=require
+```
+
+For **local dev** the default is single-file SQLite (`GATEWAY_DB_URL=sqlite:///...`).
+
+The store auto-applies connection-pool tuning (pre-ping + recycle, sized to the
+threadpool) for non-sqlite URLs. Schema is managed by **Alembic**, not
+`create_all()`: the container entrypoint runs `alembic upgrade head` (idempotent)
+before uvicorn, so deploys and restarts self-migrate. Add a schema change with:
+
+```bash
+cd services/gateway-server
+GATEWAY_DB_URL=sqlite:///$PWD/gw.db uv run alembic revision --autogenerate -m "<change>"
+# review the generated migrations/versions/*.py, then it applies on next deploy
 ```
 
 ## Deploy (ECS)
@@ -35,45 +64,47 @@ Deploy assets live in `deploy/` (docker-compose, persistent `/data` volume,
 
 ```bash
 cd services/gateway-server/deploy
-cp .env.example .env          # fill in OSS creds, bucket, optional JWT JWKS URL
+cp .env.example .env          # set POSTGRES_PASSWORD + OSS creds, bucket, optional JWT JWKS URL
 ./deploy.sh --build           # build image from repo root, then `docker compose up -d`
 ```
 
-`.env` supplies secrets + config: `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET`,
-`GATEWAY_OSS_BUCKET`, `GATEWAY_OSS_REGION`, and (for external JWT access)
-`GATEWAY_AUTH__JWT_JWKS_URL`. `.env` is gitignored. The image already sets the
-DB/registry/session defaults, so those need not be repeated.
+`.env` supplies secrets + config: `POSTGRES_PASSWORD` (for the bundled postgres),
+`OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET`, `GATEWAY_OSS_BUCKET`,
+`GATEWAY_OSS_REGION`, and (for external JWT access) `GATEWAY_AUTH__JWT_JWKS_URL`.
+`.env` is gitignored. `docker compose up` starts a **PostgreSQL 18** service, waits
+for it to be healthy, then the gateway entrypoint runs `alembic upgrade head`
+before uvicorn — so the schema is created/updated automatically. Point
+`GATEWAY_DB_URL` at an external DB in `.env` to bypass the bundled postgres (see
+[Database & migrations](#database--migrations)).
 
 ## Users & API keys
-Users and API keys live in the gateway's SQLite DB (`/data/gateway/gateway.db`,
-tables `users` / `api_keys`). `key_id` **is** the principal jobs are owned by;
-the secret is stored only as a sha256 hash. There is no admin UI (MVP) — seed
-keys with the stdlib-only helper `scripts/seed_key.py`.
+Users and API keys live in the gateway's DB (tables `users` / `api_keys`).
+`key_id` **is** the principal jobs are owned by; the secret is stored only as a
+sha256 hash. There is no admin UI (MVP) — seed keys with `scripts/seed_key.py`.
+The schema is created by `alembic upgrade head` (run automatically by the
+container entrypoint on start) before seeding.
 
-The gateway must have started at least once (so it created the schema) before
-seeding. All commands below run against the bind-mounted DB file (default
-`deploy/data/`).
+**With the bundled PostgreSQL** (docker-compose default) the DB lives in a
+container volume, so seed from *inside* the gateway container — it has the DB
+URL in `$GATEWAY_DB_URL`, so no `--db`/`--db-url` needed:
 
-**Create a new user** — there is no separate "create user" step: a user is
-created as a side effect of issuing their first key (a user with no key can't
-authenticate). Just pass a new `--principal`:
+```bash
+cd services/gateway-server/deploy
+docker compose exec gateway python scripts/seed_key.py --principal alice
+# inserts user "alice" (if new) + a new API key;
+# prints key_id + secret  (store the secret — only its sha256 hash is persisted)
+
+# another key for an existing user (rotation / per-client) — distinct --key-id:
+docker compose exec gateway python scripts/seed_key.py --principal alice --key-id gk_alice_ci
+```
+
+**With a SQLite DB** (local dev / single node) seed against the DB file directly
+(stdlib-only, no container needed):
 
 ```bash
 python services/gateway-server/scripts/seed_key.py \
     --db services/gateway-server/deploy/data/gateway/gateway.db \
     --principal alice
-# inserts user "alice" (INSERT OR IGNORE) + a new API key;
-# prints key_id + secret  (store the secret — only its sha256 hash is persisted)
-```
-
-**Add another key to an existing user** (rotation / per-client keys) — same
-principal, a distinct `--key-id`:
-
-```bash
-python services/gateway-server/scripts/seed_key.py \
-    --db services/gateway-server/deploy/data/gateway/gateway.db \
-    --principal alice --key-id gk_alice_ci
-# user row is INSERT OR IGNORE'd (no-op); a second key is added
 ```
 
 Options: `--secret` (default: random), `--key-id` (default: `gk_<random>`),

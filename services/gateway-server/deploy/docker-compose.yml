@@ -2,26 +2,59 @@
 # Run on the ECS host from this directory:  ./deploy.sh   (or: docker compose up -d)
 #
 # Image ENV defaults (set in the Dockerfile) already provide:
-#   GATEWAY_DB_URL=sqlite:////data/gateway/gateway.db
 #   GATEWAY_JOBS_BASE_DIR=/data/gateway_jobs
 #   GATEWAY_REGISTRY_PATH=/opt/gateway/services.yaml
 #   GATEWAY_SESSION_HEADER_NAME=bioagent-session-id
 # so only secrets + OSS/JWT config need to be supplied via .env.
 #
-# The service registry (/opt/gateway/services.yaml) is bind-mounted from the
-# repo's services.yaml below, so registry edits apply on `docker compose restart
-# gateway` without an image rebuild.
+# This compose bundles a PostgreSQL 18 service and points the gateway at it by
+# default (the URL is auto-composed from the POSTGRES_* vars in .env). To use an
+# external/managed DB instead, set GATEWAY_DB_URL in .env — it overrides the
+# bundled URL. The gateway entrypoint runs `alembic upgrade head` against
+# whichever DB GATEWAY_DB_URL names, after postgres reports healthy.
 services:
+  postgres:
+    image: postgres:18.4-trixie
+    container_name: gateway-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bioagent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-gateway}
+    volumes:
+      - gateway-pgdata:/var/lib/postgresql/data
+    # Not published by default — the gateway reaches it over the compose network
+    # as host "postgres". Uncomment to expose for debugging (psql from the host).
+    # ports:
+    #   - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bioagent} -d ${POSTGRES_DB:-gateway}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   gateway:
     image: ${GATEWAY_IMAGE:-gateway-server:latest}
     container_name: gateway-server
     restart: always
+    # Wait until postgres accepts connections so the entrypoint's
+    # `alembic upgrade head` doesn't race the DB coming up.
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "${GATEWAY_PORT:-9000}:9000"
     env_file:
       - .env
+    environment:
+      # Point the gateway at the bundled postgres by default; setting
+      # GATEWAY_DB_URL in .env (cloud RDS URL, or sqlite for single-node)
+      # overrides this composed value.
+      GATEWAY_DB_URL: ${GATEWAY_DB_URL:-postgresql+psycopg://${POSTGRES_USER:-bioagent}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-gateway}}
     volumes:
-      # Persistent state: SQLite DB (/data/gateway) + job scratch (/data/gateway_jobs).
+      # Persistent job scratch (/data/gateway_jobs). The SQLite DB dir
+      # (/data/gateway) is unused while GATEWAY_DB_URL points at postgres.
       - ${GATEWAY_DATA_DIR:-./data}:/data
       # Downstream service registry — bind-mounted from the repo's canonical
       # services.yaml (single source of truth) so adding/updating a service only
@@ -36,3 +69,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+volumes:
+  # Named volume for postgres data (survives `docker compose down`; remove with
+  # `docker compose down -v`). Docker manages permissions, unlike a host bind.
+  gateway-pgdata:

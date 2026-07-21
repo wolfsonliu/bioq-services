@@ -38,8 +38,11 @@ app = create_app(
 )
 
 # --- wire gateway state ---
+# Schema is managed by Alembic (`alembic upgrade head`, run by the container
+# entrypoint before uvicorn) — NOT create_all() here, so multi-instance startup
+# can't race on DDL and schema changes are versioned. Tests bootstrap via
+# GatewayDB.create_all() in their fixture.
 _db = GatewayDB(settings.db_url)
-_db.create_all()
 app.state.db = _db
 app.state.registry = ServiceRegistry(settings.registry_path)
 app.state.discover = Discovery(ttl_sec=300)

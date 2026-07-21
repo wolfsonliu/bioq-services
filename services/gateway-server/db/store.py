@@ -18,8 +18,22 @@ from .models import ApiKey, Base, Job, User
 
 class GatewayDB:
     def __init__(self, db_url: str) -> None:
-        connect_args = {"check_same_thread": False} if db_url.startswith("sqlite") else {}
-        self._engine = create_engine(db_url, connect_args=connect_args, future=True)
+        is_sqlite = db_url.startswith("sqlite")
+        connect_args = {"check_same_thread": False} if is_sqlite else {}
+        # SQLite is single-file/in-process → no pool tuning. For a networked DB
+        # (cloud PostgreSQL) size the pool to the anyio threadpool (sync handlers
+        # each grab a connection) and defend against the cloud LB silently
+        # dropping idle connections: pre_ping validates on checkout, recycle
+        # retires connections before the server's idle timeout.
+        pool_kwargs = {} if is_sqlite else dict(
+            pool_size=20,
+            max_overflow=40,
+            pool_pre_ping=True,
+            pool_recycle=1800,
+        )
+        self._engine = create_engine(
+            db_url, connect_args=connect_args, future=True, **pool_kwargs
+        )
         self._Session: sessionmaker[Session] = sessionmaker(
             bind=self._engine, future=True, expire_on_commit=False
         )
