@@ -1,0 +1,34 @@
+# Docker build context filter.
+# All service Dockerfiles use `docker build -f services/<svc>/Dockerfile .`
+# from the repo root (see Makefile). Only services/ is referenced by COPY
+# instructions — everything else is dead weight in the build context.
+# Ref: https://docs.docker.com/build/building/best-practices/#exclude-with-dockerignore
+
+# Version control
+**/.git
+**/.gitignore
+**/.gitmodules
+
+# Python
+**/.venv
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.egg-info
+**/node_modules
+**/uv.lock
+
+# Claude Code / IDE / editor
+.claude/
+**/.vscode
+**/.idea
+**/*.swp
+**/*.swo
+**/*~
+
+# Root-level files not needed by any COPY instruction
+/*.md
+/*.toml
+/*.lock
+/Makefile
+/sif
