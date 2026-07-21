@@ -16,7 +16,7 @@
 客户端 / Agent
   ↓ HTTP
 ┌─────────────────────────────────────────────────────────┐
-│  FastAPI + bioagent-service-framework  (port 9000)      │
+│  FastAPI + bioq-service-framework  (port 9000)      │
 │  POST /api/{design,score,probs}                         │
 │  GET  /api/manifest  /api/jobs/{id}/*  /healthz         │
 └─────────────────────────────────────────────────────────┘
@@ -175,6 +175,6 @@ make push-proteinmpnn-server
 
 - [proteinmpnn-server 设计](../../engineering/decisions/2026-05-13-proteinmpnn-server-design.md)
 - [新增 bioagent service cookbook](../../engineering/guides/adding-a-new-service.md)
-- [bioagent-service-framework](../_framework/README.md)
+- [bioq-service-framework](../_framework/README.md)
 - [调用 bioagent service](../../engineering/guides/calling-bioagent-services.md)
 - [ProteinMPNN 上游 README](../../opensource/ProteinMPNN/README.md)

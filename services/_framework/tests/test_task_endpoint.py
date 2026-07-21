@@ -18,8 +18,8 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel
 from pydantic_settings import SettingsConfigDict
 
-from bioagent_service import JobAdapter, ServiceSettings, create_app, register_task_endpoint
-from bioagent_service.models import JobStatus
+from bioq_service import JobAdapter, ServiceSettings, create_app, register_task_endpoint
+from bioq_service.models import JobStatus
 
 
 class _EchoRequest(BaseModel):
@@ -141,9 +141,9 @@ def test_task_endpoint_disabled_when_setting_false(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 from fastapi import Depends, File, Header, Request, UploadFile  # noqa: E402
 
-from bioagent_service import execute_task  # noqa: E402
-from bioagent_service.forms import model_form_depends  # noqa: E402
-from bioagent_service.models import JobInfo  # noqa: E402
+from bioq_service import execute_task  # noqa: E402
+from bioq_service.forms import model_form_depends  # noqa: E402
+from bioq_service.models import JobInfo  # noqa: E402
 from typing import Optional  # noqa: E402
 
 

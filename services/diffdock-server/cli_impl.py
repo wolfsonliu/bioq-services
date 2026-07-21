@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bioagent_service.cli import CLIEndpoint
+from bioq_service.cli import CLIEndpoint
 
 from .models import DockRequest
 from .settings import DiffdockSettings

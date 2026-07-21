@@ -2,7 +2,7 @@
 
 基于 FastAPI 的 [TurboHopp](https://github.com/orgw/TurboHopp) HTTP 服务
 —— 把一致性模型加速的 **scaffold hopping** 功能包装成 FC GPU 服务。
-**构建在 [bioagent-service-framework](../_framework/) 之上**。
+**构建在 [bioq-service-framework](../_framework/) 之上**。
 
 TurboHopp：给定**蛋白口袋** + **参考配体**，通过 consistency-model 距离
 蒸馏的 GVP 网络生成 N 个候选分子——同 DiffHopp 输入域但采样步数从 100+
@@ -31,7 +31,7 @@ TurboHopp：给定**蛋白口袋** + **参考配体**，通过 consistency-model
 客户端 / Agent
   ↓ HTTP (multipart upload: protein.pdb + reference_ligand.sdf)
 ┌────────────────────────────────────────────────────────────────┐
-│  FastAPI + bioagent-service-framework  (port 9000)             │
+│  FastAPI + bioq-service-framework  (port 9000)             │
 │                                                                │
 │  服务专属                                                      │
 │    POST /api/generate         (submit/poll)                    │

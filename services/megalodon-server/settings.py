@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bioagent_service import ServiceSettings
+from bioq_service import ServiceSettings
 from pydantic import BaseModel, Field
 from pydantic_settings import SettingsConfigDict
 

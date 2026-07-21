@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from bioagent_service import JobInfo, JobStatus, FailureKind  # noqa: F401
+from bioq_service import JobInfo, JobStatus, FailureKind  # noqa: F401
 from pydantic import BaseModel, Field
 
 Forcefield = Literal["OPLS2005", "OPLS2015", "OPLSAAM", "AMBER14sb", "CHARMM36"]

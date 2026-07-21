@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel
 from pydantic_settings import SettingsConfigDict
 
-from bioagent_service import JobAdapter, JobInfo, ServiceSettings, attach_mcp, create_app
+from bioq_service import JobAdapter, JobInfo, ServiceSettings, attach_mcp, create_app
 
 
 class _PingRequest(BaseModel):

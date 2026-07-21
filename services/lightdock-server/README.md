@@ -4,7 +4,7 @@ HTTP + CLI service wrapping [LightDock](https://github.com/lightdock/lightdock)
 — a **protein-protein / protein-peptide / protein-DNA** docking framework based
 on Glowworm Swarm Optimization (GSO). CPU-only, no NN weights.
 
-Built on `bioagent-service-framework`. Design rationale:
+Built on `bioq-service-framework`. Design rationale:
 [engineering/decisions/2026-07-15-lightdock-server-design.md](../../engineering/decisions/2026-07-15-lightdock-server-design.md).
 
 ## Endpoints

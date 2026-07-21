@@ -2,7 +2,7 @@
 
 FastAPI wrapper for [DockQ](https://github.com/bjornwallner/DockQ) — protein /
 NA / small-molecule docking quality scoring. Built on
-[bioagent-service-framework](../_framework/).
+[bioq-service-framework](../_framework/).
 
 ```
 client ──▶ FastAPI (this service)

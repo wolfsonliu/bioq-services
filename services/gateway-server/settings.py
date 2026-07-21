@@ -1,6 +1,6 @@
 """gateway-server settings.
 
-Inherits bioagent_service.ServiceSettings (jobs_base_dir / NAS conventions),
+Inherits bioq_service.ServiceSettings (jobs_base_dir / NAS conventions),
 adds: auth (VPC bypass + JWT), a SQLite DB URL, an OSS bucket/region for
 presign, the downstream service registry path, and an HTTP dispatch timeout.
 API keys live in the DB (not settings) — see db/.
@@ -13,7 +13,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from pydantic_settings import SettingsConfigDict
 
-from bioagent_service import ServiceSettings
+from bioq_service import ServiceSettings
 
 
 class AuthSettings(BaseModel):

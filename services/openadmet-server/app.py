@@ -9,7 +9,7 @@ Exposes:
 * ``GET  /api/models``           — enumerate NAS-registered model_dirs
 
 Job lifecycle (`/api/jobs/*`), manifest, healthz, OpenAPI come from
-`bioagent_service.create_app`.
+`bioq_service.create_app`.
 
 Design doc: engineering/decisions/2026-07-05-openadmet-server-design.md
 """
@@ -20,7 +20,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
@@ -45,7 +45,7 @@ from .tools import (
     split_inline_smiles,
     write_alias_csv,
 )
-from bioagent_service.uris import resolve_input, save_upload
+from bioq_service.uris import resolve_input, save_upload
 
 logger = logging.getLogger(__name__)
 

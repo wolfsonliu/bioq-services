@@ -2,7 +2,7 @@
 
 Exposes `/api/generate` (submit/poll) + `/api/tasks/generate` (FC async
 task mode).  Job lifecycle endpoints (/healthz, /api/jobs/*, /api/manifest,
-/openapi.json) come from `bioagent_service.create_app`.
+/openapi.json) come from `bioq_service.create_app`.
 
 Unconditional generation — no file uploads.  Requests carry only pydantic
 form fields.
@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,

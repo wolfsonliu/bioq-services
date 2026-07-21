@@ -13,7 +13,7 @@ from unittest.mock import patch
 import pytest
 from pydantic_settings import SettingsConfigDict
 
-from bioagent_service.cli import CLIEndpoint, create_cli
+from bioq_service.cli import CLIEndpoint, create_cli
 
 from server.adapter import DrughiveAdapter
 from server.configs import (
@@ -201,7 +201,7 @@ def test_cli_generate_success(tmp_path):
         "--ligand", str(ligand),
         "--output-dir", str(output_dir),
     ]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with patch.object(adapter, "detect_outputs", return_value=True):
                 with pytest.raises(SystemExit) as exc_info:
@@ -230,7 +230,7 @@ def test_cli_optimize_success_with_pdbqt(tmp_path, capsys):
         "--json",
         "--params-json", '{"n_cycles": 2, "n_samples_initial": 20, "n_samples": 4, "n_best_parents": 2}',
     ]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with patch.object(adapter, "detect_outputs", return_value=True):
                 with pytest.raises(SystemExit) as exc_info:

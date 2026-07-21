@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from bioagent_service.downloads import archive_dir, list_files, safe_subpath
-from bioagent_service.uploads import (
+from bioq_service.downloads import archive_dir, list_files, safe_subpath
+from bioq_service.uploads import (
     extract_dataset,
     safe_basename,
     save_upload,

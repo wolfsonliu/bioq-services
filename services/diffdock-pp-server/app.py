@@ -2,7 +2,7 @@
 
 Exposes `/api/dock` (submit/poll) + `/api/tasks/dock` (FC async task mode).
 Job lifecycle endpoints (/healthz, /api/jobs/*, /api/manifest, /openapi.json)
-come from `bioagent_service.create_app`.
+come from `bioq_service.create_app`.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
@@ -126,7 +126,7 @@ def _save_inputs(
     input_dir: Path,
 ) -> tuple[Path, Path]:
     """Persist + URI-resolve the two required PDB inputs."""
-    from bioagent_service.uris import resolve_input
+    from bioq_service.uris import resolve_input
 
     input_dir.mkdir(parents=True, exist_ok=True)
 

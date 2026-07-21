@@ -26,7 +26,7 @@ class _OfflineSettings(PPIFlowSettings):
 
 @pytest.fixture
 def client(tmp_path: Path) -> TestClient:
-    from bioagent_service import create_app
+    from bioq_service import create_app
 
     settings = _OfflineSettings(
         jobs_base_dir=tmp_path / "jobs",

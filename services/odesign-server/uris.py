@@ -1,7 +1,7 @@
 """odesign-server specific input helpers.
 
 Generic URI resolution (upload / job:// / file:// / oss:// / http(s)://) lives in
-`bioagent_service.uris`; this module only holds ODesign's JSON ref_file rewriting.
+`bioq_service.uris`; this module only holds ODesign's JSON ref_file rewriting.
 """
 
 from __future__ import annotations

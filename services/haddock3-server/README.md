@@ -2,7 +2,7 @@
 
 HTTP + CLI service wrapping [HADDOCK3](https://github.com/haddocking/haddock3)
 (BonvinLab, *JCIM* 2025) — an integrative biomolecular **docking** platform.
-Built on [bioagent-service-framework](../_framework/).
+Built on [bioq-service-framework](../_framework/).
 
 ```
 client ──HTTP──▶ FastAPI (server.app) ──▶ JobRunner ──▶ subprocess

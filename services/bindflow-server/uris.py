@@ -18,7 +18,7 @@ from typing import Optional
 
 from fastapi import HTTPException, UploadFile
 
-from bioagent_service.uris import resolve_uri
+from bioq_service.uris import resolve_uri
 
 from .settings import BindFlowSettings
 

@@ -11,16 +11,16 @@ import logging
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
-from bioagent_service.adapter import JobAdapter
-from bioagent_service.downloads import archive_dir, list_files, safe_subpath
-from bioagent_service.jobs import (
+from bioq_service.adapter import JobAdapter
+from bioq_service.downloads import archive_dir, list_files, safe_subpath
+from bioq_service.jobs import (
     JobStore,
     cleanup_job,
     disk_usage_bytes,
 )
-from bioagent_service.models import FailureKind, JobInfo, JobStatus, UploadInfo, utcnow
-from bioagent_service.settings import ServiceSettings
-from bioagent_service.uploads import stage_upload
+from bioq_service.models import FailureKind, JobInfo, JobStatus, UploadInfo, utcnow
+from bioq_service.settings import ServiceSettings
+from bioq_service.uploads import stage_upload
 
 logger = logging.getLogger(__name__)
 

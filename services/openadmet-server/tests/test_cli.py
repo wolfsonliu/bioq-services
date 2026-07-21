@@ -375,7 +375,7 @@ def _compare_build_dummy(req, inputs, job_dir, settings):
     return ["/bin/true"]
 
 
-from bioagent_service.cli import CLIEndpoint  # noqa: E402
+from bioq_service.cli import CLIEndpoint  # noqa: E402
 
 
 ENDPOINTS = {
@@ -428,7 +428,7 @@ def test_compare_endpoint_declares_stats_file_slots():
 def test_cli_no_subcommand_exits_nonzero(tmp_path):
     """Running the CLI without a subcommand should exit non-zero."""
     from server.adapter import OpenAdmetAdapter
-    from bioagent_service.cli import create_cli
+    from bioq_service.cli import create_cli
 
     s = _Off(jobs_base_dir=tmp_path / "jobs")
     adapter = OpenAdmetAdapter(settings=s)

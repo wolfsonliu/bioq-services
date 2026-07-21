@@ -30,7 +30,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from bioagent_service.fc_testing import fc_url, poll_job
+from bioq_service.fc_testing import fc_url, poll_job
 
 SERVICE = "boltzgen-server"
 

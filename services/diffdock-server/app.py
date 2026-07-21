@@ -5,7 +5,7 @@ Exposes 1 sync submit/poll endpoint + 1 async task endpoint:
 - /api/tasks/dock      → FC async task mode (recommended for >2 min jobs)
 
 Job lifecycle endpoints (/healthz, /api/jobs/*, /api/manifest,
-/openapi.json) come from ``bioagent_service.create_app``.
+/openapi.json) come from ``bioq_service.create_app``.
 
 DiffDock upstream is MIT-licensed.
 """
@@ -16,7 +16,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
@@ -31,7 +31,7 @@ from .adapter import DiffdockAdapter
 from .models import DockRequest
 from .settings import DiffdockSettings
 from .tools import dock_argv
-from bioagent_service.uris import maybe_resolve_input
+from bioq_service.uris import maybe_resolve_input
 
 logger = logging.getLogger(__name__)
 

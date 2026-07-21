@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from pydantic_settings import SettingsConfigDict
 
-from bioagent_service import ServiceSettings
+from bioq_service import ServiceSettings
 
 
 class _TempSettings(ServiceSettings):

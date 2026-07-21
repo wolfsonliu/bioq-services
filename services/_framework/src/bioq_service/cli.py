@@ -37,9 +37,9 @@ from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 from pydantic_core import PydanticUndefined
 
-from bioagent_service.adapter import JobAdapter
-from bioagent_service.runner import SubprocessRunner
-from bioagent_service.settings import ServiceSettings
+from bioq_service.adapter import JobAdapter
+from bioq_service.runner import SubprocessRunner
+from bioq_service.settings import ServiceSettings
 
 logger = logging.getLogger(__name__)
 

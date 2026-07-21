@@ -18,7 +18,7 @@ from __future__ import annotations
 import zipfile
 from pathlib import Path
 
-from bioagent_service.cli import CLIEndpoint, create_cli
+from bioq_service.cli import CLIEndpoint, create_cli
 
 from .adapter import Genie3Adapter
 from .configs import build_binder_config, build_motif_config, build_unconditional_config

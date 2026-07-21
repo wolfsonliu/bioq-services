@@ -3,7 +3,7 @@
 FastAPI wrapper for [Promera](https://github.com/bjing2016/promera) —
 pairformer + EDM-diffusion model for protein complex structure prediction
 (cofold) and de novo binder design (minibinder / VHH). Built on
-[bioagent-service-framework](../_framework/).
+[bioq-service-framework](../_framework/).
 
 ```
 client ──▶ FastAPI (this service)

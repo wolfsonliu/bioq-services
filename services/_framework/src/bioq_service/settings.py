@@ -50,7 +50,7 @@ class ServiceSettings(BaseSettings):
             "here. Absent => output-sink is a no-op (NAS-only)."
         ),
     )
-    # Region for the data-plane OSS bucket, used by `bioagent_service.uris` when
+    # Region for the data-plane OSS bucket, used by `bioq_service.uris` when
     # resolving `oss://` input URIs via the SDK (the mount path is separate; see
     # oss_output_mount). Every service ships the same default; override via
     # <PREFIX>_OSS_REGION only for a differently-regioned bucket.

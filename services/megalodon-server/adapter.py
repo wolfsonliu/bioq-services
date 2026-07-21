@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bioagent_service import EndpointExample, JobAdapter
+from bioq_service import EndpointExample, JobAdapter
 
 from .settings import MegalodonSettings
 

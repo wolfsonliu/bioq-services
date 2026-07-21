@@ -2,7 +2,7 @@
 
 Exposes `/api/predict_structure` and `/api/predict_affinity`. Job lifecycle
 endpoints (`/healthz`, `/api/jobs/*`, `/api/manifest`, `/openapi.json`) come
-from `bioagent_service.create_app`.
+from `bioq_service.create_app`.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
@@ -26,7 +26,7 @@ from .adapter import BoltzAdapter
 from .models import PredictAffinityRequest, PredictStructureRequest
 from .settings import BoltzSettings
 from .tools import build_yaml, predict_argv
-from bioagent_service.uris import resolve_uri, save_upload
+from bioq_service.uris import resolve_uri, save_upload
 
 logging.basicConfig(
     level=logging.INFO,

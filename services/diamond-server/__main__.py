@@ -12,7 +12,7 @@ Exposes all commands, including the CLI-only ``makedb``::
 
 from __future__ import annotations
 
-from bioagent_service.cli import CLIEndpoint, create_cli
+from bioq_service.cli import CLIEndpoint, create_cli
 
 from .adapter import DiamondAdapter
 from .models import BlastpRequest, BlastxRequest, ClusterRequest, MakedbRequest, MsaRequest

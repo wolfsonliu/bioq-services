@@ -18,7 +18,7 @@ from unittest.mock import patch
 
 import pytest
 
-from bioagent_service.cli import CLIEndpoint
+from bioq_service.cli import CLIEndpoint
 
 SERVICE_DIR = Path(__file__).resolve().parent.parent
 
@@ -210,7 +210,7 @@ def test_pair_build_argv_rejects_single_chain(
 def _cli_with_args(main_module, args: list[str]):
     """Run ``main_module.main`` with patched argv + mocked SubprocessRunner."""
     with patch.object(sys, "argv", ["python -m server", *args]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with patch.object(
                 main_module.adapter, "detect_outputs", return_value=True

@@ -17,7 +17,7 @@
 #   builder = conda env (Python 3.10 + snakemake + gromacs>=2023,<2026 (bioconda / conda-forge)
 #             + ambertools + openmm + openff-toolkit + parmed + mpi4py
 #             + pdbfixer + bindflow + gmx_MMPBSA pinned commit
-#             + bioagent-service-framework)
+#             + bioq-service-framework)
 #   runtime = lean: conda env + BindFlow upstream + server code.
 #
 # Base: nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04 — reserved for future

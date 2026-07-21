@@ -3,7 +3,7 @@
 These describe the *parameter* payloads — the actual PDB / Quiver files come in
 as `UploadFile` or are resolved from URIs (see `uris.py`). The framework's
 `JobInfo` / `JobStatus` / `FailureKind` are imported directly from
-`bioagent_service` and re-exported here for backward compatibility with
+`bioq_service` and re-exported here for backward compatibility with
 existing clients.
 """
 
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from bioagent_service import FailureKind, JobInfo, JobStatus  # re-exports
+from bioq_service import FailureKind, JobInfo, JobStatus  # re-exports
 from pydantic import BaseModel, Field
 
 __all__ = [

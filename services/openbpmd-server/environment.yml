@@ -16,4 +16,4 @@ dependencies:
   - numpy=1.26
   - pandas=2.2
   - pip:
-      - bioagent-service-framework[mcp]
+      - bioq-service-framework[mcp]

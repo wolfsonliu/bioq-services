@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Iterator
 
 import pytest
-from bioagent_service import JobInfo, JobStatus
+from bioq_service import JobInfo, JobStatus
 from fastapi.testclient import TestClient
 
 SERVICE_DIR = Path(__file__).resolve().parent.parent
@@ -458,7 +458,7 @@ def stub_task_subprocess(monkeypatch: pytest.MonkeyPatch) -> dict:
         return cfg["rc"]
 
     monkeypatch.setattr(
-        "bioagent_service.task_endpoint.SubprocessRunner.run", staticmethod(_fake_run)
+        "bioq_service.task_endpoint.SubprocessRunner.run", staticmethod(_fake_run)
     )
 
     # `execute_task` ends with `finalize_job` which calls `adapter.detect_outputs`

@@ -34,7 +34,7 @@ wheels = [
 ]
 
 [[package]]
-name = "bioagent-service-framework"
+name = "bioq-service-framework"
 version = "0.1.0"
 source = { editable = "../_framework" }
 dependencies = [
@@ -202,7 +202,7 @@ name = "mmseqs2-server"
 version = "0.0.1"
 source = { editable = "." }
 dependencies = [
-    { name = "bioagent-service-framework" },
+    { name = "bioq-service-framework" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "pydantic" },
@@ -213,7 +213,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "bioagent-service-framework", editable = "../_framework" },
+    { name = "bioq-service-framework", editable = "../_framework" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "pydantic", specifier = ">=2.7" },

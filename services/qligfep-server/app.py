@@ -10,7 +10,7 @@ import shutil
 import zipfile
 from pathlib import Path
 
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,

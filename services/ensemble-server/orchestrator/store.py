@@ -2,7 +2,7 @@
 
 Each job is one file: <jobs_base>/<task_id>/job.json.  Reads are
 read-through cached (file mtime gating), writes hold a lock.  Mirrors
-the patterns from bioagent_service.JobStore.
+the patterns from bioq_service.JobStore.
 """
 
 from __future__ import annotations

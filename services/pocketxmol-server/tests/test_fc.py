@@ -26,7 +26,7 @@ from typing import Any, Callable
 import httpx
 import pytest
 
-from bioagent_service.fc_testing import fc_url, poll_job
+from bioq_service.fc_testing import fc_url, poll_job
 
 SERVICE = "pocketxmol-server"
 SESSION_HEADER = "bioagent-session-id"

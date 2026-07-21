@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from bioagent_service import FailureKind, JobInfo, JobStatus  # noqa: F401 (re-exports)
+from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401 (re-exports)
 from pydantic import BaseModel, Field
 
 __all__ = ["FailureKind", "JobInfo", "JobStatus", "DockRequest"]

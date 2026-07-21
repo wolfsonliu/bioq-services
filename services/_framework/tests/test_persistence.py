@@ -6,13 +6,13 @@ import json
 from pathlib import Path
 
 import pytest
-from bioagent_service import JobAdapter, ServiceSettings
-from bioagent_service.jobs import (
+from bioq_service import JobAdapter, ServiceSettings
+from bioq_service.jobs import (
     SIDECAR_NAME,
     JobStore,
     reload_from_disk,
 )
-from bioagent_service.models import FailureKind, JobInfo, JobStatus
+from bioq_service.models import FailureKind, JobInfo, JobStatus
 
 
 class _Adapter(JobAdapter):
@@ -83,7 +83,7 @@ def test_reload_running_downgrades_to_interrupted(
     tmp_path: Path, adapter: _Adapter
 ) -> None:
     """Same instance restarting should mark its own running jobs as interrupted."""
-    from bioagent_service.models import utcnow
+    from bioq_service.models import utcnow
 
     instance_id = "same-instance"
     pre = JobStore(persist_dir=tmp_path, instance_id=instance_id)
@@ -112,7 +112,7 @@ def test_reload_skips_running_job_from_other_instance(
     tmp_path: Path, adapter: _Adapter
 ) -> None:
     """A different instance's running job must NOT be marked interrupted."""
-    from bioagent_service.models import utcnow
+    from bioq_service.models import utcnow
 
     owner = JobStore(persist_dir=tmp_path, instance_id="instance-A")
     owner.create("active")

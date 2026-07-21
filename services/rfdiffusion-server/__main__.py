@@ -12,7 +12,7 @@ Usage::
 
 from __future__ import annotations
 
-from bioagent_service.cli import CLIEndpoint, create_cli
+from bioq_service.cli import CLIEndpoint, create_cli
 
 from .adapter import RFdiffusionAdapter
 from .models import (

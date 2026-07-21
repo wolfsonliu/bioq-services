@@ -1,4 +1,4 @@
-"""Tests for ``bioagent_service.forms.model_form_depends``.
+"""Tests for ``bioq_service.forms.model_form_depends``.
 
 Verifies the workaround for FastAPI's ``Annotated[Model, Form()]`` limitation
 when the route also accepts ``UploadFile`` parameters: with the helper, every
@@ -15,7 +15,7 @@ from fastapi import Depends, FastAPI, File, UploadFile
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field, model_validator
 
-from bioagent_service import model_form_depends
+from bioq_service import model_form_depends
 
 
 # ---------------------------------------------------------------------------

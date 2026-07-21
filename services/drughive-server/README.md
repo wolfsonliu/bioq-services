@@ -16,7 +16,7 @@ FastAPI HTTP wrapper for [**DrugHIVE**](https://github.com/jssweller/DrugHIVE)
 optionally optimize a scoring criterion (QVina2 affinity / QED / SA / ALogP)
 over multiple genetic cycles.
 
-Built on [bioagent-service-framework](../_framework/).
+Built on [bioq-service-framework](../_framework/).
 
 Base image: `nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04`;
 conda env (Python 3.10 + PyTorch 1.12.1 + cu117 + RDKit + OpenBabel +
@@ -28,7 +28,7 @@ QVina2 via `bioconda::qvina`).
 Client / Agent
   ↓ HTTP (multipart: target.pdb + ligand.sdf [+ substruct.sdf | pdbqt])
 ┌────────────────────────────────────────────────────────────────┐
-│  FastAPI + bioagent-service-framework  (port 9000)             │
+│  FastAPI + bioq-service-framework  (port 9000)             │
 │                                                                │
 │  Service-specific                                              │
 │    POST /api/generate           (de novo, MolGenerator)        │

@@ -2,7 +2,7 @@
 
 Exposes /api/design and /api/inverse_fold for BoltzGen binder design pipeline.
 Job lifecycle endpoints (/healthz, /api/jobs/*, /api/manifest, /openapi.json)
-come from `bioagent_service.create_app`.
+come from `bioq_service.create_app`.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import zipfile
 from pathlib import Path
 from typing import List, Optional
 
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
@@ -27,7 +27,7 @@ from .adapter import BoltzGenAdapter
 from .models import DesignRequest, InverseFoldRequest
 from .settings import BoltzGenSettings
 from .tools import design_argv, inverse_fold_argv
-from bioagent_service.uris import resolve_input, resolve_uri, save_upload
+from bioq_service.uris import resolve_input, resolve_uri, save_upload
 
 logging.basicConfig(
     level=logging.INFO,

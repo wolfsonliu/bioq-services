@@ -17,8 +17,8 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel
 from pydantic_settings import SettingsConfigDict
 
-from bioagent_service import JobAdapter, ServiceSettings, create_app
-from bioagent_service.models import JobStatus
+from bioq_service import JobAdapter, ServiceSettings, create_app
+from bioq_service.models import JobStatus
 
 
 class _EchoRequest(BaseModel):
@@ -326,7 +326,7 @@ def test_run_catch_all_marks_job_failed_on_unexpected_error(tmp_path: Path) -> N
 
     with TestClient(app) as c:
         with patch(
-            "bioagent_service.runner.finalize_job",
+            "bioq_service.runner.finalize_job",
             side_effect=RuntimeError("disk exploded"),
         ):
             submit = c.post("/api/echo", json={"message": "boom"})
@@ -339,7 +339,7 @@ def test_run_catch_all_marks_job_failed_on_unexpected_error(tmp_path: Path) -> N
 
 def test_subprocess_runner_returns_rc_for_fast_exit(tmp_path: Path) -> None:
     """SubprocessRunner.run with check_interval_s loop returns correct rc."""
-    from bioagent_service.runner import SubprocessRunner
+    from bioq_service.runner import SubprocessRunner
 
     log = tmp_path / "test.log"
     rc = SubprocessRunner.run(["bash", "-c", "exit 42"], log, check_interval_s=0.1)

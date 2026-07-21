@@ -9,7 +9,7 @@ from pathlib import Path
 
 import anyio
 import httpx
-from bioagent_service import attach_mcp, create_app, read_version_file
+from bioq_service import attach_mcp, create_app, read_version_file
 from fastapi import Body, Depends, Header, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from starlette.background import BackgroundTask

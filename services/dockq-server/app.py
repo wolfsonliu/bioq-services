@@ -2,7 +2,7 @@
 
 Exposes /api/score (single pair) and /api/score_batch (1 native + N models).
 Job lifecycle endpoints (/healthz, /api/jobs/*, /api/manifest, /openapi.json)
-come from `bioagent_service.create_app`.
+come from `bioq_service.create_app`.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import zipfile
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
@@ -27,7 +27,7 @@ from .adapter import DockQAdapter
 from .models import ScoreBatchRequest, ScoreRequest
 from .settings import DockQSettings
 from .tools import batch_argv, score_argv
-from bioagent_service.uris import resolve_input, resolve_uri, save_upload
+from bioq_service.uris import resolve_input, resolve_uri, save_upload
 
 logging.basicConfig(
     level=logging.INFO,

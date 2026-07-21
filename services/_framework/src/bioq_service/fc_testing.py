@@ -9,7 +9,7 @@ endpoints during normal `pytest` runs. To enable, either:
 Each service's `tests/conftest.py` delegates marker registration + skip logic
 to this module via:
 
-    from bioagent_service.fc_testing import (
+    from bioq_service.fc_testing import (
         register_fc_marker,
         skip_fc_tests_unless_enabled,
     )

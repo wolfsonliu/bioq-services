@@ -32,7 +32,7 @@ class _OfflineSettings(RFantibodySettings):
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     # Build a settings/adapter pair pointing entirely at tmp_path; create_app
     # is the same one the production app uses (see server.app).
-    from bioagent_service import create_app
+    from bioq_service import create_app
 
     settings = _OfflineSettings(
         jobs_base_dir=tmp_path / "jobs",

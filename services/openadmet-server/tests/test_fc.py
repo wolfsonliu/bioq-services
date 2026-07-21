@@ -20,7 +20,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from bioagent_service.fc_testing import fc_url, poll_job
+from bioq_service.fc_testing import fc_url, poll_job
 
 LOSARTAN = "CCCCC1=NC(=C(N1CC2=CC=C(C=C2)C3=CC=CC=C3C4=NNN=N4)CO)Cl"
 ASPIRIN = "CC(=O)OC1=CC=CC=C1C(=O)O"

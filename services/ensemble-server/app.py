@@ -3,7 +3,7 @@
 Unlike most bioagent services, ensemble-server does NOT run subprocess
 jobs.  It orchestrates remote calls to downstream services via
 HTTPDispatcher (plain httpx + FC's HTTP async-invocation header), so we
-use bioagent_service.ServiceSettings (for jobs_base_dir / NAS conventions)
+use bioq_service.ServiceSettings (for jobs_base_dir / NAS conventions)
 but not the framework's JobRunner.
 """
 
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 
-from bioagent_service import read_version_file
+from bioq_service import read_version_file
 from fastapi import FastAPI
 
 from .adapters.folding.alphafold import AlphaFoldFoldingAdapter

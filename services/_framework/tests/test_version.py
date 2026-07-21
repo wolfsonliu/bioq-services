@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bioagent_service import read_version_file
+from bioq_service import read_version_file
 
 
 def test_reads_sibling_version(tmp_path: Path) -> None:

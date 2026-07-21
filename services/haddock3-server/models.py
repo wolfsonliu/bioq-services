@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from bioagent_service import JobInfo  # noqa: F401  (re-export for compat)
+from bioq_service import JobInfo  # noqa: F401  (re-export for compat)
 from pydantic import BaseModel, Field
 
 

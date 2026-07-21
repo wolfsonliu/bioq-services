@@ -103,7 +103,7 @@ ENSEMBLE_API_KEYS__0__MONTHLY_QUOTA_CALLS=1000    # optional, 未生效（Phase 
 
 ### NAS 路径
 
-继承自 `bioagent_service.ServiceSettings`：
+继承自 `bioq_service.ServiceSettings`：
 
 ```bash
 ENSEMBLE_JOBS_BASE_DIR=/data/jobs/ensemble    # default: /data/jobs
@@ -325,7 +325,7 @@ FC HTTP 触发器本身支持 JWT 验签作为请求前置处理。如果你希�
 ```bash
 cd services/ensemble-server
 uv venv
-uv pip install -e ../_framework  # bioagent-service-framework editable
+uv pip install -e ../_framework  # bioq-service-framework editable
 uv pip install -e .              # ensemble-server 自身
 ```
 

@@ -2,7 +2,7 @@
 
 Exposes /api/design for ODesign cross-modality biomolecular interaction design.
 Job lifecycle endpoints (/healthz, /api/jobs/*, /api/manifest, /openapi.json)
-come from `bioagent_service.create_app`.
+come from `bioq_service.create_app`.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 from typing import List, Optional
 
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
@@ -27,7 +27,7 @@ from .models import DesignRequest
 from .settings import ODesignSettings
 from .tools import design_argv
 from .uris import rewrite_ref_files
-from bioagent_service.uris import resolve_input, save_upload
+from bioq_service.uris import resolve_input, save_upload
 
 logging.basicConfig(
     level=logging.INFO,

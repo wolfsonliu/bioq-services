@@ -30,7 +30,7 @@ import os
 import sys
 from pathlib import Path
 
-from bioagent_service.cli import CLIEndpoint, create_cli
+from bioq_service.cli import CLIEndpoint, create_cli
 
 from .adapter import MMseqs2JobAdapter
 from .models import MSARequest

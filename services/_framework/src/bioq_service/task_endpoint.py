@@ -34,12 +34,12 @@ from typing import Any, Callable, Optional
 from fastapi import Depends, FastAPI, Header, Request
 from pydantic import BaseModel
 
-from bioagent_service.errors import finalize_job
-from bioagent_service.forms import model_form_depends
-from bioagent_service.jobs import cleanup_job, evict_finished_until_under_limit
-from bioagent_service.models import JobInfo, JobStatus, utcnow
-from bioagent_service.oss_export import mirror_job_dir_to_oss
-from bioagent_service.runner import SubprocessRunner
+from bioq_service.errors import finalize_job
+from bioq_service.forms import model_form_depends
+from bioq_service.jobs import cleanup_job, evict_finished_until_under_limit
+from bioq_service.models import JobInfo, JobStatus, utcnow
+from bioq_service.oss_export import mirror_job_dir_to_oss
+from bioq_service.runner import SubprocessRunner
 
 logger = logging.getLogger(__name__)
 

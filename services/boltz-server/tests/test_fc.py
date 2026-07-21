@@ -24,7 +24,7 @@ import httpx
 import pytest
 import yaml
 
-from bioagent_service.fc_testing import fc_url, poll_job
+from bioq_service.fc_testing import fc_url, poll_job
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 

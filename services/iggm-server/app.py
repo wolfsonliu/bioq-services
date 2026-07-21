@@ -7,7 +7,7 @@ Endpoints:
   + /api/tasks/<name> async twins for FC Async Task Mode.
 
 Job lifecycle endpoints (/healthz, /api/jobs/*, /api/manifest, /openapi.json)
-come from `bioagent_service.create_app`.
+come from `bioq_service.create_app`.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
@@ -31,7 +31,7 @@ from .adapter import IgGMAdapter
 from .models import AffinityMaturationRequest, DesignRequest, EpitopeRequest
 from .settings import IgGMSettings
 from .tools import design_argv, epitope_argv
-from bioagent_service.uris import resolve_input
+from bioq_service.uris import resolve_input
 
 logging.basicConfig(
     level=logging.INFO,

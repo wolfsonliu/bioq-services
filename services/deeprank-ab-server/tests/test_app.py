@@ -228,7 +228,7 @@ def test_score_argv_nanobody(tmp_path):
 
 def test_uri_resolve_file(tmp_path):
     from server.settings import DeepRankAbSettings
-    from bioagent_service.uris import resolve_input
+    from bioq_service.uris import resolve_input
 
     class _Off(DeepRankAbSettings):
         model_config = SettingsConfigDict(env_prefix="DEEPRANK_AB_TEST_", env_file=None, extra="ignore")
@@ -243,7 +243,7 @@ def test_uri_resolve_file(tmp_path):
 def test_uri_requires_input(tmp_path):
     from fastapi import HTTPException
     from server.settings import DeepRankAbSettings
-    from bioagent_service.uris import resolve_input
+    from bioq_service.uris import resolve_input
 
     class _Off(DeepRankAbSettings):
         model_config = SettingsConfigDict(env_prefix="DEEPRANK_AB_TEST_", env_file=None, extra="ignore")

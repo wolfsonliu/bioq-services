@@ -30,9 +30,9 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, Field
 
-from bioagent_service.adapter import JobAdapter
-from bioagent_service.models import FailureKind, JobStatus
-from bioagent_service.settings import ServiceSettings
+from bioq_service.adapter import JobAdapter
+from bioq_service.models import FailureKind, JobStatus
+from bioq_service.settings import ServiceSettings
 
 # Routes the framework owns. The manifest excludes these from `endpoints`
 # (they're described in `job_lifecycle` instead) so the agent sees a clean list

@@ -1,6 +1,6 @@
 # Deployed service registry — the single source of truth for downstream
 # service URLs and deployment metadata. Loaded by
-# bioagent_service.service_registry (load_services / fc_url) and the gateway.
+# bioq_service.service_registry (load_services / fc_url) and the gateway.
 #
 # Schema per entry (only `url` is required):
 #   url:      VPC HTTP trigger URL (https://fc-...-vpc.fcapp.run)

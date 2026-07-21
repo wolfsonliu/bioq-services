@@ -5,7 +5,7 @@ FastAPI wrapper around the GPU-enabled `mmseqs` binary, exposing the
 so any client that talks to `https://api.colabfold.com` — notably
 [`boltz-server`](../boltz-server/)'s `--msa_server_url` — can be redirected to
 an internal endpoint. Built on
-[bioagent-service-framework](../_framework/).
+[bioq-service-framework](../_framework/).
 
 ```
 client (boltz, ...)  ──▶  FastAPI (this service)

@@ -18,7 +18,7 @@
 #   builder = conda env (Python 3.8 + RDKit 2020.09.5 + scaffoldgraph 1.1.2
 #             + oddt + molvs + numpy/pandas/scikit-learn) for the ChemBounce
 #             subprocess; plus /opt/server-venv (Python 3.11) for the
-#             FastAPI + bioagent-service-framework layer (framework requires
+#             FastAPI + bioq-service-framework layer (framework requires
 #             py>=3.10, upstream conda env pins py3.8 — split by design).
 #   runtime = lean: conda env + server venv from builder + ChemBounce source
 #             + server code.
@@ -113,7 +113,7 @@ RUN /opt/conda/envs/chembounce/bin/pip uninstall -y \
 
 # ---------------------------------------------------------------------------
 # Server venv — isolated Python 3.11 (base image's system Python) for the
-# FastAPI + bioagent-service-framework layer.  Kept separate from the
+# FastAPI + bioq-service-framework layer.  Kept separate from the
 # chembounce conda env (py3.8, pinned by upstream) because the framework
 # requires py>=3.10 and uses `X | None` unions at runtime.
 # ---------------------------------------------------------------------------

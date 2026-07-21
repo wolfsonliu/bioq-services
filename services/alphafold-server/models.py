@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
-from bioagent_service import FailureKind, JobInfo, JobStatus  # noqa: F401
+from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401
 from pydantic import BaseModel, Field
 
 

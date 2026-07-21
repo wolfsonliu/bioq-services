@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 from pydantic_settings import SettingsConfigDict
 
-from bioagent_service.cli import create_cli
+from bioq_service.cli import create_cli
 
 from server.adapter import QligfepAdapter
 from server.settings import QligfepSettings
@@ -24,7 +24,7 @@ def _endpoints():
     Return the registered dict."""
     import importlib
     sys.modules.pop("server.__main__", None)
-    with patch("bioagent_service.cli.create_cli", lambda *a, **k: None):
+    with patch("bioq_service.cli.create_cli", lambda *a, **k: None):
         importlib.import_module("server.__main__")
     return sys.modules["server.__main__"].endpoints
 
@@ -56,7 +56,7 @@ def _run_cli(argv, tmp_path):
     s = _Off(jobs_base_dir=tmp_path / "jobs")
     adapter = QligfepAdapter(settings=s)
     with patch.object(sys, "argv", argv):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with patch.object(adapter, "detect_outputs", return_value=True):
                 with pytest.raises(SystemExit) as exc:

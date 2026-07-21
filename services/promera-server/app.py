@@ -8,7 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
@@ -28,7 +28,7 @@ from .tools import (
     design_argv,
     write_design_config,
 )
-from bioagent_service.uris import resolve_input, save_upload
+from bioq_service.uris import resolve_input, save_upload
 
 settings = PromeraSettings()
 adapter = PromeraAdapter(settings=settings)

@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Callable
 
-from bioagent_service import EndpointExample, JobAdapter
+from bioq_service import EndpointExample, JobAdapter
 
 from .settings import QligfepSettings
 

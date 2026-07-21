@@ -20,7 +20,7 @@ HTTP (each has an `/api/tasks/<name>` FC async-task-mode variant):
 | `POST /api/msa` | `query` FASTA + (`db_uri` \| default `DIAMOND_MSA_DB`) | `output/<name>.a3m` |
 
 Framework endpoints (`/healthz`, `/healthz/detail`, `/api/jobs/*`,
-`/api/manifest`, `/openapi.json`) come from `bioagent_service.create_app`.
+`/api/manifest`, `/openapi.json`) come from `bioq_service.create_app`.
 
 `makedb` is **CLI/SIF-only** — building a database is an offline step; the HTTP
 service consumes prebuilt `.dmnd` files (or builds a tiny one inline from an

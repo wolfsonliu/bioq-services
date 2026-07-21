@@ -2,7 +2,7 @@
 
 基于 FastAPI 的 [ODesign](https://github.com/OTeam-AI4S/ODesign) HTTP 服务，
 封装跨模态生物分子设计（蛋白 / 配体 / 核酸 binder + motif/atom scaffolding）。
-**构建在 [bioagent-service-framework](../_framework/) 之上**。
+**构建在 [bioq-service-framework](../_framework/) 之上**。
 
 镜像 base：`nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04`；conda env (Python
 3.10) + torch 2.3.1+cu121 + PyG + CUTLASS (DS4Sci_EvoformerAttention + fast

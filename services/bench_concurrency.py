@@ -33,7 +33,7 @@ _SERVICES_DIR = Path(__file__).resolve().parent
 
 
 def _fc_url(service: str) -> str:
-    from bioagent_service.service_registry import fc_url
+    from bioq_service.service_registry import fc_url
 
     return fc_url(service, start=Path(__file__))
 

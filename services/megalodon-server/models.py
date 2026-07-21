@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, Optional
 
-from bioagent_service import FailureKind, JobInfo, JobStatus  # noqa: F401  (re-exported)
+from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401  (re-exported)
 from pydantic import BaseModel, Field
 
 # Megalodon ships 6 headline checkpoints: {qm9, drugs} x {diffusion, fm, quick}.

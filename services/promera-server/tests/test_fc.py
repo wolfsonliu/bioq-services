@@ -22,7 +22,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from bioagent_service.fc_testing import fc_url, poll_job
+from bioq_service.fc_testing import fc_url, poll_job
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 TEST_TARGET = DATA_DIR / "test_target.json"

@@ -2,7 +2,7 @@
 
 Complex fields (scoring, stages, diversity_filter, inception, pairs,
 learning_strategy) are dict/list — over multipart form they arrive as JSON
-strings and are decoded by bioagent_service.forms.model_form_depends.
+strings and are decoded by bioq_service.forms.model_form_depends.
 """
 from __future__ import annotations
 

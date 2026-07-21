@@ -7,7 +7,7 @@ protein-ligand (and protein-protein / nucleic-acid) interactions.
 ```
 client ──HTTP──▶ FastAPI (server.app) ──▶ SubprocessRunner ──▶ python -m plip.plipcmd
                      │                                              │
-             bioagent_service framework                    output/<name>.xml + .txt
+             bioq_service framework                    output/<name>.xml + .txt
              (jobs / manifest / MCP)                       (+ optional .pse / .png)
 ```
 

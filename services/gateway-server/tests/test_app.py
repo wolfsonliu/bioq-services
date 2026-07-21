@@ -41,7 +41,7 @@ def test_v1_requires_auth(client):
 def test_run_and_status_happy(client):
     import server.app as appmod
     _seed_key(appmod)
-    from bioagent_service.service_registry import ServiceRecord
+    from bioq_service.service_registry import ServiceRecord
     appmod.app.state.registry._services = {
         "openbpmd-server": ServiceRecord(url="https://svc.local")
     }
@@ -78,7 +78,7 @@ def test_tenant_isolation(client):
     import server.app as appmod
     _seed_key(appmod, account_id="alice", secret="alice-sec", key_id="gk_alice")
     _seed_key(appmod, account_id="bob", secret="bob-sec", key_id="gk_bob")
-    from bioagent_service.service_registry import ServiceRecord
+    from bioq_service.service_registry import ServiceRecord
     appmod.app.state.registry._services = {
         "openbpmd-server": ServiceRecord(url="https://svc.local")
     }
@@ -133,7 +133,7 @@ def test_presign_route(client):
 def test_download_redirects_to_oss_when_present(client):
     import server.app as appmod
     _seed_key(appmod, account_id="alice", secret="d-sec", key_id="gk_d")
-    from bioagent_service.service_registry import ServiceRecord
+    from bioq_service.service_registry import ServiceRecord
     appmod.app.state.registry._services = {"openbpmd-server": ServiceRecord(url="https://svc.local")}
 
     class _Disp:
@@ -165,7 +165,7 @@ def test_download_redirects_to_oss_when_present(client):
 def test_download_falls_back_to_proxy_when_not_on_oss(client):
     import server.app as appmod
     _seed_key(appmod, account_id="alice", secret="f-sec", key_id="gk_f")
-    from bioagent_service.service_registry import ServiceRecord
+    from bioq_service.service_registry import ServiceRecord
     appmod.app.state.registry._services = {"openbpmd-server": ServiceRecord(url="https://svc.local")}
 
     class _Disp:
@@ -201,7 +201,7 @@ def test_download_falls_back_to_proxy_when_not_on_oss(client):
 def test_run_rewrites_oss_inputs_to_mount_for_mounted_service(client):
     import server.app as appmod
     _seed_key(appmod, account_id="alice", secret="m-sec", key_id="gk_m")
-    from bioagent_service.service_registry import ServiceRecord
+    from bioq_service.service_registry import ServiceRecord
     appmod.app.state.registry._services = {
         "openbpmd-server": ServiceRecord(url="https://svc.local", oss_mount=True),
     }
@@ -233,7 +233,7 @@ def test_run_rewrites_oss_inputs_to_mount_for_mounted_service(client):
 def test_run_keeps_oss_uris_for_unmounted_service(client):
     import server.app as appmod
     _seed_key(appmod, account_id="alice", secret="u-sec", key_id="gk_u")
-    from bioagent_service.service_registry import ServiceRecord
+    from bioq_service.service_registry import ServiceRecord
     appmod.app.state.registry._services = {
         "openbpmd-server": ServiceRecord(url="https://svc.local"),  # oss_mount defaults False
     }

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import List, Literal, Optional
 
-from bioagent_service import JobInfo  # noqa: F401  (re-exported)
+from bioq_service import JobInfo  # noqa: F401  (re-exported)
 from pydantic import BaseModel, Field
 
 # design.py --run_task choices.  affinity_maturation is exposed via its own

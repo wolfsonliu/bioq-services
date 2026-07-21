@@ -26,7 +26,7 @@ from typing import Optional
 
 from fastapi import HTTPException, UploadFile
 
-from bioagent_service.settings import ServiceSettings
+from bioq_service.settings import ServiceSettings
 
 
 def save_upload(upload: UploadFile, dest: Path) -> Path:

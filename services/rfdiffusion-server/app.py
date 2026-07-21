@@ -20,7 +20,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
@@ -48,7 +48,7 @@ from .tools import (
     symmetry_argv,
     unconditional_argv,
 )
-from bioagent_service.uris import resolve_input
+from bioq_service.uris import resolve_input
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)

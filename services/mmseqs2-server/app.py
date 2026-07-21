@@ -24,14 +24,14 @@ import tarfile
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     create_app,
     execute_task,
     read_version_file,
     resolve_task_id,
 )
-from bioagent_service.models import JobStatus
+from bioq_service.models import JobStatus
 from fastapi import Form, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 

@@ -18,7 +18,7 @@
 - Rosetta refinement / DockQ → 另起 `rosetta-server`
 - Partial-flow 局部重设计（`sample_*_partial.py`）→ 未来在 v0.0.2+ 加 endpoint
 
-**v0.2 起构建在 [bioagent-service-framework](../_framework/) 之上**：HTTP / job 生命周期 /
+**v0.2 起构建在 [bioq-service-framework](../_framework/) 之上**：HTTP / job 生命周期 /
 错误处理 / 持久化 / 多实例一致性 / Agent manifest 由框架统一提供。
 
 ## 架构
@@ -27,7 +27,7 @@
 客户端 / Agent
   ↓ HTTP
 ┌────────────────────────────────────────────────────────────────┐
-│  FastAPI + bioagent-service-framework  (port 9000)             │
+│  FastAPI + bioq-service-framework  (port 9000)             │
 │                                                                │
 │  服务专属 (5 个 sampler)                                       │
 │    POST /api/sample/{binder,antibody,nanobody,monomer,scaffolding}
@@ -299,6 +299,6 @@ make push-ppiflow-server    # 自动用 services/ppiflow-server/VERSION 里的 t
 ## 相关文档
 
 - [新增 bioagent service cookbook](../../engineering/guides/adding-a-new-service.md) —— 本 service 按这份建
-- [bioagent-service-framework](../_framework/README.md) —— 通用 HTTP / job / 错误处理 / manifest 层
+- [bioq-service-framework](../_framework/README.md) —— 通用 HTTP / job / 错误处理 / manifest 层
 - [调用 bioagent service](../../engineering/guides/calling-bioagent-services.md) —— Agent / client 调用协议
 - [PPIFlow 上游 README](../../opensource/PPIFlow/tool/PPIFlow/README.md) —— 算法本身的参数细节

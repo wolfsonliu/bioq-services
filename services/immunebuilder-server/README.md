@@ -2,7 +2,7 @@
 
 基于 FastAPI 的 [ImmuneBuilder](https://github.com/brennanaba/ImmuneBuilder)
 HTTP 服务，封装免疫受体结构预测（抗体 / 纳米抗体 / TCR 三端点）。**构建在
-[bioagent-service-framework](../_framework/) 之上**。
+[bioq-service-framework](../_framework/) 之上**。
 
 底层：ABodyBuilder2 / NanoBodyBuilder2 / TCRBuilder2，conda env (Python 3.10
 + OpenMM + pdbfixer + HMMER) + uv pip (torch 2.7.1 + ANARCI)。

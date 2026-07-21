@@ -37,7 +37,7 @@ import httpx
 import pytest
 import yaml
 
-from bioagent_service.fc_testing import fc_url, poll_job
+from bioq_service.fc_testing import fc_url, poll_job
 
 SERVICE = "genie3-server"
 

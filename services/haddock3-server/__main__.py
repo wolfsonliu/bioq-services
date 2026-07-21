@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bioagent_service.cli import CLIEndpoint, create_cli
+from bioq_service.cli import CLIEndpoint, create_cli
 
 from .adapter import Haddock3Adapter
 from .configs import build_protein_protein_cfg, write_cfg

@@ -9,7 +9,7 @@ Marked `@pytest.mark.fc`, skipped by default. Run with:
 Test fixtures live in `tests/data/`, so the suite is self-contained — no
 dependency on `opensource/DockQ` (which is gitignored).
 
-URL is read from `services/services.yaml` via `bioagent_service.fc_testing`.
+URL is read from `services/services.yaml` via `bioq_service.fc_testing`.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from bioagent_service.fc_testing import fc_url, poll_job
+from bioq_service.fc_testing import fc_url, poll_job
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 MODEL_PDB = DATA_DIR / "model.pdb"

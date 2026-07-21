@@ -4,7 +4,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
-from bioagent_service.fc_testing import (
+from bioq_service.fc_testing import (
     register_fc_marker,
     skip_fc_tests_unless_enabled,
 )

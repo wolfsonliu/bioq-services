@@ -1,6 +1,6 @@
 """ensemble-server settings.
 
-Inherits from bioagent_service.ServiceSettings for jobs_base_dir / NAS
+Inherits from bioq_service.ServiceSettings for jobs_base_dir / NAS
 conventions, then adds aggregator-specific config:
   - Per-method FC function connection (URL + function name + region)
   - Multi-layer auth: VPC bypass + JWT verification + static API keys
@@ -11,7 +11,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 from pydantic_settings import SettingsConfigDict
 
-from bioagent_service import ServiceSettings
+from bioq_service import ServiceSettings
 
 
 class FCMethodConfig(BaseModel):

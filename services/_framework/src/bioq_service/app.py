@@ -14,13 +14,13 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
-from bioagent_service.adapter import JobAdapter
-from bioagent_service.errors import ServiceBusyError
-from bioagent_service.jobs import JobStore, reload_from_disk
-from bioagent_service.manifest import make_manifest_router
-from bioagent_service.routes import make_generic_router
-from bioagent_service.runner import JobRunner
-from bioagent_service.settings import ServiceSettings
+from bioq_service.adapter import JobAdapter
+from bioq_service.errors import ServiceBusyError
+from bioq_service.jobs import JobStore, reload_from_disk
+from bioq_service.manifest import make_manifest_router
+from bioq_service.routes import make_generic_router
+from bioq_service.runner import JobRunner
+from bioq_service.settings import ServiceSettings
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
@@ -212,9 +212,9 @@ def attach_mcp(
 
     The MCP session manager is started/stopped via FastAPI startup/shutdown
     events; the server is stashed on `app.state.mcp` so the stdio CLI
-    entrypoint (`bioagent-service-mcp-stdio`) can reuse the same instance.
+    entrypoint (`bioq-service-mcp-stdio`) can reuse the same instance.
     """
-    from bioagent_service.mcp_server import make_mcp_server  # late import — optional dep
+    from bioq_service.mcp_server import make_mcp_server  # late import — optional dep
 
     mcp = make_mcp_server(
         app,

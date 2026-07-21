@@ -6,7 +6,7 @@
 #
 # DockQ source lives at services/dockq-server/upstream/ (vendored at pinned
 # SHA via scripts/vendor.sh).  CPU-only Python + Cython extension.
-# Final image ~350 MB — DockQ + bioagent-service-framework + numpy/biopython wheels.
+# Final image ~350 MB — DockQ + bioq-service-framework + numpy/biopython wheels.
 
 # Base: uv's pre-built python3.11 slim image (Debian bookworm + uv pre-installed).
 # Chosen over python:3.11-slim to skip the `COPY --from=ghcr.io/astral-sh/uv` step,

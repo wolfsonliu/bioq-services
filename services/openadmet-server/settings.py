@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Optional
 
 import yaml
-from bioagent_service import ServiceSettings
+from bioq_service import ServiceSettings
 from pydantic import Field, computed_field
 from pydantic_settings import SettingsConfigDict
 

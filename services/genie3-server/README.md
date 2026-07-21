@@ -1,7 +1,7 @@
 # Genie3 Server
 
 基于 FastAPI 的 Genie3 HTTP 服务，仅暴露 `genie3 generate` 功能（不含评估流程）。
-**v0.2 起构建在 [bioagent-service-framework](../_framework/) 之上**：HTTP / job / 错误 / 持久化
+**v0.2 起构建在 [bioq-service-framework](../_framework/) 之上**：HTTP / job / 错误 / 持久化
 / 多实例一致性 / Agent 协议描述由框架统一提供，本服务只负责数据集 zip 处理 + 配置 YAML 拼装 +
 `genie3 generate` argv 构造。
 
@@ -15,7 +15,7 @@ FoldSeek / ProteinMPNN / TMscore / DSSP / IPSAE 等评估工具 —— 比官方
 客户端 / Agent
   ↓ HTTP
 ┌────────────────────────────────────────────────────────────────┐
-│  FastAPI + bioagent-service-framework  (port 9000)             │
+│  FastAPI + bioq-service-framework  (port 9000)             │
 │                                                                │
 │  服务专属（genie3-server 注册）                                │
 │    POST /api/generate/unconditional                            │
@@ -378,6 +378,6 @@ docker run --gpus all -p 9000:9000 --memory 16g \
 
 ## 相关文档
 
-- [bioagent-service-framework](../_framework/README.md) — 通用 HTTP / job / 错误处理 / manifest 层
+- [bioq-service-framework](../_framework/README.md) — 通用 HTTP / job / 错误处理 / manifest 层
 - [Service 框架抽象设计](../../engineering/decisions/2026-05-12-service-framework-design.md) — 设计决策
 - [Tool 抽象层设计](../../engineering/decisions/2026-04-23-tool-abstraction-design.md) — Client 端 Tool + Runner（消费本 service 的 manifest）

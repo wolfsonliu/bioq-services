@@ -18,7 +18,7 @@ if "server" not in sys.modules:
         sys.modules["server"] = module
         spec.loader.exec_module(module)
 
-from bioagent_service.fc_testing import (  # noqa: E402
+from bioq_service.fc_testing import (  # noqa: E402
     register_fc_marker,
     skip_fc_tests_unless_enabled,
 )

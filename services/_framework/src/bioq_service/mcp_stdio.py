@@ -1,9 +1,9 @@
-"""`bioagent-service-mcp-stdio` CLI — run a service's MCP server over stdio.
+"""`bioq-service-mcp-stdio` CLI — run a service's MCP server over stdio.
 
 Usage::
 
-    bioagent-service-mcp-stdio --app proteinmpnn_server.app:app
-    bioagent-service-mcp-stdio --app rfantibody_server.app:app
+    bioq-service-mcp-stdio --app proteinmpnn_server.app:app
+    bioq-service-mcp-stdio --app rfantibody_server.app:app
 
 The argument is a Python module path (`module:attr`) that imports to the
 service's FastAPI `app` object. The CLI builds an MCP server mirroring that
@@ -38,7 +38,7 @@ def _load_app(spec: str) -> Any:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="bioagent-service-mcp-stdio")
+    parser = argparse.ArgumentParser(prog="bioq-service-mcp-stdio")
     parser.add_argument(
         "--app",
         required=True,
@@ -65,7 +65,7 @@ def main() -> None:
     # otherwise build one on the fly with the same auto-discovery logic.
     mcp = getattr(app.state, "mcp", None)
     if mcp is None:
-        from bioagent_service.mcp_server import make_mcp_server
+        from bioq_service.mcp_server import make_mcp_server
 
         mcp = make_mcp_server(app, app.state.adapter, app.state.settings)
         app.state.mcp = mcp

@@ -2,7 +2,7 @@
 
 Exposes `/api/fold` for structure prediction. Job lifecycle endpoints
 (`/healthz`, `/api/jobs/*`, `/api/manifest`, `/openapi.json`) come from
-`bioagent_service.create_app`.
+`bioq_service.create_app`.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import zipfile
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
@@ -27,7 +27,7 @@ from .adapter import ESMFold2Adapter
 from .models import FoldRequest
 from .settings import ESMFold2Settings
 from .tools import build_input_json, fold_argv
-from bioagent_service.uris import resolve_uri, save_upload
+from bioq_service.uris import resolve_uri, save_upload
 
 logging.basicConfig(
     level=logging.INFO,

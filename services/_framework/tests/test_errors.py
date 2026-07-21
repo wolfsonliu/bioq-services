@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bioagent_service import JobAdapter, ServiceSettings
-from bioagent_service.errors import extract_error_summary, finalize_job
-from bioagent_service.jobs import JobStore
-from bioagent_service.models import FailureKind, JobStatus
+from bioq_service import JobAdapter, ServiceSettings
+from bioq_service.errors import extract_error_summary, finalize_job
+from bioq_service.jobs import JobStore
+from bioq_service.models import FailureKind, JobStatus
 
 
 class _Adapter(JobAdapter):

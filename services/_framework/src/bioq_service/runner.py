@@ -17,11 +17,11 @@ from concurrent.futures import Executor
 from pathlib import Path
 from typing import Any, Callable
 
-from bioagent_service.adapter import JobAdapter
-from bioagent_service.errors import ServiceBusyError, finalize_job
-from bioagent_service.jobs import JobStore, cleanup_job, evict_finished_until_under_limit
-from bioagent_service.models import FailureKind, JobInfo, JobStatus, utcnow
-from bioagent_service.settings import ServiceSettings
+from bioq_service.adapter import JobAdapter
+from bioq_service.errors import ServiceBusyError, finalize_job
+from bioq_service.jobs import JobStore, cleanup_job, evict_finished_until_under_limit
+from bioq_service.models import FailureKind, JobInfo, JobStatus, utcnow
+from bioq_service.settings import ServiceSettings
 
 logger = logging.getLogger(__name__)
 

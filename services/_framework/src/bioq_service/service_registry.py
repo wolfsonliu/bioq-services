@@ -2,7 +2,7 @@
 
 General-purpose utilities (production code may resolve downstream service URLs
 via these), so this module has no test-only dependencies.
-`bioagent_service.fc_testing` re-exports the helpers for backward compatibility.
+`bioq_service.fc_testing` re-exports the helpers for backward compatibility.
 
 `services/services.yaml` schema::
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import zipfile
 from pathlib import Path
 
-from bioagent_service.oss_export import mirror_job_dir_to_oss
+from bioq_service.oss_export import mirror_job_dir_to_oss
 
 
 def _make_job(tmp_path: Path) -> Path:

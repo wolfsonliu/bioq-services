@@ -5,7 +5,7 @@ Marked `@pytest.mark.fc`, skipped by default. Run with:
     RUN_FC_TESTS=1 pytest services/diamond-server/tests/test_fc_task.py
 
 Exercises the blocking task endpoints via the framework's job store. URL is read
-from `services/services.yaml` via `bioagent_service.fc_testing`.
+from `services/services.yaml` via `bioq_service.fc_testing`.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from bioagent_service.fc_testing import fc_url, poll_job
+from bioq_service.fc_testing import fc_url, poll_job
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 QUERY = DATA_DIR / "query.faa"

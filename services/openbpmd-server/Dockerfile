@@ -14,7 +14,7 @@
 # Multistage layout
 # -----------------
 #   builder = conda env (Python 3.10 + openmm 8.1.1 CUDA + mdanalysis + mdtraj
-#             + parmed + numpy + pandas + bioagent-service-framework), plus the
+#             + parmed + numpy + pandas + bioq-service-framework), plus the
 #             vendored OpenBPMD source with patches/ applied.
 #   runtime = lean: conda env + patched upstream + server code.
 #

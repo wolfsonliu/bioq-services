@@ -13,7 +13,7 @@ from unittest.mock import patch
 import pytest
 from pydantic_settings import SettingsConfigDict
 
-from bioagent_service.cli import CLIEndpoint, create_cli
+from bioq_service.cli import CLIEndpoint, create_cli
 
 from server.adapter import DockQAdapter
 from server.models import ScoreBatchRequest, ScoreRequest
@@ -154,7 +154,7 @@ def test_cli_score_success(tmp_path):
         "--model", str(model), "--native", str(native),
         "--output-dir", str(output_dir),
     ]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with patch.object(adapter, "detect_outputs", return_value=True):
                 with pytest.raises(SystemExit) as exc_info:
@@ -177,7 +177,7 @@ def test_cli_score_json_output(tmp_path, capsys):
         "--model", str(model), "--native", str(native),
         "--json", "--output-dir", str(output_dir),
     ]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with patch.object(adapter, "detect_outputs", return_value=True):
                 with pytest.raises(SystemExit) as exc_info:
@@ -214,7 +214,7 @@ def test_cli_score_failure(tmp_path):
         "--model", str(model), "--native", str(native),
         "--output-dir", str(output_dir),
     ]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 1
             with pytest.raises(SystemExit) as exc_info:
                 create_cli(adapter, s, ENDPOINTS, version="0.0.1")
@@ -236,7 +236,7 @@ def test_cli_write_job_json(tmp_path):
         "--model", str(model), "--native", str(native),
         "--write-job-json", "--output-dir", str(output_dir),
     ]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with patch.object(adapter, "detect_outputs", return_value=True):
                 with pytest.raises(SystemExit):

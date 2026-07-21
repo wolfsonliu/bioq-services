@@ -2,7 +2,7 @@
 
 Exposes /api/score for scoring antibody-antigen docking complexes.
 Job lifecycle endpoints (/healthz, /api/jobs/*, /api/manifest, /openapi.json)
-come from `bioagent_service.create_app`.
+come from `bioq_service.create_app`.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
@@ -26,7 +26,7 @@ from .adapter import DeepRankAbAdapter
 from .models import ScoreRequest
 from .settings import DeepRankAbSettings
 from .argv import score_argv
-from bioagent_service.uris import resolve_input
+from bioq_service.uris import resolve_input
 
 logging.basicConfig(
     level=logging.INFO,

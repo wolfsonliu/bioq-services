@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 from pydantic_settings import SettingsConfigDict
 
-from bioagent_service import ServiceSettings
+from bioq_service import ServiceSettings
 
 
 class _NoEnvSettings(ServiceSettings):

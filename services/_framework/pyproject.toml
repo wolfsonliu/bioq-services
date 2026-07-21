@@ -1,5 +1,5 @@
 [project]
-name = "bioagent-service-framework"
+name = "bioq-service-framework"
 version = "0.1.0"
 description = "Reusable HTTP/job/error layer for bioagent algorithm services"
 requires-python = ">=3.10"
@@ -26,14 +26,14 @@ dev = [
 ]
 
 [project.scripts]
-bioagent-service-mcp-stdio = "bioagent_service.mcp_stdio:main"
+bioq-service-mcp-stdio = "bioq_service.mcp_stdio:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/bioagent_service"]
+packages = ["src/bioq_service"]
 
 [tool.ruff]
 line-length = 100

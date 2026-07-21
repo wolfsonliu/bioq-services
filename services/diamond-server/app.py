@@ -3,7 +3,7 @@
 Exposes /api/blastp, /api/blastx, /api/cluster, /api/msa (+ /api/tasks/* async
 variants). makedb is CLI/SIF-only (see __main__.py). Job lifecycle endpoints
 (/healthz, /api/jobs/*, /api/manifest, /openapi.json) come from
-`bioagent_service.create_app`.
+`bioq_service.create_app`.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
@@ -21,7 +21,7 @@ from bioagent_service import (
     read_version_file,
     resolve_task_id,
 )
-from bioagent_service.uris import resolve_input, resolve_uri
+from bioq_service.uris import resolve_input, resolve_uri
 from fastapi import Depends, File, Form, Header, HTTPException, Request, UploadFile
 
 from .adapter import DiamondAdapter

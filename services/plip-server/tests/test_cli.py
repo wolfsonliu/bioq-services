@@ -13,7 +13,7 @@ from unittest.mock import patch
 import pytest
 from pydantic_settings import SettingsConfigDict
 
-from bioagent_service.cli import CLIEndpoint, create_cli
+from bioq_service.cli import CLIEndpoint, create_cli
 
 from server.adapter import PlipAdapter
 from server.models import ProfileRequest
@@ -100,7 +100,7 @@ def test_cli_profile_success(tmp_path):
     with patch.object(sys, "argv", [
         "prog", "profile", "--input-pdb", str(PDB), "--output-dir", str(output_dir),
     ]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with patch.object(adapter, "detect_outputs", return_value=True):
                 with pytest.raises(SystemExit) as exc:

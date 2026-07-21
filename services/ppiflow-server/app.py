@@ -6,7 +6,7 @@ bioagent services; this server is intentionally scoped to PPIFlow's own
 sampling capability.
 
 Lifecycle (status / log / download / single-file / delete / manifest /
-openapi) is contributed by `bioagent_service.create_app`. See
+openapi) is contributed by `bioq_service.create_app`. See
 `engineering/guides/calling-bioagent-services.md` for the call protocol.
 """
 
@@ -16,7 +16,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
@@ -44,7 +44,7 @@ from .tools import (
     nanobody_argv,
     scaffolding_argv,
 )
-from bioagent_service.uris import resolve_input
+from bioq_service.uris import resolve_input
 
 logging.basicConfig(
     level=logging.INFO,

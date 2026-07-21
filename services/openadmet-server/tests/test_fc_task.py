@@ -25,7 +25,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from bioagent_service.fc_testing import fc_url
+from bioq_service.fc_testing import fc_url
 
 SERVICE = "openadmet-server"
 

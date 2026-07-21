@@ -3,7 +3,7 @@ name = "gateway-server"
 version = "0.0.1"
 requires-python = ">=3.11"
 dependencies = [
-    "bioagent-service-framework[mcp]",
+    "bioq-service-framework[mcp]",
     "httpx>=0.28",
     "pyjwt[crypto]>=2.8",
     "sqlalchemy>=2.0",
@@ -18,6 +18,9 @@ dependencies = [
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
+
+[tool.uv.sources]
+bioq-service-framework = { path = "../_framework", editable = true }
 
 [tool.setuptools]
 packages = ["server"]

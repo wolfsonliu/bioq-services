@@ -1,4 +1,4 @@
-"""Shared URI-resolution helpers (bioagent_service.uris)."""
+"""Shared URI-resolution helpers (bioq_service.uris)."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ import pytest
 from fastapi import HTTPException
 from pydantic_settings import SettingsConfigDict
 
-from bioagent_service.settings import ServiceSettings
-from bioagent_service.uris import (
+from bioq_service.settings import ServiceSettings
+from bioq_service.uris import (
     maybe_resolve_input,
     resolve_input,
     resolve_uri,

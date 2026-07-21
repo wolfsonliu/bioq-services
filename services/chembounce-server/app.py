@@ -2,7 +2,7 @@
 
 Exposes `/api/scaffold_hop` (submit/poll) + `/api/tasks/scaffold_hop`
 (FC async task mode).  Job lifecycle endpoints (/healthz, /api/jobs/*,
-/api/manifest, /openapi.json) come from `bioagent_service.create_app`.
+/api/manifest, /openapi.json) come from `bioq_service.create_app`.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,

@@ -2,7 +2,7 @@
 
 基于 FastAPI 的 [FlowMol3](https://github.com/Dunni3/FlowMol) HTTP 服务——把
 flow matching 的 **无条件 3D 小分子生成**功能包装成 FC GPU 服务。**构建在
-[bioagent-service-framework](../_framework/) 之上**。
+[bioq-service-framework](../_framework/) 之上**。
 
 FlowMol3：flow matching 模型，从 $\mathcal{N}(0, I)$ 先验直接生成 3D 全原子
 （含 H）的 valid drug-like 小分子（原子坐标 + 类型 + 电荷 + 键序）。**6M
@@ -19,7 +19,7 @@ rdkit)。
 客户端 / Agent
   ↓ HTTP (form-encoded params, no file uploads — unconditional)
 ┌────────────────────────────────────────────────────────────────┐
-│  FastAPI + bioagent-service-framework  (port 9000)             │
+│  FastAPI + bioq-service-framework  (port 9000)             │
 │                                                                │
 │  服务专属                                                       │
 │    POST /api/generate         (submit/poll)                    │

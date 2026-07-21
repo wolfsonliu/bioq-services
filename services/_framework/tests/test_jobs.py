@@ -6,14 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from bioagent_service.jobs import (
+from bioq_service.jobs import (
     JobStore,
     cleanup_job,
     disk_usage_bytes,
     evict_finished_until_under_limit,
     get_job_dir,
 )
-from bioagent_service.models import JobStatus
+from bioq_service.models import JobStatus
 
 
 def test_create_get_update_round_trip() -> None:

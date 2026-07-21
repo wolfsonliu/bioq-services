@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bioagent_service.cli import CLIEndpoint, create_cli
+from bioq_service.cli import CLIEndpoint, create_cli
 
 from .adapter import ImmuneBuilderAdapter
 from .models import AntibodyRequest, NanobodyRequest, TCRRequest

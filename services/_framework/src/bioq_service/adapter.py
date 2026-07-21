@@ -21,12 +21,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from bioagent_service.jobs import get_job_dir
-from bioagent_service.models import JobInfo, JobStatus
-from bioagent_service.settings import ServiceSettings
+from bioq_service.jobs import get_job_dir
+from bioq_service.models import JobInfo, JobStatus
+from bioq_service.settings import ServiceSettings
 
 if TYPE_CHECKING:
-    from bioagent_service.manifest import EndpointExample
+    from bioq_service.manifest import EndpointExample
 
 
 class JobAdapter:

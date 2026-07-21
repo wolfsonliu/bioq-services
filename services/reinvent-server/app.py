@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
@@ -31,7 +31,7 @@ from .tools import (
     enumeration_argv, sampling_argv, scoring_argv,
     staged_learning_argv, transfer_learning_argv,
 )
-from bioagent_service.uris import maybe_resolve_input, resolve_input
+from bioq_service.uris import maybe_resolve_input, resolve_input
 
 settings = ReinventSettings()
 adapter = ReinventAdapter(settings=settings)

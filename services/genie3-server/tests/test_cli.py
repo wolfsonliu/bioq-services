@@ -15,7 +15,7 @@ import pytest
 import yaml
 from pydantic_settings import SettingsConfigDict
 
-from bioagent_service.cli import CLIEndpoint, create_cli
+from bioq_service.cli import CLIEndpoint, create_cli
 
 from server.adapter import Genie3Adapter
 from server.configs import build_binder_config, build_motif_config, build_unconditional_config
@@ -165,7 +165,7 @@ def test_cli_unconditional_success(tmp_path):
         "--n-sample", "3",
         "--output-dir", str(output_dir),
     ]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with patch.object(adapter, "detect_outputs", return_value=True):
                 with pytest.raises(SystemExit) as exc_info:

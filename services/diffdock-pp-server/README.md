@@ -2,7 +2,7 @@
 
 基于 FastAPI 的 [DiffDock-PP](https://github.com/ketatam/DiffDock-PP)
 HTTP 服务——把刚性蛋白-蛋白对接（rigid protein-protein docking）功能包装成
-FC GPU 服务。**构建在 [bioagent-service-framework](../_framework/) 之上**。
+FC GPU 服务。**构建在 [bioq-service-framework](../_framework/) 之上**。
 
 DiffDock-PP：给定一对未结合蛋白结构（receptor + ligand，两者都是 protein），
 用 e3nn 等变扩散网络采样 N 个候选相对姿势，再用 confidence model 打分排序
@@ -21,7 +21,7 @@ DiffDock-PP：给定一对未结合蛋白结构（receptor + ligand，两者都�
 客户端 / Agent
   ↓ HTTP (multipart upload: receptor.pdb + ligand.pdb)
 ┌────────────────────────────────────────────────────────────────┐
-│  FastAPI + bioagent-service-framework  (port 9000)             │
+│  FastAPI + bioq-service-framework  (port 9000)             │
 │                                                                │
 │  服务专属                                                      │
 │    POST /api/dock              (submit/poll)                   │

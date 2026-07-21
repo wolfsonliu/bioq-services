@@ -10,7 +10,7 @@ Exposes 6 sync endpoints (submit/poll) + 6 async task endpoints:
 - /api/tasks/<same-name>  → FC async task-mode variants
 
 Job lifecycle endpoints (/healthz, /api/jobs/*, /api/manifest,
-/openapi.json) come from ``bioagent_service.create_app``.
+/openapi.json) come from ``bioq_service.create_app``.
 
 PocketXMol is MIT-licensed.  See engineering/decisions/
 2026-07-06-pocketxmol-server-design.md.
@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Optional
 
 import yaml
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
@@ -55,7 +55,7 @@ from .models import (
 )
 from .settings import PocketXMolSettings
 from .tools import confidence_argv, sample_argv
-from bioagent_service.uris import maybe_resolve_input, resolve_input
+from bioq_service.uris import maybe_resolve_input, resolve_input
 
 logger = logging.getLogger(__name__)
 

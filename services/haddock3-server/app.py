@@ -9,7 +9,7 @@ Endpoints (each with a matching /api/tasks/<name> for FC async task mode):
   * `/api/restraints/active-passive-to-ambig` — CNS-free ambig restraints
 
 Job lifecycle (/healthz, /api/jobs/*, /api/manifest, /openapi.json) comes from
-`bioagent_service.create_app`.
+`bioq_service.create_app`.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
@@ -29,7 +29,7 @@ from bioagent_service import (
     resolve_input,
     resolve_task_id,
 )
-from bioagent_service.uris import resolve_uri
+from bioq_service.uris import resolve_uri
 from fastapi import Depends, File, Form, Header, Request, UploadFile
 
 from .adapter import Haddock3Adapter

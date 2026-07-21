@@ -14,7 +14,7 @@ from unittest.mock import patch
 import pytest
 from pydantic_settings import SettingsConfigDict
 
-from bioagent_service.cli import CLIEndpoint, create_cli
+from bioq_service.cli import CLIEndpoint, create_cli
 
 from server.adapter import ODesignAdapter
 from server.models import DesignRequest
@@ -147,7 +147,7 @@ def test_cli_design_success(tmp_path):
         "--model", "odesign_base_prot_flex",
         "--output-dir", str(output_dir),
     ]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with patch.object(adapter, "detect_outputs", return_value=True):
                 with pytest.raises(SystemExit) as exc_info:
@@ -168,7 +168,7 @@ def test_cli_design_json_output(tmp_path, capsys):
         "--input-json", str(json_file),
         "--json", "--output-dir", str(output_dir),
     ]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with patch.object(adapter, "detect_outputs", return_value=True):
                 with pytest.raises(SystemExit) as exc_info:

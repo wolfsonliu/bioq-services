@@ -22,7 +22,7 @@ anyway. The wrapper ``json.loads`` them before calling the model constructor.
 Usage::
 
     from fastapi import Depends, File, UploadFile
-    from bioagent_service.forms import model_form_depends
+    from bioq_service.forms import model_form_depends
 
     @app.post("/api/design")
     def post_design(

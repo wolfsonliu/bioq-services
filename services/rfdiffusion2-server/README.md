@@ -1,6 +1,6 @@
 # RFdiffusion2 Server
 
-基于 FastAPI 的 RFdiffusion2 HTTP 服务，构建在 [bioagent-service-framework](../_framework/) 之上：
+基于 FastAPI 的 RFdiffusion2 HTTP 服务，构建在 [bioq-service-framework](../_framework/) 之上：
 HTTP 层 / job 生命周期 / 错误处理 / 持久化 / 多实例一致性 / Agent 协议描述均由框架统一提供，服务自身只
 负责把 RFdiffusion2 的 3 种典型用法（active_site / small_molecule_binder / 自定义）映射为
 `rf_diffusion/run_inference.py` 的 Hydra override argv。
@@ -18,7 +18,7 @@ HTTP 层 / job 生命周期 / 错误处理 / 持久化 / 多实例一致性 / Ag
 客户端 / Agent
   ↓ HTTP
 ┌────────────────────────────────────────────────────────────────┐
-│  FastAPI + bioagent-service-framework  (port 9000)             │
+│  FastAPI + bioq-service-framework  (port 9000)             │
 │                                                                │
 │  服务专属（rfdiffusion2-server 注册）                          │
 │    POST /api/generate/active_site             (酶活性位点)     │
@@ -218,7 +218,7 @@ micromamba run -n rfd2 uvicorn server.app:app --reload --port 9000
 
 ```bash
 cd services/rfdiffusion2-server
-uv run --with bioagent-service-framework --with httpx --with pytest \
+uv run --with bioq-service-framework --with httpx --with pytest \
   --no-project python -m pytest tests/
 ```
 

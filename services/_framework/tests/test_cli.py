@@ -1,4 +1,4 @@
-"""Tests for the CLI batch-mode module (bioagent_service.cli).
+"""Tests for the CLI batch-mode module (bioq_service.cli).
 
 Covers: pydantic→argparse conversion, request building, input resolution,
 CLIEndpoint wiring, and end-to-end create_cli flow (with mocked subprocess).
@@ -16,9 +16,9 @@ import pytest
 from pydantic import BaseModel, Field
 from pydantic_settings import SettingsConfigDict
 
-from bioagent_service import ServiceSettings
-from bioagent_service.adapter import JobAdapter
-from bioagent_service.cli import (
+from bioq_service import ServiceSettings
+from bioq_service.adapter import JobAdapter
+from bioq_service.cli import (
     CLIEndpoint,
     _UNSET,
     _add_model_args,
@@ -273,7 +273,7 @@ def test_create_cli_success(tmp_path: Path):
 
     output_dir = tmp_path / "run" / "output"
     with patch.object(sys, "argv", ["prog", "echo", "--output-dir", str(output_dir)]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with pytest.raises(SystemExit) as exc_info:
                 create_cli(adapter, settings, endpoints)
@@ -297,7 +297,7 @@ def test_create_cli_failure(tmp_path: Path):
 
     output_dir = tmp_path / "run" / "output"
     with patch.object(sys, "argv", ["prog", "echo", "--output-dir", str(output_dir)]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 1
             with pytest.raises(SystemExit) as exc_info:
                 create_cli(adapter, settings, endpoints)
@@ -324,7 +324,7 @@ def test_create_cli_json_output(tmp_path: Path, capsys):
 
     output_dir = tmp_path / "run" / "output"
     with patch.object(sys, "argv", ["prog", "echo", "--json", "--output-dir", str(output_dir)]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with pytest.raises(SystemExit) as exc_info:
                 create_cli(adapter, settings, endpoints)
@@ -359,7 +359,7 @@ def test_create_cli_write_job_json(tmp_path: Path):
     with patch.object(sys, "argv", [
         "prog", "echo", "--write-job-json", "--output-dir", str(output_dir),
     ]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with pytest.raises(SystemExit):
                 create_cli(adapter, settings, endpoints)
@@ -399,7 +399,7 @@ def test_create_cli_with_input_files(tmp_path: Path):
     with patch.object(sys, "argv", [
         "prog", "score", "--model", str(model_pdb), "--output-dir", str(output_dir),
     ]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with pytest.raises(SystemExit):
                 create_cli(adapter, settings, endpoints)

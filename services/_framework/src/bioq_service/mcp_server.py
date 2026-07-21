@@ -23,7 +23,7 @@ Two transports are supported:
     same image is deployed to Alibaba Cloud FC. Fits FC's request-response
     model; no long-lived SSE connection is required.
   * **stdio** — for local Claude Desktop / Cursor / IDE integrations. Started
-    via the `bioagent-service-mcp-stdio` CLI entry point in `mcp_stdio.py`.
+    via the `bioq-service-mcp-stdio` CLI entry point in `mcp_stdio.py`.
 """
 
 # Note: NO `from __future__ import annotations` here. FastMCP runs
@@ -41,8 +41,8 @@ from fastapi import FastAPI, UploadFile
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, create_model
 
-from bioagent_service.adapter import JobAdapter
-from bioagent_service.settings import ServiceSettings
+from bioq_service.adapter import JobAdapter
+from bioq_service.settings import ServiceSettings
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -50,7 +50,7 @@ try:
 except ImportError as e:  # pragma: no cover - guarded by enable_mcp
     raise ImportError(
         "MCP support requested but `mcp` is not installed. "
-        "Install with `pip install 'bioagent-service-framework[mcp]'`."
+        "Install with `pip install 'bioq-service-framework[mcp]'`."
     ) from e
 
 logger = logging.getLogger(__name__)

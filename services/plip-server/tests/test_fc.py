@@ -7,7 +7,7 @@ Marked `@pytest.mark.fc`, skipped by default. Run with:
     RUN_FC_TESTS=1 pytest services/plip-server/tests/test_fc.py
 
 Fixtures live in `tests/data/` so the suite is self-contained. URL is read from
-`services/services.yaml` via `bioagent_service.fc_testing`.
+`services/services.yaml` via `bioq_service.fc_testing`.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from bioagent_service.fc_testing import fc_url, poll_job
+from bioq_service.fc_testing import fc_url, poll_job
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 PDB = DATA_DIR / "1vsn.pdb"

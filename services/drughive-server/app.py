@@ -7,7 +7,7 @@ Exposes 3 sync endpoints (submit/poll) + 3 async task endpoints:
 - /api/tasks/<same-name> → FC async task mode variants
 
 Job lifecycle endpoints (/healthz, /api/jobs/*, /api/manifest,
-/openapi.json) come from ``bioagent_service.create_app``.
+/openapi.json) come from ``bioq_service.create_app``.
 
 DrugHIVE is licensed under USC-RL v2.0 (non-commercial academic research
 only).  See engineering/decisions/2026-07-02-drughive-server-design.md §1.
@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Optional
 
 import yaml
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
@@ -41,7 +41,7 @@ from .configs import (
 from .models import GenerateRequest, GenerateSpatialRequest, OptimizeRequest
 from .settings import DrughiveSettings
 from .tools import generate_argv, optimize_argv
-from bioagent_service.uris import maybe_resolve_input, resolve_input
+from bioq_service.uris import maybe_resolve_input, resolve_input
 
 logger = logging.getLogger(__name__)
 

@@ -2,7 +2,7 @@
 
 ChemBounce takes SMILES as a string, not a file — so this resolver is slim: it
 fetches an `input_smiles_uri` (for chained pipelines, e.g. a previous job's
-output SMILES) via the shared `bioagent_service.uris.resolve_uri` and returns
+output SMILES) via the shared `bioq_service.uris.resolve_uri` and returns
 the first non-empty line as the SMILES string. Most calls pass `input_smiles`
 as a plain form field and never touch this.
 """
@@ -15,7 +15,7 @@ from pathlib import Path
 
 from fastapi import HTTPException
 
-from bioagent_service.uris import resolve_uri
+from bioq_service.uris import resolve_uri
 
 from .settings import ChemBounceSettings
 

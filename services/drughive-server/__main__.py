@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Optional
 
 import yaml
-from bioagent_service.cli import CLIEndpoint, create_cli
+from bioq_service.cli import CLIEndpoint, create_cli
 
 from .adapter import DrughiveAdapter
 from .configs import (

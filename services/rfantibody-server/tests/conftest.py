@@ -34,7 +34,7 @@ if "server" not in sys.modules:
 # ---------------------------------------------------------------------------
 # `fc` marker — opt-in tests that hit the deployed Function Compute URL.
 # ---------------------------------------------------------------------------
-from bioagent_service.fc_testing import (  # noqa: E402
+from bioq_service.fc_testing import (  # noqa: E402
     register_fc_marker,
     skip_fc_tests_unless_enabled,
 )

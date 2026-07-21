@@ -12,7 +12,7 @@ from typing import Optional
 
 # Re-export framework JobInfo / JobStatus for backwards compatibility with
 # callers that used to import them from server.models.
-from bioagent_service import FailureKind, JobInfo, JobStatus  # noqa: F401
+from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 

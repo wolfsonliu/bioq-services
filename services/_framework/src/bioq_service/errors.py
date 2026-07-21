@@ -11,11 +11,11 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from bioagent_service.models import FailureKind, JobStatus, utcnow
+from bioq_service.models import FailureKind, JobStatus, utcnow
 
 if TYPE_CHECKING:
-    from bioagent_service.adapter import JobAdapter
-    from bioagent_service.jobs import JobStore
+    from bioq_service.adapter import JobAdapter
+    from bioq_service.jobs import JobStore
 
 
 class ServiceBusyError(Exception):

@@ -2,7 +2,7 @@
 
 基于 FastAPI 的 [BoltzGen](https://github.com/HannesStark/boltzgen) HTTP 服务，
 封装 binder design 流水线（扩散生成 + inverse fold + refolding + filtering）。
-**构建在 [bioagent-service-framework](../_framework/) 之上**：HTTP / job /
+**构建在 [bioq-service-framework](../_framework/) 之上**：HTTP / job /
 错误 / 持久化由框架统一提供。
 
 镜像 base：`nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04`；torch 2.4.1 cu124

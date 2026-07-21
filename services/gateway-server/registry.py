@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bioagent_service.service_registry import ServiceRecord, load_services
+from bioq_service.service_registry import ServiceRecord, load_services
 
 
 class ServiceRegistry:

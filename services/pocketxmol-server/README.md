@@ -2,7 +2,7 @@
 
 基于 FastAPI 的 [PocketXMol](https://github.com/pengxingang/PocketXMol) HTTP + CLI
 双模服务——把 pocket-interacting foundation model 的**结构预测 / 分子设计 / 多肽设计**
-能力包装成 FC GPU 服务。**构建在 [bioagent-service-framework](../_framework/) 之上**。
+能力包装成 FC GPU 服务。**构建在 [bioq-service-framework](../_framework/) 之上**。
 
 **PocketXMol** (Peng et al., *Cell* 2026, doi:10.1016/j.cell.2026.01.003, MIT)
 用**单个 ckpt** 统一建模原子级相互作用，覆盖多种 pocket-based 任务：小分子/多肽
@@ -19,7 +19,7 @@
 客户端 / Agent
   ↓ HTTP (multipart: protein.pdb + optional ligand/peptide + form fields)
 ┌────────────────────────────────────────────────────────────────┐
-│  FastAPI + bioagent-service-framework  (port 9000)             │
+│  FastAPI + bioq-service-framework  (port 9000)             │
 │                                                                │
 │  服务专属（每个 endpoint 配套 /api/tasks/<name> 异步版）       │
 │    POST /api/dock        (small mol / peptide docking)         │

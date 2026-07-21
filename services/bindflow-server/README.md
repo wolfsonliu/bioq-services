@@ -4,7 +4,7 @@
 包装 —— snakemake 编排的 GROMACS ABFE / MMPBSA 全流程。**HPC-primary**：
 主入口是 `apptainer exec bindflow-server.sif python -m server {fep|mmpbsa}`；
 HTTP 端点保留用于本地 dev / smoke / 未来 K8s 部署，**不部署 FC**（工作负载
-经常超出 24 h 上限）。构建在 [bioagent-service-framework](../_framework/) 之上。
+经常超出 24 h 上限）。构建在 [bioq-service-framework](../_framework/) 之上。
 
 BindFlow：给定蛋白 + 已知结合姿势的配体，用 Boresch-restrained FEP 或
 MM(P/G)BSA 计算严格的结合自由能。**Upstream 是 GPL-3.0**（fork 自 Biggin Lab
@@ -25,7 +25,7 @@ MM(P/G)BSA 计算严格的结合自由能。**Upstream 是 GPL-3.0**（fork 自 
 客户端 / Agent
   ↓ HTTP multipart / URI  OR  CLI subcommand
 ┌───────────────────────────────────────────────────────────────────┐
-│  FastAPI + bioagent-service-framework  (port 9000, HTTP mode)     │
+│  FastAPI + bioq-service-framework  (port 9000, HTTP mode)     │
 │    POST /api/calculate/fep                                        │
 │    POST /api/calculate/mmpbsa                                     │
 │    GET  /api/manifest, /healthz, /healthz/detail, /openapi.json   │

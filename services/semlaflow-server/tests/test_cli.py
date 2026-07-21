@@ -13,7 +13,7 @@ from unittest.mock import patch
 import pytest
 from pydantic_settings import SettingsConfigDict
 
-from bioagent_service.cli import CLIEndpoint, create_cli
+from bioq_service.cli import CLIEndpoint, create_cli
 
 from server.adapter import SemlaFlowAdapter
 from server.models import GenerateRequest
@@ -99,7 +99,7 @@ def test_cli_generate_success(tmp_path):
         "--integration-steps", "50",
         "--output-dir", str(output_dir),
     ]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with patch.object(adapter, "detect_outputs", return_value=True):
                 with pytest.raises(SystemExit) as exc_info:
@@ -117,7 +117,7 @@ def test_cli_generate_json_output(tmp_path, capsys):
         "--n-molecules", "5",
         "--json", "--output-dir", str(output_dir),
     ]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with patch.object(adapter, "detect_outputs", return_value=True):
                 with pytest.raises(SystemExit) as exc_info:
@@ -141,7 +141,7 @@ def test_cli_generate_via_params_json(tmp_path):
         '{"model_name": "qm9", "n_molecules": 20, "integration_steps": 60, "seed": 7}',
         "--output-dir", str(output_dir),
     ]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with patch.object(adapter, "detect_outputs", return_value=True):
                 with pytest.raises(SystemExit) as exc_info:

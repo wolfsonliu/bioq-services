@@ -2,7 +2,7 @@
 
 基于 FastAPI 的 [DiffHopp](https://github.com/jostorge/diffusion-hopping)
 HTTP 服务——把图扩散模型的 **scaffold hopping**（候选骨架生成）功能包装成 FC
-GPU 服务。**构建在 [bioagent-service-framework](../_framework/) 之上**。
+GPU 服务。**构建在 [bioq-service-framework](../_framework/) 之上**。
 
 DiffHopp：给定**蛋白口袋** + **参考配体**，生成 N 个保留结合姿势但骨架不同的
 候选分子（arXiv:2308.07416，MIT license）。
@@ -16,7 +16,7 @@ DiffHopp：给定**蛋白口袋** + **参考配体**，生成 N 个保留结合�
 客户端 / Agent
   ↓ HTTP (multipart upload: protein.pdb + reference_ligand.sdf)
 ┌────────────────────────────────────────────────────────────────┐
-│  FastAPI + bioagent-service-framework  (port 9000)             │
+│  FastAPI + bioq-service-framework  (port 9000)             │
 │                                                                │
 │  服务专属                                                      │
 │    POST /api/generate         (submit/poll)                    │

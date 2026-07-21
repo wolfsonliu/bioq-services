@@ -7,9 +7,9 @@ from types import SimpleNamespace
 from pydantic import BaseModel
 from pydantic_settings import SettingsConfigDict
 
-from bioagent_service import JobAdapter, JobStatus, ServiceSettings
-from bioagent_service.jobs import JobStore
-from bioagent_service.task_endpoint import execute_task
+from bioq_service import JobAdapter, JobStatus, ServiceSettings
+from bioq_service.jobs import JobStore
+from bioq_service.task_endpoint import execute_task
 
 
 class _Settings(ServiceSettings):

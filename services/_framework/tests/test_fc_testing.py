@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from bioagent_service.fc_testing import (
+from bioq_service.fc_testing import (
     fc_url,
     find_services_yaml,
     load_services,

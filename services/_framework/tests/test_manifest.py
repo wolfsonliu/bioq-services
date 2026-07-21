@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel
 from pydantic_settings import SettingsConfigDict
 
-from bioagent_service import JobAdapter, ServiceSettings, create_app
+from bioq_service import JobAdapter, ServiceSettings, create_app
 
 
 class _Settings(ServiceSettings):
@@ -165,7 +165,7 @@ def test_request_fields_flattened_with_required_marker(default_client: TestClien
 
 def test_request_fields_detect_optional_via_anyof_null(tmp_path: Path) -> None:
     """A field declared `Optional[str]` should come out non-required with type='string'."""
-    from bioagent_service import create_app
+    from bioq_service import create_app
     from fastapi import Form
 
     settings = _Settings(jobs_base_dir=tmp_path / "jobs")
@@ -196,7 +196,7 @@ def test_extract_fields_marks_file_uploads_by_schema_shape() -> None:
     end-to-end file-upload path is exercised by the rfantibody-server tests
     against its real upload endpoints.
     """
-    from bioagent_service.manifest import _extract_fields
+    from bioq_service.manifest import _extract_fields
 
     body_schema = {
         "type": "object",
@@ -257,7 +257,7 @@ def test_endpoint_examples_default_empty(default_client: TestClient) -> None:
 
 def test_endpoint_examples_from_adapter_hook(tmp_path: Path) -> None:
     """Adapter.endpoint_examples() values surface on the relevant endpoint."""
-    from bioagent_service import EndpointExample, JobAdapter, create_app
+    from bioq_service import EndpointExample, JobAdapter, create_app
 
     class _AdapterWithExamples(JobAdapter):
         name = "demo"

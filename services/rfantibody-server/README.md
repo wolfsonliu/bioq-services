@@ -1,6 +1,6 @@
 # RFantibody Server
 
-基于 FastAPI 的 RFantibody HTTP 服务，**v0.2 起构建在 [bioagent-service-framework](../_framework/) 之上**：
+基于 FastAPI 的 RFantibody HTTP 服务，**v0.2 起构建在 [bioq-service-framework](../_framework/) 之上**：
 HTTP 层 / job 生命周期 / 错误处理 / 持久化 / 多实例一致性 / Agent 协议描述均由框架统一提供，服务自身只
 负责 RFantibody 三个工具（RFdiffusion / ProteinMPNN / RF2）的 argv 拼装与 URI 解析。
 
@@ -10,7 +10,7 @@ HTTP 层 / job 生命周期 / 错误处理 / 持久化 / 多实例一致性 / Ag
 客户端 / Agent
   ↓ HTTP
 ┌────────────────────────────────────────────────────────────────┐
-│  FastAPI + bioagent-service-framework  (port 9000)             │
+│  FastAPI + bioq-service-framework  (port 9000)             │
 │                                                                │
 │  服务专属（rfantibody-server 注册）                            │
 │    POST /api/rfdiffusion              (单步：骨架设计)         │
@@ -315,6 +315,6 @@ docker run --gpus all -p 9000:9000 --memory 16g \
 
 ## 相关文档
 
-- [bioagent-service-framework](../_framework/README.md) — 通用 HTTP / job / 错误处理 / manifest 层
+- [bioq-service-framework](../_framework/README.md) — 通用 HTTP / job / 错误处理 / manifest 层
 - [Service 框架抽象设计](../../engineering/decisions/2026-05-12-service-framework-design.md) — 设计决策
 - [Tool 抽象层设计](../../engineering/decisions/2026-04-23-tool-abstraction-design.md) — Client 端 Tool + Runner（消费本 service 的 manifest）

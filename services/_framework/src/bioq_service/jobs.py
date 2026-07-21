@@ -27,10 +27,10 @@ import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from bioagent_service.models import FailureKind, JobInfo, JobStatus, utcnow
+from bioq_service.models import FailureKind, JobInfo, JobStatus, utcnow
 
 if TYPE_CHECKING:
-    from bioagent_service.adapter import JobAdapter
+    from bioq_service.adapter import JobAdapter
 
 logger = logging.getLogger(__name__)
 

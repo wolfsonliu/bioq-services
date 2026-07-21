@@ -3,7 +3,7 @@
 Exposes a single `/api/profile` endpoint (+ `/api/tasks/profile` async variant)
 that profiles the non-covalent interactions in one PDB complex. Job lifecycle
 endpoints (/healthz, /api/jobs/*, /api/manifest, /openapi.json) come from
-`bioagent_service.create_app`.
+`bioq_service.create_app`.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
@@ -22,7 +22,7 @@ from bioagent_service import (
     read_version_file,
     resolve_task_id,
 )
-from bioagent_service.uris import resolve_input
+from bioq_service.uris import resolve_input
 from fastapi import Depends, File, Form, Header, Request, UploadFile
 
 from .adapter import PlipAdapter

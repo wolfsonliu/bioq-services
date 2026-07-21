@@ -9,7 +9,7 @@ Exposes four POST endpoints:
                                     custom `cond_strategy`, etc.)
 
 Lifecycle (status / log / download / single-file / delete / manifest / OpenAPI)
-is contributed by `bioagent_service.create_app`.
+is contributed by `bioq_service.create_app`.
 
 FC deployment:
   - 0.0.0.0:CAPort (default 9000)
@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import yaml
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,

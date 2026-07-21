@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from bioagent_service.cli import CLIEndpoint, create_cli
+from bioq_service.cli import CLIEndpoint, create_cli
 
 from server.adapter import RFdiffusionAdapter
 from server.models import (
@@ -219,7 +219,7 @@ def test_cli_unconditional_success(settings, tmp_path):
         "--min-length", "100", "--max-length", "150",
         "--output-dir", str(output_dir),
     ]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with patch.object(adapter, "detect_outputs", return_value=True):
                 with pytest.raises(SystemExit) as exc_info:
@@ -239,7 +239,7 @@ def test_cli_binder_with_input(settings, tmp_path):
         "--contigs", "A1-150/0 70-100",
         "--output-dir", str(output_dir),
     ]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with patch.object(adapter, "detect_outputs", return_value=True):
                 with pytest.raises(SystemExit) as exc_info:

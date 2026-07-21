@@ -16,7 +16,7 @@ Minimal example:
     from pathlib import Path
     from pydantic import BaseModel
     from pydantic_settings import SettingsConfigDict
-    from bioagent_service import JobAdapter, ServiceSettings, create_app
+    from bioq_service import JobAdapter, ServiceSettings, create_app
 
     class EchoRequest(BaseModel):
         message: str
@@ -44,17 +44,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bioagent_service.adapter import JobAdapter
-from bioagent_service.app import attach_mcp, create_app
-from bioagent_service.cli import CLIEndpoint, create_cli
-from bioagent_service.errors import FailureKind, extract_error_summary, finalize_job
-from bioagent_service.forms import model_form_depends
-from bioagent_service.manifest import EndpointExample, ServiceManifest
-from bioagent_service.models import JobInfo, JobStatus, UploadInfo
-from bioagent_service.oss_export import mirror_job_dir_to_oss
-from bioagent_service.settings import ServiceSettings
-from bioagent_service.task_endpoint import execute_task, register_task_endpoint, resolve_task_id
-from bioagent_service.uris import (
+from bioq_service.adapter import JobAdapter
+from bioq_service.app import attach_mcp, create_app
+from bioq_service.cli import CLIEndpoint, create_cli
+from bioq_service.errors import FailureKind, extract_error_summary, finalize_job
+from bioq_service.forms import model_form_depends
+from bioq_service.manifest import EndpointExample, ServiceManifest
+from bioq_service.models import JobInfo, JobStatus, UploadInfo
+from bioq_service.oss_export import mirror_job_dir_to_oss
+from bioq_service.settings import ServiceSettings
+from bioq_service.task_endpoint import execute_task, register_task_endpoint, resolve_task_id
+from bioq_service.uris import (
     maybe_resolve_input,
     resolve_input,
     resolve_uri,

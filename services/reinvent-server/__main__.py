@@ -9,7 +9,7 @@ See engineering/decisions/2026-05-29-cli-batch-mode.md.
 """
 from __future__ import annotations
 
-from bioagent_service.cli import CLIEndpoint, create_cli
+from bioq_service.cli import CLIEndpoint, create_cli
 
 from .adapter import ReinventAdapter
 from .models import (

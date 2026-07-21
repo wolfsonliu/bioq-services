@@ -2,7 +2,7 @@
 
 Exposes ``/api/generate`` (submit/poll) + ``/api/tasks/generate`` (FC async
 task mode).  Job lifecycle endpoints (``/healthz``, ``/api/jobs/*``,
-``/api/manifest``, ``/openapi.json``) come from ``bioagent_service.create_app``.
+``/api/manifest``, ``/openapi.json``) come from ``bioq_service.create_app``.
 
 FC deployment notes:
   - Listen on 0.0.0.0:CAPort (default 9000)
@@ -16,7 +16,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from bioagent_service import (
+from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
@@ -115,7 +115,7 @@ def _save_inputs(
     Imports done inline so test discovery isn't blocked by missing
     optional deps when these closures aren't reached.
     """
-    from bioagent_service.uris import resolve_input
+    from bioq_service.uris import resolve_input
 
     input_dir.mkdir(parents=True, exist_ok=True)
 

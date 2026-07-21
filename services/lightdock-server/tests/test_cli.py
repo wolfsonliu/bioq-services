@@ -15,7 +15,7 @@ from unittest.mock import patch
 import pytest
 from pydantic_settings import SettingsConfigDict
 
-from bioagent_service.cli import CLIEndpoint, create_cli
+from bioq_service.cli import CLIEndpoint, create_cli
 from server.adapter import LightdockAdapter
 from server.models import DockRequest
 from server.settings import LightdockSettings
@@ -132,7 +132,7 @@ def test_cli_dock_success(tmp_path):
         "--receptor", str(RECEPTOR), "--ligand", str(LIGAND),
         "--output-dir", str(out), "--swarms", "2", "--steps", "3",
     ]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with patch.object(adapter, "detect_outputs", return_value=True):
                 with pytest.raises(SystemExit) as exc:
@@ -150,7 +150,7 @@ def test_cli_json_output(tmp_path, capsys):
         "--receptor", str(RECEPTOR), "--ligand", str(LIGAND),
         "--json", "--output-dir", str(out),
     ]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with patch.object(adapter, "detect_outputs", return_value=True):
                 with pytest.raises(SystemExit) as exc:

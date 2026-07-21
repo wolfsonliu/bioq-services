@@ -3,7 +3,7 @@
 FastAPI wrapper for [Boltz-2](https://github.com/jwohlwend/boltz) —
 AlphaFold3-class biomolecular foundation model for complex structure +
 binding-affinity prediction. Built on
-[bioagent-service-framework](../_framework/).
+[bioq-service-framework](../_framework/).
 
 ```
 client ──▶ FastAPI (this service)

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Optional, Union
 
-from bioagent_service import FailureKind, JobInfo, JobStatus  # noqa: F401
+from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 # ---- Constants / enums ----

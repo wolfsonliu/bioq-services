@@ -1,4 +1,4 @@
-# bioagent-service-framework
+# bioq-service-framework
 
 Reusable HTTP / job / error-handling layer shared by all bioagent algorithm services.
 
@@ -27,7 +27,7 @@ RUN pip install /tmp/service-framework         # or: uv pip install /tmp/service
 ```python
 # services/echo-server/app.py
 from pathlib import Path
-from bioagent_service import JobAdapter, ServiceSettings, create_app
+from bioq_service import JobAdapter, ServiceSettings, create_app
 from pydantic import BaseModel
 from pydantic_settings import SettingsConfigDict
 
@@ -101,7 +101,7 @@ def echo(request: EchoRequest):
   missing. Use it in `create_app(..., version=read_version_file(__file__))`
   so the HTTP version cannot drift from the Docker image tag.
 
-- **`bioagent_service.fc_testing`** — helpers for tests that hit the deployed
+- **`bioq_service.fc_testing`** — helpers for tests that hit the deployed
   Function Compute URLs:
   - `fc_url(service_name, start=Path(__file__))` resolves the URL from
     [services/aliyun_fc_url.md](../aliyun_fc_url.md) (the single source of

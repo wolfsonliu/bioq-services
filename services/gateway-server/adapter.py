@@ -6,7 +6,7 @@ gateway needs.
 
 from __future__ import annotations
 
-from bioagent_service import JobAdapter
+from bioq_service import JobAdapter
 
 
 class GatewayAdapter(JobAdapter):

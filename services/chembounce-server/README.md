@@ -2,7 +2,7 @@
 
 基于 FastAPI 的 [ChemBounce](https://github.com/jyryu3161/chembounce) HTTP
 服务——把经典（非 ML）的 **ligand-based scaffold hopping** 工具包装成 FC
-CPU 服务。**构建在 [bioagent-service-framework](../_framework/) 之上**。
+CPU 服务。**构建在 [bioq-service-framework](../_framework/) 之上**。
 
 ChemBounce：给定一个分子的 SMILES，做分子骨架替换（fragmentation +
 相似性搜索 + 药物规则过滤），输出 N 个保留主体但骨架不同的候选。
@@ -32,7 +32,7 @@ scaffoldgraph + oddt + molvs)。**CPU-only，无 GPU 依赖**。
 客户端 / Agent
   ↓ HTTP (form: input_smiles=... + thresholds)
 ┌────────────────────────────────────────────────────────────────┐
-│  FastAPI + bioagent-service-framework  (port 9000)             │
+│  FastAPI + bioq-service-framework  (port 9000)             │
 │                                                                │
 │  服务专属                                                      │
 │    POST /api/scaffold_hop         (submit/poll)                │

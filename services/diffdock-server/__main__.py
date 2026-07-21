@@ -32,7 +32,7 @@ triggering ``create_cli`` (which parses ``sys.argv``).
 
 from __future__ import annotations
 
-from bioagent_service.cli import create_cli
+from bioq_service.cli import create_cli
 
 from .adapter import DiffdockAdapter
 from .cli_impl import build_endpoints

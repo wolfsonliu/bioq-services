@@ -48,7 +48,7 @@ def captured_argv(monkeypatch):
     captured: list[dict] = []
 
     def _fake_submit(build_argv, label, **kwargs):
-        from bioagent_service import JobInfo, JobStatus
+        from bioq_service import JobInfo, JobStatus
 
         job_id = f"stub-{label}-{len(captured)}"
         # Run build_argv in a temp dir so its side effects (YAML write) are

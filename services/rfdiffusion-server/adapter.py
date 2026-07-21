@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bioagent_service import EndpointExample, JobAdapter, JobInfo, JobStatus
+from bioq_service import EndpointExample, JobAdapter, JobInfo, JobStatus
 
 from .models import MODEL_CHOICES
 from .settings import RFdiffusionSettings

@@ -3,7 +3,7 @@
 FastAPI HTTP wrapper for [**OpenADMET Models**](https://github.com/OpenADMET/openadmet-models)
 (MIT / OMSF) — a general-purpose ADMET (Absorption / Distribution /
 Metabolism / Excretion / Toxicity) ML modeling toolbox.  **Built on
-[bioagent-service-framework](../_framework/).**
+[bioq-service-framework](../_framework/).**
 
 Not a single-model service — OpenADMET is a **framework**.  The server
 exposes a **model registry** (`GET /api/models`) listing NAS-pre-staged
@@ -28,7 +28,7 @@ of `openadmet-models-gpu.yaml`).
 Client / Agent
   ↓ HTTP (multipart: input_smiles | input_csv | input_sdf + model_names[])
 ┌──────────────────────────────────────────────────────────────────────┐
-│  FastAPI + bioagent-service-framework  (port 9000)                   │
+│  FastAPI + bioq-service-framework  (port 9000)                   │
 │                                                                      │
 │  Service-specific                                                    │
 │    POST /api/predict          POST /api/tasks/predict                │

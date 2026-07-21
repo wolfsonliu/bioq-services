@@ -19,7 +19,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from bioagent_service.fc_testing import fc_url, make_retrying_client
+from bioq_service.fc_testing import fc_url, make_retrying_client
 
 pytestmark = pytest.mark.fc
 

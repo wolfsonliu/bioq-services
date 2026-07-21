@@ -2,7 +2,7 @@
 
 基于 FastAPI 的 [DeepRank-Ab](https://github.com/haddocking/DeepRank-Ab) HTTP
 服务，封装 EGNN + ESM-2 抗体-抗原对接打分。**构建在
-[bioagent-service-framework](../_framework/) 之上**。
+[bioq-service-framework](../_framework/) 之上**。
 
 镜像 base：`nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04`；torch + ESM-2 via
 conda。

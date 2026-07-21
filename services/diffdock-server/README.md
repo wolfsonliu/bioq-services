@@ -8,7 +8,7 @@ sequence) + a **ligand** (SDF/MOL2 or SMILES), sample N candidate poses
 on the product manifold `T(3) × SO(3) × SO(2)^m` and rank them by an
 independently trained confidence model.
 
-Upstream license: **MIT**.  Built on [bioagent-service-framework](../_framework/).
+Upstream license: **MIT**.  Built on [bioq-service-framework](../_framework/).
 
 Base image: `nvidia/cuda:11.7.1-devel-ubuntu22.04` (builder) →
 `nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04` (runtime); conda env
@@ -25,7 +25,7 @@ Client / Agent
   ↓ HTTP (multipart: protein.pdb [| protein_sequence]
                     + ligand.sdf [| ligand_description SMILES])
 ┌────────────────────────────────────────────────────────────────┐
-│  FastAPI + bioagent-service-framework  (port 9000)             │
+│  FastAPI + bioq-service-framework  (port 9000)             │
 │                                                                │
 │  Service-specific                                              │
 │    POST /api/dock           (single-complex docking)           │

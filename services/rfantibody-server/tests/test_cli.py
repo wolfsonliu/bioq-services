@@ -13,7 +13,7 @@ from unittest.mock import patch
 import pytest
 from pydantic_settings import SettingsConfigDict
 
-from bioagent_service.cli import CLIEndpoint, create_cli
+from bioq_service.cli import CLIEndpoint, create_cli
 
 from server.adapter import RFantibodyAdapter
 from server.models import ProteinMPNNRequest, RF2Request, RFdiffusionRequest
@@ -178,7 +178,7 @@ def test_cli_rfdiffusion_success(tmp_path):
         "--target", str(target), "--framework", str(framework),
         "--output-dir", str(output_dir),
     ]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with patch.object(adapter, "detect_outputs", return_value=True):
                 with pytest.raises(SystemExit) as exc_info:
@@ -218,7 +218,7 @@ def test_cli_proteinmpnn_json_output(tmp_path, capsys):
         "--input-quiver", str(quiver),
         "--json", "--output-dir", str(output_dir),
     ]):
-        with patch("bioagent_service.cli.SubprocessRunner") as mock_runner:
+        with patch("bioq_service.cli.SubprocessRunner") as mock_runner:
             mock_runner.run.return_value = 0
             with patch.object(adapter, "detect_outputs", return_value=True):
                 with pytest.raises(SystemExit) as exc_info:
