@@ -14,10 +14,11 @@ resources:
           handler: 'true'
           timeout: 3
       runtime: custom-container
-      cpu: 4
+      cpu: 16
       instanceConcurrency: 200
       vpcConfig:
         securityGroupId: sg-bp16eiz6pkbsj4suejie
+        anytunnelViaENI: false
         vpcId: vpc-bp1y6pbb5wp095bxej4np
         vSwitchIds:
           - vsw-bp1r8dil1l9hl72qx373t
@@ -56,18 +57,23 @@ resources:
         logBeginRule: DefaultRegex
         project: serverless-cn-hangzhou-19ebd24e-ebe2-5da6-bf89-3c78e2ce4d70
         logstore: default-logs
-      functionName: fc_chembounce
+      functionName: fc_diffdock
       sessionAffinity: HEADER_FIELD
+      gpuConfig:
+        gpuMemorySize: 24576
+        gpuType: fc.gpu.ampere.1
       customContainerConfig:
-        image: harbor.ruosheng.bio/aliyun_fc/chembounce-server:v0.0.4
+        image: harbor.ruosheng.bio/aliyun_fc/diffdock-server:v0.0.4
         registryConfig:
           certConfig:
             insecure: false
         port: 9000
         healthCheckConfig: {}
-      memorySize: 8192
+      memorySize: 32768
       environmentVariables:
-        CHEMBOUNCE_SESSION_HEADER_NAME: bioagent-session-id
+        DIFFDOCK_SESSION_HEADER_NAME: bioagent-session-id
+        PYTHONFAULTHANDLER: '1'
+        OPENBLAS_NUM_THREADS: '1'
       triggers:
         - triggerConfig:
             methods:
@@ -75,9 +81,12 @@ resources:
               - POST
               - PUT
               - DELETE
+              - HEAD
+              - OPTIONS
+              - PATCH
             authType: anonymous
             disableURLInternet: true
-          triggerName: trigger-e0eff7g5
+          triggerName: defaultTrigger
           description: ''
           qualifier: LATEST
           triggerType: http

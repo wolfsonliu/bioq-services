@@ -14,8 +14,8 @@ resources:
           handler: 'true'
           timeout: 3
       runtime: custom-container
-      cpu: 4
-      instanceConcurrency: 200
+      cpu: 6
+      instanceConcurrency: 1
       vpcConfig:
         securityGroupId: sg-bp16eiz6pkbsj4suejie
         vpcId: vpc-bp1y6pbb5wp095bxej4np
@@ -31,15 +31,7 @@ resources:
             mountDir: /data
         userId: 0
       description: ''
-      timeout: 36000
-      sessionAffinityConfig:
-        affinityHeaderFieldName: bioagent-session-id
-        disableSessionIdReuse: false
-        enableAutoPause: false
-        enableAutoResume: null
-        sessionConcurrencyPerInstance: 1
-        sessionIdleTimeoutInSeconds: 1800
-        sessionTTLInSeconds: 86400
+      timeout: 60
       internetAccess: true
       ossMountConfig:
         mountPoints:
@@ -56,18 +48,18 @@ resources:
         logBeginRule: DefaultRegex
         project: serverless-cn-hangzhou-19ebd24e-ebe2-5da6-bf89-3c78e2ce4d70
         logstore: default-logs
-      functionName: fc_chembounce
-      sessionAffinity: HEADER_FIELD
+      functionName: fc_plip
+      sessionAffinity: NONE
       customContainerConfig:
-        image: harbor.ruosheng.bio/aliyun_fc/chembounce-server:v0.0.4
+        image: harbor.ruosheng.bio/aliyun_fc/plip-server:v0.0.1
         registryConfig:
           certConfig:
             insecure: false
         port: 9000
         healthCheckConfig: {}
-      memorySize: 8192
+      memorySize: 6144
       environmentVariables:
-        CHEMBOUNCE_SESSION_HEADER_NAME: bioagent-session-id
+        PLIP_SESSION_HEADER_NAME: bioagent-session-id
       triggers:
         - triggerConfig:
             methods:
@@ -77,16 +69,11 @@ resources:
               - DELETE
             authType: anonymous
             disableURLInternet: true
-          triggerName: trigger-e0eff7g5
+          triggerName: trigger-6gd420dj
           description: ''
           qualifier: LATEST
           triggerType: http
       asyncInvokeConfig:
         asyncTask: true
         maxAsyncEventAgeInSeconds: 86400
-        destinationConfig:
-          onFailure:
-            destination: ''
-          onSuccess:
-            destination: ''
         maxAsyncRetryAttempts: 3

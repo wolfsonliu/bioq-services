@@ -14,7 +14,7 @@ resources:
           handler: 'true'
           timeout: 3
       runtime: custom-container
-      cpu: 4
+      cpu: 8
       instanceConcurrency: 200
       vpcConfig:
         securityGroupId: sg-bp16eiz6pkbsj4suejie
@@ -56,10 +56,10 @@ resources:
         logBeginRule: DefaultRegex
         project: serverless-cn-hangzhou-19ebd24e-ebe2-5da6-bf89-3c78e2ce4d70
         logstore: default-logs
-      functionName: fc_chembounce
+      functionName: fc_lightdock
       sessionAffinity: HEADER_FIELD
       customContainerConfig:
-        image: harbor.ruosheng.bio/aliyun_fc/chembounce-server:v0.0.4
+        image: harbor.ruosheng.bio/aliyun_fc/lightdock-server:v0.0.1
         registryConfig:
           certConfig:
             insecure: false
@@ -67,7 +67,7 @@ resources:
         healthCheckConfig: {}
       memorySize: 8192
       environmentVariables:
-        CHEMBOUNCE_SESSION_HEADER_NAME: bioagent-session-id
+        LIGHTDOCK_SESSION_HEADER_NAME: bioagent-session-id
       triggers:
         - triggerConfig:
             methods:
@@ -77,16 +77,11 @@ resources:
               - DELETE
             authType: anonymous
             disableURLInternet: true
-          triggerName: trigger-e0eff7g5
+          triggerName: lightdock_http
           description: ''
           qualifier: LATEST
           triggerType: http
       asyncInvokeConfig:
         asyncTask: true
         maxAsyncEventAgeInSeconds: 86400
-        destinationConfig:
-          onFailure:
-            destination: ''
-          onSuccess:
-            destination: ''
         maxAsyncRetryAttempts: 3

@@ -7,8 +7,12 @@ resources:
     props:
       region: cn-hangzhou
       handler: index.handler
-      imagePrewarmStatus: Success
+      imagePrewarmStatus: InProgress
       diskSize: 10240
+      instanceLifecycleConfig:
+        preStop:
+          handler: 'true'
+          timeout: 3
       runtime: custom-container
       cpu: 4
       instanceConcurrency: 200
@@ -17,8 +21,8 @@ resources:
         anytunnelViaENI: false
         vpcId: vpc-bp1y6pbb5wp095bxej4np
         vSwitchIds:
-          - vsw-bp10yskvjvewq3ndyl4tv
-      role: ''
+          - vsw-bp1r8dil1l9hl72qx373t
+      role: acs:ram::1713785072839647:role/bioresearch-fc
       disableOndemand: false
       nasConfig:
         groupId: 0
@@ -38,7 +42,14 @@ resources:
         sessionIdleTimeoutInSeconds: 1800
         sessionTTLInSeconds: 86400
       internetAccess: true
-      resourceGroupId: rg-acfm2onshbsoxxy
+      ossMountConfig:
+        mountPoints:
+          - bucketName: bio-gateway
+            endpoint: http://oss-cn-hangzhou-internal.aliyuncs.com
+            bucketPath: ''
+            mountDir: /mnt/oss
+            readOnly: false
+      resourceGroupId: rg-aek54blnrbv56ry
       instanceIsolationMode: SHARE
       logConfig:
         enableRequestMetrics: true
@@ -52,7 +63,10 @@ resources:
         gpuMemorySize: 16384
         gpuType: fc.gpu.tesla.1
       customContainerConfig:
-        image: harbor.ruosheng.bio/aliyun_fc/immunebuilder-server:v0.0.6
+        image: harbor.ruosheng.bio/aliyun_fc/immunebuilder-server:v0.0.8
+        registryConfig:
+          certConfig:
+            insecure: false
         port: 9000
         healthCheckConfig: {}
       memorySize: 16384
