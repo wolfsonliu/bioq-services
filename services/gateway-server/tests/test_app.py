@@ -28,9 +28,9 @@ def test_healthz_ok(client):
     assert r.json()["status"] == "ok"
 
 
-def _seed_key(appmod, principal="alice", secret="s3cr3t", key_id="gk_1"):
-    appmod.app.state.db.create_user(principal)
-    appmod.app.state.db.create_api_key(principal, secret=secret, key_id=key_id)
+def _seed_key(appmod, account_id="alice", secret="s3cr3t", key_id="gk_1"):
+    appmod.app.state.db.create_user(account_id)
+    appmod.app.state.db.create_api_key(account_id, secret=secret, key_id=key_id)
 
 
 def test_v1_requires_auth(client):
@@ -63,7 +63,7 @@ def test_run_and_status_happy(client):
     r2 = client.get(f"/v1/jobs/{job_id}", headers=hdr)
     assert r2.status_code == 200
     assert r2.json()["status"] == "completed"
-    assert r2.json()["principal"] == "alice"
+    assert r2.json()["account_id"] == "alice"
 
 
 def test_run_unknown_service_404(client):
@@ -76,8 +76,8 @@ def test_run_unknown_service_404(client):
 
 def test_tenant_isolation(client):
     import server.app as appmod
-    _seed_key(appmod, principal="alice", secret="alice-sec", key_id="gk_alice")
-    _seed_key(appmod, principal="bob", secret="bob-sec", key_id="gk_bob")
+    _seed_key(appmod, account_id="alice", secret="alice-sec", key_id="gk_alice")
+    _seed_key(appmod, account_id="bob", secret="bob-sec", key_id="gk_bob")
     from bioagent_service.service_registry import ServiceRecord
     appmod.app.state.registry._services = {
         "openbpmd-server": ServiceRecord(url="https://svc.local")
@@ -111,13 +111,13 @@ def test_tenant_isolation(client):
 
 def test_presign_route(client):
     import server.app as appmod
-    _seed_key(appmod, principal="alice", secret="p-sec", key_id="gk_p")
+    _seed_key(appmod, account_id="alice", secret="p-sec", key_id="gk_p")
     from server.models import PresignResponse
 
     class _FakePresigner:
-        def presign_put(self, principal, job_id, filename, sha256=None):
+        def presign_put(self, account_id, job_id, filename, sha256=None):
             return PresignResponse(
-                uri=f"oss://b/users/{principal}/{job_id}/input/{filename}",
+                uri=f"oss://b/users/{account_id}/{job_id}/input/{filename}",
                 exists=False, url="https://oss.put/signed")
 
     appmod.app.state.presigner = _FakePresigner()
@@ -132,7 +132,7 @@ def test_presign_route(client):
 
 def test_download_redirects_to_oss_when_present(client):
     import server.app as appmod
-    _seed_key(appmod, principal="alice", secret="d-sec", key_id="gk_d")
+    _seed_key(appmod, account_id="alice", secret="d-sec", key_id="gk_d")
     from bioagent_service.service_registry import ServiceRecord
     appmod.app.state.registry._services = {"openbpmd-server": ServiceRecord(url="https://svc.local")}
 
@@ -146,7 +146,7 @@ def test_download_redirects_to_oss_when_present(client):
     appmod.app.state.dispatch = _Disp()
 
     class _Presigner:
-        def presign_get_if_exists(self, principal, job_id, filename):
+        def presign_get_if_exists(self, account_id, job_id, filename):
             return "https://oss.get/signed-results"
 
     appmod.app.state.presigner = _Presigner()
@@ -164,7 +164,7 @@ def test_download_redirects_to_oss_when_present(client):
 
 def test_download_falls_back_to_proxy_when_not_on_oss(client):
     import server.app as appmod
-    _seed_key(appmod, principal="alice", secret="f-sec", key_id="gk_f")
+    _seed_key(appmod, account_id="alice", secret="f-sec", key_id="gk_f")
     from bioagent_service.service_registry import ServiceRecord
     appmod.app.state.registry._services = {"openbpmd-server": ServiceRecord(url="https://svc.local")}
 
@@ -184,7 +184,7 @@ def test_download_falls_back_to_proxy_when_not_on_oss(client):
     appmod.app.state.dispatch = _Disp()
 
     class _Presigner:
-        def presign_get_if_exists(self, principal, job_id, filename):
+        def presign_get_if_exists(self, account_id, job_id, filename):
             return None  # not on OSS => fall back to proxying the downstream
 
     appmod.app.state.presigner = _Presigner()
@@ -200,7 +200,7 @@ def test_download_falls_back_to_proxy_when_not_on_oss(client):
 
 def test_run_rewrites_oss_inputs_to_mount_for_mounted_service(client):
     import server.app as appmod
-    _seed_key(appmod, principal="alice", secret="m-sec", key_id="gk_m")
+    _seed_key(appmod, account_id="alice", secret="m-sec", key_id="gk_m")
     from bioagent_service.service_registry import ServiceRecord
     appmod.app.state.registry._services = {
         "openbpmd-server": ServiceRecord(url="https://svc.local", oss_mount=True),
@@ -232,7 +232,7 @@ def test_run_rewrites_oss_inputs_to_mount_for_mounted_service(client):
 
 def test_run_keeps_oss_uris_for_unmounted_service(client):
     import server.app as appmod
-    _seed_key(appmod, principal="alice", secret="u-sec", key_id="gk_u")
+    _seed_key(appmod, account_id="alice", secret="u-sec", key_id="gk_u")
     from bioagent_service.service_registry import ServiceRecord
     appmod.app.state.registry._services = {
         "openbpmd-server": ServiceRecord(url="https://svc.local"),  # oss_mount defaults False

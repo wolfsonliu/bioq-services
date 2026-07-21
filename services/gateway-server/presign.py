@@ -4,8 +4,8 @@ MVP: sign with the gateway's own OSS credentials
 (EnvironmentVariableCredentialsProvider — OSS_ACCESS_KEY_ID / _SECRET). Each
 presigned URL is scoped to exactly one object key, so no STS is needed for
 tenant isolation. Keys are job-centric: input key
-users/<principal>/<job_id>/input/<filename>, output key
-users/<principal>/<job_id>/<filename>.
+users/<account_id>/<job_id>/input/<filename>, output key
+users/<account_id>/<job_id>/<filename>.
 """
 
 from __future__ import annotations
@@ -51,11 +51,11 @@ class Presigner:
         self._region = region
         self._expiry = expiry_sec
 
-    def input_key(self, principal: str, job_id: str, filename: str) -> str:
-        return f"users/{principal}/{job_id}/input/{filename}"
+    def input_key(self, account_id: str, job_id: str, filename: str) -> str:
+        return f"users/{account_id}/{job_id}/input/{filename}"
 
-    def output_key(self, principal: str, job_id: str, filename: str) -> str:
-        return f"users/{principal}/{job_id}/{filename}"
+    def output_key(self, account_id: str, job_id: str, filename: str) -> str:
+        return f"users/{account_id}/{job_id}/{filename}"
 
     def uri_for(self, key: str) -> str:
         return f"oss://{self._bucket}/{key}"
@@ -76,10 +76,10 @@ class Presigner:
                 return False
             raise
 
-    def presign_put(self, principal: str, job_id: str, filename: str,
+    def presign_put(self, account_id: str, job_id: str, filename: str,
                     sha256: str | None = None) -> PresignResponse:
         import alibabacloud_oss_v2 as oss
-        key = self.input_key(principal, job_id, filename)
+        key = self.input_key(account_id, job_id, filename)
         uri = self.uri_for(key)
         if self._exists(key):
             return PresignResponse(uri=uri, exists=True, url=None)
@@ -89,9 +89,9 @@ class Presigner:
         )
         return PresignResponse(uri=uri, exists=False, url=result.url)
 
-    def presign_get_if_exists(self, principal: str, job_id: str, filename: str) -> str | None:
+    def presign_get_if_exists(self, account_id: str, job_id: str, filename: str) -> str | None:
         import alibabacloud_oss_v2 as oss
-        key = self.output_key(principal, job_id, filename)
+        key = self.output_key(account_id, job_id, filename)
         if not self._exists(key):
             return None
         result = self._client.presign(

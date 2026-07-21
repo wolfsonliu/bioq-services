@@ -18,7 +18,7 @@ class Base(DeclarativeBase):
 
 class User(Base):
     __tablename__ = "users"
-    principal: Mapped[str] = mapped_column(String, primary_key=True)
+    account_id: Mapped[str] = mapped_column(String, primary_key=True)
     display_name: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String, default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
@@ -27,7 +27,7 @@ class User(Base):
 class ApiKey(Base):
     __tablename__ = "api_keys"
     key_id: Mapped[str] = mapped_column(String, primary_key=True)
-    principal: Mapped[str] = mapped_column(ForeignKey("users.principal"), index=True)
+    account_id: Mapped[str] = mapped_column(ForeignKey("users.account_id"), index=True)
     secret_hash: Mapped[str] = mapped_column(String, index=True)
     status: Mapped[str] = mapped_column(String, default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
@@ -35,13 +35,13 @@ class ApiKey(Base):
 
 
 class Job(Base):
-    # Composite PK (principal, job_id): job_id is namespaced per principal, so
-    # different users may reuse the same job_id string without colliding. The
+    # Composite PK (account_id, job_id): job_id is namespaced per account, so
+    # different accounts may reuse the same job_id string without colliding. The
     # globally-unique downstream identity (FC async-task-id / shared NAS dir) is
-    # the derived `fc_task_id` = f"{principal}-{job_id}", NOT job_id. See
+    # the derived `fc_task_id` = f"{account_id}-{job_id}", NOT job_id. See
     # engineering/decisions/2026-07-09-unified-service-access-cli.md §5.
     __tablename__ = "jobs"
-    principal: Mapped[str] = mapped_column(ForeignKey("users.principal"), primary_key=True)
+    account_id: Mapped[str] = mapped_column(ForeignKey("users.account_id"), primary_key=True)
     job_id: Mapped[str] = mapped_column(String, primary_key=True)
     svc: Mapped[str] = mapped_column(String)
     endpoint: Mapped[str] = mapped_column(String)

@@ -20,7 +20,8 @@ dispatch to downstream + status/download proxy. See design + plan:
 
 ## Auth
 Three-layer: VPC bypass (internal) → JWT (`Authorization: Bearer`) → API key
-(`X-API-Key`, looked up in the DB). `key_id` = principal.
+(`X-API-Key`, looked up in the DB). The key maps to an `account_id` — the
+identity jobs are owned by (one account may hold several keys).
 
 ## Local dev
 ```bash
@@ -79,10 +80,10 @@ before uvicorn — so the schema is created/updated automatically. Point
 
 ## Users & API keys
 Users and API keys live in the gateway's DB (tables `users` / `api_keys`).
-`key_id` **is** the principal jobs are owned by; the secret is stored only as a
-sha256 hash. There is no admin UI (MVP) — seed keys with `scripts/seed_key.py`.
-The schema is created by `alembic upgrade head` (run automatically by the
-container entrypoint on start) before seeding.
+An account (`account_id`) is the identity jobs are owned by and may hold several
+keys; the secret is stored only as a sha256 hash. There is no admin UI (MVP) —
+seed keys with `scripts/seed_key.py`. The schema is created by `alembic upgrade
+head` (run automatically by the container entrypoint on start) before seeding.
 
 **With the bundled PostgreSQL** (docker-compose default) the DB lives in a
 container volume, so seed from *inside* the gateway container — it has the DB
@@ -90,12 +91,12 @@ URL in `$GATEWAY_DB_URL`, so no `--db`/`--db-url` needed:
 
 ```bash
 cd services/gateway-server/deploy
-docker compose exec gateway python scripts/seed_key.py --principal alice
-# inserts user "alice" (if new) + a new API key;
+docker compose exec gateway python scripts/seed_key.py --account-id alice
+# inserts account "alice" (if new) + a new API key;
 # prints key_id + secret  (store the secret — only its sha256 hash is persisted)
 
-# another key for an existing user (rotation / per-client) — distinct --key-id:
-docker compose exec gateway python scripts/seed_key.py --principal alice --key-id gk_alice_ci
+# another key for an existing account (rotation / per-client) — distinct --key-id:
+docker compose exec gateway python scripts/seed_key.py --account-id alice --key-id gk_alice_ci
 ```
 
 **With a SQLite DB** (local dev / single node) seed against the DB file directly
@@ -104,7 +105,7 @@ docker compose exec gateway python scripts/seed_key.py --principal alice --key-i
 ```bash
 python services/gateway-server/scripts/seed_key.py \
     --db services/gateway-server/deploy/data/gateway/gateway.db \
-    --principal alice
+    --account-id alice
 ```
 
 Options: `--secret` (default: random), `--key-id` (default: `gk_<random>`),

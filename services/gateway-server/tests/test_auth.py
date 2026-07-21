@@ -77,20 +77,20 @@ def test_vpc_bypass():
     r = _req(headers={"host": "fc-gateway-x.cn-hangzhou-vpc.fcapp.run"})
     ident = require_auth(r)
     assert ident.method == "vpc_bypass"
-    assert ident.principal == "internal_vpc"
+    assert ident.account_id == "internal_vpc"
 
 
 def test_api_key_success():
     db = MagicMock()
     key_row = MagicMock()
     key_row.key_id = "gk_1"
-    key_row.principal = "alice"
+    key_row.account_id = "alice"
     db.find_api_key.return_value = key_row
     r = _req(auth=AuthSettings(bypass_vpc=False), db=db,
              headers={"x-api-key": "s3cr3t", "host": "public.example.com"})
     ident = require_auth(r)
     assert ident.method == "api_key"
-    assert ident.principal == "alice"
+    assert ident.account_id == "alice"
     db.find_api_key.assert_called_once_with(hash_secret("s3cr3t"))
 
 
@@ -129,7 +129,7 @@ def test_jwt_success():
         ident = require_auth(r)
     jv._clear_cache(url)
     assert ident.method == "jwt"
-    assert ident.principal == "acme"
+    assert ident.account_id == "acme"
     assert ident.raw_token_id == "jti-1"
     db.find_api_key.assert_not_called()
 
@@ -140,7 +140,7 @@ def test_jwt_failure_falls_through_to_api_key():
     db = MagicMock()
     key_row = MagicMock()
     key_row.key_id = "gk_fb"
-    key_row.principal = "fallback"
+    key_row.account_id = "fallback"
     db.find_api_key.return_value = key_row
     r = _req(
         auth=_jwt_auth(url),
@@ -154,7 +154,7 @@ def test_jwt_failure_falls_through_to_api_key():
     ident = require_auth(r)
     jv._clear_cache(url)
     assert ident.method == "api_key"
-    assert ident.principal == "fallback"
+    assert ident.account_id == "fallback"
 
 
 def test_vpc_beats_jwt():

@@ -6,13 +6,13 @@ Two modes:
 * SQLite file (host, stdlib-only) — run on the ECS host against the
   bind-mounted DB file, no `server` package / venv needed:
 
-      python seed_key.py --db ./data/gateway/gateway.db --principal alice
+      python seed_key.py --db ./data/gateway/gateway.db --account-id alice
 
 * Any DB URL (SQLAlchemy) — for the bundled/managed **PostgreSQL**, run INSIDE
   the gateway container (which has SQLAlchemy + psycopg + the models). The
   container already has GATEWAY_DB_URL set, so --db-url can be omitted:
 
-      docker compose exec gateway python scripts/seed_key.py --principal alice
+      docker compose exec gateway python scripts/seed_key.py --account-id alice
 
 The schema must already exist (the entrypoint runs `alembic upgrade head` on
 start) before seeding. The secret is printed ONCE — store it; only its sha256
@@ -44,7 +44,7 @@ def _tables_exist(con: sqlite3.Connection) -> bool:
     return {r[0] for r in rows} >= {"users", "api_keys"}
 
 
-def _seed_sqlite(db_path: str, *, principal: str, secret: str, key_id: str,
+def _seed_sqlite(db_path: str, *, account_id: str, secret: str, key_id: str,
                  display_name: str | None) -> int:
     secret_hash = hashlib.sha256(secret.encode("utf-8")).hexdigest()
     now = _utcnow_iso()
@@ -59,15 +59,15 @@ def _seed_sqlite(db_path: str, *, principal: str, secret: str, key_id: str,
             return 2
         with con:
             con.execute(
-                "INSERT OR IGNORE INTO users(principal, display_name, status, created_at) "
+                "INSERT OR IGNORE INTO users(account_id, display_name, status, created_at) "
                 "VALUES (?,?,?,?)",
-                (principal, display_name, "active", now),
+                (account_id, display_name, "active", now),
             )
             con.execute(
                 "INSERT INTO api_keys"
-                "(key_id, principal, secret_hash, status, created_at, last_used_at) "
+                "(key_id, account_id, secret_hash, status, created_at, last_used_at) "
                 "VALUES (?,?,?,?,?,?)",
-                (key_id, principal, secret_hash, "active", now, None),
+                (key_id, account_id, secret_hash, "active", now, None),
             )
     except sqlite3.IntegrityError as exc:
         print(f"error: {exc} (key_id {key_id!r} may already exist)", file=sys.stderr)
@@ -100,7 +100,7 @@ def _ensure_server_importable() -> None:
         sys.path.insert(0, str(service_dir))
 
 
-def _seed_via_orm(db_url: str, *, principal: str, secret: str, key_id: str,
+def _seed_via_orm(db_url: str, *, account_id: str, secret: str, key_id: str,
                   display_name: str | None) -> int:
     # ORM path (postgres/any backend); needs the `server` package + SQLAlchemy,
     # so run it inside the gateway container. Imported lazily so the SQLite
@@ -112,8 +112,8 @@ def _seed_via_orm(db_url: str, *, principal: str, secret: str, key_id: str,
 
     db = GatewayDB(db_url)
     try:
-        db.create_user(principal, display_name)
-        db.create_api_key(principal, secret=secret, key_id=key_id)
+        db.create_user(account_id, display_name)
+        db.create_api_key(account_id, secret=secret, key_id=key_id)
     except IntegrityError as exc:
         print(f"error: {exc.orig} (key_id {key_id!r} may already exist)", file=sys.stderr)
         return 1
@@ -130,8 +130,8 @@ def main(argv: list[str] | None = None) -> int:
     src.add_argument("--db", help="Path to a SQLite gateway.db file (host mode).")
     src.add_argument("--db-url", help="SQLAlchemy DB URL (ORM mode; default: "
                      "$GATEWAY_DB_URL). Use inside the gateway container for postgres.")
-    ap.add_argument("--principal", required=True,
-                    help="Principal / username — this is the identity jobs are owned by.")
+    ap.add_argument("--account-id", required=True,
+                    help="Account id / username — this is the identity jobs are owned by.")
     ap.add_argument("--secret", default=None,
                     help="API key secret (default: generate a random one).")
     ap.add_argument("--key-id", default=None,
@@ -144,10 +144,10 @@ def main(argv: list[str] | None = None) -> int:
 
     db_url = args.db_url or (None if args.db else os.environ.get("GATEWAY_DB_URL"))
     if args.db:
-        rc = _seed_sqlite(args.db, principal=args.principal, secret=secret,
+        rc = _seed_sqlite(args.db, account_id=args.account_id, secret=secret,
                           key_id=key_id, display_name=args.display_name)
     elif db_url:
-        rc = _seed_via_orm(db_url, principal=args.principal, secret=secret,
+        rc = _seed_via_orm(db_url, account_id=args.account_id, secret=secret,
                            key_id=key_id, display_name=args.display_name)
     else:
         print("error: pass --db <sqlite file>, --db-url <url>, or set GATEWAY_DB_URL.",
@@ -157,9 +157,9 @@ def main(argv: list[str] | None = None) -> int:
         return rc
 
     print("Seeded API key (store the secret now — it is not recoverable):")
-    print(f"  principal : {args.principal}")
-    print(f"  key_id    : {key_id}")
-    print(f"  secret    : {secret}")
+    print(f"  account_id : {args.account_id}")
+    print(f"  key_id     : {key_id}")
+    print(f"  secret     : {secret}")
     print()
     print("Authenticate with:  -H 'X-API-Key: <secret>'")
     return 0

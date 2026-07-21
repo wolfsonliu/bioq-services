@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 class JobView(BaseModel):
     job_id: str
-    principal: str
+    account_id: str
     svc: str
     endpoint: str
     status: str
@@ -24,6 +24,6 @@ class PresignRequest(BaseModel):
 
 
 class PresignResponse(BaseModel):
-    uri: str                 # oss://bucket/users/<principal>/<job_id>/input/<name>
+    uri: str                 # oss://bucket/users/<account_id>/<job_id>/input/<name>
     exists: bool             # True => already uploaded, skip PUT
     url: Optional[str] = None  # presigned PUT URL when exists is False

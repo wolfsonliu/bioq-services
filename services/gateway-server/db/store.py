@@ -42,14 +42,14 @@ class GatewayDB:
         Base.metadata.create_all(self._engine)
 
     # ---- users / keys ----
-    def create_user(self, principal: str, display_name: str | None = None) -> None:
+    def create_user(self, account_id: str, display_name: str | None = None) -> None:
         with self._Session() as s, s.begin():
-            if s.get(User, principal) is None:
-                s.add(User(principal=principal, display_name=display_name))
+            if s.get(User, account_id) is None:
+                s.add(User(account_id=account_id, display_name=display_name))
 
-    def create_api_key(self, principal: str, *, secret: str, key_id: str) -> None:
+    def create_api_key(self, account_id: str, *, secret: str, key_id: str) -> None:
         with self._Session() as s, s.begin():
-            s.add(ApiKey(key_id=key_id, principal=principal, secret_hash=hash_secret(secret)))
+            s.add(ApiKey(key_id=key_id, account_id=account_id, secret_hash=hash_secret(secret)))
 
     def find_api_key(self, secret_hash: str) -> ApiKey | None:
         with self._Session() as s:
@@ -65,26 +65,26 @@ class GatewayDB:
                 row.last_used_at = datetime.now(timezone.utc)
 
     # ---- jobs ----
-    def create_job(self, *, job_id: str, principal: str, svc: str, endpoint: str,
+    def create_job(self, *, job_id: str, account_id: str, svc: str, endpoint: str,
                    input_params: dict | None, output_prefix: str | None) -> None:
         with self._Session() as s, s.begin():
-            s.add(Job(job_id=job_id, principal=principal, svc=svc, endpoint=endpoint,
+            s.add(Job(job_id=job_id, account_id=account_id, svc=svc, endpoint=endpoint,
                       input_params=input_params, output_prefix=output_prefix))
 
-    def get_job(self, principal: str, job_id: str) -> Job | None:
+    def get_job(self, account_id: str, job_id: str) -> Job | None:
         with self._Session() as s:
-            return s.get(Job, (principal, job_id))
+            return s.get(Job, (account_id, job_id))
 
-    def update_job(self, principal: str, job_id: str, **fields) -> None:
+    def update_job(self, account_id: str, job_id: str, **fields) -> None:
         with self._Session() as s, s.begin():
-            row = s.get(Job, (principal, job_id))
+            row = s.get(Job, (account_id, job_id))
             if row is None:
-                raise KeyError((principal, job_id))
+                raise KeyError((account_id, job_id))
             for k, v in fields.items():
                 setattr(row, k, v)
 
-    def list_jobs(self, principal: str) -> list[Job]:
+    def list_jobs(self, account_id: str) -> list[Job]:
         with self._Session() as s:
             return list(s.scalars(
-                select(Job).where(Job.principal == principal).order_by(Job.created_at)
+                select(Job).where(Job.account_id == account_id).order_by(Job.created_at)
             ))

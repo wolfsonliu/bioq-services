@@ -17,10 +17,10 @@ from bioagent_service import ServiceSettings
 
 
 class AuthSettings(BaseModel):
-    """VPC bypass + JWT verification knobs (ENSEMBLE parity, principal-based)."""
+    """VPC bypass + JWT verification knobs (ENSEMBLE parity, account-based)."""
 
     bypass_vpc: bool = True
-    vpc_principal: str = "internal_vpc"
+    vpc_account_id: str = "internal_vpc"
 
     jwt_jwks_url: str = ""                 # empty = JWT disabled
     jwt_audience: str = "gateway-server"

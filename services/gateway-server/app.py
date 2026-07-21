@@ -94,38 +94,38 @@ def run(svc: str, endpoint: str, request: Request,
     except KeyError:
         raise HTTPException(404, f"unknown service {svc!r}")
     # job_id is client-supplied (CLI-generated) and only needs to be unique
-    # WITHIN this principal — the DB keys jobs by (principal, job_id).
+    # WITHIN this account — the DB keys jobs by (account_id, job_id).
     job_id = x_bioagent_job_id or uuid.uuid4().hex[:20]
     db = request.app.state.db
-    if db.get_job(ident.principal, job_id) is not None:
+    if db.get_job(ident.account_id, job_id) is not None:
         raise HTTPException(409, f"job {job_id!r} already exists")
-    oss_prefix = f"users/{ident.principal}/{job_id}/"
+    oss_prefix = f"users/{ident.account_id}/{job_id}/"
     # Downstream identity must be globally unique: FC dedups async tasks by
     # X-Fc-Async-Task-Id per function, and the downstream NAS job dir is shared
-    # across all users. Derive it from principal so two users' identical job_ids
-    # never collide there. See design doc §5.
-    fc_task_id = f"{ident.principal}-{job_id}"
+    # across all accounts. Derive it from account_id so two accounts' identical
+    # job_ids never collide there. See design doc §5.
+    fc_task_id = f"{ident.account_id}-{job_id}"
     rec = reg.record(svc)
     if rec.oss_mount:
         body = map_oss_inputs_to_mount(
             body, bucket=settings.oss_bucket, mount=settings.downstream_oss_mount
         )
-    db.create_user(ident.principal)
-    db.create_job(job_id=job_id, principal=ident.principal, svc=svc, endpoint=endpoint,
+    db.create_user(ident.account_id)
+    db.create_job(job_id=job_id, account_id=ident.account_id, svc=svc, endpoint=endpoint,
                   input_params=body, output_prefix=oss_prefix)
     try:
         request.app.state.dispatch.submit(base, endpoint, fc_task_id, body, oss_prefix=oss_prefix)
     except Exception as exc:  # noqa: BLE001
-        db.update_job(ident.principal, job_id, status="failed")
+        db.update_job(ident.account_id, job_id, status="failed")
         raise HTTPException(502, f"dispatch failed: {exc}")
-    db.update_job(ident.principal, job_id, status="running", fc_task_id=fc_task_id)
+    db.update_job(ident.account_id, job_id, status="running", fc_task_id=fc_task_id)
     return {"job_id": job_id, "status": "running"}
 
 
 def _owned_job(request: Request, job_id: str, ident: AuthIdentity):
-    # Scoped by (principal, job_id): a caller can only ever see jobs under their
-    # own principal, so cross-user job_id reuse is invisible + safe.
-    job = request.app.state.db.get_job(ident.principal, job_id)
+    # Scoped by (account_id, job_id): a caller can only ever see jobs under their
+    # own account, so cross-account job_id reuse is invisible + safe.
+    job = request.app.state.db.get_job(ident.account_id, job_id)
     if job is None:
         raise HTTPException(404, "job not found")
     return job
@@ -155,14 +155,14 @@ def get_job(job_id: str, request: Request,
                 down = request.app.state.dispatch.status(rec.url, task_id)
                 new_status = down.get("status", job.status)
             if new_status != job.status:
-                request.app.state.db.update_job(ident.principal, job_id, status=new_status)
-                job = request.app.state.db.get_job(ident.principal, job_id)
+                request.app.state.db.update_job(ident.account_id, job_id, status=new_status)
+                job = request.app.state.db.get_job(ident.account_id, job_id)
         except httpx.HTTPStatusError as exc:
             # Surface (don't silently swallow) why the status refresh failed.
             detail = f"downstream status refresh: HTTP {exc.response.status_code}"
         except Exception as exc:  # noqa: BLE001 — transient network/SDK issues
             detail = f"status refresh error: {type(exc).__name__}: {exc}"
-    return JobView(job_id=job.job_id, principal=job.principal, svc=job.svc,
+    return JobView(job_id=job.job_id, account_id=job.account_id, svc=job.svc,
                    endpoint=job.endpoint, status=job.status,
                    output_prefix=job.output_prefix, detail=detail)
 
@@ -173,14 +173,14 @@ def download_job(job_id: str, request: Request,
     job = _owned_job(request, job_id, ident)
     reg = request.app.state.registry
     try:
-        url = _get_presigner(request).presign_get_if_exists(ident.principal, job_id, "results.zip")
+        url = _get_presigner(request).presign_get_if_exists(ident.account_id, job_id, "results.zip")
     except Exception as exc:  # noqa: BLE001 — OSS not configured / down => fall back to proxy
         # `presign_get_if_exists` returns None for a genuinely-absent object; an
         # exception here means a real OSS problem (auth/5xx/transport). We still
         # fall back to proxying the downstream (resilience), but log it — otherwise
         # an OSS outage silently masquerades as "results just not on OSS".
         logger.warning("presign GET failed for %s/%s (OSS error, proxying downstream): %r",
-                       ident.principal, job_id, exc)
+                       ident.account_id, job_id, exc)
         url = None
     if url:
         # Fast path: object is on OSS → 302 to a presigned GET. Returns instantly
@@ -225,7 +225,7 @@ def _unlink_quiet(path: Path) -> None:
 def cancel_job(job_id: str, request: Request,
                ident: AuthIdentity = Depends(require_auth)) -> dict:
     _owned_job(request, job_id, ident)
-    request.app.state.db.update_job(ident.principal, job_id, status="cancelled")  # MVP: local mark only
+    request.app.state.db.update_job(ident.account_id, job_id, status="cancelled")  # MVP: local mark only
     return {"job_id": job_id, "status": "cancelled"}
 
 
@@ -244,7 +244,7 @@ def _get_presigner(request: Request) -> Presigner:
 def presign_upload(request: Request, body: PresignRequest,
                    ident: AuthIdentity = Depends(require_auth)) -> PresignResponse:
     return _get_presigner(request).presign_put(
-        ident.principal, body.job_id, body.filename, body.sha256
+        ident.account_id, body.job_id, body.filename, body.sha256
     )
 
 

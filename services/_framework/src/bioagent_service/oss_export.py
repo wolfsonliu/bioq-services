@@ -2,7 +2,7 @@
 
 When a downstream FC service has the data-plane OSS bucket mounted at
 `settings.oss_output_mount` (default /mnt/oss) AND the gateway passed an OSS
-prefix (users/<principal>/<job_id>/), the framework copies the whole NAS job
+prefix (users/<account_id>/<job_id>/), the framework copies the whole NAS job
 dir (minus input/, already uploaded by the client) to <mount>/<prefix> and
 writes results.zip of the output dir. No mount or no prefix => no-op. This lets
 the gateway serve downloads straight from OSS without invoking the downstream.

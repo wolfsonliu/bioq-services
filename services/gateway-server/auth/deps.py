@@ -1,6 +1,6 @@
 """Three-layer auth fallthrough: VPC bypass -> JWT -> API Key (DB lookup).
 
-Returns AuthIdentity{principal, method, raw_token_id}. Raises 401 if none.
+Returns AuthIdentity{account_id, method, raw_token_id}. Raises 401 if none.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class AuthIdentity(BaseModel):
-    principal: str
+    account_id: str
     method: Literal["vpc_bypass", "jwt", "api_key"]
     raw_token_id: Optional[str] = None
 
@@ -29,7 +29,7 @@ def require_auth(request: Request) -> AuthIdentity:
 
     # 1. VPC bypass
     if settings.auth.bypass_vpc and is_vpc_host(request.headers.get("host")):
-        return AuthIdentity(principal=settings.auth.vpc_principal, method="vpc_bypass")
+        return AuthIdentity(account_id=settings.auth.vpc_account_id, method="vpc_bypass")
 
     # 2. JWT
     auth_header = request.headers.get("authorization", "")
@@ -43,7 +43,7 @@ def require_auth(request: Request) -> AuthIdentity:
                 issuer=settings.auth.jwt_issuer or None,
                 ttl_sec=settings.auth.jwt_jwks_cache_ttl_sec,
             )
-            return AuthIdentity(principal=claims.get("sub", ""), method="jwt",
+            return AuthIdentity(account_id=claims.get("sub", ""), method="jwt",
                                 raw_token_id=claims.get("jti"))
         except JWTError as e:
             logger.info("auth: jwt verify failed (%s); fall through to api_key", e)
@@ -54,7 +54,7 @@ def require_auth(request: Request) -> AuthIdentity:
         row = request.app.state.db.find_api_key(hash_secret(api_key))
         if row is not None:
             request.app.state.db.touch_api_key(row.key_id)
-            return AuthIdentity(principal=row.principal, method="api_key",
+            return AuthIdentity(account_id=row.account_id, method="api_key",
                                 raw_token_id=row.key_id)
 
     raise HTTPException(401, "missing or invalid credentials "
