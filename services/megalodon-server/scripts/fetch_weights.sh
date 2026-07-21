@@ -60,8 +60,9 @@
 #   qm9:   qm9.zip (deepchem S3) -> gdb9.sdf -> process_qm9.py  -> processed/
 #   drugs: geom_raw/ (bits.csb.pitt.edu, tens of GB) -> process_geom.py -> processed/
 #   Preprocessing runs with MEGALODON_PY (a python that can import torch, rdkit,
-#   torch_geometric, pandas — i.e. the `megalodon` conda env). Needs `wget` and,
-#   for qm9, `unzip`. Model init itself loads train_atom_types_h.npy as a prior,
+#   torch_geometric, numpy, tqdm — i.e. the `megalodon` conda env or upstream
+#   .venv; qm9 also needs pandas). Needs `wget` and, for qm9, `unzip`. Model init
+#   itself loads train_atom_types_h.npy as a prior,
 #   so stats are REQUIRED, not just for metrics.
 #   Shortcut: if you already have a processed/ dir, skip the download+compute:
 #     MEGALODON_STATS_SRC_QM9=/path/to/qm9_data/processed \
@@ -319,20 +320,41 @@ ensure_stats() {
 }
 
 # Preflight: fail fast BEFORE a multi-GB download if the preprocessing env is
-# wrong (only when we actually need to preprocess).
+# wrong (only when we actually need to preprocess). Requirements are dataset-
+# aware: both scripts share utils_data (torch/rdkit/torch_geometric/numpy/tqdm);
+# only qm9 (process_qm9.py) additionally imports pandas.
 preflight_preprocess_env() {
-    local need_preprocess=0 ds
+    local need_qm9=0 need_any=0 ds
     for ds in "${MODELS[@]}"; do
         ds="$(echo "$ds" | xargs)"; [[ -z "$ds" ]] && continue
         [[ -n "${STATS_SRC[$ds]:-}" ]] && continue
         _stats_staged "$ds" && continue
-        need_preprocess=1
+        need_any=1
+        [[ "$ds" == "qm9" ]] && need_qm9=1
     done
-    [[ "$need_preprocess" == "0" ]] && return
-    if ! "$PREPROCESS_PY" -c "import torch, rdkit, torch_geometric, pandas" 2>/dev/null; then
-        die "MEGALODON_PY=$PREPROCESS_PY cannot import torch/rdkit/torch_geometric/pandas.
-       Point MEGALODON_PY at the megalodon conda env, e.g.
-       MEGALODON_PY=/opt/conda/envs/megalodon/bin/python, or provide a
+    [[ "$need_any" == "0" ]] && return
+
+    local mods="torch rdkit.Chem torch_geometric numpy tqdm"
+    [[ "$need_qm9" == "1" ]] && mods="$mods pandas"
+
+    local missing
+    missing="$("$PREPROCESS_PY" - "$mods" <<'PY'
+import sys
+bad = []
+for m in sys.argv[1].split():
+    try:
+        __import__(m)
+    except Exception as e:  # missing OR broken install
+        bad.append(f"{m} ({type(e).__name__})")
+print("; ".join(bad))
+PY
+)" || missing="python failed to run ($PREPROCESS_PY)"
+
+    if [[ -n "$missing" ]]; then
+        die "MEGALODON_PY=$PREPROCESS_PY is missing/broken: $missing
+       (needed for preprocessing: $mods)
+       Point MEGALODON_PY at an env that has these (e.g. the megalodon conda
+       env or the upstream .venv), install the missing package(s), or provide a
        pre-processed dir via MEGALODON_STATS_SRC_<DS> / skip with
        MEGALODON_FETCH_STATS=0."
     fi

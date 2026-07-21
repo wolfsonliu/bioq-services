@@ -1048,11 +1048,17 @@ class TestEndToEndPlip:
         )
         content = _run_poll_zip(
             client, svc="plip-server", endpoint="profile", job_id=job_id,
-            body={"input_pdb_uri": input_pdb_uri, "name": "gwtest"},
+            body={
+                "input_pdb_uri": input_pdb_uri, "name": "gwtest",
+                "pymol_session": True,
+            },
             poll_timeout_s=1200,
         )
+        names = zipfile.ZipFile(io.BytesIO(content)).namelist()
         xml = _zip_member(content, "gwtest.xml").decode()
         assert "<report" in xml
+        # pymol_session=True → one PyMOL session (.pse) per binding site.
+        assert any(n.endswith(".pse") for n in names), f"no .pse in results.zip: {names}"
 
 
 @pytest.mark.fc
