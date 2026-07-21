@@ -29,6 +29,7 @@ import sqlite3
 import sys
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 
 def _utcnow_iso() -> str:
@@ -76,11 +77,35 @@ def _seed_sqlite(db_path: str, *, principal: str, secret: str, key_id: str,
     return 0
 
 
+def _ensure_server_importable() -> None:
+    # Running `python scripts/seed_key.py` puts scripts/ on sys.path, not the dir
+    # holding the `server` package. Make `server` importable for both layouts:
+    #  - image (/opt/gateway): `server/` is a sibling subdir → add parent to path.
+    #  - source tree: pyproject maps package `server` -> the service dir itself
+    #    (package-dir {"server": "."}), so bootstrap it from its __init__.py.
+    import importlib.util
+
+    if "server" in sys.modules:
+        return
+    service_dir = Path(__file__).resolve().parent.parent
+    init = service_dir / "__init__.py"
+    if init.exists():
+        spec = importlib.util.spec_from_file_location(
+            "server", init, submodule_search_locations=[str(service_dir)],
+        )
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["server"] = module
+        spec.loader.exec_module(module)
+    else:
+        sys.path.insert(0, str(service_dir))
+
+
 def _seed_via_orm(db_url: str, *, principal: str, secret: str, key_id: str,
                   display_name: str | None) -> int:
     # ORM path (postgres/any backend); needs the `server` package + SQLAlchemy,
     # so run it inside the gateway container. Imported lazily so the SQLite
     # host path above stays stdlib-only.
+    _ensure_server_importable()
     from sqlalchemy.exc import IntegrityError, OperationalError
 
     from server.db.store import GatewayDB
