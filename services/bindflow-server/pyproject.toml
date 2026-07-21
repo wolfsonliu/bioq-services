@@ -1,0 +1,18 @@
+[project]
+name = "bindflow-server"
+version = "0.0.2"
+requires-python = ">=3.10"
+dependencies = [
+    "bioq-service-framework[mcp]",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+
+# Test/dev env only — the `server` package is set up by tests/conftest.py (importlib),
+# so uv should not build/install this service. Heavy runtime deps live in the Dockerfile.
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+bioq-service-framework = { path = "../_framework", editable = true }

@@ -18,3 +18,9 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.uv.sources]
+bioq-service-framework = { path = "../_framework", editable = true }
+
+[tool.uv]
+package = false

@@ -17,3 +17,6 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools]
 packages = ["server"]
 package-dir = {"server" = "."}
+
+[tool.uv.sources]
+bioq-service-framework = { path = "../_framework", editable = true }
