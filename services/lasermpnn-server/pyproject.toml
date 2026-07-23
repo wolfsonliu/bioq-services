@@ -1,0 +1,24 @@
+[project]
+name = "lasermpnn-server"
+version = "0.0.1"
+description = "HTTP + CLI wrapper around LASErMPNN (small-molecule-conditioned protein sequence design)"
+requires-python = ">=3.10"
+dependencies = [
+    "bioq-service-framework[mcp]",
+]
+
+# Relative path to the framework — no PyPI publish needed.
+[tool.uv.sources]
+bioq-service-framework = { path = "../_framework", editable = true }
+
+# Offline test env only; the server package is COPY-injected in the Dockerfile,
+# not pip-installed.
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = ["pytest", "pytest-asyncio"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

@@ -194,3 +194,13 @@ services:
     tier: cold
     function: fc_lightdock
     oss_mount: true
+  # lasermpnn-server: GPU small-molecule-conditioned protein sequence design
+  # (LASErMPNN + retrained-LigandMPNN variant). Not deployed yet — fill url +
+  # function after the first FC deploy AND staging weights to NAS
+  # /data/models/lasermpnn/ (see services/lasermpnn-server/scripts/fetch_weights.sh).
+  # lasermpnn-server:
+  #   url: https://fc-lasermpnn-XXXXXX.cn-hangzhou-vpc.fcapp.run
+  #   tier: cold
+  #   function: fc_lasermpnn
+  #   gpu: true
+  #   oss_mount: true

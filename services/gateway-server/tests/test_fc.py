@@ -1919,3 +1919,29 @@ class TestEndToEndLightDock:
             },
             output_suffixes=("top_1.pdb",), poll_timeout_s=900,
         )
+
+
+@pytest.mark.fc
+@_needs
+class TestEndToEndLASErMPNN:
+    """LASErMPNN ligand-conditioned design through the gateway.
+
+    Single PDB (protein + protonated ligand) uploaded via presign -> oss:// URI;
+    the gateway rewrites it to /mnt/oss/... for the oss_mount downstream. Tiny
+    sampling (designs_per_input=1, designs_per_batch=1) so the GPU job finishes
+    fast. Asserts results.zip carries a design_*.pdb."""
+
+    def test_design_end_to_end(self, client):
+        job_id = uuid.uuid4().hex[:20]
+        pdb_uri = _upload_via_presign(
+            client, job_id, "4jnj-1_prot.pdb", _fixture("lasermpnn-server", "4jnj-1_prot.pdb")
+        )
+        _run_poll_download(
+            client, svc="lasermpnn-server", endpoint="design", job_id=job_id,
+            body={
+                "pdb_uri": pdb_uri,
+                "designs_per_input": 1, "designs_per_batch": 1,
+                "sequence_temp": 0.3,
+            },
+            output_suffixes=("design_0.pdb", ".pdb"), poll_timeout_s=1200,
+        )
