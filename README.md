@@ -74,8 +74,15 @@ make sif-<service>             # Docker → Apptainer SIF（HPC/Slurm）
 
 ## 添加新服务
 
-参考 `bioagent` 仓库的 `engineering/guides/adding-a-new-service/` cookbook 与
-`engineering/CONVENTIONS.md`（跨仓库文档）。
+**先读 [`docs/adding-a-service.md`](docs/adding-a-service.md)** —— repo-local 落地指南（代码放哪、
+`bioq_service` 命名、vendor/测试/构建/注册的具体命令）。
+
+完整流程与设计原则（骨架 / Dockerfile 两套 / conda 踩坑 / 测试骨架 / FC 部署 / 提交 checklist）在
+`bioagent` 仓库的 `engineering/guides/adding-a-new-service/` cookbook + `engineering/CONVENTIONS.md`
+（跨仓库文档）。
+
+> 分工：服务**代码**只在本仓开发；**设计文档**（`engineering/decisions/...-design.md`）留在
+> `bioagent` monorepo。详见 [`docs/adding-a-service.md`](docs/adding-a-service.md)。
 
 ## 相关仓库
 
