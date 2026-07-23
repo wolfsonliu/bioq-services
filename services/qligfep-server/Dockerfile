@@ -118,7 +118,7 @@ RUN /opt/conda/envs/qligfep/bin/python -c \
 # Shared service framework — separate layer so framework bumps don't
 # invalidate the (heavy) conda env layer above.
 # ---------------------------------------------------------------------------
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
+RUN --mount=type=bind,source=framework,target=/tmp/service-framework \
     --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/qligfep/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2

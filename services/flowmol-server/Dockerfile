@@ -202,7 +202,7 @@ RUN /opt/conda/envs/flowmol/bin/pip uninstall -y \
 # Shared service framework — independent layer so framework bumps don't
 # invalidate the conda env layer above.
 # ---------------------------------------------------------------------------
-COPY services/_framework /tmp/service-framework
+COPY framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/flowmol/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2

@@ -18,4 +18,4 @@ packages = ["server"]
 package-dir = {"server" = "."}
 
 [tool.uv.sources]
-bioq-service-framework = { path = "../_framework", editable = true }
+bioq-service-framework = { path = "../../framework", editable = true }

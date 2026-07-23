@@ -128,7 +128,7 @@ RUN /opt/conda/envs/odesign/bin/pip uninstall -y \
 # Shared service framework — independent layer so framework changes don't
 # invalidate the (slow) conda env + cleanup above.
 # ---------------------------------------------------------------------------
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
+RUN --mount=type=bind,source=framework,target=/tmp/service-framework \
     --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/odesign/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2

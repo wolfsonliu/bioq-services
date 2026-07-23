@@ -1,7 +1,8 @@
 # Docker build context filter.
-# All service Dockerfiles use `docker build -f services/<svc>/Dockerfile .`
-# from the repo root (see Makefile). Only services/ is referenced by COPY
-# instructions — everything else is dead weight in the build context.
+# All service Dockerfiles build from the repo root: `docker build -f <svc-dir>/Dockerfile .`
+# (<svc-dir> = services/<svc>/, gateway/, or edge/<svc>/; see Makefile). COPY
+# instructions reference services/ + gateway/ + edge/ + framework/ — everything
+# else is dead weight in the build context.
 # Ref: https://docs.docker.com/build/building/best-practices/#exclude-with-dockerignore
 
 # Version control

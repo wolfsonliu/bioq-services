@@ -135,4 +135,4 @@ RUN_FC_TESTS=1 uv run python -m pytest -m fc services/haddock3-server/tests/test
 CPU function (no GPU). Enable async task mode; mount NAS `/data/models/haddock3`
 (CNS) + `/data/haddock3_jobs`; for gateway use, mount the data-plane OSS bucket
 at `/mnt/oss`. Add the `haddock3-server` entry to
-[services/services.yaml](../services.yaml) after the first deploy.
+[services.yaml](../../services.yaml) after the first deploy.

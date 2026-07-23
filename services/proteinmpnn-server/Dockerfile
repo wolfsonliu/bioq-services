@@ -63,7 +63,7 @@ COPY services/proteinmpnn-server/AbMPNN_model_weights/  ./AbMPNN_model_weights/
 # COPY (not --mount=type=bind) so a framework SOURCE change busts this layer's
 # cache: BuildKit does not include bind-mount content in the cache key, which
 # would otherwise ship a stale framework even after the framework is updated.
-COPY services/_framework /tmp/service-framework
+COPY framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 

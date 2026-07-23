@@ -62,7 +62,7 @@ COPY services/lasermpnn-server/upstream /opt/lasermpnn/LASErMPNN
 
 # Shared bioagent service framework + remote-fetch deps (late layer). COPY (not
 # --mount=bind) so a framework source change busts this layer's cache.
-COPY services/_framework /tmp/service-framework
+COPY framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2

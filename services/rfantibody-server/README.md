@@ -178,7 +178,7 @@ cd opensource/RFantibody
 uv sync
 
 # 2. 安装服务框架
-uv pip install ../../services/_framework
+uv pip install ../../framework
 
 # 3. 软链 server 包，让 uvicorn 通过 `server.app:app` 找到
 ln -s ../../services/rfantibody-server server
@@ -256,7 +256,7 @@ docker run --gpus all -p 9000:9000 --memory 16g \
     rfantibody-server
 ```
 
-构建上下文必须是项目根目录，因为 Dockerfile 同时 `COPY services/_framework` 安装框架包。
+构建上下文必须是项目根目录，因为 Dockerfile 同时 `COPY framework` 安装框架包。
 
 ## 阿里云函数计算部署
 

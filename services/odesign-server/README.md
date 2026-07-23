@@ -116,7 +116,7 @@ docker run --gpus all -p 9000:9000 \
     odesign-server
 ```
 
-构建上下文必须是项目根目录（Dockerfile 同时 `COPY services/_framework`）。
+构建上下文必须是项目根目录（Dockerfile 同时 `COPY framework`）。
 
 ## 相关文档
 

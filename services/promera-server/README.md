@@ -155,7 +155,7 @@ plus URI variants on common endpoints):
 
 Framework env vars (`SERVICE_DISK_LIMIT_MB`, `SERVICE_ERROR_TAIL_CHARS`,
 `SERVICE_TASK_ENDPOINTS_ENABLED`, ...) behave as documented in
-`services/_framework/README.md`.
+`framework/README.md`.
 
 ## Local development
 

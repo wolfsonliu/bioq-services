@@ -152,7 +152,7 @@ usable for smoke tests, not production MSA).
 | `MMSEQS2_MMSEQS_BINARY` | `/opt/mmseqs-gpu/bin/mmseqs` | Override only if the install path changes |
 
 Framework env vars (`SERVICE_DISK_LIMIT_MB`, `SERVICE_ERROR_TAIL_CHARS`, ...)
-behave as documented in `services/_framework/README.md`.
+behave as documented in `framework/README.md`.
 
 DB preparation runs offline on an HPC node; see
 [`scripts/prepare_databases.sh`](scripts/) (added in a later stage).

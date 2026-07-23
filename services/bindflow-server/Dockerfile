@@ -149,7 +149,7 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
 # ---------------------------------------------------------------------------
 # Framework — into the same conda env (Python 3.10 satisfies requires-python).
 # ---------------------------------------------------------------------------
-COPY services/_framework /tmp/service-framework
+COPY framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     /opt/conda/envs/bindflow/bin/pip install \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2

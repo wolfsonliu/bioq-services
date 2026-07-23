@@ -214,7 +214,7 @@ cd env/SE3Transformer && pip install -r requirements.txt && python setup.py inst
 pip install -e .
 
 # 2. 安装服务框架
-pip install ../../services/_framework
+pip install ../../framework
 
 # 3. 软链 server 包
 ln -s ../../services/rfdiffusion-server server
@@ -297,7 +297,7 @@ docker run --gpus all -p 9000:9000 --memory 16g \
     rfdiffusion-server
 ```
 
-构建上下文必须是项目根目录（Dockerfile 同时 `COPY services/_framework`）。
+构建上下文必须是项目根目录（Dockerfile 同时 `COPY framework`）。
 
 ## 阿里云函数计算部署
 

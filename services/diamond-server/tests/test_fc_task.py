@@ -5,7 +5,7 @@ Marked `@pytest.mark.fc`, skipped by default. Run with:
     RUN_FC_TESTS=1 pytest services/diamond-server/tests/test_fc_task.py
 
 Exercises the blocking task endpoints via the framework's job store. URL is read
-from `services/services.yaml` via `bioq_service.fc_testing`.
+from `services.yaml` via `bioq_service.fc_testing`.
 """
 
 from __future__ import annotations

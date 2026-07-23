@@ -179,7 +179,7 @@ micromamba env create -y -n ppiflow -f environment.yml
 micromamba activate ppiflow
 
 # 2. 装服务框架
-pip install ../../../../services/_framework httpx alibabacloud-oss-v2
+pip install ../../../../framework httpx alibabacloud-oss-v2
 
 # 3. 软链 server 包让 uvicorn 找到
 ln -s $(pwd)/../../../../services/ppiflow-server $(pwd)/server
@@ -255,7 +255,7 @@ docker run --gpus all -p 9000:9000 --memory 16g \
     ppiflow-server
 ```
 
-构建上下文必须是项目根目录，因为 Dockerfile 同时 `COPY services/_framework`
+构建上下文必须是项目根目录，因为 Dockerfile 同时 `COPY framework`
 安装框架包 + `COPY services/ppiflow-server/upstream/` 取 vendored 源码。
 
 ## 阿里云函数计算部署

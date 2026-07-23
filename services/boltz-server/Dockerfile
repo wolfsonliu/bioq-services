@@ -86,7 +86,7 @@ RUN .venv/bin/python -c "import torch, cuequivariance_torch, boltz; \
 # framework changing doesn't invalidate the Boltz install/weight layers above).
 # COPY (not bind): framework source changes must bust this layer's cache so the
 # output-sink fix ships in the image (BuildKit bind-mount content isn't a cache key).
-COPY services/_framework /tmp/service-framework
+COPY framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2 pyyaml

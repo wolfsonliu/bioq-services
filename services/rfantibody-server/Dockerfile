@@ -78,7 +78,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # read-through cache). COPY (not bind) so framework source changes bust this layer's
 # cache — a bind mount's content is not part of the BuildKit layer cache key and would
 # ship a stale framework (missing output-sink fixes).
-COPY services/_framework /tmp/service-framework
+COPY framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
 

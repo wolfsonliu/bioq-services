@@ -253,7 +253,7 @@ RUN /opt/conda/envs/diffdock_pp/bin/pip uninstall -y \
 # layer cache key, so a bind would ship a stale framework even after the
 # framework source is updated (would silently drop the output-sink fix).
 # ---------------------------------------------------------------------------
-COPY services/_framework /tmp/service-framework
+COPY framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/diffdock_pp/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2

@@ -241,7 +241,7 @@ RUN rm -f /opt/ppiflow/models/layer_norm/fastfold_layer_norm_cuda.so \
 # conda env's interpreter — faster than conda env's bundled pip and benefits
 # from Huawei mirror (UV_INDEX_URL set above).
 # ---------------------------------------------------------------------------
-COPY services/_framework /tmp/service-framework
+COPY framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/ppiflow/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2

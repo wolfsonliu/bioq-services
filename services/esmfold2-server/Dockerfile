@@ -54,7 +54,7 @@ from esm.models.esmfold2 import ESMFold2InputBuilder; \
 print('esm.models.esmfold2 OK')"
 
 # Shared bioagent service framework + remote-fetch deps.
-COPY services/_framework /tmp/service-framework
+COPY framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2

@@ -89,7 +89,7 @@ RUN patch -p1 -d /opt/openbpmd/upstream < /opt/openbpmd/patches/0001-parametrize
 # ---------------------------------------------------------------------------
 # Framework — into the same conda env.
 # ---------------------------------------------------------------------------
-COPY services/_framework /tmp/service-framework
+COPY framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     /opt/conda/envs/openbpmd/bin/pip install \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2

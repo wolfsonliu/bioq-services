@@ -16,8 +16,8 @@
 | 设计文档 `engineering/decisions/YYYY-MM-DD-<svc>-server-design.md` + `index.md` 一行 | **`bioagent`（monorepo）** |
 | 调用指南 base-URL 行 `engineering/guides/calling-bioagent-services.md` | **`bioagent`（monorepo）** |
 | 服务代码 `services/<svc>-server/`（全套） | **本仓** |
-| `services/services.yaml` 条目 | **本仓** |
-| gateway e2e `services/gateway-server/tests/test_fc.py` 的 `TestEndToEnd<Svc>` | **本仓** |
+| `services.yaml` 条目 | **本仓** |
+| gateway e2e `gateway/tests/test_fc.py` 的 `TestEndToEnd<Svc>` | **本仓** |
 
 **开工前先在 monorepo 写设计文档**（cookbook §0 必做），再回本仓写代码。
 
@@ -78,7 +78,7 @@ requires-python = ">=3.10"
 dependencies = ["bioq-service-framework[mcp]"]
 
 [tool.uv.sources]
-bioq-service-framework = { path = "../_framework", editable = true }
+bioq-service-framework = { path = "../../framework", editable = true }
 
 [tool.uv]
 package = false            # server 代码通过 Dockerfile COPY 注入，不 pip 装本包
@@ -89,7 +89,7 @@ dev = ["pytest", "pytest-asyncio"]
 
 ## Dockerfile 约定（本仓特有的点）
 
-- 装框架：`COPY services/_framework /tmp/service-framework` +
+- 装框架：`COPY framework /tmp/service-framework` +
   `uv pip install "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2`（**COPY，非 bind-mount**）。
 - 模块路径用 `bioq_service`（若 Dockerfile 里有显式模块引用）。
 - 上游源从 `services/<svc>-server/upstream/` COPY（**不在 image 内 git clone**）——先在 host 跑
@@ -130,10 +130,10 @@ kill %1
 
 ## 注册 + 网关联通
 
-1. `services/services.yaml` 加一行 `<svc>-server:`（`url`、可选 `tier`/`function`/`gpu`；**有文件输入
+1. `services.yaml` 加一行 `<svc>-server:`（`url`、可选 `tier`/`function`/`gpu`；**有文件输入
    的服务加 `oss_mount: true`**）。未部署时可先加**注释条目**占位（照 `haddock3-server` / `lasermpnn-server`
    的写法）。
-2. 经 gateway 调用的服务：在 `services/gateway-server/tests/test_fc.py` 加一个 `TestEndToEnd<Svc>` 类
+2. 经 gateway 调用的服务：在 `gateway/tests/test_fc.py` 加一个 `TestEndToEnd<Svc>` 类
    （照 `TestEndToEndProteinMPNN` 走 presign-file 输入 / `TestEndToEndMMseqs2` 走 inline 参数），断言
    download 是 302→OSS + `results.zip` 内含预期产物。
 

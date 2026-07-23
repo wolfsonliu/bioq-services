@@ -66,7 +66,7 @@ ENV PATH=/opt/mmseqs-gpu/bin:$PATH
 # framework source change correctly busts this layer's cache and the output-sink
 # fix ships (BuildKit bind-mount contents don't enter the layer cache key).
 # -----------------------------------------------------------------------------
-COPY services/_framework /tmp/service-framework
+COPY framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/mmseqs2/.venv/bin/python \
         /tmp/service-framework \

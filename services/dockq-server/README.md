@@ -94,7 +94,7 @@ All env-driven via `pydantic-settings`; `DOCKQ_` prefix.
 | `DOCKQ_OSS_REGION` | `cn-hangzhou` | for `oss://` URIs |
 
 Framework env vars (`SERVICE_DISK_LIMIT_MB`, `SERVICE_ERROR_TAIL_CHARS`, ...)
-behave as documented in `services/_framework/README.md`.
+behave as documented in `framework/README.md`.
 
 ## Local development
 

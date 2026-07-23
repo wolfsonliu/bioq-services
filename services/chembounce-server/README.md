@@ -189,7 +189,7 @@ docker run -p 9000:9000 --memory 64g \
     chembounce-server
 ```
 
-构建上下文必须是项目根目录（Dockerfile 同时 `COPY services/_framework`）。
+构建上下文必须是项目根目录（Dockerfile 同时 `COPY framework`）。
 
 ## CLI 批处理模式
 

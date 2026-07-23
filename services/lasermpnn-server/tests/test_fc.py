@@ -4,7 +4,7 @@ Marked `@pytest.mark.fc`, skipped by default. Run with:
 
     RUN_FC_TESTS=1 pytest -m fc services/lasermpnn-server/tests/test_fc.py
 
-URL resolves via `services/services.yaml`. Test PDB (4jnj-1_prot, a protein with
+URL resolves via `services.yaml`. Test PDB (4jnj-1_prot, a protein with
 a bound small molecule) ships in `tests/data/` — copied from upstream so the
 suite is self-contained. Inference calls keep designs_per_input small.
 """

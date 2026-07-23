@@ -7,7 +7,7 @@ Marked `@pytest.mark.fc`, skipped by default. Run with:
     RUN_FC_TESTS=1 pytest services/plip-server/tests/test_fc.py
 
 Fixtures live in `tests/data/` so the suite is self-contained. URL is read from
-`services/services.yaml` via `bioq_service.fc_testing`.
+`services.yaml` via `bioq_service.fc_testing`.
 """
 
 from __future__ import annotations

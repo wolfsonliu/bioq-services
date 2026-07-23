@@ -6,7 +6,7 @@
 
 新 service = 一个 Docker 镜像 + 一组 HTTP endpoint + CLI 批处理入口。
 部署到 FC 上由 agent / pipeline 通过 HTTP 调用；在 Slurm 集群上通过 `python -m server` 作为 sbatch 任务执行。
-**强制基于 [services/_framework](../../services/_framework/) 构建** —— 不要再造 HTTP /
+**强制基于 [framework](../../framework/) 构建** —— 不要再造 HTTP /
 job 生命周期 / 错误处理 / 持久化 / manifest / CLI 这些通用层。
 
 本页是单一权威索引；如果 `_framework/README.md`、设计文档、调用指南之间有冲突，以本 cookbook 为准。
@@ -82,7 +82,7 @@ services/<svc>/
 ├── adapter.py               # JobAdapter 子类（name + manifest_extras + endpoint_examples）
 ├── settings.py              # ServiceSettings 子类（env_prefix=<SVC>_）；weights_dir 默认指向 /data/models/<svc>/
 ├── models.py                # 请求 pydantic models
-├── Dockerfile               # COPY services/_framework + services/<svc>/upstream/ + 算法栈
+├── Dockerfile               # COPY framework + services/<svc>/upstream/ + 算法栈
 ├── pyproject.toml           # 包依赖（可选——仅 uv venv 骨架 + pip install -e . 时需要）
 ├── README.md                # endpoint / 配置 / 部署说明 + Weights 章节（NAS / SIF --bind）
 ├── VERSION                  # 镜像 tag，Makefile 读取（如 "v0.0.1"）
@@ -107,7 +107,7 @@ services/<svc>/
 |---|---|---|
 | `tools.py` / `configs.py` | argv builder / 配置 YAML 构造函数 | [rfantibody-server/tools.py](../../services/rfantibody-server/tools.py), [genie3-server/configs.py](../../services/genie3-server/configs.py) |
 | `datasets.py` | dataset zip 解压 + 路径重写 | [genie3-server/datasets.py](../../services/genie3-server/datasets.py) |
-| `uris.py` | URI scheme 解析（job:// / oss:// / file:// / http(s):// 等）——**现由框架统一提供** | [_framework uris.py](../../services/_framework/src/bioq_service/uris.py) |
+| `uris.py` | URI scheme 解析（job:// / oss:// / file:// / http(s):// 等）——**现由框架统一提供** | [_framework uris.py](../../framework/src/bioq_service/uris.py) |
 | `patches/` | 上游源码补丁 + 应用规则（vendor.sh 后 Dockerfile 中 `patch -p1` 应用） | [genie3-server/patches/](../../services/genie3-server/patches/) |
 | `scripts/vendor.sh` | **强制**：clone 上游源到 `upstream/` at pinned SHA + 重试 + 校验。Build 期 Dockerfile 从 `upstream/` COPY，不在 image 内 `git clone` | [proteinmpnn-server/scripts/vendor.sh](../../services/proteinmpnn-server/scripts/vendor.sh)（单 upstream），[promera-server/scripts/vendor.sh](../../services/promera-server/scripts/vendor.sh)（多 upstream） |
 | `scripts/fetch_weights.sh` | 预下载模型权重到 `weights/`，**支持 `WEIGHTS_DST=` 直接下到 NAS**。Docker image 不再 COPY 权重 | [boltzgen-server/scripts/fetch_weights.sh](../../services/boltzgen-server/scripts/fetch_weights.sh)，[immunebuilder-server/scripts/fetch_weights.sh](../../services/immunebuilder-server/scripts/fetch_weights.sh) |
@@ -184,7 +184,7 @@ pytest -m fc services/<svc>/tests/test_fc_task.py
 - [ ] 每个 submit/poll endpoint 都有对应的 task endpoint（`/api/tasks/<name>`），用 `register_task_endpoint`（无上传）或 `execute_task`（有上传）
 - [ ] task endpoint 注册放在 `if settings.task_endpoints_enabled:` 守卫内（自定义 endpoint 时）
 - [ ] FC 部署后控制台开启「异步任务模式」+ 清空 keepalive URL + 确认 NAS 挂载 `/data/models/<svc>` 可读
-- [ ] **经 gateway 调用的服务**：FC 控制台把数据面 OSS bucket `bioagent-inputs` 挂到 `/mnt/oss`（RW）；Dockerfile runtime 有 `ENV <SVC>_OSS_OUTPUT_MOUNT=/mnt/oss`；framework 用 `COPY services/_framework`（非 bind-mount，否则 output-sink 修复进不去镜像）；有文件输入的服务其 `uris.py` 必须支持裸 `/` 绝对路径（gateway 把 `oss://` 改写成 `/mnt/oss/...`，下游用 `shutil.copy2` 直读）。详见 迁移到 OSS mount
+- [ ] **经 gateway 调用的服务**：FC 控制台把数据面 OSS bucket `bioagent-inputs` 挂到 `/mnt/oss`（RW）；Dockerfile runtime 有 `ENV <SVC>_OSS_OUTPUT_MOUNT=/mnt/oss`；framework 用 `COPY framework`（非 bind-mount，否则 output-sink 修复进不去镜像）；有文件输入的服务其 `uris.py` 必须支持裸 `/` 绝对路径（gateway 把 `oss://` 改写成 `/mnt/oss/...`，下游用 `shutil.copy2` 直读）。详见 迁移到 OSS mount
 - [ ] FC 部署后 `curl /healthz/detail` 验证 `weights_loaded: true`
 - [ ] Dockerfile 用 uv venv 骨架 或 conda/micromamba 多阶段构建
 - [ ] **conda 服务**：Dockerfile runtime 阶段有 `ENV LANG=C.UTF-8` + `ENV LC_ALL=C.UTF-8`（关闭 upstream `open()` ASCII locale 陷阱，见 [conda-pitfalls.md](./conda-pitfalls.md)）
@@ -198,20 +198,19 @@ pytest -m fc services/<svc>/tests/test_fc_task.py
 - [ ] `pytest tests/test_app.py tests/test_cli.py` 通过（offline）
 - [ ] 部署后 `pytest -m fc services/<svc>/tests/test_fc.py` 通过（每个 endpoint 至少 1 个 inference job 跑过）
 - [ ] 控制台开启异步任务模式后 `pytest -m fc services/<svc>/tests/test_fc_task.py` 通过（覆盖 `/api/tasks/<name>` 的 submit=202 / 完成 / 生命周期 / 平台层 dedup）
-- [ ] [services/services.yaml](../../services/services.yaml) 加一个条目 `<svc>-server:` + `url: https://...`（可选 `tier` / `region` / `function` / `gpu`；**有文件输入的服务加 `oss_mount: true`** 让 gateway 把 `oss://` 输入改写成 `/mnt/oss/...` 供下游凭证-free 直读）
-- [ ] **经 gateway 调用的服务**：在 [services/gateway-server/tests/test_fc.py](../../services/gateway-server/tests/test_fc.py) 加一个 `TestEndToEnd<Svc>` e2e 类（照 `TestEndToEndProteinMPNN` 走 presign-file 输入 / `TestEndToEndMMseqs2` 走 inline 参数），断言 download 是 302→OSS + `results.zip` 内含预期产物。**嵌套 endpoint（如 `generate/motif`）需 gateway ≥ v0.0.2**（`{endpoint:path}` 路由）
+- [ ] [services.yaml](../../services.yaml) 加一个条目 `<svc>-server:` + `url: https://...`（可选 `tier` / `region` / `function` / `gpu`；**有文件输入的服务加 `oss_mount: true`** 让 gateway 把 `oss://` 输入改写成 `/mnt/oss/...` 供下游凭证-free 直读）
+- [ ] **经 gateway 调用的服务**：在 [gateway/tests/test_fc.py](../../gateway/tests/test_fc.py) 加一个 `TestEndToEnd<Svc>` e2e 类（照 `TestEndToEndProteinMPNN` 走 presign-file 输入 / `TestEndToEndMMseqs2` 走 inline 参数），断言 download 是 302→OSS + `results.zip` 内含预期产物。**嵌套 endpoint（如 `generate/motif`）需 gateway ≥ v0.0.2**（`{endpoint:path}` 路由）
 - [ ] 在消费端调用指南（base-URL 表格）追加一行 base URL + source 链接（该表随消费端文档，按团队流程维护）
 
 ## 相关
 
-- [services/_framework/](../../services/_framework/) —— 框架包源码 + 单元测试可作参考
+- [framework/](../../framework/) —— 框架包源码 + 单元测试可作参考
 - Service 框架抽象设计 —— 设计动机 + 内部协议
 - CLI 批处理模式设计 —— 同一镜像 HTTP + CLI 双模式架构、`CLIEndpoint` 描述符、pydantic→argparse 转换规则
 - FC 异步任务模式设计 —— task endpoint + execute_task / register_task_endpoint 框架
 - gateway OSS output-sink 设计 + 迁移到 OSS mount（cookbook） —— 经 gateway 调用时的输入直读（`oss://→/mnt/oss`）+ 结果回传 OSS；新服务照 cookbook 的 checklist 接入
 - Service 权重 NAS 外置化设计 —— 权重 NAS 挂载 + vendor.sh + healthz 探针的完整背景
 - FC GPU 实例 keepalive —— legacy keepalive 与 task endpoint 的对比
-- [services/_framework/scripts/probe_fc_concurrency.py](../../services/_framework/scripts/probe_fc_concurrency.py) —— FC 异步任务模式并发探测工具
 - 调用 bioagent service —— agent / client 端怎么消费这些服务
 - 参考实现：
   - [proteinmpnn-server](../../services/proteinmpnn-server/) —— **vendor.sh 标准示范**：单上游 + cherry-pick + 测试通过的最简骨架

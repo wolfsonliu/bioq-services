@@ -117,7 +117,7 @@ RUN /opt/conda/envs/chembounce/bin/pip uninstall -y \
 # chembounce conda env (py3.8, pinned by upstream) because the framework
 # requires py>=3.10 and uses `X | None` unions at runtime.
 # ---------------------------------------------------------------------------
-COPY services/_framework /tmp/service-framework
+COPY framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
     python3.11 -m venv /opt/server-venv \
     && uv pip install --python /opt/server-venv/bin/python \

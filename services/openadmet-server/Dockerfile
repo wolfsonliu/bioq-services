@@ -215,7 +215,7 @@ RUN /opt/conda/envs/openadmet-models/bin/pip uninstall -y \
 # ---------------------------------------------------------------------------
 # bioagent service framework — separate layer for cache locality.
 # ---------------------------------------------------------------------------
-COPY services/_framework /tmp/service-framework
+COPY framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/openadmet-models/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2

@@ -155,7 +155,7 @@ VPC 检测基于 `Host` header：匹配 `*-vpc.fcapp.run` 或 `localhost` / `127
 
 #### 2. JWT（可选；不配则禁用 JWT 路径）
 
-复用 `services/jwt/` 的 JWKS：
+复用 `edge/jwt/` 的 JWKS：
 
 ```bash
 ENSEMBLE_AUTH__JWT_JWKS_URL=https://fc-jwt-XXX.cn-hangzhou-vpc.fcapp.run/.well-known/jwks.json
@@ -295,7 +295,7 @@ kill %1
 FC HTTP 触发器本身支持 JWT 验签作为请求前置处理。如果你希望让 FC 网关在请求到达函数**之前**就过滤无效 token，可在 FC 控制台启用：
 
 - 函数详情 → 触发器 → HTTP 触发器 → JWT 鉴权配置
-- JWKS URL：填 `services/jwt/` 的 `.well-known/jwks.json` 地址
+- JWKS URL：填 `edge/jwt/` 的 `.well-known/jwks.json` 地址
 - 期望 audience：填 `ensemble-server`
 
 启用后，平台层和应用层会**各自验一遍**（多花 3-5 ms / 请求），但能挡住打到函数的恶意流量。
@@ -363,7 +363,7 @@ uv run python -m server  # 9000 端口
 
 ## Docker 构建 + 本地冒烟
 
-镜像构建必须以 **仓库根** 作为构建上下文（因为要 COPY `services/_framework/` 和 `pipelines/`）：
+镜像构建必须以 **仓库根** 作为构建上下文（因为要 COPY `framework/` 和 `pipelines/`）：
 
 ```bash
 cd /path/to/bioagent

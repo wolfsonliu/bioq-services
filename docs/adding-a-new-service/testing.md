@@ -8,7 +8,7 @@
 
 本页覆盖四套测试骨架：`test_app.py`（离线 HTTP 单测）/ `test_cli.py`（CLI 批处理）/
 `test_fc.py`（FC 部署后回归）/ `test_fc_task.py`（FC 异步任务模式集成）。经 gateway
-调用的服务还应在 `services/gateway-server/tests/test_fc.py` 加一个 `TestEndToEnd<Svc>`
+调用的服务还应在 `gateway/tests/test_fc.py` 加一个 `TestEndToEnd<Svc>`
 e2e 类（见 迁移到 OSS mount）。
 
 ### 10. `services/<svc>/tests/test_app.py`
@@ -247,7 +247,7 @@ def test_cli_no_subcommand_exits_2(tmp_path):
 
 ### 12. `services/<svc>/tests/test_fc.py` + `tests/data/`
 
-部署后的 FC URL 回归测试。Marker = `fc`，默认 skip；显式开启用 `pytest -m fc` 或 `RUN_FC_TESTS=1`。URL 从 [services/services.yaml](../../services/services.yaml) 读 —— 部署完成后把新条目写进那个文件。
+部署后的 FC URL 回归测试。Marker = `fc`，默认 skip；显式开启用 `pytest -m fc` 或 `RUN_FC_TESTS=1`。URL 从 [services.yaml](../../services.yaml) 读 —— 部署完成后把新条目写进那个文件。
 
 **测试数据放置原则（默认自包含）**：任何测试脚本（`test_fc.py` / `test_fc_task.py` / `test_cli.py` / …）需要的 fixture（PDB / JSON / FASTA / prm7+rst7 / etc.）**必须尽量**复制到该测试所在目录下的 `tests/data/` 并一起 commit —— 让 suite 自包含，新 clone 直接能跑。**绝不**引用 `opensource/*`（gitignore，新 clone 缺失）或其它服务目录。测试里用 `DATA_DIR = Path(__file__).resolve().parent / "data"` 定位，别用相对 `opensource` 的路径。
 

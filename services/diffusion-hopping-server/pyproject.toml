@@ -15,4 +15,4 @@ dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
 package = false
 
 [tool.uv.sources]
-bioq-service-framework = { path = "../_framework", editable = true }
+bioq-service-framework = { path = "../../framework", editable = true }

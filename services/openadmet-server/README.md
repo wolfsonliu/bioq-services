@@ -249,7 +249,7 @@ docker run -p 9000:9000 --gpus all \
     openadmet-server
 ```
 
-Build context must be the project root (Dockerfile also `COPY services/_framework`).
+Build context must be the project root (Dockerfile also `COPY framework`).
 
 ## CLI batch mode
 

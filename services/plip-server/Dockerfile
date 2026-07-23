@@ -50,7 +50,7 @@ RUN uv venv .venv --python /usr/bin/python3 --system-site-packages
 
 # Shared bioagent service framework + HTTP/remote-fetch deps into the venv.
 # numpy/lxml/openbabel/pymol resolve from system site-packages (not reinstalled).
-COPY services/_framework /tmp/service-framework
+COPY framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
         "/tmp/service-framework[mcp]" \

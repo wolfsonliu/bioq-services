@@ -4,7 +4,7 @@ Marked `@pytest.mark.fc`, skipped by default. Run with:
 
     pytest -m fc services/boltz-server/tests/test_fc.py
 
-The base URL is read from `services/services.yaml` — update that file after
+The base URL is read from `services.yaml` — update that file after
 deploying a new tag in the FC console. Inference tests use `msa_mode=empty`
 so they don't depend on ColabFold's MSA server (which can be slow/flaky from
 inside FC).

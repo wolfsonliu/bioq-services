@@ -234,7 +234,7 @@ pip install --upgrade pip setuptools wheel "numpy>=2.0.2,<3" Cython
 pip install torch==2.7.1 tqdm scipy pandas lightning "biopython<1.86" \
             ml-collections zstandard huggingface_hub wandb tensorboard PyYAML
 pip install --no-build-isolation -e ./opensource/genie3
-pip install ./services/_framework             # 服务框架
+pip install ./framework             # 服务框架
 pip install httpx alibabacloud-oss-v2          # 远程 fetch 用
 
 # 3. 软链 server 包到 genie3 目录（让 uvicorn 通过 server.app:app 找到）
@@ -315,7 +315,7 @@ docker run --gpus all -p 9000:9000 --memory 16g \
     genie3-server
 ```
 
-构建上下文必须是项目根目录，因为 Dockerfile 同时 `COPY services/_framework`
+构建上下文必须是项目根目录，因为 Dockerfile 同时 `COPY framework`
 安装框架包，并 `COPY services/genie3-server/patches` 应用上游补丁。
 
 ## 阿里云函数计算部署

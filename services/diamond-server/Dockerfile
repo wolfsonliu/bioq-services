@@ -40,7 +40,7 @@ WORKDIR /opt/diamond
 RUN uv venv .venv --python python3.11
 
 # Shared bioagent service framework + HTTP/remote-fetch deps.
-COPY services/_framework /tmp/service-framework
+COPY framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
         "/tmp/service-framework[mcp]" \

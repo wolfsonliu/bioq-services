@@ -4,20 +4,29 @@ PLATFORM := linux/amd64
 # Login once with: docker login harbor.ruosheng.bio
 REGISTRY ?= harbor.ruosheng.bio/aliyun_fc
 
-# Auto-discover services: any directory under services/ with a Dockerfile.
-SERVICES := $(notdir $(patsubst %/Dockerfile,%,$(wildcard services/*/Dockerfile)))
+# Auto-discover buildable images across the tiers: compute workers under
+# services/, the control-plane gateway/, and edge/ components (jwt, MCP adapter).
+# framework/ has no Dockerfile so it is never discovered (it is a library, not a
+# deployable image). The image name is the LAST path segment (workers keep their
+# -server suffix, so image names & live FC references are unchanged).
+SERVICE_DOCKERFILES := $(wildcard services/*/Dockerfile) $(wildcard gateway/Dockerfile) $(wildcard edge/*/Dockerfile)
+SERVICES := $(notdir $(patsubst %/Dockerfile,%,$(SERVICE_DOCKERFILES)))
+
+# Resolve a service name to its source directory across the tiers. Candidates,
+# in order: services/<name>/ (workers), gateway/ (top-level), edge/<name>/.
+svc_dir = $(patsubst %/Dockerfile,%,$(firstword $(wildcard services/$(1)/Dockerfile $(1)/Dockerfile edge/$(1)/Dockerfile)))
 
 # Per-service versioning. Each service has its own release cadence; image tags
 # are NEVER coordinated globally. Priority for which tag to use:
 #
 #   1. CLI override (`make push-<svc> TAG=v0.0.5`) — wins over everything
-#   2. services/<svc>/VERSION file (one line, e.g. "v0.0.5") — the normal case
+#   2. <svc-dir>/VERSION file (one line, e.g. "v0.0.5") — the normal case
 #   3. Git describe fallback — for unversioned local builds only
 #
 # Note: TAG is left unset by default (no `?=`) so the priority chain above
 # actually evaluates instead of being short-circuited by a global default.
 GIT_TAG  := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
-service_version = $(shell cat services/$(1)/VERSION 2>/dev/null || echo $(GIT_TAG))
+service_version = $(shell cat $(call svc_dir,$(1))/VERSION 2>/dev/null || echo $(GIT_TAG))
 
 # SIF output directory for Apptainer images.
 SIF_DIR ?= sif
@@ -29,7 +38,7 @@ SIF_DIR ?= sif
 
 help:
 	@echo "Versioning model: each service has its own image tag (services evolve"
-	@echo "independently). The tag comes from services/<svc>/VERSION; bump that"
+	@echo "independently). The tag comes from <svc-dir>/VERSION; bump that"
 	@echo "file when you cut a new release. `TAG=...` on the CLI overrides for"
 	@echo "one invocation."
 	@echo ""
@@ -75,7 +84,7 @@ login-harbor:
 # --- Bump patch version ---
 
 bump-%:
-	@f=services/$*/VERSION; \
+	@f=$(call svc_dir,$*)/VERSION; \
 	if [ ! -f "$$f" ]; then echo "error: $$f not found"; exit 1; fi; \
 	old=$$(cat "$$f"); \
 	prefix=$${old%.*}; \
@@ -93,7 +102,7 @@ build-%:
 	@echo "→ building $*:$(V)"
 	docker build --platform $(PLATFORM) \
 		-t $*:$(V) -t $*:latest \
-		-f services/$*/Dockerfile .
+		-f $(call svc_dir,$*)/Dockerfile .
 
 # --- Tag (no push) ---
 # Useful when you want to verify the registry path before pushing, or push

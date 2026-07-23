@@ -32,7 +32,7 @@ ENV PATH=/opt/.venv/bin:$PATH
 
 # Shared bioagent service framework (provides ServiceSettings, read_version_file).
 # Copied early so subsequent server-code changes don't bust the framework layer.
-COPY services/_framework /opt/_framework
+COPY framework /opt/_framework
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/.venv/bin/python /opt/_framework
 

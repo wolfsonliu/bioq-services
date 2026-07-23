@@ -81,7 +81,7 @@ RUN ln -s /data/models/promera/ligandmpnn /opt/promera/LigandMPNN/model_params
 # Shared bioagent service framework + remote-fetch deps. COPY (not bind) so framework
 # source changes bust this layer's cache — a bind mount's content is not part of the
 # BuildKit layer cache key and would ship a stale framework (missing output-sink fixes).
-COPY services/_framework /tmp/service-framework
+COPY framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
     "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2 pyyaml

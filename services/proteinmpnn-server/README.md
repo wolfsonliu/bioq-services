@@ -119,7 +119,7 @@ OSS 凭证走 `OSS_ACCESS_KEY_ID` + `OSS_ACCESS_KEY_SECRET`。
 ```bash
 # 1. 装 framework + 算法栈
 cd opensource/ProteinMPNN
-pip install ../../services/_framework httpx alibabacloud-oss-v2
+pip install ../../framework httpx alibabacloud-oss-v2
 pip install --index-url https://download.pytorch.org/whl/cu121 torch==2.4.1 numpy
 
 # 2. 软链 server 包让 uvicorn 找到
@@ -142,7 +142,7 @@ make build-proteinmpnn-server
 docker run --gpus all -p 9000:9000 proteinmpnn-server
 ```
 
-构建上下文必须是项目根目录，因为 Dockerfile 同时 `COPY services/_framework` 和 `COPY opensource/ProteinMPNN`。
+构建上下文必须是项目根目录，因为 Dockerfile 同时 `COPY framework` 和 `COPY opensource/ProteinMPNN`。
 
 ## FC 部署
 

@@ -131,7 +131,7 @@ RUN find /opt/conda/envs/af2/lib -name '*.a' -delete \
 # ---------------------------------------------------------------------------
 # Shared service framework.
 # ---------------------------------------------------------------------------
-COPY services/_framework /tmp/service-framework
+COPY framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/af2/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2

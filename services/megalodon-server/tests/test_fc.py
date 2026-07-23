@@ -5,7 +5,7 @@ Marked `@pytest.mark.fc`, skipped by default. Run with:
     RUN_FC_TESTS=1 \\
     uv run python -m pytest -m fc services/megalodon-server/tests/test_fc.py -v
 
-URL resolves via `services/services.yaml`.
+URL resolves via `services.yaml`.
 
 Unconditional generation — no file uploads. All params in form fields.
 """

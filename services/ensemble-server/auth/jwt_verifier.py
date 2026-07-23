@@ -1,6 +1,6 @@
 """JWT verification using JWKS fetched from a remote endpoint.
 
-Used to verify RS256-signed JWTs issued by `services/jwt/` (or any other
+Used to verify RS256-signed JWTs issued by `edge/jwt/` (or any other
 JWKS-publishing identity provider).  Caches the JWKS in-process; on a kid
 miss the cache is force-refreshed once (handles key rotation) before
 failing.

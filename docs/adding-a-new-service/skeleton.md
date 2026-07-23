@@ -392,7 +392,7 @@ dependencies = [
 
 # 相对路径引用框架，无需发布到 PyPI
 [tool.uv.sources]
-bioq-service-framework = { path = "../_framework", editable = true }
+bioq-service-framework = { path = "../../framework", editable = true }
 
 # 仅作为离线测试环境，不构建本服务包
 [tool.uv]

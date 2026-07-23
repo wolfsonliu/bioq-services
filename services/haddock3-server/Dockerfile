@@ -49,7 +49,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # Shared bioagent service framework + remote-fetch deps (late layer so framework
 # changes don't invalidate the haddock3 install layer above).
-COPY services/_framework /tmp/service-framework
+COPY framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2

@@ -9,7 +9,7 @@ dependencies = [
 
 # Relative path to the framework — no PyPI publish needed.
 [tool.uv.sources]
-bioq-service-framework = { path = "../_framework", editable = true }
+bioq-service-framework = { path = "../../framework", editable = true }
 
 # Offline test env only; the server package is COPY-injected in the Dockerfile,
 # not pip-installed.

@@ -150,7 +150,7 @@ RUN /opt/conda/envs/immunebuilder/bin/pip uninstall -y \
 # Shared service framework — independent layer so framework changes don't
 # invalidate the (slow) conda env + cleanup above.
 # ---------------------------------------------------------------------------
-COPY services/_framework /tmp/service-framework
+COPY framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/immunebuilder/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2

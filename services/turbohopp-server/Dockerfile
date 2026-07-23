@@ -154,7 +154,7 @@ RUN /opt/conda/bin/pip uninstall -y \
 # Shared service framework — independent layer so framework bumps don't
 # invalidate the conda env layer above.
 # ---------------------------------------------------------------------------
-RUN --mount=type=bind,source=services/_framework,target=/tmp/service-framework \
+RUN --mount=type=bind,source=framework,target=/tmp/service-framework \
     --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/bin/python \
         "/tmp/service-framework[mcp]" httpx alibabacloud-oss-v2
