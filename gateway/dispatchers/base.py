@@ -22,7 +22,10 @@ class Dispatcher(Protocol):
     """Submit a job, poll its status, and fetch its result archive."""
 
     def submit(self, rec: ServiceRecord, endpoint: str, job_id: str,
-               data: dict[str, Any], *, oss_prefix: str | None = None) -> None: ...
+               data: dict[str, Any], *, oss_prefix: str | None = None) -> str | None:
+        """Return the downstream job handle to use for subsequent status/download
+        (e.g. a worker-generated id), or None to keep using the passed job_id."""
+        ...
 
     def status(self, rec: ServiceRecord, job_id: str) -> dict[str, Any]: ...
 
@@ -57,6 +60,5 @@ def stream_download(client: httpx.Client, url: str, dest: Path,
             r.read()
             r.raise_for_status()
         with open(dest, "wb") as fh:
-            for chunk in r.iter_bytes():
-                fh.write(chunk)
+            fh.writelines(r.iter_bytes())
     return dest

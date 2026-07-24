@@ -15,13 +15,13 @@ from .fc import SESSION_AFFINITY_HEADER, FCDispatcher
 from .local import LocalHttpDispatcher
 
 __all__ = [
+    "SESSION_AFFINITY_HEADER",
     "Dispatcher",
     "FCDispatcher",
     "LocalHttpDispatcher",
-    "SESSION_AFFINITY_HEADER",
     "encode_form",
-    "stream_download",
     "make_dispatcher",
+    "stream_download",
 ]
 
 

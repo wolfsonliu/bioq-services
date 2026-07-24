@@ -5,7 +5,6 @@ from urllib.parse import parse_qs
 
 import httpx
 from bioq_service.service_registry import ServiceRecord
-
 from server.dispatchers import LocalHttpDispatcher
 
 
@@ -29,11 +28,12 @@ def test_submit_hits_plain_endpoint_without_fc_headers():
         seen["job"] = request.headers.get("x-bioagent-job-id")
         return httpx.Response(202, json={"job_id": "job-1"})
 
-    _local(handler).submit(_rec(), "score", "job-1", {"nreps": 1})
+    handle = _local(handler).submit(_rec(), "score", "job-1", {"nreps": 1})
     assert seen["path"] == "/api/score"          # NOT /api/tasks/score
     assert seen["inv"] is None                    # no FC headers
     assert seen["task"] is None
     assert seen["job"] == "job-1"
+    assert handle == "job-1"                      # worker-assigned id returned
 
 
 def test_submit_treats_409_as_ok():

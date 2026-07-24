@@ -106,11 +106,17 @@ def run(svc: str, endpoint: str, request: Request,
     db.create_job(job_id=job_id, account_id=ident.account_id, svc=svc, endpoint=endpoint,
                   input_params=body, output_prefix=oss_prefix)
     try:
-        request.app.state.dispatch.submit(rec, endpoint, fc_task_id, body, oss_prefix=oss_prefix)
+        downstream_id = request.app.state.dispatch.submit(
+            rec, endpoint, fc_task_id, body, oss_prefix=oss_prefix
+        )
     except Exception as exc:  # noqa: BLE001
         db.update_job(ident.account_id, job_id, status="failed")
         raise HTTPException(502, f"dispatch failed: {exc}")
-    db.update_job(ident.account_id, job_id, status="running", fc_task_id=fc_task_id)
+    # Track whatever handle the backend uses for status/download: the FC task id
+    # we passed (FCDispatcher returns None) or the worker-assigned job_id
+    # (LocalHttpDispatcher).
+    db.update_job(ident.account_id, job_id, status="running",
+                  fc_task_id=downstream_id or fc_task_id)
     return {"job_id": job_id, "status": "running"}
 
 

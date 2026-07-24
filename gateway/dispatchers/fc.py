@@ -26,7 +26,7 @@ class FCDispatcher:
         self._client = client or httpx.Client(timeout=60.0)
 
     def submit(self, rec: ServiceRecord, endpoint: str, job_id: str,
-               data: dict[str, Any], *, oss_prefix: str | None = None) -> None:
+               data: dict[str, Any], *, oss_prefix: str | None = None) -> str | None:
         headers = {
             "X-Fc-Invocation-Type": "Async",
             "X-Fc-Async-Task-Id": job_id,
@@ -37,11 +37,14 @@ class FCDispatcher:
         r = self._client.post(f"{rec.url}/api/tasks/{endpoint}",
                               data=encode_form(data), headers=headers)
         if r.status_code == 409:
-            return  # duplicate task id — idempotent, already submitted
+            return None  # duplicate task id — idempotent, already submitted
         if r.status_code not in (200, 202):
             raise httpx.HTTPStatusError(
                 f"submit failed: {r.status_code} {r.text!r}", request=r.request, response=r,
             )
+        # FC keys the task by the X-Fc-Async-Task-Id we passed; status/download
+        # use that same id, so no downstream handle to return.
+        return None
 
     def status(self, rec: ServiceRecord, job_id: str) -> dict[str, Any]:
         # Control-plane status when we have a function name + AK/SK: reliable and

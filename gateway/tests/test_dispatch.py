@@ -7,7 +7,6 @@ from urllib.parse import parse_qs
 import httpx
 import pytest
 from bioq_service.service_registry import ServiceRecord
-
 from server.dispatchers import (
     Dispatcher,
     FCDispatcher,
@@ -44,10 +43,11 @@ def test_submit_sends_async_headers():
         seen["task"] = request.headers.get("x-fc-async-task-id")
         return httpx.Response(202, json={"status": "accepted"})
 
-    _fc(handler).submit(_rec(), "score", "job-1", {"nreps": "1"})
+    handle = _fc(handler).submit(_rec(), "score", "job-1", {"nreps": "1"})
     assert seen["path"] == "/api/tasks/score"
     assert seen["inv"] == "Async"
     assert seen["task"] == "job-1"
+    assert handle is None  # FC keys by the id we passed; no downstream handle
 
 
 def test_submit_treats_409_as_ok():
