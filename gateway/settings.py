@@ -45,6 +45,12 @@ class GatewaySettings(ServiceSettings):
     # The store auto-applies connection-pool tuning for non-sqlite URLs.
     db_url: str = Field(default="sqlite:////data/gateway/gateway.db")
 
+    # storage backend: "oss" (presigned direct-to-object) or "file" (gateway
+    # /v1/files IO over a shared volume — local Compose/K8s). Env:
+    # GATEWAY_STORAGE_BACKEND / GATEWAY_FILE_BASE_DIR.
+    storage_backend: str = Field(default="oss")
+    file_base_dir: Path = Field(default=Path("/shared"))
+
     # OSS for presigned upload/download
     oss_bucket: str = Field(default="bioagent-inputs")
     oss_region: str = Field(default="cn-hangzhou")

@@ -21,9 +21,9 @@ from .discover import Discovery
 from .dispatchers import make_dispatcher
 from .models import JobView, PresignRequest, PresignResponse
 from .oss_map import map_oss_inputs_to_mount
-from .presign import Presigner, build_oss_client
 from .registry import ServiceRegistry
 from .settings import GatewaySettings
+from .storage import FileStorage, make_storage
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +159,7 @@ def download_job(job_id: str, request: Request,
     job = _owned_job(request, job_id, ident)
     reg = request.app.state.registry
     try:
-        url = _get_presigner(request).presign_get_if_exists(ident.account_id, job_id, "results.zip")
+        url = _get_storage(request).presign_get_if_exists(ident.account_id, job_id, "results.zip")
     except Exception as exc:  # noqa: BLE001 — OSS not configured / down => fall back to proxy
         # `presign_get_if_exists` returns None for a genuinely-absent object; an
         # exception here means a real OSS problem (auth/5xx/transport). We still
@@ -216,23 +216,61 @@ def cancel_job(job_id: str, request: Request,
     return {"job_id": job_id, "status": "cancelled"}
 
 
-def _get_presigner(request: Request) -> Presigner:
-    p = getattr(request.app.state, "presigner", None)
-    if p is None:
-        s = request.app.state.settings
-        p = Presigner(client=build_oss_client(s.oss_region),
-                      bucket=s.oss_bucket, region=s.oss_region,
-                      expiry_sec=s.presign_expiry_sec)
-        request.app.state.presigner = p
-    return p
+def _get_storage(request: Request):
+    s = getattr(request.app.state, "storage", None)
+    if s is None:
+        s = make_storage(request.app.state.settings)
+        request.app.state.storage = s
+    return s
 
 
 @app.post("/v1/uploads/presign", response_model=PresignResponse)
 def presign_upload(request: Request, body: PresignRequest,
                    ident: AuthIdentity = Depends(require_auth)) -> PresignResponse:
-    return _get_presigner(request).presign_put(
+    return _get_storage(request).presign_put(
         ident.account_id, body.job_id, body.filename, body.sha256
     )
+
+
+def _file_storage_or_404(request: Request) -> FileStorage:
+    storage = _get_storage(request)
+    if not isinstance(storage, FileStorage):
+        raise HTTPException(404, "file IO is only available with the 'file' storage backend")
+    return storage
+
+
+def _guard_key(key: str, ident: AuthIdentity) -> None:
+    # Tenant isolation: a caller may only touch files under their own account.
+    if not key.startswith(f"users/{ident.account_id}/"):
+        raise HTTPException(403, "forbidden")
+
+
+@app.put("/v1/files/{key:path}")
+async def put_file(key: str, request: Request,
+                   ident: AuthIdentity = Depends(require_auth)) -> dict:
+    storage = _file_storage_or_404(request)
+    _guard_key(key, ident)
+    dest = storage.resolve(key)  # rejects traversal outside base_dir
+    data = await request.body()
+    # Blocking filesystem write off the event loop (local file backend only).
+    await anyio.to_thread.run_sync(_write_bytes, dest, data)
+    return {"ok": True, "key": key}
+
+
+def _write_bytes(dest: Path, data: bytes) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(data)
+
+
+@app.get("/v1/files/{key:path}")
+def get_file(key: str, request: Request,
+             ident: AuthIdentity = Depends(require_auth)):
+    storage = _file_storage_or_404(request)
+    _guard_key(key, ident)
+    path = storage.resolve(key)
+    if not path.is_file():
+        raise HTTPException(404, "file not found")
+    return FileResponse(str(path))
 
 
 attach_mcp(app)

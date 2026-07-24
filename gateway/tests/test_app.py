@@ -120,7 +120,7 @@ def test_presign_route(client):
                 uri=f"oss://b/users/{account_id}/{job_id}/input/{filename}",
                 exists=False, url="https://oss.put/signed")
 
-    appmod.app.state.presigner = _FakePresigner()
+    appmod.app.state.storage = _FakePresigner()
     hdr = {"x-api-key": "p-sec", "host": "public.example.com"}
     r = client.post("/v1/uploads/presign",
                     json={"job_id": "job1", "filename": "x.rst7"}, headers=hdr)
@@ -149,7 +149,7 @@ def test_download_redirects_to_oss_when_present(client):
         def presign_get_if_exists(self, account_id, job_id, filename):
             return "https://oss.get/signed-results"
 
-    appmod.app.state.presigner = _Presigner()
+    appmod.app.state.storage = _Presigner()
 
     hdr = {"x-api-key": "d-sec", "host": "public.example.com"}
     r = client.post("/v1/run/openbpmd-server/score",
@@ -187,7 +187,7 @@ def test_download_falls_back_to_proxy_when_not_on_oss(client):
         def presign_get_if_exists(self, account_id, job_id, filename):
             return None  # not on OSS => fall back to proxying the downstream
 
-    appmod.app.state.presigner = _Presigner()
+    appmod.app.state.storage = _Presigner()
 
     hdr = {"x-api-key": "f-sec", "host": "public.example.com"}
     r = client.post("/v1/run/openbpmd-server/score",
@@ -257,3 +257,83 @@ def test_run_keeps_oss_uris_for_unmounted_service(client):
     )
     assert r.status_code == 202
     assert captured["data"]["structure_uri"] == "oss://bioagent-inputs/users/alice/ujob1/input/x.rst7"
+
+
+def test_file_backend_put_get_roundtrip(client, tmp_path):
+    import server.app as appmod
+    from server.storage import FileStorage
+    _seed_key(appmod, account_id="alice", secret="fa", key_id="gk_fa")
+    shared = tmp_path / "shared"
+    appmod.app.state.storage = FileStorage(shared)
+
+    hdr = {"x-api-key": "fa", "host": "public.example.com"}
+    key = "users/alice/j1/input/x.pdb"
+    r = client.put(f"/v1/files/{key}", content=b"HELLO", headers=hdr)
+    assert r.status_code == 200, r.text
+    assert (shared / key).read_bytes() == b"HELLO"
+
+    r2 = client.get(f"/v1/files/{key}", headers=hdr)
+    assert r2.status_code == 200
+    assert r2.content == b"HELLO"
+
+
+def test_file_backend_tenant_guard(client, tmp_path):
+    import server.app as appmod
+    from server.storage import FileStorage
+    _seed_key(appmod, account_id="alice", secret="fa", key_id="gk_fa")
+    appmod.app.state.storage = FileStorage(tmp_path / "shared")
+
+    hdr = {"x-api-key": "fa", "host": "public.example.com"}
+    # alice may not write under bob's prefix
+    r = client.put("/v1/files/users/bob/j1/input/x.pdb", content=b"x", headers=hdr)
+    assert r.status_code == 403
+    r2 = client.get("/v1/files/users/bob/j1/results.zip", headers=hdr)
+    assert r2.status_code == 403
+
+
+def test_file_routes_404_on_non_file_backend(client):
+    import server.app as appmod
+    _seed_key(appmod, account_id="alice", secret="fa", key_id="gk_fa")
+
+    class _NotFile:
+        def presign_put(self, *a, **k):
+            raise AssertionError
+
+        def presign_get_if_exists(self, *a, **k):
+            return None
+
+    appmod.app.state.storage = _NotFile()
+    hdr = {"x-api-key": "fa", "host": "public.example.com"}
+    r = client.put("/v1/files/users/alice/j1/input/x.pdb", content=b"x", headers=hdr)
+    assert r.status_code == 404
+
+
+def test_file_backend_download_redirects_to_gateway_file_url(client, tmp_path):
+    import server.app as appmod
+    from bioq_service.service_registry import ServiceRecord
+    from server.storage import FileStorage
+    _seed_key(appmod, account_id="alice", secret="fa", key_id="gk_fa")
+    appmod.app.state.registry._services = {"openbpmd-server": ServiceRecord(url="https://svc.local")}
+
+    class _Disp:
+        def submit(self, rec, ep, job_id, data, oss_prefix=None):
+            pass
+
+        def status(self, rec, job_id):
+            return {"status": "completed"}
+
+    appmod.app.state.dispatch = _Disp()
+    shared = tmp_path / "shared"
+    appmod.app.state.storage = FileStorage(shared)
+    # simulate the worker having mirrored results to the shared volume
+    out = shared / "users/alice/dljob/results.zip"
+    out.parent.mkdir(parents=True)
+    out.write_bytes(b"RESULTZIP")
+
+    hdr = {"x-api-key": "fa", "host": "public.example.com"}
+    r = client.post("/v1/run/openbpmd-server/score", json={},
+                    headers={**hdr, "x-bioagent-job-id": "dljob"})
+    assert r.status_code == 202
+    r2 = client.get("/v1/jobs/dljob/download", headers=hdr, follow_redirects=False)
+    assert r2.status_code == 302
+    assert r2.headers["location"] == "/v1/files/users/alice/dljob/results.zip"
