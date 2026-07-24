@@ -1,0 +1,46 @@
+# OpenFaaS stack for bioq-services workers (async task mode).
+#
+# Each worker is an of-watchdog HTTP-mode function wrapping its existing image
+# (see Dockerfile.watchdog). The gateway (control plane) is NOT a function — it
+# runs as a normal Deployment and dispatches here via GATEWAY_DISPATCH_BACKEND=openfaas.
+#
+# Deploy pre-built wrapped images:
+#   faas-cli deploy -f stack.yaml --gateway $OPENFAAS_GATEWAY
+# (or `faas-cli up -f stack.yaml` to build+push+deploy from Dockerfile.watchdog).
+#
+# CRITICAL: jobs_base_dir must be a SHARED RWX volume across replicas, so status
+# polls (routed to any replica) read each job's job.json sidecar. Mount the same
+# volume the gateway uses for `file` storage. Wire the PVC via an OpenFaaS
+# profile (com.openfaas.profile) — see README.
+
+version: 1.0
+
+provider:
+  name: openfaas
+  gateway: ${OPENFAAS_GATEWAY:-http://127.0.0.1:8080}
+
+functions:
+  # Example CPU worker. Copy this block per service; the function name must match
+  # the `function:` value in the openfaas services.yaml.
+  dockq-server:
+    lang: dockerfile
+    handler: .
+    image: ${REGISTRY:-localhost:5000}/dockq-server-fn:latest
+    build_args:
+      BASE_IMAGE: ${DOCKQ_BASE_IMAGE:-harbor.ruosheng.bio/aliyun_fc/dockq-server:latest}
+    environment:
+      # Shared job store (RWX) so any replica answers status/download polls, and
+      # the output-sink mirrors results where the gateway's file storage reads them.
+      DOCKQ_JOBS_BASE_DIR: /shared/jobs
+      DOCKQ_OSS_OUTPUT_MOUNT: /shared
+      # Long jobs: keep the async invocation alive for the full compute.
+      exec_timeout: 86400s
+      read_timeout: 86400s
+      write_timeout: 86400s
+    labels:
+      com.openfaas.scale.min: "1"      # keep 1 warm so status polls don't cold-start
+      com.openfaas.scale.max: "5"
+    # Mount the shared RWX PVC + (GPU) select GPU nodes via a profile:
+    # annotations:
+    #   com.openfaas.profile: shared-jobs        # PVC mount (see README)
+    #   com.openfaas.profile: gpu                 # nodeSelector/tolerations/limits

@@ -1,0 +1,27 @@
+# Thin of-watchdog (HTTP mode) wrapper over an existing bioq-services worker
+# image. The worker's own code/deps are untouched — this only adds the OpenFaaS
+# watchdog as PID 1, which starts the FastAPI app on 127.0.0.1:8000 and proxies
+# OpenFaaS traffic (:8080) to it.
+#
+# Build (from this directory):
+#   docker build -f Dockerfile.watchdog \
+#     --build-arg BASE_IMAGE=harbor.ruosheng.bio/aliyun_fc/dockq-server:latest \
+#     -t <registry>/dockq-server-fn:latest .
+#   docker push <registry>/dockq-server-fn:latest
+
+ARG BASE_IMAGE
+FROM ghcr.io/openfaas/of-watchdog:0.10.7 AS watchdog
+
+FROM ${BASE_IMAGE}
+COPY --from=watchdog /fwatchdog /usr/bin/fwatchdog
+
+# HTTP mode: watchdog on :8080, forwards to the FastAPI upstream it launches.
+ENV mode="http" \
+    upstream_url="http://127.0.0.1:8000" \
+    fprocess="python -m uvicorn server.app:app --host 127.0.0.1 --port 8000" \
+    exec_timeout="86400s" \
+    read_timeout="86400s" \
+    write_timeout="86400s"
+
+EXPOSE 8080
+CMD ["fwatchdog"]

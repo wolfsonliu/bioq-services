@@ -1,0 +1,9 @@
+# Downstream registry for the OpenFaaS backend. `function` is the OpenFaaS
+# function name (must match stack.yaml); `url` is a placeholder (the gateway
+# routes through GATEWAY_OPENFAAS_GATEWAY_URL, not this url). No oss_mount when
+# using the `file` storage backend over the shared volume.
+services:
+  dockq-server:
+    url: http://openfaas
+    function: dockq-server
+    tier: warm
