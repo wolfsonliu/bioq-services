@@ -63,10 +63,15 @@ class GatewaySettings(ServiceSettings):
     # downstream HTTP dispatch
     dispatch_timeout_sec: float = Field(default=60.0, ge=5)
 
-    # execution backend: "fc" (Alibaba FC async task mode) or "http" (plain
+    # execution backend: "fc" (Alibaba FC async task mode), "http" (plain
     # submit/poll against each service's own in-process runner — local
-    # Compose/K8s). Env: GATEWAY_DISPATCH_BACKEND.
+    # Compose/K8s), or "openfaas" (async via the OpenFaaS gateway). Env:
+    # GATEWAY_DISPATCH_BACKEND.
     dispatch_backend: str = Field(default="fc")
+
+    # OpenFaaS gateway base URL (dispatch_backend="openfaas"), e.g.
+    # http://gateway.openfaas:8080. Env: GATEWAY_OPENFAAS_GATEWAY_URL.
+    openfaas_gateway_url: str = Field(default="")
 
     # anyio threadpool capacity. All /v1 handlers are sync `def` → FastAPI runs
     # them in the threadpool (anyio default = 40 tokens). Gateway work is
