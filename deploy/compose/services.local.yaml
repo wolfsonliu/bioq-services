@@ -1,0 +1,7 @@
+# Downstream registry for the local Compose stack. Same schema as the cloud
+# services.yaml, but `url` points at the in-compose service DNS name and there's
+# no `function` (FC-only) / no `oss_mount` (file backend stages file:// inputs).
+services:
+  dockq-server:
+    url: http://dockq-server:8000
+    tier: warm

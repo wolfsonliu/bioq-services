@@ -1,0 +1,59 @@
+# Local single-node deployment of bioq-services — no Alibaba FC / OSS.
+#
+#   Dispatch: http  — gateway POSTs /api/<endpoint>, polls /api/jobs/<id>
+#   Storage:  file  — gateway /v1/files IO over the `shared` volume; workers read
+#                     the file:// inputs the gateway staged there
+#
+# Build the images first, from the repo root:
+#   make build-gateway
+#   make build-dockq-server
+# then bring the stack up:
+#   docker compose -f deploy/compose/docker-compose.yml up -d
+#
+# See README.md for seeding an API key and running a job.
+
+name: bioq-local
+
+services:
+  gateway:
+    image: ${GATEWAY_IMAGE:-gateway:latest}
+    environment:
+      GATEWAY_DISPATCH_BACKEND: http
+      GATEWAY_STORAGE_BACKEND: file
+      GATEWAY_FILE_BASE_DIR: /shared
+      GATEWAY_REGISTRY_PATH: /opt/gateway/services.yaml
+      GATEWAY_DB_URL: sqlite:////data/gateway/gateway.db
+      # Exercise real API-key auth locally (VPC bypass off).
+      GATEWAY_AUTH__BYPASS_VPC: "false"
+    ports:
+      - "${GATEWAY_PORT:-9000}:9000"
+    volumes:
+      - ./services.local.yaml:/opt/gateway/services.yaml:ro
+      - shared:/shared
+      - gwdata:/data/gateway
+    depends_on:
+      - dockq-server
+
+  # Example CPU worker. Add more the same way (one service block each) and list
+  # them in services.local.yaml. GPU workers add the deploy.resources block below.
+  dockq-server:
+    image: ${DOCKQ_IMAGE:-dockq-server:latest}
+    command: ["python", "-m", "uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      DOCKQ_JOBS_BASE_DIR: /data/dockq_jobs
+    volumes:
+      - shared:/shared          # read file:// inputs the gateway staged here
+      - wdata:/data
+    # --- GPU worker template (uncomment + set image/command for a GPU service) ---
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+volumes:
+  shared:   # gateway + workers share this: staged inputs + (optional) results
+  gwdata:   # gateway sqlite DB
+  wdata:    # worker job dirs
