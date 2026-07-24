@@ -18,8 +18,7 @@ from .adapter import GatewayAdapter
 from .auth.deps import AuthIdentity, require_auth
 from .db.store import GatewayDB
 from .discover import Discovery
-from .dispatch import HttpDispatch
-from .fc_status import FcStatusClient
+from .dispatchers import make_dispatcher
 from .models import JobView, PresignRequest, PresignResponse
 from .oss_map import map_oss_inputs_to_mount
 from .presign import Presigner, build_oss_client
@@ -46,13 +45,7 @@ _db = GatewayDB(settings.db_url)
 app.state.db = _db
 app.state.registry = ServiceRegistry(settings.registry_path)
 app.state.discover = Discovery(ttl_sec=300)
-app.state.dispatch = HttpDispatch()
-app.state.fc_status = FcStatusClient(
-    access_key_id=settings.ali_access_key_id,
-    access_key_secret=settings.ali_access_key_secret,
-    default_region=settings.oss_region,
-    endpoint=settings.fc_endpoint,
-)
+app.state.dispatch = make_dispatcher(settings)
 
 
 @app.on_event("startup")
@@ -90,7 +83,7 @@ def run(svc: str, endpoint: str, request: Request,
         ident: AuthIdentity = Depends(require_auth)) -> dict:
     reg = request.app.state.registry
     try:
-        base = reg.base_url(svc)
+        rec = reg.record(svc)
     except KeyError:
         raise HTTPException(404, f"unknown service {svc!r}")
     # job_id is client-supplied (CLI-generated) and only needs to be unique
@@ -105,7 +98,6 @@ def run(svc: str, endpoint: str, request: Request,
     # across all accounts. Derive it from account_id so two accounts' identical
     # job_ids never collide there. See design doc §5.
     fc_task_id = f"{ident.account_id}-{job_id}"
-    rec = reg.record(svc)
     if rec.oss_mount:
         body = map_oss_inputs_to_mount(
             body, bucket=settings.oss_bucket, mount=settings.downstream_oss_mount
@@ -114,7 +106,7 @@ def run(svc: str, endpoint: str, request: Request,
     db.create_job(job_id=job_id, account_id=ident.account_id, svc=svc, endpoint=endpoint,
                   input_params=body, output_prefix=oss_prefix)
     try:
-        request.app.state.dispatch.submit(base, endpoint, fc_task_id, body, oss_prefix=oss_prefix)
+        request.app.state.dispatch.submit(rec, endpoint, fc_task_id, body, oss_prefix=oss_prefix)
     except Exception as exc:  # noqa: BLE001
         db.update_job(ident.account_id, job_id, status="failed")
         raise HTTPException(502, f"dispatch failed: {exc}")
@@ -136,7 +128,6 @@ def get_job(job_id: str, request: Request,
             ident: AuthIdentity = Depends(require_auth)) -> JobView:
     job = _owned_job(request, job_id, ident)
     reg = request.app.state.registry
-    fc = request.app.state.fc_status
     task_id = job.fc_task_id or job_id
     detail = None
     try:
@@ -145,15 +136,10 @@ def get_job(job_id: str, request: Request,
         rec = None
     if rec is not None:
         try:
-            if rec.function and fc.enabled:
-                # Control-plane status — spins no downstream instance.
-                new_status = fc.get_status(
-                    function=rec.function, task_id=task_id, region=rec.region
-                )
-            else:
-                # Fallback: HTTP poll (services without a function name / no AK/SK).
-                down = request.app.state.dispatch.status(rec.url, task_id)
-                new_status = down.get("status", job.status)
+            # Status source is backend-specific (FC GetAsyncTask vs HTTP poll),
+            # resolved inside the dispatcher.
+            down = request.app.state.dispatch.status(rec, task_id)
+            new_status = down.get("status", job.status)
             if new_status != job.status:
                 request.app.state.db.update_job(ident.account_id, job_id, status=new_status)
                 job = request.app.state.db.get_job(ident.account_id, job_id)
@@ -192,7 +178,8 @@ def download_job(job_id: str, request: Request,
     # so clean the temp file up after the response is sent (persistent gateway).
     dest = Path(settings.jobs_base_dir) / job_id / f"{job_id}.zip"
     try:
-        request.app.state.dispatch.download(reg.base_url(job.svc), job.fc_task_id or job_id, dest)
+        rec = reg.record(job.svc)
+        request.app.state.dispatch.download(rec, job.fc_task_id or job_id, dest)
     except httpx.HTTPStatusError as exc:
         try:
             detail = exc.response.text[:200]

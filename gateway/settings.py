@@ -57,6 +57,11 @@ class GatewaySettings(ServiceSettings):
     # downstream HTTP dispatch
     dispatch_timeout_sec: float = Field(default=60.0, ge=5)
 
+    # execution backend: "fc" (Alibaba FC async task mode) or "http" (plain
+    # submit/poll against each service's own in-process runner — local
+    # Compose/K8s). Env: GATEWAY_DISPATCH_BACKEND.
+    dispatch_backend: str = Field(default="fc")
+
     # anyio threadpool capacity. All /v1 handlers are sync `def` → FastAPI runs
     # them in the threadpool (anyio default = 40 tokens). Gateway work is
     # I/O-bound proxy work (httpx to downstream/FC + OSS + SQLite) — threads sit
