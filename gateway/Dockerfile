@@ -17,11 +17,12 @@ RUN --mount=type=bind,source=framework,target=/tmp/service-framework \
 
 # gateway code into /opt/gateway/server/  (imported as `server.app`).
 # Glob all top-level modules (+ VERSION) so a new module can't be forgotten;
-# `*.py` is non-recursive, so tests/ / scripts/ are excluded. auth/ + db/ are
-# subpackages, copied explicitly.
+# `*.py` is non-recursive, so tests/ / scripts/ are excluded. auth/ + db/ +
+# dispatchers/ are subpackages, copied explicitly.
 COPY gateway/*.py gateway/VERSION /opt/gateway/server/
 COPY gateway/auth/ /opt/gateway/server/auth/
 COPY gateway/db/ /opt/gateway/server/db/
+COPY gateway/dispatchers/ /opt/gateway/server/dispatchers/
 
 # schema migrations (alembic upgrade head runs in entrypoint before uvicorn).
 # alembic.ini + migrations/ live at /opt/gateway (the WORKDIR alembic runs from).
