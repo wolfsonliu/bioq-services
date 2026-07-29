@@ -31,7 +31,23 @@ service_version = $(shell cat $(call svc_dir,$(1))/VERSION 2>/dev/null || echo $
 # SIF output directory for Apptainer images.
 SIF_DIR ?= sif
 
-.PHONY: help build push clean list version login-harbor bump sif
+# --- Local dev (kind + OpenFaaS) ---
+# One-command local deploy via deploy/openfaas/local-up.sh. All state (kubeconfig,
+# downloaded tools, and the shared volume holding gateway.db + job dirs) lives
+# under BIOQ_WORKDIR. These are exported so `make local-*` and the scripts agree.
+BIOQ_WORKDIR ?= $(HOME)/.cache/bioq-local
+BIOQ_API_KEY ?= bioq-local-secret
+BIOQ_GATEWAY_PORT ?= 9000
+export BIOQ_WORKDIR BIOQ_API_KEY BIOQ_GATEWAY_PORT
+# LOCAL_SERVICES: services to start (space-separated). LOCAL_SVC: which service's
+# logs `make local-logs` tails (use "gateway" for the bioq gateway itself).
+LOCAL_SERVICES ?= dockq-server
+LOCAL_SVC ?= dockq-server
+KUBECTL := KUBECONFIG=$(BIOQ_WORKDIR)/kubeconfig PATH="$(BIOQ_WORKDIR)/bin:$$PATH" kubectl
+
+.PHONY: help build push clean list version login-harbor bump sif \
+	local-up local-down local-purge local-status local-logs local-test \
+	local-info local-forward
 
 # Keep intermediate pattern targets around (no auto-rm after the recipe runs).
 .PRECIOUS: build-% tag-%
@@ -68,6 +84,16 @@ help:
 	@echo "  make clean-<service>         Remove one"
 	@echo "  make list                    List discovered services"
 	@echo "  make login-harbor            docker login harbor.ruosheng.bio"
+	@echo ""
+	@echo "Local dev (kind + OpenFaaS):"
+	@echo "  make local-up                Start local deploy (LOCAL_SERVICES=\"$(LOCAL_SERVICES)\")"
+	@echo "  make local-up LOCAL_SERVICES=\"dockq-server plip-server\"   Pick services"
+	@echo "  make local-status            Show local pods + services"
+	@echo "  make local-logs [LOCAL_SVC=..]  Tail logs (LOCAL_SVC=gateway for the gateway)"
+	@echo "  make local-test              Run the dockq functional test vs the local deploy"
+	@echo "  make local-info              Print gateway URL / API key / paths"
+	@echo "  make local-forward           (Re)establish the gateway port-forward"
+	@echo "  make local-down              Tear down (make local-purge also wipes $(BIOQ_WORKDIR))"
 	@echo ""
 	@echo "Current state:"
 	@$(foreach svc,$(SERVICES),echo "  $(svc): $(call service_version,$(svc))";)
@@ -160,3 +186,42 @@ clean-sif: $(addprefix clean-sif-,$(SERVICES))
 
 clean-sif-%:
 	rm -f $(SIF_DIR)/$*.sif
+
+# --- Local dev (kind + OpenFaaS) ---
+# Thin wrappers over deploy/openfaas/local-up.sh / local-down.sh + kubectl queries.
+# Config: LOCAL_SERVICES / LOCAL_SVC / BIOQ_* (see the top of this file).
+
+local-up:
+	deploy/openfaas/local-up.sh $(LOCAL_SERVICES)
+
+local-down:
+	deploy/openfaas/local-down.sh
+
+local-purge:
+	deploy/openfaas/local-down.sh --purge
+
+local-status:
+	@$(KUBECTL) get pods -A 2>/dev/null | grep -E 'NAMESPACE|bioq|openfaas' \
+		|| echo "cluster not up — run: make local-up"
+	@echo
+	@$(KUBECTL) get svc -A 2>/dev/null | grep -E 'NAMESPACE|bioq|openfaas' || true
+
+local-logs:
+	@if [ "$(LOCAL_SVC)" = gateway ]; then \
+		$(KUBECTL) -n bioq logs deploy/bioq-gateway -f; \
+	else \
+		$(KUBECTL) -n openfaas-fn logs -l faas_function=$(LOCAL_SVC) -f; \
+	fi
+
+local-forward:
+	$(KUBECTL) -n bioq port-forward svc/bioq-gateway $(BIOQ_GATEWAY_PORT):9000 --address 127.0.0.1
+
+local-info:
+	@echo "gateway URL : http://127.0.0.1:$(BIOQ_GATEWAY_PORT)   (header X-API-Key: $(BIOQ_API_KEY))"
+	@echo "kubeconfig  : $(BIOQ_WORKDIR)/kubeconfig"
+	@echo "shared dir  : $(BIOQ_WORKDIR)/shared   (gateway.db, jobs/<acct>-<id>/, users/<acct>/<id>/)"
+
+local-test:
+	cd gateway && GATEWAY_BASE_URL=http://127.0.0.1:$(BIOQ_GATEWAY_PORT) \
+		GATEWAY_API_KEY=$(BIOQ_API_KEY) RUN_LOCAL_TESTS=1 \
+		uv run --with pytest --with pytest-asyncio python -m pytest tests/test_local_openfaas.py -v
