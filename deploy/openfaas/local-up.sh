@@ -18,6 +18,10 @@
 #   BIOQ_API_KEY=bioq-local-secret     seeded gateway API key
 #   BIOQ_GATEWAY_PORT=9000             host port the gateway is forwarded to
 #   BIOQ_BUILD=auto                    auto|always|never — build missing base images
+#   BIOQ_DB_BACKEND=postgres           postgres|sqlite — gateway DB (postgres bundles
+#                                      a PostgreSQL pod, mirroring the ECS compose default)
+#   BIOQ_PG_IMAGE=postgres:18.4-trixie postgres image (pulled via the Docker Hub mirror)
+#   BIOQ_PG_PASSWORD=bioq-local-pg     bundled postgres password
 #
 # Requires: docker. kind/kubectl/helm are auto-downloaded to $BIOQ_WORKDIR/bin
 # if not already on PATH. Docker Hub is assumed unreachable directly, so Docker
@@ -33,6 +37,14 @@ API_KEY="${BIOQ_API_KEY:-bioq-local-secret}"
 GATEWAY_PORT="${BIOQ_GATEWAY_PORT:-9000}"
 BUILD_MODE="${BIOQ_BUILD:-auto}"
 ACCOUNT="local"
+
+# Gateway DB: postgres (bundled pod, like the ECS compose) or sqlite (single file
+# on the shared volume). Postgres tunables mirror gateway/deploy/.env.example.
+DB_BACKEND="${BIOQ_DB_BACKEND:-postgres}"
+PG_IMAGE="${BIOQ_PG_IMAGE:-postgres:18.4-trixie}"
+PG_USER="${BIOQ_PG_USER:-bioagent}"
+PG_PASSWORD="${BIOQ_PG_PASSWORD:-bioq-local-pg}"
+PG_DB="${BIOQ_PG_DB:-gateway}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"   # repos/bioq-services
 BIN_DIR="$WORKDIR/bin"
@@ -226,6 +238,62 @@ EOF
   kubectl -n openfaas-fn rollout restart "deploy/$svc" >/dev/null 2>&1 || true
 }
 
+# Bundled PostgreSQL in the bioq namespace (mirrors the ECS compose default).
+# Idempotent: skips if already deployed. Data lives on the shared hostPath so it
+# survives a `local-down` (non-purge), like the SQLite file did. The image runs
+# as root first so its entrypoint chowns the hostPath data dir to the postgres uid.
+deploy_postgres() {
+  kubectl create namespace bioq >/dev/null 2>&1 || true
+  if kubectl -n bioq get deploy bioq-postgres >/dev/null 2>&1; then
+    log "postgres already deployed"; return
+  fi
+  if ! docker image inspect "$PG_IMAGE" >/dev/null 2>&1; then
+    log "pulling $PG_IMAGE via $MIRROR"
+    docker pull "$MIRROR/library/$PG_IMAGE" >/dev/null
+    docker tag "$MIRROR/library/$PG_IMAGE" "$PG_IMAGE"
+  fi
+  kind load docker-image "$PG_IMAGE" --name "$CLUSTER" >/dev/null
+  log "deploying postgres ($PG_IMAGE)"
+  cat > "$MANIFEST_DIR/postgres.yaml" <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: bioq-postgres, namespace: bioq, labels: { app: bioq-postgres } }
+spec:
+  replicas: 1
+  # Single hostPath volume — never run two pods against it.
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: bioq-postgres } }
+  template:
+    metadata: { labels: { app: bioq-postgres } }
+    spec:
+      volumes: [ { name: pgdata, hostPath: { path: /shared/pgdata, type: DirectoryOrCreate } } ]
+      containers:
+        - name: postgres
+          image: $PG_IMAGE
+          imagePullPolicy: IfNotPresent
+          env:
+            - { name: POSTGRES_USER, value: "$PG_USER" }
+            - { name: POSTGRES_PASSWORD, value: "$PG_PASSWORD" }
+            - { name: POSTGRES_DB, value: "$PG_DB" }
+          ports: [ { containerPort: 5432 } ]
+          # PG 18+ keeps data in a major-version subdir, so mount the parent.
+          volumeMounts: [ { name: pgdata, mountPath: /var/lib/postgresql } ]
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "$PG_USER", "-d", "$PG_DB"] }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata: { name: bioq-postgres, namespace: bioq }
+spec:
+  selector: { app: bioq-postgres }
+  ports: [ { name: pg, port: 5432, targetPort: 5432 } ]
+EOF
+  kubectl apply -f "$MANIFEST_DIR/postgres.yaml" >/dev/null
+  kubectl -n bioq rollout status deploy/bioq-postgres --timeout=180s
+}
+
 # --- per-service build + deploy -------------------------------------------
 for svc in "${SERVICES[@]}"; do
   [ -d "$REPO_ROOT/services/$svc" ] || die "unknown service: $svc (no services/$svc)"
@@ -245,6 +313,24 @@ ensure_base_image_gateway() {
 ensure_base_image_gateway
 kind load docker-image gateway:latest --name "$CLUSTER" >/dev/null
 
+# --- gateway DB (postgres | sqlite) ---------------------------------------
+if [ "$DB_BACKEND" = postgres ]; then
+  deploy_postgres
+  DB_URL="postgresql+psycopg://$PG_USER:$PG_PASSWORD@bioq-postgres:5432/$PG_DB"
+  # Gate the gateway's `alembic upgrade head` on postgres accepting connections.
+  GW_INIT="      initContainers:
+        - name: wait-postgres
+          image: $PG_IMAGE
+          imagePullPolicy: IfNotPresent
+          command: [\"sh\", \"-c\", \"until pg_isready -h bioq-postgres -U $PG_USER; do echo waiting-for-postgres; sleep 2; done\"]
+"
+elif [ "$DB_BACKEND" = sqlite ]; then
+  DB_URL="sqlite:////shared/gateway.db"
+  GW_INIT=""
+else
+  die "BIOQ_DB_BACKEND must be 'postgres' or 'sqlite' (got: $DB_BACKEND)"
+fi
+
 # registry (services.yaml) for the selected services
 REG=""
 for svc in "${SERVICES[@]}"; do
@@ -255,7 +341,7 @@ for svc in "${SERVICES[@]}"; do
 "
 done
 
-log "deploying bioq gateway (openfaas + file storage)"
+log "deploying bioq gateway (openfaas + file storage, db=$DB_BACKEND)"
 cat > "$MANIFEST_DIR/gateway.yaml" <<EOF
 apiVersion: v1
 kind: Namespace
@@ -281,7 +367,7 @@ spec:
       volumes:
         - { name: shared, hostPath: { path: /shared, type: DirectoryOrCreate } }
         - { name: registry, configMap: { name: bioq-registry } }
-      containers:
+$GW_INIT      containers:
         - name: gateway
           image: gateway:latest
           imagePullPolicy: IfNotPresent
@@ -292,7 +378,7 @@ spec:
             - { name: GATEWAY_STORAGE_BACKEND, value: file }
             - { name: GATEWAY_FILE_BASE_DIR, value: /shared }
             - { name: GATEWAY_REGISTRY_PATH, value: /etc/bioq/services.yaml }
-            - { name: GATEWAY_DB_URL, value: "sqlite:////shared/gateway.db" }
+            - { name: GATEWAY_DB_URL, value: "$DB_URL" }
             - { name: GATEWAY_JOBS_BASE_DIR, value: /shared/gw_jobs }
             - { name: GATEWAY_AUTH__BYPASS_VPC, value: "false" }
           volumeMounts:
@@ -340,6 +426,7 @@ cat <<EOF
 $(printf '\033[1;32m[local-up] ready\033[0m')
   gateway URL : http://127.0.0.1:$GATEWAY_PORT
   API key     : $API_KEY   (header: X-API-Key)
+  db backend  : $DB_BACKEND$([ "$DB_BACKEND" = postgres ] && echo "   (svc bioq-postgres in ns bioq)")
   services    : ${SERVICES[*]}
   kubeconfig  : $KUBECONFIG   (export KUBECONFIG=... to use kubectl)
 

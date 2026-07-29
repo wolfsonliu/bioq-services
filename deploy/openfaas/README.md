@@ -17,9 +17,10 @@ normal Deployment and dispatches here via `GATEWAY_DISPATCH_BACKEND=openfaas`.
 ## Quick start: one-command local deploy (kind)
 
 `local-up.sh` spins up a full local stack on **kind + OpenFaaS** (no manual K8s
-steps): kind cluster, OpenFaaS, the bioq gateway (openfaas + `file` storage over a
-shared volume), and the selected worker services wrapped as OpenFaaS functions —
-then seeds an API key and port-forwards the gateway.
+steps): kind cluster, OpenFaaS, a bundled **PostgreSQL** for the gateway DB, the
+bioq gateway (openfaas + `file` storage over a shared volume), and the selected
+worker services wrapped as OpenFaaS functions — then seeds an API key and
+port-forwards the gateway.
 
 ```bash
 cd deploy/openfaas
@@ -39,7 +40,15 @@ built via `make build-<svc>` if missing (some need a one-time `vendor.sh`).
 
 The script is **idempotent** (re-run to add services or pick up rebuilt images).
 Key env overrides: `BIOQ_CLUSTER`, `BIOQ_WORKDIR`, `BIOQ_API_KEY`,
-`BIOQ_GATEWAY_PORT`, `BIOQ_DOCKERHUB_MIRROR`, `BIOQ_BUILD` (auto|always|never).
+`BIOQ_GATEWAY_PORT`, `BIOQ_DOCKERHUB_MIRROR`, `BIOQ_BUILD` (auto|always|never),
+`BIOQ_DB_BACKEND` (postgres|sqlite).
+
+**Gateway DB:** defaults to a bundled **PostgreSQL** pod (`bioq-postgres` in the
+`bioq` namespace), mirroring the ECS `gateway/deploy/docker-compose.yml` default;
+its data persists on the shared hostPath (`$BIOQ_WORKDIR/shared/pgdata`) across a
+non-purge `local-down`. Pass `BIOQ_DB_BACKEND=sqlite` for the old single-file DB
+(`$BIOQ_WORKDIR/shared/gateway.db`) instead. The postgres image is pulled via the
+Docker Hub mirror; override with `BIOQ_PG_IMAGE` / `BIOQ_PG_PASSWORD`.
 
 On success it prints the gateway URL + API key and the command to run the
 functional test (`gateway/tests/test_local_openfaas.py`).
