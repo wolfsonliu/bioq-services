@@ -45,7 +45,7 @@ on a memory-limited host where running one worker at a time is best. Set
 `BIOQ_PRUNE=0` for additive re-runs that keep prior workers.
 Key env overrides: `BIOQ_CLUSTER`, `BIOQ_WORKDIR`, `BIOQ_API_KEY`,
 `BIOQ_GATEWAY_PORT`, `BIOQ_DOCKERHUB_MIRROR`, `BIOQ_BUILD` (auto|always|never),
-`BIOQ_DB_BACKEND` (postgres|sqlite).
+`BIOQ_DB_BACKEND` (postgres|sqlite), `BIOQ_MODELS_DIR`, `BIOQ_GPU` (0|1).
 
 **Gateway DB:** defaults to a bundled **PostgreSQL** pod (`bioq-postgres` in the
 `bioq` namespace), mirroring the ECS `gateway/deploy/docker-compose.yml` default;
@@ -53,6 +53,26 @@ its data persists on the shared hostPath (`$BIOQ_WORKDIR/shared/pgdata`) across 
 non-purge `local-down`. Pass `BIOQ_DB_BACKEND=sqlite` for the old single-file DB
 (`$BIOQ_WORKDIR/shared/gateway.db`) instead. The postgres image is pulled via the
 Docker Hub mirror; override with `BIOQ_PG_IMAGE` / `BIOQ_PG_PASSWORD`.
+
+**GPU services + model weights:** worker images ship **no weights** (see the
+weights-externalization decision); each reads them from `/data/models/<svc>/`
+via its baked `<PREFIX>_WEIGHTS_DIR`. `local-up.sh` mounts a host dir there
+(`BIOQ_MODELS_DIR`, default `$BIOQ_WORKDIR/shared/models`, read-only). To run a
+GPU service locally:
+
+1. Fetch its weights once into `$BIOQ_MODELS_DIR/<svc>/`:
+   `services/<svc>/scripts/fetch_weights.sh` (layout must match the baked
+   `<PREFIX>_WEIGHTS_DIR` — e.g. `.../models/boltz/`, `.../models/diffdock/`).
+2. Deploy with GPU scheduling: `make local-up LOCAL_SERVICES=<svc> BIOQ_GPU=1`
+   — this adds `nvidia.com/gpu: 1` + `runtimeClassName: nvidia` to the pod. It
+   requires the **NVIDIA device plugin / GPU operator** on the cluster and a
+   GPU-capable node (kind alone does not provide GPUs). This path is provided
+   but untested in CI here (no GPU); CPU services need neither step.
+
+The default weights dir lives under the shared volume, so it works on an
+already-running cluster. A custom `BIOQ_MODELS_DIR` outside that tree needs its
+own kind mount, applied only on a freshly-created cluster (re-`local-down` /
+`local-up`).
 
 On success it prints the gateway URL + API key and the command to run the
 functional test (`gateway/tests/test_local_openfaas.py`).

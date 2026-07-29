@@ -222,6 +222,7 @@ local-info:
 	@echo "kubeconfig  : $(BIOQ_WORKDIR)/kubeconfig"
 	@echo "shared dir  : $(BIOQ_WORKDIR)/shared   (jobs/<acct>-<id>/, users/<acct>/<id>/; pgdata/ or gateway.db)"
 	@echo "gateway db  : postgres (svc bioq-postgres, ns bioq) by default; BIOQ_DB_BACKEND=sqlite for the old single-file DB"
+	@echo "weights dir : $(BIOQ_WORKDIR)/shared/models -> /data/models (put GPU weights in <dir>/<svc>/; BIOQ_GPU=1 to schedule a GPU)"
 
 local-test:
 	cd gateway && GATEWAY_BASE_URL=http://127.0.0.1:$(BIOQ_GATEWAY_PORT) \

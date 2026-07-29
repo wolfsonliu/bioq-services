@@ -24,6 +24,9 @@
 #                                      a PostgreSQL pod, mirroring the ECS compose default)
 #   BIOQ_PG_IMAGE=postgres:18.4-trixie postgres image (pulled via the Docker Hub mirror)
 #   BIOQ_PG_PASSWORD=bioq-local-pg     bundled postgres password
+#   BIOQ_MODELS_DIR=<workdir>/shared/models   host weights dir mounted at
+#                                      /data/models (GPU services read /data/models/<svc>/)
+#   BIOQ_GPU=0                         1|0 — request a GPU + nvidia runtime for workers
 #
 # Requires: docker. kind/kubectl/helm are auto-downloaded to $BIOQ_WORKDIR/bin
 # if not already on PATH. Docker Hub is assumed unreachable directly, so Docker
@@ -55,13 +58,41 @@ MANIFEST_DIR="$WORKDIR/manifests"
 export KUBECONFIG="$WORKDIR/kubeconfig"
 export PATH="$BIN_DIR:$PATH"
 
+# Model weights. GPU services read weights from /data/models/<svc>/ (baked
+# <PREFIX>_WEIGHTS_DIR); the image ships none (see the weights-externalization
+# decision). We mount a host dir there. Default lives UNDER the shared volume so
+# it needs no extra kind mount and works on an already-running cluster; a custom
+# BIOQ_MODELS_DIR outside the shared tree gets its own kind extraMount (which
+# only takes effect on a freshly-created cluster). Populate per service with
+# services/<svc>/scripts/fetch_weights.sh into $MODELS_DIR/<svc>/.
+MODELS_DIR="${BIOQ_MODELS_DIR:-$SHARED_DIR/models}"
+case "$MODELS_DIR" in
+  "$SHARED_DIR"/*)  MODELS_NODE_PATH="/shared/${MODELS_DIR#"$SHARED_DIR"/}"; MODELS_EXTRA_MOUNT=0 ;;
+  *)                MODELS_NODE_PATH="/data/models"; MODELS_EXTRA_MOUNT=1 ;;
+esac
+# GPU scheduling for worker pods (untested here — no GPU). When 1, requests one
+# nvidia.com/gpu + selects the nvidia runtime. Requires the NVIDIA device plugin
+# / GPU operator on the cluster and a GPU-capable node. The snippets are spliced
+# into the worker manifest (empty = CPU pod, unchanged); keep the trailing
+# newlines so the following YAML keys stay correctly indented.
+GPU="${BIOQ_GPU:-0}"
+GPU_POD_YAML="" GPU_RES_YAML="" GPU_LOG=""
+if [ "$GPU" = 1 ]; then
+  GPU_LOG=", gpu"
+  GPU_POD_YAML="      runtimeClassName: nvidia
+      tolerations: [ { key: nvidia.com/gpu, operator: Exists, effect: NoSchedule } ]
+"
+  GPU_RES_YAML="          resources: { limits: { nvidia.com/gpu: 1 } }
+"
+fi
+
 SERVICES=("$@"); [ "${#SERVICES[@]}" -eq 0 ] && SERVICES=(dockq-server)
 
 log()  { printf '\033[1;34m[local-up]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[local-up]\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31m[local-up] error:\033[0m %s\n' "$*" >&2; exit 1; }
 
-mkdir -p "$BIN_DIR" "$SHARED_DIR" "$MANIFEST_DIR"
+mkdir -p "$BIN_DIR" "$SHARED_DIR" "$MANIFEST_DIR" "$MODELS_DIR"
 chmod 777 "$SHARED_DIR"
 
 # --- tool bootstrap -------------------------------------------------------
@@ -104,12 +135,25 @@ ensure_kubectl() {
 ensure_kind; ensure_kubectl; ensure_helm
 
 # --- kind cluster ---------------------------------------------------------
+# A custom BIOQ_MODELS_DIR (outside the shared tree) needs its own node mount,
+# which can only be added at cluster-creation time.
+models_extra_mount_yaml=""
+if [ "$MODELS_EXTRA_MOUNT" = 1 ]; then
+  models_extra_mount_yaml="      - hostPath: $MODELS_DIR
+        containerPath: /data/models"
+fi
+
 if kind get clusters 2>/dev/null | grep -qx "$CLUSTER"; then
   log "kind cluster '$CLUSTER' already exists"
   kind export kubeconfig --name "$CLUSTER" --kubeconfig "$KUBECONFIG" >/dev/null 2>&1 || true
+  if [ "$MODELS_EXTRA_MOUNT" = 1 ]; then
+    warn "custom BIOQ_MODELS_DIR=$MODELS_DIR won't be mounted on the EXISTING cluster"
+    warn "(node mounts are set at creation). Run ./local-down.sh then ./local-up.sh,"
+    warn "or use the default location under $SHARED_DIR/models."
+  fi
 else
   ensure_node_image
-  log "creating kind cluster '$CLUSTER' (shared volume: $SHARED_DIR -> /shared)"
+  log "creating kind cluster '$CLUSTER' (shared: $SHARED_DIR -> /shared; models: $MODELS_DIR -> /data/models)"
   cat > "$MANIFEST_DIR/kind.yaml" <<EOF
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
@@ -120,6 +164,7 @@ nodes:
     extraMounts:
       - hostPath: $SHARED_DIR
         containerPath: /shared
+$models_extra_mount_yaml
 EOF
   kind create cluster --config "$MANIFEST_DIR/kind.yaml" --kubeconfig "$KUBECONFIG" --wait 120s
 fi
@@ -204,7 +249,7 @@ svc_env_prefix() {
 
 deploy_function() {
   local svc="$1" prefix; prefix="$(svc_env_prefix "$svc")"
-  log "[$svc] deploying function (env prefix ${prefix})"
+  log "[$svc] deploying function (env prefix ${prefix}${GPU_LOG})"
   cat > "$MANIFEST_DIR/fn-$svc.yaml" <<EOF
 apiVersion: apps/v1
 kind: Deployment
@@ -215,7 +260,9 @@ spec:
   template:
     metadata: { labels: { faas_function: $svc } }
     spec:
-      volumes: [ { name: shared, hostPath: { path: /shared, type: DirectoryOrCreate } } ]
+$GPU_POD_YAML      volumes:
+        - { name: shared, hostPath: { path: /shared, type: DirectoryOrCreate } }
+        - { name: models, hostPath: { path: $MODELS_NODE_PATH, type: DirectoryOrCreate } }
       containers:
         - name: $svc
           image: $svc-fn:latest
@@ -224,8 +271,11 @@ spec:
           env:
             - { name: ${prefix}JOBS_BASE_DIR, value: /shared/jobs }
             - { name: ${prefix}OSS_OUTPUT_MOUNT, value: /shared }
-          volumeMounts: [ { name: shared, mountPath: /shared } ]
-          readinessProbe: { httpGet: { path: /_/health, port: 8080 }, initialDelaySeconds: 3, periodSeconds: 5 }
+          volumeMounts:
+            - { name: shared, mountPath: /shared }
+            # Weights read-only at the baked <PREFIX>_WEIGHTS_DIR root (/data/models/<svc>/).
+            - { name: models, mountPath: /data/models, readOnly: true }
+$GPU_RES_YAML          readinessProbe: { httpGet: { path: /_/health, port: 8080 }, initialDelaySeconds: 3, periodSeconds: 5 }
           livenessProbe:  { httpGet: { path: /_/health, port: 8080 }, initialDelaySeconds: 5, periodSeconds: 15 }
 ---
 apiVersion: v1
@@ -446,7 +496,8 @@ $(printf '\033[1;32m[local-up] ready\033[0m')
   gateway URL : http://127.0.0.1:$GATEWAY_PORT
   API key     : $API_KEY   (header: X-API-Key)
   db backend  : $DB_BACKEND$([ "$DB_BACKEND" = postgres ] && echo "   (svc bioq-postgres in ns bioq)")
-  services    : ${SERVICES[*]}
+  services    : ${SERVICES[*]}$([ "$GPU" = 1 ] && echo "   (gpu: nvidia.com/gpu x1)")
+  weights dir : $MODELS_DIR -> /data/models   (put weights in <dir>/<svc>/)
   kubeconfig  : $KUBECONFIG   (export KUBECONFIG=... to use kubectl)
 
   smoke test:
