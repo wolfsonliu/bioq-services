@@ -1,7 +1,11 @@
-# Downstream registry for the OpenFaaS backend. `function` is the OpenFaaS
-# function name (must match stack.yaml); `url` is a placeholder (the gateway
-# routes through GATEWAY_OPENFAAS_GATEWAY_URL, not this url). No oss_mount when
-# using the `file` storage backend over the shared volume.
+# REFERENCE ONLY — NOT used by local-up.sh / `make local-up` (that generates the
+# gateway registry as a ConfigMap from the services you pass). This is the manual
+# path: the gateway's downstream registry (GATEWAY_REGISTRY_PATH) for a hand-rolled
+# OpenFaaS deploy.
+#
+# `function` is the OpenFaaS function name (must match stack.yaml); `url` is a
+# placeholder (the gateway routes through GATEWAY_OPENFAAS_GATEWAY_URL, not this
+# url). No oss_mount when using the `file` storage backend over the shared volume.
 services:
   dockq-server:
     url: http://openfaas

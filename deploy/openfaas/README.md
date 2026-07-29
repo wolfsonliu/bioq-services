@@ -56,6 +56,25 @@ PVC) mounted into all function replicas — the same volume the gateway uses for
 `file` storage. Without this, polls hit a replica that doesn't have the job and
 return 404. (This mirrors how the FC backend relies on shared NAS.)
 
+## Manual / real-cluster path (faas-cli)
+
+The steps below are the **manual** path for a real cluster (multi-node / Alibaba
+ACK) where worker images are pushed to a public/reachable registry. They use two
+**reference-only** files that `local-up.sh` does **not** use:
+
+- **`stack.yaml`** — a faas-cli stack (one `functions:` block per service). You
+  extend it per service; it is not a per-service file.
+- **`services.local.yaml`** — the gateway's downstream registry (`function:` names).
+
+`local-up.sh` instead generates the function Deployments/Services and the gateway
+registry ConfigMap dynamically from the services you pass — so for **local dev you
+don't need either file**; use `make local-up` and skip this whole section.
+
+> **Why the split:** OpenFaaS CE rejects local/kind-loaded images
+> (`faas-cli deploy` → "only allows public images"), so this faas-cli path needs
+> images pushed to a registry the cluster can pull. `local-up.sh` sidesteps that
+> by applying raw K8s Deployments instead of going through `faas-cli`.
+
 ## 1. Wrap worker images with of-watchdog
 
 OpenFaaS functions need the watchdog. `Dockerfile.watchdog` adds it over an

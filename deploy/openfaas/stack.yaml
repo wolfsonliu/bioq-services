@@ -1,3 +1,11 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# REFERENCE ONLY — this file is NOT used by local-up.sh / `make local-up`.
+# It is the MANUAL faas-cli deploy path for a REAL cluster with images pushed to
+# a public/reachable registry. (OpenFaaS CE rejects local images — "only allows
+# public images" — which is exactly why local-up.sh creates raw K8s manifests
+# instead of using faas-cli.) For local dev, use `make local-up` and ignore this.
+# ─────────────────────────────────────────────────────────────────────────────
+#
 # OpenFaaS stack for bioq-services workers (async task mode).
 #
 # Each worker is an of-watchdog HTTP-mode function wrapping its existing image
