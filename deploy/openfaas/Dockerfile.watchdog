@@ -1,27 +1,38 @@
 # Thin of-watchdog (HTTP mode) wrapper over an existing bioq-services worker
 # image. The worker's own code/deps are untouched — this only adds the OpenFaaS
-# watchdog as PID 1, which starts the FastAPI app on 127.0.0.1:8000 and proxies
+# watchdog as PID 1, which (re)launches the worker's FastAPI app and proxies
 # OpenFaaS traffic (:8080) to it.
 #
-# Build (from this directory):
+# FPROCESS / UPSTREAM_PORT default to a generic uvicorn invocation, but local-up.sh
+# derives them from each base image's own CMD (venv path, port), so this wrapper
+# works across services without hard-coding per-service details.
+#
+# Build (example):
 #   docker build -f Dockerfile.watchdog \
-#     --build-arg BASE_IMAGE=harbor.ruosheng.bio/aliyun_fc/dockq-server:latest \
-#     -t <registry>/dockq-server-fn:latest .
-#   docker push <registry>/dockq-server-fn:latest
+#     --build-arg BASE_IMAGE=dockq-server:latest \
+#     --build-arg UPSTREAM_PORT=9000 \
+#     --build-arg FPROCESS="/opt/dockq/.venv/bin/python -m uvicorn server.app:app --host 127.0.0.1 --port 9000" \
+#     -t dockq-server-fn:latest .
 
 ARG BASE_IMAGE
+ARG UPSTREAM_PORT=8000
+ARG FPROCESS="python -m uvicorn server.app:app --host 127.0.0.1 --port 8000"
+
 FROM ghcr.io/openfaas/of-watchdog:0.10.7 AS watchdog
 
 FROM ${BASE_IMAGE}
+ARG UPSTREAM_PORT
+ARG FPROCESS
 COPY --from=watchdog /fwatchdog /usr/bin/fwatchdog
 
-# HTTP mode: watchdog on :8080, forwards to the FastAPI upstream it launches.
+# HTTP mode: watchdog on :8080, forwards to the FastAPI upstream it (re)launches.
 ENV mode="http" \
-    upstream_url="http://127.0.0.1:8000" \
-    fprocess="python -m uvicorn server.app:app --host 127.0.0.1 --port 8000" \
+    upstream_url="http://127.0.0.1:${UPSTREAM_PORT}" \
+    fprocess="${FPROCESS}" \
     exec_timeout="86400s" \
     read_timeout="86400s" \
-    write_timeout="86400s"
+    write_timeout="86400s" \
+    healthcheck_interval="5s"
 
 EXPOSE 8080
 CMD ["fwatchdog"]

@@ -14,6 +14,40 @@ normal Deployment and dispatches here via `GATEWAY_DISPATCH_BACKEND=openfaas`.
 
 > \* design doc lives in the team engineering repo, not this repo.
 
+## Quick start: one-command local deploy (kind)
+
+`local-up.sh` spins up a full local stack on **kind + OpenFaaS** (no manual K8s
+steps): kind cluster, OpenFaaS, the bioq gateway (openfaas + `file` storage over a
+shared volume), and the selected worker services wrapped as OpenFaaS functions —
+then seeds an API key and port-forwards the gateway.
+
+```bash
+cd deploy/openfaas
+
+./local-up.sh                         # default: just dockq-server
+./local-up.sh dockq-server plip-server   # pick specific services
+
+# tear down (add --purge to also delete the work dir):
+./local-down.sh
+```
+
+Only `docker` is required — `kind`/`kubectl`/`helm` are auto-downloaded to
+`~/.cache/bioq-local/bin`. Docker Hub images (kind node, NATS) are pulled via a
+mirror (`BIOQ_DOCKERHUB_MIRROR`, default `docker.m.daocloud.io`) since Docker Hub
+is often unreachable; ghcr.io images are pulled directly. Base service images are
+built via `make build-<svc>` if missing (some need a one-time `vendor.sh`).
+
+The script is **idempotent** (re-run to add services or pick up rebuilt images).
+Key env overrides: `BIOQ_CLUSTER`, `BIOQ_WORKDIR`, `BIOQ_API_KEY`,
+`BIOQ_GATEWAY_PORT`, `BIOQ_DOCKERHUB_MIRROR`, `BIOQ_BUILD` (auto|always|never).
+
+On success it prints the gateway URL + API key and the command to run the
+functional test (`gateway/tests/test_local_openfaas.py`).
+
+> **Single-node note:** the script gives each function one replica on a hostPath
+> shared volume, so the "shared RWX" requirement below is satisfied trivially. For
+> a real multi-node cluster, use a shared RWX PVC as described next.
+
 ## ⚠️ Critical requirement: shared RWX job store
 
 Status polls are routed to **any** replica, so every replica must see every job's
