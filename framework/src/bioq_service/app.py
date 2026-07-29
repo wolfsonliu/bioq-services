@@ -198,7 +198,7 @@ def attach_mcp(
     *,
     mount_path: str = "/mcp",
     server_name: str | None = None,
-) -> "FastMCP":
+) -> "FastMCP | None":
     """Mount a Streamable-HTTP MCP server on `app` mirroring its HTTP surface.
 
     Call this AFTER all service-specific POST routes have been registered; the
@@ -214,7 +214,18 @@ def attach_mcp(
     events; the server is stashed on `app.state.mcp` so the stdio CLI
     entrypoint (`bioq-service-mcp-stdio`) can reuse the same instance.
     """
-    from bioq_service.mcp_server import make_mcp_server  # late import — optional dep
+    # MCP is an optional extra (`bioq-service-framework[mcp]`). If it isn't
+    # installed — or the installed `mcp` package is an incompatible build (e.g.
+    # a mirror resolved a name-colliding version lacking `mcp.server.fastmcp`) —
+    # skip mounting rather than crashing the whole service: the core HTTP API
+    # the gateway drives must still come up. Callers ignore the return value.
+    try:
+        from bioq_service.mcp_server import make_mcp_server  # late import — optional dep
+    except ImportError as exc:
+        logger.warning(
+            "MCP unavailable (%s); serving HTTP API without the /mcp mount.", exc
+        )
+        return None
 
     mcp = make_mcp_server(
         app,
