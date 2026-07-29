@@ -38,7 +38,11 @@ mirror (`BIOQ_DOCKERHUB_MIRROR`, default `docker.m.daocloud.io`) since Docker Hu
 is often unreachable; ghcr.io images are pulled directly. Base service images are
 built via `make build-<svc>` if missing (some need a one-time `vendor.sh`).
 
-The script is **idempotent** (re-run to add services or pick up rebuilt images).
+The script is **idempotent**: re-run to switch services or pick up rebuilt
+images. By default it **prunes** worker functions not in the set you pass (so
+`./local-up.sh plip-server` frees a previously-deployed `dockq-server`) — handy
+on a memory-limited host where running one worker at a time is best. Set
+`BIOQ_PRUNE=0` for additive re-runs that keep prior workers.
 Key env overrides: `BIOQ_CLUSTER`, `BIOQ_WORKDIR`, `BIOQ_API_KEY`,
 `BIOQ_GATEWAY_PORT`, `BIOQ_DOCKERHUB_MIRROR`, `BIOQ_BUILD` (auto|always|never),
 `BIOQ_DB_BACKEND` (postgres|sqlite).

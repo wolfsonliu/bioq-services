@@ -18,6 +18,8 @@
 #   BIOQ_API_KEY=bioq-local-secret     seeded gateway API key
 #   BIOQ_GATEWAY_PORT=9000             host port the gateway is forwarded to
 #   BIOQ_BUILD=auto                    auto|always|never — build missing base images
+#   BIOQ_PRUNE=1                       1|0 — remove worker functions not in the
+#                                      requested set (frees memory; set 0 for additive)
 #   BIOQ_DB_BACKEND=postgres           postgres|sqlite — gateway DB (postgres bundles
 #                                      a PostgreSQL pod, mirroring the ECS compose default)
 #   BIOQ_PG_IMAGE=postgres:18.4-trixie postgres image (pulled via the Docker Hub mirror)
@@ -301,6 +303,23 @@ for svc in "${SERVICES[@]}"; do
   build_fn_image "$svc"
   deploy_function "$svc"
 done
+
+# Prune worker functions NOT in the requested set (default on). On a memory-
+# limited host, running every previously-deployed worker at once is costly, so
+# re-running with a single service frees the others. Set BIOQ_PRUNE=0 to keep
+# old functions (additive re-runs).
+if [ "${BIOQ_PRUNE:-1}" != 0 ]; then
+  want=" ${SERVICES[*]} "
+  existing="$(kubectl -n openfaas-fn get deploy -l faas_function \
+    -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || true)"
+  for fn in $existing; do
+    case "$want" in
+      *" $fn "*) ;;  # keep — requested
+      *) log "pruning worker not in requested set: $fn"
+         kubectl -n openfaas-fn delete deploy,svc "$fn" >/dev/null 2>&1 || true ;;
+    esac
+  done
+fi
 
 # --- gateway --------------------------------------------------------------
 ensure_base_image_gateway() {
