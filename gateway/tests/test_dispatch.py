@@ -168,3 +168,7 @@ def test_make_dispatcher_selects_backend():
     assert isinstance(make_dispatcher(_settings("fc")), FCDispatcher)
     with pytest.raises(ValueError):
         make_dispatcher(_settings("nope"))
+
+
+def test_fc_describe_base_url_is_rec_url():
+    assert _fc(lambda r: httpx.Response(200)).describe_base_url(_rec()) == "https://svc.local"

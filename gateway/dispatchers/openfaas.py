@@ -68,3 +68,8 @@ class OpenFaaSDispatcher:
         return stream_download(
             self._client, f"{self._gw}/function/{fn}/api/jobs/{job_id}/download", dest
         )
+
+    def describe_base_url(self, rec: ServiceRecord) -> str:
+        # rec.url is a placeholder in openfaas mode — reach the worker through the
+        # OpenFaaS gateway's sync route (any replica serves manifest/openapi).
+        return f"{self._gw}/function/{self._fn(rec)}"

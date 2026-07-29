@@ -49,3 +49,6 @@ class LocalHttpDispatcher:
 
     def download(self, rec: ServiceRecord, job_id: str, dest: Path) -> Path:
         return stream_download(self._client, f"{rec.url}/api/jobs/{job_id}/download", dest)
+
+    def describe_base_url(self, rec: ServiceRecord) -> str:
+        return rec.url

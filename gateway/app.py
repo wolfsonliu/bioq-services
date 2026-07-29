@@ -67,9 +67,13 @@ def describe_service(svc: str, request: Request,
                      _: AuthIdentity = Depends(require_auth)) -> dict:
     reg = request.app.state.registry
     try:
-        base = reg.base_url(svc)
+        rec = reg.record(svc)
     except KeyError:
         raise HTTPException(404, f"unknown service {svc!r}")
+    # Route discovery through the dispatcher: in openfaas mode the worker has no
+    # static URL (rec.url is a placeholder), so it must be reached via the
+    # OpenFaaS gateway. fc/http backends return rec.url unchanged.
+    base = request.app.state.dispatch.describe_base_url(rec)
     return request.app.state.discover.describe(svc, base)
 
 

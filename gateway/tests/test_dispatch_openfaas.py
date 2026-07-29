@@ -108,3 +108,14 @@ def test_make_dispatcher_openfaas():
     assert isinstance(make_dispatcher(_settings("openfaas")), OpenFaaSDispatcher)
     with pytest.raises(ValueError):
         make_dispatcher(_settings("openfaas", gw=""))
+
+
+def test_describe_base_url_routes_through_gateway():
+    # rec.url is a placeholder in openfaas mode; discovery must go via the gateway.
+    assert _ofn(lambda r: httpx.Response(200)).describe_base_url(_rec()) == \
+        f"{GW}/function/dockq-server"
+
+
+def test_describe_base_url_requires_function():
+    with pytest.raises(ValueError):
+        _ofn(lambda r: httpx.Response(200)).describe_base_url(_rec(function=None))

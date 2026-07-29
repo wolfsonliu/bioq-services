@@ -89,3 +89,7 @@ def test_download_error_has_readable_body(tmp_path):
     except httpx.HTTPStatusError as exc:
         assert exc.response.status_code == 404
         assert "nope" in exc.response.text
+
+
+def test_describe_base_url_is_rec_url():
+    assert _local(lambda r: httpx.Response(200)).describe_base_url(_rec()) == "https://svc.local"

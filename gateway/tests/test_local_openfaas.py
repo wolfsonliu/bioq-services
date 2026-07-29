@@ -93,6 +93,15 @@ def test_services_list_has_dockq(client):
 def test_describe_dockq(client):
     r = client.get("/v1/services/dockq-server")
     assert r.status_code == 200
+    body = r.json()
+    # describe must route through the OpenFaaS gateway to reach the worker (rec.url
+    # is a placeholder in openfaas mode). An empty manifest/openapi means it fell
+    # back to the placeholder URL — the CLI then reports "no runnable task
+    # endpoints found". Assert the runnable task endpoints are actually surfaced.
+    endpoints = (body.get("manifest") or {}).get("endpoints") or []
+    task_paths = {e.get("path") for e in endpoints if str(e.get("path", "")).startswith("/api/tasks/")}
+    assert {"/api/tasks/score", "/api/tasks/score_batch"} <= task_paths, body
+    assert (body.get("openapi") or {}).get("paths"), "openapi.json not discovered"
 
 
 # --- dockq-server /api/score end-to-end (openfaas async) ---

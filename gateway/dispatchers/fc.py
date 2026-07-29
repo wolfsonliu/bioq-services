@@ -60,3 +60,7 @@ class FCDispatcher:
     def download(self, rec: ServiceRecord, job_id: str, dest: Path) -> Path:
         return stream_download(self._client, f"{rec.url}/api/jobs/{job_id}/download",
                                dest, headers={SESSION_AFFINITY_HEADER: job_id})
+
+    def describe_base_url(self, rec: ServiceRecord) -> str:
+        # FC HTTP trigger URL is directly reachable for manifest/openapi.
+        return rec.url

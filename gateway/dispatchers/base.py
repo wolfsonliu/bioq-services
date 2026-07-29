@@ -31,6 +31,14 @@ class Dispatcher(Protocol):
 
     def download(self, rec: ServiceRecord, job_id: str, dest: Path) -> Path: ...
 
+    def describe_base_url(self, rec: ServiceRecord) -> str:
+        """Base URL `describe` fetches `/api/manifest` + `/openapi.json` from.
+
+        Backends where the worker is reachable directly return `rec.url`; the
+        OpenFaaS backend routes through its gateway (`{gw}/function/<fn>`) since
+        the worker has no static URL (rec.url is a placeholder there)."""
+        ...
+
 
 def encode_form(data: dict[str, Any]) -> dict[str, str]:
     """Form-encode a request body: str as-is; list/dict -> JSON (so structured
