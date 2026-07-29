@@ -47,7 +47,7 @@ KUBECTL := KUBECONFIG=$(BIOQ_WORKDIR)/kubeconfig PATH="$(BIOQ_WORKDIR)/bin:$$PAT
 
 .PHONY: help build push clean list version login-harbor bump sif \
 	local-up local-down local-purge local-status local-logs local-test \
-	local-info local-forward
+	local-info local-forward local-user
 
 # Keep intermediate pattern targets around (no auto-rm after the recipe runs).
 .PRECIOUS: build-% tag-%
@@ -91,6 +91,7 @@ help:
 	@echo "  make local-status            Show local pods + services"
 	@echo "  make local-logs [LOCAL_SVC=..]  Tail logs (LOCAL_SVC=gateway for the gateway)"
 	@echo "  make local-test              Run the dockq functional test vs the local deploy"
+	@echo "  make local-user ACCOUNT=bob  Create a user + API key (secret printed once)"
 	@echo "  make local-info              Print gateway URL / API key / paths"
 	@echo "  make local-forward           (Re)establish the gateway port-forward"
 	@echo "  make local-down              Tear down (make local-purge also wipes $(BIOQ_WORKDIR))"
@@ -219,9 +220,27 @@ local-forward:
 local-info:
 	@echo "gateway URL : http://127.0.0.1:$(BIOQ_GATEWAY_PORT)   (header X-API-Key: $(BIOQ_API_KEY))"
 	@echo "kubeconfig  : $(BIOQ_WORKDIR)/kubeconfig"
-	@echo "shared dir  : $(BIOQ_WORKDIR)/shared   (gateway.db, jobs/<acct>-<id>/, users/<acct>/<id>/)"
+	@echo "shared dir  : $(BIOQ_WORKDIR)/shared   (jobs/<acct>-<id>/, users/<acct>/<id>/; pgdata/ or gateway.db)"
+	@echo "gateway db  : postgres (svc bioq-postgres, ns bioq) by default; BIOQ_DB_BACKEND=sqlite for the old single-file DB"
 
 local-test:
 	cd gateway && GATEWAY_BASE_URL=http://127.0.0.1:$(BIOQ_GATEWAY_PORT) \
 		GATEWAY_API_KEY=$(BIOQ_API_KEY) RUN_LOCAL_TESTS=1 \
 		uv run --with pytest --with pytest-asyncio python -m pytest tests/test_local_openfaas.py -v
+
+# Create a gateway user + API key in the local deploy. Runs seed_key.py inside
+# the gateway pod, which reads GATEWAY_DB_URL — so it works the same whether the
+# DB is postgres or sqlite. The secret is printed ONCE (only its hash is stored);
+# pass SECRET=.. for a fixed one, else a random secret is generated.
+#   make local-user ACCOUNT=alice
+#   make local-user ACCOUNT=alice SECRET=s3cret KEY_ID=gk_alice DISPLAY_NAME="Alice"
+local-user:
+	@if [ -z "$(ACCOUNT)" ]; then \
+		echo "usage: make local-user ACCOUNT=<name> [SECRET=..] [KEY_ID=..] [DISPLAY_NAME=..]"; \
+		exit 2; \
+	fi
+	@$(KUBECTL) -n bioq exec deploy/bioq-gateway -- /opt/gateway/.venv/bin/python \
+		/opt/gateway/scripts/seed_key.py --account-id "$(ACCOUNT)" \
+		$(if $(SECRET),--secret "$(SECRET)") \
+		$(if $(KEY_ID),--key-id "$(KEY_ID)") \
+		$(if $(DISPLAY_NAME),--display-name "$(DISPLAY_NAME)")
