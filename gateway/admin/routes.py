@@ -210,7 +210,7 @@ def cancel_job(account_id: str, job_id: str, request: Request,
 
 @router.get("/services", response_class=HTMLResponse)
 def services(request: Request, admin: str = Depends(require_admin_web),
-             describe: str = ""):
+             describe: str = "", reloaded: int = 0):
     registry = request.app.state.registry
     rows = []
     for name in registry.list():
@@ -228,4 +228,18 @@ def services(request: Request, admin: str = Depends(require_admin_web),
         except Exception as exc:  # noqa: BLE001 — describe degrades gracefully
             described = {"error": f"{type(exc).__name__}: {exc}"}
     return _render(request, "services.html", "services", admin=admin,
-                   rows=rows, described=described, describe_name=describe)
+                   rows=rows, described=described, describe_name=describe,
+                   reloaded=bool(reloaded),
+                   reload_error=request.session.pop("flash_reload_error", None))
+
+
+@router.post("/services/reload")
+def reload_services(request: Request, admin: str = Depends(require_admin_web),
+                    _c: None = Depends(verify_csrf)):
+    """MVP dynamic loading: re-read services.yaml into the in-memory registry."""
+    try:
+        request.app.state.registry.reload()
+    except Exception as exc:  # noqa: BLE001 — surface as a flash, don't 500
+        request.session["flash_reload_error"] = f"{type(exc).__name__}: {exc}"
+        return RedirectResponse("/admin/services", status_code=303)
+    return RedirectResponse("/admin/services?reloaded=1", status_code=303)

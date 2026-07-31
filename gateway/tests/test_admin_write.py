@@ -143,3 +143,20 @@ def test_cancel_requires_csrf(client):
     _seed_job(appmod, job_id="jx", status="running")
     r = client.post("/admin/jobs/alice/jx/cancel", data={}, headers=VPC)
     assert r.status_code == 403
+
+
+def test_services_reload_picks_up_new_service(client):
+    # registry starts empty (fixture writes 'services: {}')
+    assert "boltz-server" not in client.get("/admin/services", headers=VPC).text
+    client._registry_yaml.write_text(
+        "services:\n  boltz-server:\n    url: https://boltz.local\n", encoding="utf-8")
+    tok = _csrf(client)
+    r = client.post("/admin/services/reload", data={"csrf": tok},
+                    headers=VPC, follow_redirects=False)
+    assert r.status_code == 303
+    assert "boltz-server" in client.get("/admin/services", headers=VPC).text
+
+
+def test_services_reload_requires_csrf(client):
+    r = client.post("/admin/services/reload", data={}, headers=VPC)
+    assert r.status_code == 403
