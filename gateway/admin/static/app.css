@@ -108,6 +108,23 @@ button:hover { border-color: var(--accent); }
 
 .pager { margin-top: 0.8rem; display: flex; gap: 1rem; }
 
+.error { color: #ff5f5f; }
+.flash {
+  border: 1px solid var(--amber);
+  color: var(--amber);
+  padding: 0.8rem 1rem;
+  margin: 0.8rem 0;
+  background: #1a1400;
+}
+.flash code { color: var(--accent); word-break: break-all; }
+.ok { color: var(--accent); }
+form.inline { display: inline; }
+button.link {
+  background: none; border: none; color: #ff5f5f; cursor: pointer;
+  padding: 0; font-size: 13px;
+}
+button.link:hover { text-decoration: underline; }
+
 /* login */
 .login-body { display: flex; min-height: 100vh; align-items: center; justify-content: center; }
 .login-box { border: 1px solid var(--border); padding: 2rem; background: var(--row); min-width: 20rem; }

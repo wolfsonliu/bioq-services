@@ -83,17 +83,39 @@ def dashboard(request: Request, admin: str = Depends(require_admin_web)):
                    by_status=db.count_jobs_by_status())
 
 
-@router.get("/accounts", response_class=HTMLResponse)
-def accounts(request: Request, admin: str = Depends(require_admin_web)):
-    db = request.app.state.db
-    rows = [
+def _accounts_rows(db) -> list[dict]:
+    return [
         {"account_id": u.account_id, "display_name": u.display_name,
          "role": u.role, "status": u.status, "created_at": u.created_at,
          "key_count": len(db.list_api_keys(u.account_id)),
          "job_count": len(db.list_jobs(u.account_id))}
         for u in db.list_users()
     ]
-    return _render(request, "accounts.html", "accounts", admin=admin, rows=rows)
+
+
+@router.get("/accounts", response_class=HTMLResponse)
+def accounts(request: Request, admin: str = Depends(require_admin_web)):
+    return _render(request, "accounts.html", "accounts", admin=admin,
+                   rows=_accounts_rows(request.app.state.db))
+
+
+@router.post("/accounts", response_class=HTMLResponse)
+def create_account(request: Request, admin: str = Depends(require_admin_web),
+                   _c: None = Depends(verify_csrf),
+                   account_id: str = Form(...), display_name: str = Form(""),
+                   role: str = Form("user")):
+    db = request.app.state.db
+    account_id = account_id.strip()
+    error = None
+    if not account_id or role not in ("user", "admin"):
+        error = "invalid_input"
+    elif db.get_user(account_id) is not None:
+        error = "exists"
+    if error:
+        return _render(request, "accounts.html", "accounts", status_code=400,
+                       admin=admin, rows=_accounts_rows(db), error=error)
+    db.create_user(account_id, display_name or None, role=role)
+    return RedirectResponse("/admin/accounts", status_code=303)
 
 
 @router.get("/accounts/{account_id}", response_class=HTMLResponse)
