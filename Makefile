@@ -91,7 +91,7 @@ help:
 	@echo "  make local-status            Show local pods + services"
 	@echo "  make local-logs [LOCAL_SVC=..]  Tail logs (LOCAL_SVC=gateway for the gateway)"
 	@echo "  make local-test              Run the dockq functional test vs the local deploy"
-	@echo "  make local-user ACCOUNT=bob  Create a user + API key (secret printed once)"
+	@echo "  make local-user ACCOUNT=bob [ADMIN=1]  Create a user + API key (ADMIN=1 for console access)"
 	@echo "  make local-info              Print gateway URL / API key / paths"
 	@echo "  make local-forward           (Re)establish the gateway port-forward"
 	@echo "  make local-down              Tear down (make local-purge also wipes $(BIOQ_WORKDIR))"
@@ -235,13 +235,15 @@ local-test:
 # pass SECRET=.. for a fixed one, else a random secret is generated.
 #   make local-user ACCOUNT=alice
 #   make local-user ACCOUNT=alice SECRET=s3cret KEY_ID=gk_alice DISPLAY_NAME="Alice"
+#   make local-user ACCOUNT=root ADMIN=1        # grant the admin role (console access)
 local-user:
 	@if [ -z "$(ACCOUNT)" ]; then \
-		echo "usage: make local-user ACCOUNT=<name> [SECRET=..] [KEY_ID=..] [DISPLAY_NAME=..]"; \
+		echo "usage: make local-user ACCOUNT=<name> [SECRET=..] [KEY_ID=..] [DISPLAY_NAME=..] [ADMIN=1]"; \
 		exit 2; \
 	fi
 	@$(KUBECTL) -n bioq exec deploy/bioq-gateway -- /opt/gateway/.venv/bin/python \
 		/opt/gateway/scripts/seed_key.py --account-id "$(ACCOUNT)" \
 		$(if $(SECRET),--secret "$(SECRET)") \
 		$(if $(KEY_ID),--key-id "$(KEY_ID)") \
-		$(if $(DISPLAY_NAME),--display-name "$(DISPLAY_NAME)")
+		$(if $(DISPLAY_NAME),--display-name "$(DISPLAY_NAME)") \
+		$(if $(ADMIN),--admin)
