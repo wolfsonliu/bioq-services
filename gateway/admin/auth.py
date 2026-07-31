@@ -9,7 +9,9 @@ Internal VPC hosts are still bypassed (no login needed).
 
 from __future__ import annotations
 
-from fastapi import HTTPException, Request
+import secrets
+
+from fastapi import Form, HTTPException, Request
 from server.auth.api_key import hash_secret
 from server.auth.vpc import is_vpc_host
 
@@ -48,3 +50,21 @@ def verify_admin_key(request: Request, api_key: str) -> str | None:
         return None
     user = request.app.state.db.get_user(row.account_id)
     return row.account_id if (user is not None and user.role == "admin") else None
+
+
+def csrf_token(request: Request) -> str:
+    """Get-or-create a per-session CSRF token (synchronizer-token pattern)."""
+    tok = request.session.get("csrf")
+    if not tok:
+        tok = secrets.token_urlsafe(24)
+        request.session["csrf"] = tok
+    return tok
+
+
+def verify_csrf(request: Request, csrf: str = Form("")) -> None:
+    """POST dependency: reject if the form token doesn't match the session token.
+
+    Defense-in-depth on top of the SameSite=lax session cookie.
+    """
+    if not csrf or csrf != request.session.get("csrf"):
+        raise HTTPException(status_code=403, detail="bad csrf token")

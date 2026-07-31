@@ -37,6 +37,18 @@ def test_job_lifecycle(tmp_path):
     assert db.get_job("carol", "j1") is None
 
 
+def test_revoke_api_key(tmp_path):
+    db = _db(tmp_path)
+    db.create_user("alice")
+    db.create_api_key("alice", secret="s3cr3t", key_id="gk_a")
+    assert db.find_api_key(hash_secret("s3cr3t")) is not None
+    db.revoke_api_key("gk_a")
+    assert db.find_api_key(hash_secret("s3cr3t")) is None   # only active keys found
+    import pytest
+    with pytest.raises(KeyError):
+        db.revoke_api_key("nope")
+
+
 def test_admin_queries(tmp_path):
     db = _db(tmp_path)
     db.create_user("alice")

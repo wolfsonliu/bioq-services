@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from .auth import require_admin_web, verify_admin_key
+from .auth import csrf_token, require_admin_web, verify_admin_key, verify_csrf
 from .i18n import LANGS, lang_of, t
 
 _HERE = Path(__file__).resolve().parent
@@ -29,7 +29,7 @@ def mount_admin_static(app) -> None:
 
 
 def _render(request: Request, name: str, nav: str, *, status_code: int = 200, **extra):
-    ctx = {"lang": lang_of(request), "nav": nav}
+    ctx = {"lang": lang_of(request), "nav": nav, "csrf": csrf_token(request)}
     ctx.update(extra)
     return request.app.state.templates.TemplateResponse(
         request=request, name=name, context=ctx, status_code=status_code

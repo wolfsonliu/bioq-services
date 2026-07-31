@@ -76,6 +76,13 @@ class GatewayDB:
             if row is not None:
                 row.last_used_at = datetime.now(timezone.utc)
 
+    def revoke_api_key(self, key_id: str) -> None:
+        with self._Session() as s, s.begin():
+            row = s.get(ApiKey, key_id)
+            if row is None:
+                raise KeyError(key_id)
+            row.status = "revoked"
+
     # ---- jobs ----
     def create_job(self, *, job_id: str, account_id: str, svc: str, endpoint: str,
                    input_params: dict | None, output_prefix: str | None) -> None:
