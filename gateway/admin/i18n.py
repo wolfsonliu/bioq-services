@@ -1,0 +1,140 @@
+"""Minimal i18n for the admin console: zh/en dict + cookie-remembered language."""
+
+from __future__ import annotations
+
+from fastapi import Request
+
+DEFAULT_LANG = "zh"
+LANGS = ("zh", "en")
+
+TR: dict[str, dict[str, str]] = {
+    "zh": {
+        "console": "网关控制台",
+        "dashboard": "概览",
+        "accounts": "账户",
+        "jobs": "作业",
+        "services": "服务",
+        "login": "登录",
+        "logout": "登出",
+        # dashboard
+        "overview": "总览",
+        "total_users": "账户数",
+        "total_jobs": "作业数",
+        "registered_services": "注册服务数",
+        "status_distribution": "作业状态分布",
+        "status": "状态",
+        "count": "数量",
+        # accounts
+        "account_id": "账户 ID",
+        "display_name": "显示名",
+        "role": "角色",
+        "created_at": "创建时间",
+        "key_count": "Key 数",
+        "job_count": "作业数",
+        "api_keys": "API Keys",
+        "key_id": "Key ID",
+        "last_used": "最近使用",
+        "recent_jobs": "最近作业",
+        "back": "返回",
+        # jobs
+        "filter": "筛选",
+        "service": "服务",
+        "account": "账户",
+        "all": "全部",
+        "apply": "应用",
+        "job_id": "作业 ID",
+        "endpoint": "端点",
+        "none": "无",
+        "prev": "上一页",
+        "next": "下一页",
+        # job detail
+        "input_params": "输入参数",
+        "output_prefix": "输出前缀",
+        "task_id": "下游任务 ID",
+        "live_status": "实时状态",
+        "download": "下载结果",
+        "refresh_error": "状态刷新失败",
+        # services
+        "name": "名称",
+        "url": "URL",
+        "region": "区域",
+        "tier": "层级",
+        "function": "函数",
+        "gpu": "GPU",
+        "oss_mount": "OSS 挂载",
+        "describe": "探测",
+        "health": "健康",
+        # login
+        "login_prompt": "输入 admin API key",
+        "login_error": "无效的 admin key",
+        "submit": "登录",
+        "yes": "是",
+        "no": "否",
+    },
+    "en": {
+        "console": "Gateway Console",
+        "dashboard": "Dashboard",
+        "accounts": "Accounts",
+        "jobs": "Jobs",
+        "services": "Services",
+        "login": "Login",
+        "logout": "Logout",
+        "overview": "Overview",
+        "total_users": "Users",
+        "total_jobs": "Jobs",
+        "registered_services": "Registered services",
+        "status_distribution": "Job status distribution",
+        "status": "Status",
+        "count": "Count",
+        "account_id": "Account ID",
+        "display_name": "Display name",
+        "role": "Role",
+        "created_at": "Created",
+        "key_count": "Keys",
+        "job_count": "Jobs",
+        "api_keys": "API Keys",
+        "key_id": "Key ID",
+        "last_used": "Last used",
+        "recent_jobs": "Recent jobs",
+        "back": "Back",
+        "filter": "Filter",
+        "service": "Service",
+        "account": "Account",
+        "all": "All",
+        "apply": "Apply",
+        "job_id": "Job ID",
+        "endpoint": "Endpoint",
+        "none": "none",
+        "prev": "Prev",
+        "next": "Next",
+        "input_params": "Input params",
+        "output_prefix": "Output prefix",
+        "task_id": "Downstream task ID",
+        "live_status": "Live status",
+        "download": "Download",
+        "refresh_error": "Status refresh failed",
+        "name": "Name",
+        "url": "URL",
+        "region": "Region",
+        "tier": "Tier",
+        "function": "Function",
+        "gpu": "GPU",
+        "oss_mount": "OSS mount",
+        "describe": "Describe",
+        "health": "Health",
+        "login_prompt": "Enter admin API key",
+        "login_error": "Invalid admin key",
+        "submit": "Login",
+        "yes": "yes",
+        "no": "no",
+    },
+}
+
+
+def t(key: str, lang: str = DEFAULT_LANG) -> str:
+    return TR.get(lang, TR[DEFAULT_LANG]).get(key, key)
+
+
+def lang_of(request: Request) -> str:
+    code = request.cookies.get("lang", DEFAULT_LANG)
+    return code if code in LANGS else DEFAULT_LANG

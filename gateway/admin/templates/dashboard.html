@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ t('overview', lang) }}</h1>
+
+<div class="cards">
+  <div class="card">
+    <div class="card-num">{{ total_users }}</div>
+    <div class="card-label">{{ t('total_users', lang) }}</div>
+  </div>
+  <div class="card">
+    <div class="card-num">{{ total_jobs }}</div>
+    <div class="card-label">{{ t('total_jobs', lang) }}</div>
+  </div>
+  <div class="card">
+    <div class="card-num">{{ total_services }}</div>
+    <div class="card-label">{{ t('registered_services', lang) }}</div>
+  </div>
+</div>
+
+<h2>{{ t('status_distribution', lang) }}</h2>
+<table>
+  <thead><tr><th>{{ t('status', lang) }}</th><th>{{ t('count', lang) }}</th></tr></thead>
+  <tbody>
+    {% for status, n in by_status.items() %}
+    <tr><td><span class="badge badge-{{ status }}">{{ status }}</span></td><td>{{ n }}</td></tr>
+    {% else %}
+    <tr><td colspan="2" class="muted">{{ t('none', lang) }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -13,7 +13,10 @@ from bioq_service import attach_mcp, create_app, read_version_file
 from fastapi import Body, Depends, Header, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from starlette.background import BackgroundTask
+from starlette.middleware.sessions import SessionMiddleware
 
+from .admin.routes import make_templates, mount_admin_static
+from .admin.routes import router as admin_router
 from .adapter import GatewayAdapter
 from .auth.deps import AuthIdentity, require_auth
 from .db.store import GatewayDB
@@ -46,6 +49,15 @@ app.state.db = _db
 app.state.registry = ServiceRegistry(settings.registry_path)
 app.state.discover = Discovery(ttl_sec=300)
 app.state.dispatch = make_dispatcher(settings)
+
+# --- admin console (server-side rendered, terminal-style) ---
+# Signed cookie session for browser login (API auth headers can't be carried by
+# a browser navigation). Then mount the /admin pages + static assets.
+app.add_middleware(SessionMiddleware, secret_key=settings.session_secret,
+                   session_cookie="gw_admin", same_site="lax", https_only=False)
+app.state.templates = make_templates()
+app.include_router(admin_router)
+mount_admin_static(app)
 
 
 @app.on_event("startup")

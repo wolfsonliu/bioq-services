@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ t('console', lang) }} :: {% block title %}{{ t(nav, lang) }}{% endblock %}</title>
+  <link rel="stylesheet" href="/admin/static/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <span class="prompt">root@gateway:~$</span>
+    <span class="cwd">./{{ nav }}</span>
+    <span class="spacer"></span>
+    <span class="lang">
+      <a href="/admin/setlang?code=zh&next={{ request.url.path }}" class="{{ 'on' if lang == 'zh' else '' }}">中文</a>
+      <span class="sep">|</span>
+      <a href="/admin/setlang?code=en&next={{ request.url.path }}" class="{{ 'on' if lang == 'en' else '' }}">EN</a>
+    </span>
+    <a class="logout" href="/admin/logout">[{{ t('logout', lang) }}]</a>
+  </header>
+
+  <nav class="nav">
+    {% for item in ['dashboard', 'accounts', 'jobs', 'services'] %}
+    <a href="{{ '/admin' if item == 'dashboard' else '/admin/' ~ item }}"
+       class="{{ 'active' if nav == item else '' }}">{{ t(item, lang) }}</a>
+    {% endfor %}
+  </nav>
+
+  <main class="content">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
