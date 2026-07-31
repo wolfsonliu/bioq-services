@@ -45,7 +45,7 @@ def _tables_exist(con: sqlite3.Connection) -> bool:
 
 
 def _seed_sqlite(db_path: str, *, account_id: str, secret: str, key_id: str,
-                 display_name: str | None) -> int:
+                 display_name: str | None, role: str = "user") -> int:
     secret_hash = hashlib.sha256(secret.encode("utf-8")).hexdigest()
     now = _utcnow_iso()
     con = sqlite3.connect(db_path)
@@ -59,10 +59,13 @@ def _seed_sqlite(db_path: str, *, account_id: str, secret: str, key_id: str,
             return 2
         with con:
             con.execute(
-                "INSERT OR IGNORE INTO users(account_id, display_name, status, created_at) "
-                "VALUES (?,?,?,?)",
-                (account_id, display_name, "active", now),
+                "INSERT OR IGNORE INTO users(account_id, display_name, status, role, created_at) "
+                "VALUES (?,?,?,?,?)",
+                (account_id, display_name, "active", role, now),
             )
+            if role == "admin":
+                # 账户已存在时 INSERT OR IGNORE 不生效，显式提升。
+                con.execute("UPDATE users SET role='admin' WHERE account_id=?", (account_id,))
             con.execute(
                 "INSERT INTO api_keys"
                 "(key_id, account_id, secret_hash, status, created_at, last_used_at) "
@@ -101,7 +104,7 @@ def _ensure_server_importable() -> None:
 
 
 def _seed_via_orm(db_url: str, *, account_id: str, secret: str, key_id: str,
-                  display_name: str | None) -> int:
+                  display_name: str | None, role: str = "user") -> int:
     # ORM path (postgres/any backend); needs the `server` package + SQLAlchemy,
     # so run it inside the gateway container. Imported lazily so the SQLite
     # host path above stays stdlib-only.
@@ -112,7 +115,9 @@ def _seed_via_orm(db_url: str, *, account_id: str, secret: str, key_id: str,
 
     db = GatewayDB(db_url)
     try:
-        db.create_user(account_id, display_name)
+        db.create_user(account_id, display_name, role=role)
+        if role == "admin":
+            db.set_role(account_id, "admin")   # 提升已存在账户
         db.create_api_key(account_id, secret=secret, key_id=key_id)
     except IntegrityError as exc:
         print(f"error: {exc.orig} (key_id {key_id!r} may already exist)", file=sys.stderr)
@@ -137,18 +142,21 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--key-id", default=None,
                     help="Key id (default: gk_<random>).")
     ap.add_argument("--display-name", default=None)
+    ap.add_argument("--admin", action="store_true",
+                    help="Grant the account the admin role (management console access).")
     args = ap.parse_args(argv)
 
     secret = args.secret or secrets.token_urlsafe(24)
     key_id = args.key_id or f"gk_{uuid.uuid4().hex[:12]}"
+    role = "admin" if args.admin else "user"
 
     db_url = args.db_url or (None if args.db else os.environ.get("GATEWAY_DB_URL"))
     if args.db:
         rc = _seed_sqlite(args.db, account_id=args.account_id, secret=secret,
-                          key_id=key_id, display_name=args.display_name)
+                          key_id=key_id, display_name=args.display_name, role=role)
     elif db_url:
         rc = _seed_via_orm(db_url, account_id=args.account_id, secret=secret,
-                           key_id=key_id, display_name=args.display_name)
+                           key_id=key_id, display_name=args.display_name, role=role)
     else:
         print("error: pass --db <sqlite file>, --db-url <url>, or set GATEWAY_DB_URL.",
               file=sys.stderr)
@@ -160,6 +168,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  account_id : {args.account_id}")
     print(f"  key_id     : {key_id}")
     print(f"  secret     : {secret}")
+    print(f"  role       : {role}")
     print()
     print("Authenticate with:  -H 'X-API-Key: <secret>'")
     return 0
