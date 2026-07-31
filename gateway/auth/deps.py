@@ -59,3 +59,15 @@ def require_auth(request: Request) -> AuthIdentity:
 
     raise HTTPException(401, "missing or invalid credentials "
                              "(provide Authorization: Bearer or X-API-Key)")
+
+
+def require_admin(request: Request) -> AuthIdentity:
+    """require_auth + role 闸：仅 role == "admin" 的账户放行（VPC bypass 按配置）。"""
+    ident = require_auth(request)
+    settings = request.app.state.settings
+    if ident.method == "vpc_bypass" and settings.auth.vpc_is_admin:
+        return ident
+    user = request.app.state.db.get_user(ident.account_id)
+    if user is None or user.role != "admin":
+        raise HTTPException(403, "admin privileges required")
+    return ident

@@ -12,7 +12,7 @@ from fastapi import HTTPException
 
 from server.auth import jwt_verifier as jv
 from server.auth.api_key import hash_secret
-from server.auth.deps import require_auth
+from server.auth.deps import require_admin, require_auth
 from server.settings import AuthSettings
 
 
@@ -166,3 +166,47 @@ def test_vpc_beats_jwt():
     )
     ident = require_auth(r)
     assert ident.method == "vpc_bypass"
+
+
+def _admin_db(role: str | None):
+    db = MagicMock()
+    if role is None:
+        db.get_user.return_value = None
+    else:
+        u = MagicMock()
+        u.role = role
+        db.get_user.return_value = u
+    key_row = MagicMock()
+    key_row.key_id = "gk"
+    key_row.account_id = "acct"
+    db.find_api_key.return_value = key_row
+    return db
+
+
+def test_require_admin_allows_admin_user():
+    r = _req(auth=AuthSettings(bypass_vpc=False), db=_admin_db("admin"),
+             headers={"x-api-key": "s", "host": "public.example.com"})
+    ident = require_admin(r)
+    assert ident.account_id == "acct"
+
+
+def test_require_admin_rejects_non_admin():
+    r = _req(auth=AuthSettings(bypass_vpc=False), db=_admin_db("user"),
+             headers={"x-api-key": "s", "host": "public.example.com"})
+    with pytest.raises(HTTPException) as e:
+        require_admin(r)
+    assert e.value.status_code == 403
+
+
+def test_require_admin_vpc_bypass_is_admin_by_default():
+    r = _req(headers={"host": "fc-gateway-x.cn-hangzhou-vpc.fcapp.run"})
+    ident = require_admin(r)
+    assert ident.method == "vpc_bypass"
+
+
+def test_require_admin_vpc_not_admin_when_disabled():
+    r = _req(auth=AuthSettings(vpc_is_admin=False), db=_admin_db(None),
+             headers={"host": "fc-gateway-x.cn-hangzhou-vpc.fcapp.run"})
+    with pytest.raises(HTTPException) as e:
+        require_admin(r)
+    assert e.value.status_code == 403

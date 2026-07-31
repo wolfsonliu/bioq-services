@@ -21,6 +21,7 @@ class AuthSettings(BaseModel):
 
     bypass_vpc: bool = True
     vpc_account_id: str = "internal_vpc"
+    vpc_is_admin: bool = True   # VPC bypass 身份是否直接视为 admin（内网运维）
 
     jwt_jwks_url: str = ""                 # empty = JWT disabled
     jwt_audience: str = "gateway-server"
