@@ -67,3 +67,48 @@ def test_create_account_blank_rejected(client):
                     data={"account_id": "  ", "role": "user", "csrf": tok},
                     headers=VPC)
     assert r.status_code == 400
+
+
+def test_create_key_shows_secret_once(client):
+    import server.app as appmod
+    appmod.app.state.db.create_user("alice")
+    tok = _csrf(client)
+    r = client.post("/admin/accounts/alice/keys", data={"csrf": tok},
+                    headers=VPC, follow_redirects=True)
+    assert r.status_code == 200
+    m = re.search(r"secret: <code>([^<]+)</code>", r.text)
+    assert m, "plaintext secret not shown after creation"
+    secret = m.group(1)
+    # the created key authenticates as alice
+    from server.auth.api_key import hash_secret
+    assert appmod.app.state.db.find_api_key(hash_secret(secret)).account_id == "alice"
+    # revisiting the page does NOT show the secret again (flash popped)
+    r2 = client.get("/admin/accounts/alice", headers=VPC)
+    assert secret not in r2.text
+
+
+def test_create_key_unknown_account_404(client):
+    tok = _csrf(client)
+    r = client.post("/admin/accounts/ghost/keys", data={"csrf": tok}, headers=VPC)
+    assert r.status_code == 404
+
+
+def test_revoke_key(client):
+    import server.app as appmod
+    db = appmod.app.state.db
+    db.create_user("alice")
+    db.create_api_key("alice", secret="sv", key_id="gk_rev")
+    tok = _csrf(client)
+    r = client.post("/admin/keys/gk_rev/revoke",
+                    data={"csrf": tok, "account_id": "alice"},
+                    headers=VPC, follow_redirects=False)
+    assert r.status_code == 303
+    from server.auth.api_key import hash_secret
+    assert db.find_api_key(hash_secret("sv")) is None
+
+
+def test_create_key_requires_csrf(client):
+    import server.app as appmod
+    appmod.app.state.db.create_user("alice")
+    r = client.post("/admin/accounts/alice/keys", data={}, headers=VPC)
+    assert r.status_code == 403
