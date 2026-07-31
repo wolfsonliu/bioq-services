@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from server.auth.api_key import hash_secret
@@ -100,3 +100,44 @@ class GatewayDB:
             return list(s.scalars(
                 select(Job).where(Job.account_id == account_id).order_by(Job.created_at)
             ))
+
+    # ---- admin read-only aggregates ----
+    def list_users(self) -> list[User]:
+        with self._Session() as s:
+            return list(s.scalars(select(User).order_by(User.created_at)))
+
+    def count_users(self) -> int:
+        with self._Session() as s:
+            return s.scalar(select(func.count()).select_from(User)) or 0
+
+    def list_api_keys(self, account_id: str) -> list[ApiKey]:
+        with self._Session() as s:
+            return list(s.scalars(
+                select(ApiKey).where(ApiKey.account_id == account_id)
+                .order_by(ApiKey.created_at)
+            ))
+
+    def list_all_jobs(self, *, status: str | None = None, svc: str | None = None,
+                      account_id: str | None = None, limit: int = 200,
+                      offset: int = 0) -> list[Job]:
+        with self._Session() as s:
+            q = select(Job)
+            if status:
+                q = q.where(Job.status == status)
+            if svc:
+                q = q.where(Job.svc == svc)
+            if account_id:
+                q = q.where(Job.account_id == account_id)
+            q = q.order_by(Job.created_at.desc()).limit(limit).offset(offset)
+            return list(s.scalars(q))
+
+    def count_jobs(self) -> int:
+        with self._Session() as s:
+            return s.scalar(select(func.count()).select_from(Job)) or 0
+
+    def count_jobs_by_status(self) -> dict[str, int]:
+        with self._Session() as s:
+            rows = s.execute(
+                select(Job.status, func.count()).group_by(Job.status)
+            ).all()
+            return {status: n for status, n in rows}

@@ -37,6 +37,30 @@ def test_job_lifecycle(tmp_path):
     assert db.get_job("carol", "j1") is None
 
 
+def test_admin_queries(tmp_path):
+    db = _db(tmp_path)
+    db.create_user("alice")
+    db.create_user("bob", role="admin")
+    db.create_api_key("alice", secret="s1", key_id="k1")
+    db.create_job(job_id="j1", account_id="alice", svc="rfdiffusion-server",
+                  endpoint="generate", input_params={}, output_prefix=None)
+    db.update_job("alice", "j1", status="completed")
+    db.create_job(job_id="j2", account_id="bob", svc="boltz-server",
+                  endpoint="predict", input_params={}, output_prefix=None)
+    db.update_job("bob", "j2", status="running")
+
+    assert {u.account_id for u in db.list_users()} == {"alice", "bob"}
+    assert [k.key_id for k in db.list_api_keys("alice")] == ["k1"]
+    assert db.list_api_keys("bob") == []
+    assert db.count_jobs_by_status() == {"completed": 1, "running": 1}
+    assert {j.job_id for j in db.list_all_jobs()} == {"j1", "j2"}
+    assert [j.job_id for j in db.list_all_jobs(status="running")] == ["j2"]
+    assert [j.job_id for j in db.list_all_jobs(svc="boltz-server")] == ["j2"]
+    assert [j.job_id for j in db.list_all_jobs(account_id="alice")] == ["j1"]
+    assert db.count_users() == 2
+    assert db.count_jobs() == 2
+
+
 def test_user_role_default_and_admin(tmp_path):
     db = _db(tmp_path)
     db.create_user("alice")
