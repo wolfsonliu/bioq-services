@@ -41,6 +41,7 @@ def _render(request: Request, name: str, nav: str, *, status_code: int = 200, **
 router = APIRouter(prefix="/admin")
 
 JOB_STATUSES = ["pending", "running", "completed", "failed", "cancelled", "interrupted"]
+_TERMINAL_STATUSES = {"completed", "failed", "cancelled", "interrupted"}
 PAGE_SIZE = 50
 
 
@@ -191,7 +192,20 @@ def job_detail(account_id: str, job_id: str, request: Request,
     except Exception as exc:  # noqa: BLE001 — status refresh degrades gracefully
         refresh_error = f"{type(exc).__name__}: {exc}"
     return _render(request, "job_detail.html", "jobs", admin=admin, job=job,
-                   live_status=live_status, refresh_error=refresh_error)
+                   live_status=live_status, refresh_error=refresh_error,
+                   can_cancel=job.status not in _TERMINAL_STATUSES)
+
+
+@router.post("/jobs/{account_id}/{job_id}/cancel")
+def cancel_job(account_id: str, job_id: str, request: Request,
+               admin: str = Depends(require_admin_web),
+               _c: None = Depends(verify_csrf)):
+    db = request.app.state.db
+    if db.get_job(account_id, job_id) is None:
+        raise HTTPException(404, "job not found")
+    # MVP: local mark only (mirrors /v1/jobs/{id}/cancel).
+    db.update_job(account_id, job_id, status="cancelled")
+    return RedirectResponse(f"/admin/jobs/{account_id}/{job_id}", status_code=303)
 
 
 @router.get("/services", response_class=HTMLResponse)

@@ -112,3 +112,34 @@ def test_create_key_requires_csrf(client):
     appmod.app.state.db.create_user("alice")
     r = client.post("/admin/accounts/alice/keys", data={}, headers=VPC)
     assert r.status_code == 403
+
+
+def _seed_job(appmod, account="alice", job_id="j1", status="running"):
+    db = appmod.app.state.db
+    db.create_user(account)
+    db.create_job(job_id=job_id, account_id=account, svc="s", endpoint="e",
+                  input_params={}, output_prefix=None)
+    db.update_job(account, job_id, status=status)
+
+
+def test_cancel_job(client):
+    import server.app as appmod
+    _seed_job(appmod, job_id="jc", status="running")
+    tok = _csrf(client)
+    r = client.post("/admin/jobs/alice/jc/cancel", data={"csrf": tok},
+                    headers=VPC, follow_redirects=False)
+    assert r.status_code == 303
+    assert appmod.app.state.db.get_job("alice", "jc").status == "cancelled"
+
+
+def test_cancel_unknown_job_404(client):
+    tok = _csrf(client)
+    r = client.post("/admin/jobs/alice/nope/cancel", data={"csrf": tok}, headers=VPC)
+    assert r.status_code == 404
+
+
+def test_cancel_requires_csrf(client):
+    import server.app as appmod
+    _seed_job(appmod, job_id="jx", status="running")
+    r = client.post("/admin/jobs/alice/jx/cancel", data={}, headers=VPC)
+    assert r.status_code == 403

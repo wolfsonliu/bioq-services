@@ -23,6 +23,15 @@
   </tbody>
 </table>
 
+{% if can_cancel %}
+<form class="filter" method="post"
+      action="/admin/jobs/{{ job.account_id }}/{{ job.job_id }}/cancel"
+      onsubmit="return confirm('{{ t('confirm_cancel', lang) }}')">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <button type="submit">{{ t('cancel', lang) }}</button>
+</form>
+{% endif %}
+
 <h2>{{ t('input_params', lang) }}</h2>
 <pre>{{ job.input_params | tojson(indent=2) }}</pre>
 {% endblock %}
