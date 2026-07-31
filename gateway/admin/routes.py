@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -78,3 +78,28 @@ def dashboard(request: Request, admin: str = Depends(require_admin_web)):
                    total_jobs=db.count_jobs(),
                    total_services=len(registry.list()),
                    by_status=db.count_jobs_by_status())
+
+
+@router.get("/accounts", response_class=HTMLResponse)
+def accounts(request: Request, admin: str = Depends(require_admin_web)):
+    db = request.app.state.db
+    rows = [
+        {"account_id": u.account_id, "display_name": u.display_name,
+         "role": u.role, "status": u.status, "created_at": u.created_at,
+         "key_count": len(db.list_api_keys(u.account_id)),
+         "job_count": len(db.list_jobs(u.account_id))}
+        for u in db.list_users()
+    ]
+    return _render(request, "accounts.html", "accounts", admin=admin, rows=rows)
+
+
+@router.get("/accounts/{account_id}", response_class=HTMLResponse)
+def account_detail(account_id: str, request: Request,
+                   admin: str = Depends(require_admin_web)):
+    db = request.app.state.db
+    user = db.get_user(account_id)
+    if user is None:
+        raise HTTPException(404, "account not found")
+    return _render(request, "account_detail.html", "accounts", admin=admin,
+                   user=user, keys=db.list_api_keys(account_id),
+                   jobs=db.list_all_jobs(account_id=account_id, limit=20))

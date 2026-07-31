@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ t('accounts', lang) }}</h1>
+<table>
+  <thead>
+    <tr>
+      <th>{{ t('account_id', lang) }}</th>
+      <th>{{ t('display_name', lang) }}</th>
+      <th>{{ t('role', lang) }}</th>
+      <th>{{ t('status', lang) }}</th>
+      <th>{{ t('key_count', lang) }}</th>
+      <th>{{ t('job_count', lang) }}</th>
+      <th>{{ t('created_at', lang) }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td><a href="/admin/accounts/{{ r.account_id }}">{{ r.account_id }}</a></td>
+      <td>{{ r.display_name or '' }}</td>
+      <td>{{ r.role }}</td>
+      <td>{{ r.status }}</td>
+      <td>{{ r.key_count }}</td>
+      <td>{{ r.job_count }}</td>
+      <td>{{ r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="muted">{{ t('none', lang) }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

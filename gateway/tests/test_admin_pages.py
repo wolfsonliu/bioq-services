@@ -50,3 +50,30 @@ def test_dashboard_status_distribution(client):
     db.update_job("a", "j1", status="running")
     r = client.get("/admin", headers=VPC)
     assert "running" in r.text
+
+
+def test_accounts_list(client):
+    import server.app as appmod
+    db = appmod.app.state.db
+    db.create_user("alice")
+    db.create_user("bob", role="admin")
+    db.create_api_key("alice", secret="s1", key_id="k1")
+    r = client.get("/admin/accounts", headers=VPC)
+    assert r.status_code == 200
+    assert "alice" in r.text and "bob" in r.text
+
+
+def test_account_detail_hides_secret(client):
+    import server.app as appmod
+    db = appmod.app.state.db
+    db.create_user("alice")
+    db.create_api_key("alice", secret="super-secret-value", key_id="k1")
+    r = client.get("/admin/accounts/alice", headers=VPC)
+    assert r.status_code == 200
+    assert "k1" in r.text
+    assert "super-secret-value" not in r.text   # secret never rendered
+
+
+def test_account_detail_404(client):
+    r = client.get("/admin/accounts/nobody", headers=VPC)
+    assert r.status_code == 404

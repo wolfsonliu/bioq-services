@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ user.account_id }}{% endblock %}
+{% block content %}
+<p><a href="/admin/accounts">&larr; {{ t('back', lang) }}</a></p>
+<h1>{{ user.account_id }}</h1>
+<table>
+  <tbody>
+    <tr><th>{{ t('display_name', lang) }}</th><td>{{ user.display_name or '' }}</td></tr>
+    <tr><th>{{ t('role', lang) }}</th><td>{{ user.role }}</td></tr>
+    <tr><th>{{ t('status', lang) }}</th><td>{{ user.status }}</td></tr>
+    <tr><th>{{ t('created_at', lang) }}</th><td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') if user.created_at else '' }}</td></tr>
+  </tbody>
+</table>
+
+<h2>{{ t('api_keys', lang) }}</h2>
+<table>
+  <thead>
+    <tr>
+      <th>{{ t('key_id', lang) }}</th>
+      <th>{{ t('status', lang) }}</th>
+      <th>{{ t('created_at', lang) }}</th>
+      <th>{{ t('last_used', lang) }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for k in keys %}
+    <tr>
+      <td>{{ k.key_id }}</td>
+      <td>{{ k.status }}</td>
+      <td>{{ k.created_at.strftime('%Y-%m-%d %H:%M') if k.created_at else '' }}</td>
+      <td>{{ k.last_used_at.strftime('%Y-%m-%d %H:%M') if k.last_used_at else t('none', lang) }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="muted">{{ t('none', lang) }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>{{ t('recent_jobs', lang) }}</h2>
+<table>
+  <thead>
+    <tr>
+      <th>{{ t('job_id', lang) }}</th>
+      <th>{{ t('service', lang) }}</th>
+      <th>{{ t('status', lang) }}</th>
+      <th>{{ t('created_at', lang) }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for j in jobs %}
+    <tr>
+      <td><a href="/admin/jobs/{{ j.account_id }}/{{ j.job_id }}">{{ j.job_id }}</a></td>
+      <td>{{ j.svc }}</td>
+      <td><span class="badge badge-{{ j.status }}">{{ j.status }}</span></td>
+      <td>{{ j.created_at.strftime('%Y-%m-%d %H:%M') if j.created_at else '' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="muted">{{ t('none', lang) }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
