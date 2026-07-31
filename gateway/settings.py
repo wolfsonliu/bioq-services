@@ -8,6 +8,7 @@ API keys live in the DB (not settings) — see db/.
 
 from __future__ import annotations
 
+import secrets
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -90,5 +91,11 @@ class GatewaySettings(ServiceSettings):
     ali_access_key_id: str = Field(default="", validation_alias="ALI_AK")
     ali_access_key_secret: str = Field(default="", validation_alias="ALI_SK")
     fc_endpoint: str = Field(default="")
+
+    # Signing key for the admin-console session cookie (Starlette
+    # SessionMiddleware). Default is a per-process random secret — fine for a
+    # single instance, but MUST be set explicitly (GATEWAY_SESSION_SECRET) for
+    # multi-instance so cookies validate across replicas.
+    session_secret: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
 
     auth: AuthSettings = Field(default_factory=AuthSettings)

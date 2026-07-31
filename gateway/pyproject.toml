@@ -6,6 +6,9 @@ dependencies = [
     "bioq-service-framework[mcp]",
     "httpx>=0.28",
     "pyjwt[crypto]>=2.8",
+    "jinja2>=3.1",            # admin console server-side rendering
+    "itsdangerous>=2.1",      # Starlette SessionMiddleware signed cookies
+    "python-multipart>=0.0.9",  # admin login form POST parsing
     "sqlalchemy>=2.0",
     "alembic>=1.13",          # schema migrations (alembic upgrade head on deploy)
     "psycopg[binary]>=3.1",   # driver for postgresql+psycopg:// (cloud RDS); sqlite needs no driver
