@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ job.job_id }}{% endblock %}
+{% block content %}
+<p><a href="/admin/jobs">&larr; {{ t('back', lang) }}</a></p>
+<h1>{{ job.job_id }}</h1>
+<table>
+  <tbody>
+    <tr><th>{{ t('account', lang) }}</th><td><a href="/admin/accounts/{{ job.account_id }}">{{ job.account_id }}</a></td></tr>
+    <tr><th>{{ t('service', lang) }}</th><td>{{ job.svc }}</td></tr>
+    <tr><th>{{ t('endpoint', lang) }}</th><td>{{ job.endpoint }}</td></tr>
+    <tr><th>{{ t('status', lang) }}</th><td><span class="badge badge-{{ job.status }}">{{ job.status }}</span></td></tr>
+    <tr>
+      <th>{{ t('live_status', lang) }}</th>
+      <td>
+        {% if live_status %}<span class="badge badge-{{ live_status }}">{{ live_status }}</span>
+        {% elif refresh_error %}<span class="muted">{{ t('refresh_error', lang) }}: {{ refresh_error }}</span>
+        {% else %}<span class="muted">{{ t('none', lang) }}</span>{% endif %}
+      </td>
+    </tr>
+    <tr><th>{{ t('task_id', lang) }}</th><td>{{ job.fc_task_id or t('none', lang) }}</td></tr>
+    <tr><th>{{ t('output_prefix', lang) }}</th><td>{{ job.output_prefix or t('none', lang) }}</td></tr>
+    <tr><th>{{ t('created_at', lang) }}</th><td>{{ job.created_at.strftime('%Y-%m-%d %H:%M') if job.created_at else '' }}</td></tr>
+  </tbody>
+</table>
+
+<h2>{{ t('input_params', lang) }}</h2>
+<pre>{{ job.input_params | tojson(indent=2) }}</pre>
+{% endblock %}

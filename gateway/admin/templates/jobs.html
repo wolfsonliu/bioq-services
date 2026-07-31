@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ t('jobs', lang) }}</h1>
+
+<form class="filter" method="get" action="/admin/jobs">
+  <div>
+    <label>{{ t('status', lang) }}</label>
+    <select name="status">
+      <option value="">{{ t('all', lang) }}</option>
+      {% for s in statuses %}
+      <option value="{{ s }}" {{ 'selected' if s == f_status else '' }}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label>{{ t('service', lang) }}</label>
+    <select name="svc">
+      <option value="">{{ t('all', lang) }}</option>
+      {% for s in services %}
+      <option value="{{ s }}" {{ 'selected' if s == f_svc else '' }}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label>{{ t('account', lang) }}</label>
+    <input type="text" name="account" value="{{ f_account }}">
+  </div>
+  <button type="submit">{{ t('apply', lang) }}</button>
+</form>
+
+<table>
+  <thead>
+    <tr>
+      <th>{{ t('job_id', lang) }}</th>
+      <th>{{ t('account', lang) }}</th>
+      <th>{{ t('service', lang) }}</th>
+      <th>{{ t('endpoint', lang) }}</th>
+      <th>{{ t('status', lang) }}</th>
+      <th>{{ t('created_at', lang) }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for j in rows %}
+    <tr>
+      <td><a href="/admin/jobs/{{ j.account_id }}/{{ j.job_id }}">{{ j.job_id }}</a></td>
+      <td><a href="/admin/accounts/{{ j.account_id }}">{{ j.account_id }}</a></td>
+      <td>{{ j.svc }}</td>
+      <td>{{ j.endpoint }}</td>
+      <td><span class="badge badge-{{ j.status }}">{{ j.status }}</span></td>
+      <td>{{ j.created_at.strftime('%Y-%m-%d %H:%M') if j.created_at else '' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="muted">{{ t('none', lang) }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="pager">
+  {% if page > 0 %}
+  <a href="/admin/jobs?status={{ f_status }}&svc={{ f_svc }}&account={{ f_account }}&page={{ page - 1 }}">&larr; {{ t('prev', lang) }}</a>
+  {% endif %}
+  {% if has_next %}
+  <a href="/admin/jobs?status={{ f_status }}&svc={{ f_svc }}&account={{ f_account }}&page={{ page + 1 }}">{{ t('next', lang) }} &rarr;</a>
+  {% endif %}
+</div>
+{% endblock %}

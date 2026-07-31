@@ -38,6 +38,9 @@ def _render(request: Request, name: str, nav: str, *, status_code: int = 200, **
 
 router = APIRouter(prefix="/admin")
 
+JOB_STATUSES = ["pending", "running", "completed", "failed", "cancelled", "interrupted"]
+PAGE_SIZE = 50
+
 
 # --- public: login / logout / language ---
 @router.get("/login", response_class=HTMLResponse)
@@ -103,3 +106,35 @@ def account_detail(account_id: str, request: Request,
     return _render(request, "account_detail.html", "accounts", admin=admin,
                    user=user, keys=db.list_api_keys(account_id),
                    jobs=db.list_all_jobs(account_id=account_id, limit=20))
+
+
+@router.get("/jobs", response_class=HTMLResponse)
+def jobs(request: Request, admin: str = Depends(require_admin_web),
+         status: str = "", svc: str = "", account: str = "", page: int = 0):
+    db = request.app.state.db
+    page = max(page, 0)
+    rows = db.list_all_jobs(status=status or None, svc=svc or None,
+                            account_id=account or None,
+                            limit=PAGE_SIZE, offset=page * PAGE_SIZE)
+    return _render(request, "jobs.html", "jobs", admin=admin, rows=rows,
+                   statuses=JOB_STATUSES, services=request.app.state.registry.list(),
+                   f_status=status, f_svc=svc, f_account=account,
+                   page=page, has_next=len(rows) == PAGE_SIZE)
+
+
+@router.get("/jobs/{account_id}/{job_id}", response_class=HTMLResponse)
+def job_detail(account_id: str, job_id: str, request: Request,
+               admin: str = Depends(require_admin_web)):
+    db = request.app.state.db
+    job = db.get_job(account_id, job_id)
+    if job is None:
+        raise HTTPException(404, "job not found")
+    live_status, refresh_error = None, None
+    try:
+        rec = request.app.state.registry.record(job.svc)
+        down = request.app.state.dispatch.status(rec, job.fc_task_id or job.job_id)
+        live_status = down.get("status")
+    except Exception as exc:  # noqa: BLE001 — status refresh degrades gracefully
+        refresh_error = f"{type(exc).__name__}: {exc}"
+    return _render(request, "job_detail.html", "jobs", admin=admin, job=job,
+                   live_status=live_status, refresh_error=refresh_error)
