@@ -35,3 +35,14 @@ def test_job_lifecycle(tmp_path):
     assert db.list_jobs("carol") == []
     # job_id is namespaced per account: carol reusing "j1" is a distinct row.
     assert db.get_job("carol", "j1") is None
+
+
+def test_user_role_default_and_admin(tmp_path):
+    db = _db(tmp_path)
+    db.create_user("alice")
+    assert db.get_user("alice").role == "user"      # 默认非 admin
+    db.create_user("root", role="admin")
+    assert db.get_user("root").role == "admin"
+    db.set_role("alice", "admin")                    # 提升已存在账户
+    assert db.get_user("alice").role == "admin"
+    assert db.get_user("nobody") is None

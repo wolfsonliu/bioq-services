@@ -21,6 +21,7 @@ class User(Base):
     account_id: Mapped[str] = mapped_column(String, primary_key=True)
     display_name: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String, default="active")
+    role: Mapped[str] = mapped_column(String, default="user")   # user | admin
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 

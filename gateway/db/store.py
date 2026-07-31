@@ -42,10 +42,22 @@ class GatewayDB:
         Base.metadata.create_all(self._engine)
 
     # ---- users / keys ----
-    def create_user(self, account_id: str, display_name: str | None = None) -> None:
+    def create_user(self, account_id: str, display_name: str | None = None,
+                    role: str = "user") -> None:
         with self._Session() as s, s.begin():
             if s.get(User, account_id) is None:
-                s.add(User(account_id=account_id, display_name=display_name))
+                s.add(User(account_id=account_id, display_name=display_name, role=role))
+
+    def get_user(self, account_id: str) -> User | None:
+        with self._Session() as s:
+            return s.get(User, account_id)
+
+    def set_role(self, account_id: str, role: str) -> None:
+        with self._Session() as s, s.begin():
+            u = s.get(User, account_id)
+            if u is None:
+                raise KeyError(account_id)
+            u.role = role
 
     def create_api_key(self, account_id: str, *, secret: str, key_id: str) -> None:
         with self._Session() as s, s.begin():
