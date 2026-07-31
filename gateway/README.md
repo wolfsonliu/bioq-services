@@ -81,9 +81,11 @@ before uvicorn — so the schema is created/updated automatically. Point
 ## Users & API keys
 Users and API keys live in the gateway's DB (tables `users` / `api_keys`).
 An account (`account_id`) is the identity jobs are owned by and may hold several
-keys; the secret is stored only as a sha256 hash. There is no admin UI (MVP) —
-seed keys with `scripts/seed_key.py`. The schema is created by `alembic upgrade
-head` (run automatically by the container entrypoint on start) before seeding.
+keys; the secret is stored only as a sha256 hash. A user has a `role`
+(`user` | `admin`); admins may access the [admin console](#admin-console).
+Bootstrap keys with `scripts/seed_key.py` (pass `--admin` to grant the admin
+role). The schema is created by `alembic upgrade head` (run automatically by the
+container entrypoint on start) before seeding.
 
 **With the bundled PostgreSQL** (docker-compose default) the DB lives in a
 container volume, so seed from *inside* the gateway container — it has the DB
@@ -109,7 +111,7 @@ python gateway/scripts/seed_key.py \
 ```
 
 Options: `--secret` (default: random), `--key-id` (default: `gk_<random>`),
-`--display-name`. Then authenticate:
+`--display-name`, `--admin` (grant the admin role). Then authenticate:
 
 ```bash
 curl -H "X-API-Key: <secret>" https://<gateway-host>/v1/services
@@ -117,6 +119,15 @@ curl -H "X-API-Key: <secret>" https://<gateway-host>/v1/services
 
 Internal (VPC) callers hitting the gateway's `*-vpc.fcapp.run` / localhost host
 are auto-bypassed and need no key.
+
+## Admin console
+A server-side-rendered, terminal-styled management UI at `/admin` (read-only
+dashboard, accounts, jobs, services + write ops: create account / create+revoke
+API key / cancel job / reload `services.yaml`). Browser auth is a cookie session:
+navigate to `/admin/login` and enter an **admin** API key (seed one with
+`seed_key.py --admin`). Internal VPC hosts are bypassed and land on `/admin`
+directly. Write forms are CSRF-protected; the session cookie is `SameSite=lax`
+and signed with `GATEWAY_SESSION_SECRET` (set it explicitly for multi-instance).
 
 ## Tests
 ```bash
