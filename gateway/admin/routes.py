@@ -138,3 +138,26 @@ def job_detail(account_id: str, job_id: str, request: Request,
         refresh_error = f"{type(exc).__name__}: {exc}"
     return _render(request, "job_detail.html", "jobs", admin=admin, job=job,
                    live_status=live_status, refresh_error=refresh_error)
+
+
+@router.get("/services", response_class=HTMLResponse)
+def services(request: Request, admin: str = Depends(require_admin_web),
+             describe: str = ""):
+    registry = request.app.state.registry
+    rows = []
+    for name in registry.list():
+        rec = registry.record(name)
+        rows.append({"name": name, "url": rec.url, "region": rec.region,
+                     "tier": rec.tier, "function": rec.function,
+                     "gpu": rec.gpu, "oss_mount": rec.oss_mount})
+    described = None
+    if describe:
+        # Describe one service on demand (cold-starting all 30+ would be costly).
+        try:
+            rec = registry.record(describe)
+            base = request.app.state.dispatch.describe_base_url(rec)
+            described = request.app.state.discover.describe(describe, base)
+        except Exception as exc:  # noqa: BLE001 — describe degrades gracefully
+            described = {"error": f"{type(exc).__name__}: {exc}"}
+    return _render(request, "services.html", "services", admin=admin,
+                   rows=rows, described=described, describe_name=describe)

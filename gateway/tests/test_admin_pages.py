@@ -137,3 +137,36 @@ def test_job_detail_degrades_on_status_error(client):
 def test_job_detail_404(client):
     r = client.get("/admin/jobs/alice/nope", headers=VPC)
     assert r.status_code == 404
+
+
+def test_services_list(client):
+    import server.app as appmod
+    from bioq_service.service_registry import ServiceRecord
+    appmod.app.state.registry._services = {
+        "rfdiffusion-server": ServiceRecord(url="https://rfd.local", function="fc_rfdiffusion"),
+        "boltz-server": ServiceRecord(url="https://boltz.local"),
+    }
+    r = client.get("/admin/services", headers=VPC)
+    assert r.status_code == 200
+    assert "rfdiffusion-server" in r.text and "boltz-server" in r.text
+
+
+def test_services_describe_degrades(client):
+    import server.app as appmod
+    from bioq_service.service_registry import ServiceRecord
+    appmod.app.state.registry._services = {
+        "rfdiffusion-server": ServiceRecord(url="https://rfd.local")}
+
+    class _Disp:
+        def describe_base_url(self, rec):
+            return rec.url
+
+    class _Discover:
+        def describe(self, svc, base):
+            raise RuntimeError("cold start timeout")
+
+    appmod.app.state.dispatch = _Disp()
+    appmod.app.state.discover = _Discover()
+    r = client.get("/admin/services?describe=rfdiffusion-server", headers=VPC)
+    assert r.status_code == 200            # page still renders
+    assert "cold start timeout" in r.text

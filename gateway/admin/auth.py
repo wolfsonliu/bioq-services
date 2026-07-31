@@ -10,7 +10,6 @@ Internal VPC hosts are still bypassed (no login needed).
 from __future__ import annotations
 
 from fastapi import HTTPException, Request
-
 from server.auth.api_key import hash_secret
 from server.auth.vpc import is_vpc_host
 

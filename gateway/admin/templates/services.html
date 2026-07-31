@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ t('services', lang) }}</h1>
+<table>
+  <thead>
+    <tr>
+      <th>{{ t('name', lang) }}</th>
+      <th>{{ t('url', lang) }}</th>
+      <th>{{ t('region', lang) }}</th>
+      <th>{{ t('tier', lang) }}</th>
+      <th>{{ t('function', lang) }}</th>
+      <th>{{ t('gpu', lang) }}</th>
+      <th>{{ t('oss_mount', lang) }}</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.name }}</td>
+      <td class="small">{{ r.url }}</td>
+      <td>{{ r.region }}</td>
+      <td>{{ r.tier }}</td>
+      <td>{{ r.function or '' }}</td>
+      <td>{{ r.gpu or '' }}</td>
+      <td>{{ t('yes', lang) if r.oss_mount else t('no', lang) }}</td>
+      <td><a href="/admin/services?describe={{ r.name }}">{{ t('describe', lang) }}</a></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8" class="muted">{{ t('none', lang) }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if described is not none %}
+<h2>{{ t('describe', lang) }}: {{ describe_name }}</h2>
+<pre>{{ described | tojson(indent=2) }}</pre>
+{% endif %}
+{% endblock %}
