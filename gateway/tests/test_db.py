@@ -37,6 +37,17 @@ def test_job_lifecycle(tmp_path):
     assert db.get_job("carol", "j1") is None
 
 
+def test_upsert_user(tmp_path):
+    db = _db(tmp_path)
+    db.upsert_user("u1", display_name="U One", role="admin")   # 新建
+    u = db.get_user("u1")
+    assert u.role == "admin" and u.display_name == "U One"
+    db.upsert_user("u1", display_name="U One", role="user")     # 降级同步
+    assert db.get_user("u1").role == "user"
+    db.upsert_user("u1")                                        # 无显式值不清空 display_name
+    assert db.get_user("u1").display_name == "U One"
+
+
 def test_revoke_api_key(tmp_path):
     db = _db(tmp_path)
     db.create_user("alice")

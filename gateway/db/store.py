@@ -59,6 +59,19 @@ class GatewayDB:
                 raise KeyError(account_id)
             u.role = role
 
+    def upsert_user(self, account_id: str, *, display_name: str | None = None,
+                    role: str = "user") -> None:
+        """Create the user if new, else sync role / display_name (IdP is source of truth)."""
+        with self._Session() as s, s.begin():
+            u = s.get(User, account_id)
+            if u is None:
+                s.add(User(account_id=account_id, display_name=display_name, role=role))
+            else:
+                if u.role != role:
+                    u.role = role
+                if display_name and u.display_name != display_name:
+                    u.display_name = display_name
+
     def create_api_key(self, account_id: str, *, secret: str, key_id: str) -> None:
         with self._Session() as s, s.begin():
             s.add(ApiKey(key_id=key_id, account_id=account_id, secret_hash=hash_secret(secret)))
