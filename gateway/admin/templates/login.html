@@ -10,6 +10,10 @@
   <div class="login-box">
     <div class="prompt-line"><span class="prompt">root@gateway:~$</span> login</div>
     {% if error %}<p class="error">! {{ t('login_error', lang) }}</p>{% endif %}
+    {% if sso_enabled %}
+    <a class="sso-btn" href="/admin/auth/login">{{ t('login_sso', lang) }}</a>
+    <div class="sep-or">— {{ t('or', lang) }} —</div>
+    {% endif %}
     <form method="post" action="/admin/login">
       <label for="api_key">{{ t('login_prompt', lang) }}</label>
       <input type="password" id="api_key" name="api_key" autofocus autocomplete="off">

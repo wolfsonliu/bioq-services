@@ -133,3 +133,10 @@ button.link:hover { text-decoration: underline; }
 .login-box input { width: 100%; margin-bottom: 0.8rem; }
 .login-box .error { color: #ff5f5f; }
 .login-box .lang { margin-top: 1rem; }
+.sso-btn {
+  display: block; text-align: center; padding: 0.5rem;
+  border: 1px solid var(--accent); color: var(--accent);
+  margin-bottom: 0.8rem;
+}
+.sso-btn:hover { background: #06231a; text-decoration: none; }
+.sep-or { text-align: center; color: var(--dim); margin-bottom: 0.8rem; }

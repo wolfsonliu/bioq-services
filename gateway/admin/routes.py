@@ -11,7 +11,9 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from server.auth.jwt_verifier import verify_jwt
 
+from . import sso
 from .auth import csrf_token, require_admin_web, verify_admin_key, verify_csrf
 from .i18n import LANGS, lang_of, t
 
@@ -48,15 +50,57 @@ PAGE_SIZE = 50
 # --- public: login / logout / language ---
 @router.get("/login", response_class=HTMLResponse)
 def login_form(request: Request):
-    return _render(request, "login.html", "login", error=False)
+    return _render(request, "login.html", "login", error=False,
+                   sso_enabled=sso.sso_enabled(request.app.state.settings))
 
 
 @router.post("/login", response_class=HTMLResponse)
 def login_submit(request: Request, api_key: str = Form(...)):
     acct = verify_admin_key(request, api_key)
     if acct is None:
-        return _render(request, "login.html", "login", status_code=401, error=True)
+        return _render(request, "login.html", "login", status_code=401, error=True,
+                       sso_enabled=sso.sso_enabled(request.app.state.settings))
     request.session["admin_account"] = acct
+    return RedirectResponse("/admin", status_code=303)
+
+
+# --- OIDC Authorization Code (browser SSO login) ---
+@router.get("/auth/login")
+def sso_login(request: Request):
+    settings = request.app.state.settings
+    if not sso.sso_enabled(settings):
+        raise HTTPException(404, "SSO not configured")
+    state = secrets.token_urlsafe(16)
+    request.session["oidc_state"] = state
+    redirect_uri = str(request.url_for("sso_callback"))
+    return RedirectResponse(sso.authorize_url(settings, redirect_uri, state),
+                            status_code=303)
+
+
+@router.get("/auth/callback", name="sso_callback")
+def sso_callback(request: Request, code: str = "", state: str = ""):
+    settings = request.app.state.settings
+    if not state or state != request.session.pop("oidc_state", None):
+        raise HTTPException(400, "bad state")
+    redirect_uri = str(request.url_for("sso_callback"))
+    try:
+        tok = sso.exchange_code(settings, code, redirect_uri)
+    except sso.SSOError as e:
+        raise HTTPException(502, str(e)) from e
+    claims = verify_jwt(tok["access_token"], jwks_url=settings.auth.jwt_jwks_url,
+                        audience=settings.auth.jwt_audience or None,
+                        issuer=settings.auth.jwt_issuer or None,
+                        ttl_sec=settings.auth.jwt_jwks_cache_ttl_sec)
+    account = claims.get("sub", "")
+    groups = claims.get(settings.auth.jwt_groups_claim) or []
+    if isinstance(groups, str):
+        groups = [groups]
+    role = "admin" if settings.auth.jwt_admin_group in groups else "user"
+    display = claims.get("preferred_username") or claims.get("email")
+    request.app.state.db.upsert_user(account, display_name=display, role=role)
+    if role != "admin":
+        raise HTTPException(403, "admin privileges required")
+    request.session["admin_account"] = account
     return RedirectResponse("/admin", status_code=303)
 
 

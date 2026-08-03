@@ -67,6 +67,8 @@ TR: dict[str, dict[str, str]] = {
         # login
         "login_prompt": "输入 admin API key",
         "login_error": "无效的 admin key",
+        "login_sso": "用 SSO 登录",
+        "or": "或",
         "submit": "登录",
         "yes": "是",
         "no": "否",
@@ -139,6 +141,8 @@ TR: dict[str, dict[str, str]] = {
         "health": "Health",
         "login_prompt": "Enter admin API key",
         "login_error": "Invalid admin key",
+        "login_sso": "Sign in with SSO",
+        "or": "or",
         "submit": "Login",
         "yes": "yes",
         "no": "no",
