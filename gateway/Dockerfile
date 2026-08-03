@@ -12,6 +12,7 @@ RUN --mount=type=bind,source=framework,target=/tmp/service-framework \
     uv pip install --python .venv/bin/python \
         "/tmp/service-framework[mcp]" \
         "httpx>=0.28" "pyjwt[crypto]>=2.8" "sqlalchemy>=2.0" \
+        "jinja2>=3.1" "itsdangerous>=2.1" "python-multipart>=0.0.9" \
         "alembic>=1.13" "psycopg[binary]>=3.1" alibabacloud-oss-v2 \
         "alibabacloud_fc20230330>=4.0" "alibabacloud_tea_openapi>=0.3.0" alibabacloud_tea_util
 
@@ -23,6 +24,8 @@ COPY gateway/*.py gateway/VERSION /opt/gateway/server/
 COPY gateway/auth/ /opt/gateway/server/auth/
 COPY gateway/db/ /opt/gateway/server/db/
 COPY gateway/dispatchers/ /opt/gateway/server/dispatchers/
+# admin console (server-side rendered): code + Jinja templates + static CSS.
+COPY gateway/admin/ /opt/gateway/server/admin/
 
 # schema migrations (alembic upgrade head runs in entrypoint before uvicorn).
 # alembic.ini + migrations/ live at /opt/gateway (the WORKDIR alembic runs from).
