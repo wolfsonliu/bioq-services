@@ -31,6 +31,11 @@ class AuthSettings(BaseModel):
     jwt_issuer: str = ""                   # empty = don't validate iss
     jwt_jwks_cache_ttl_sec: int = 3600
 
+    # Admin-console SSO (OIDC Authorization Code). Empty = SSO disabled.
+    oidc_issuer: str = ""
+    oidc_client_id: str = ""
+    oidc_client_secret: str = ""
+
 
 class GatewaySettings(ServiceSettings):
     model_config = SettingsConfigDict(
