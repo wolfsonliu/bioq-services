@@ -108,21 +108,29 @@ make local-logs LOCAL_SVC=gateway   # 跟踪日志（LOCAL_SVC=gateway 看 gatew
 make local-info                # 打印 gateway URL / API key / kubeconfig / 共享目录
 make local-forward             # 端口转发断了重新建立
 make local-test                # 跑 dockq 功能测试打一遍本地部署
-make local-user ACCOUNT=alice              # 建普通用户 + API key（secret 只打印一次）
-make local-user ACCOUNT=root ADMIN=1       # 建 admin 用户（可进管理控制台）
+make local-user ACCOUNT=alice PASSWORD=pw          # 在 Keycloak 建普通用户
+make local-user ACCOUNT=root  PASSWORD=pw ADMIN=1  # 建管理员（加入 bioq-admins 组）
+make local-users               # 列出 Keycloak 用户 + bioq-admins 成员
 make local-down                # 拆掉部署（保留 BIOQ_WORKDIR 状态）
 make local-purge               # 拆掉并清空 BIOQ_WORKDIR
 ```
 
-### 访问
+### 认证（Keycloak / OIDC）
 
-```bash
-curl -H "X-API-Key: bioq-local-secret" http://127.0.0.1:9000/v1/services
-```
+本地部署内置 **Keycloak**（realm `bioq`），鉴权走 OIDC；`BYPASS_VPC=false`，故都需真凭据。
+- **Keycloak**：`http://localhost:8081`（master 控制台 `admin`/`admin`；bootstrap 应用管理员 `admin`/`admin` 在 realm `bioq`、组 `bioq-admins`）。
+- **用户/权限**：`make local-user ... [ADMIN=1]` 经 kcadm 建用户;角色由**组**决定（`bioq-admins` → gateway 里 `role=admin`，首次登录 JIT 落库）。
+- **管理控制台 SSO**：开 `http://127.0.0.1:9000/admin/login` → 「Sign in with SSO」→ Keycloak 登录（admin/admin）→ 回控制台。
+- **bioq CLI**（device flow）：
+  ```bash
+  bioq --gateway-url http://127.0.0.1:9000 login --oidc \
+       --issuer http://localhost:8081/realms/bioq --client-id bioq-cli
+  bioq services       # 带 Bearer JWT → gateway 验（JWKS 集群内 / issuer=localhost:8081）
+  ```
+- `BIOQ_KEYCLOAK=0` 可关掉 Keycloak，退回旧的 api-key 种子本地模式。
 
-- **管理控制台**：`http://127.0.0.1:9000/admin` —— 经 `127.0.0.1` 属内网（VPC bypass），
-  **免登录直接进**（视为 admin）。想验证 cookie 登录流程用 `/admin/login` +
-  `make local-user ACCOUNT=x ADMIN=1` 种的 key（需以非 localhost 的 Host 访问）。
+> 关键机制:Keycloak 用 `KC_HOSTNAME=http://localhost:8081`(浏览器/bioq 可达的 frontend issuer)
+> + `KC_HOSTNAME_BACKCHANNEL_DYNAMIC=true`(gateway pod 用集群 DNS 取 token/jwks);一个 issuer、两条可达路径。
 
 ### 改了代码后重新部署
 
@@ -142,6 +150,7 @@ kubectl -n bioq rollout restart deploy/bioq-gateway
 
 `BIOQ_WORKDIR`（状态目录）、`BIOQ_API_KEY`、`BIOQ_GATEWAY_PORT`、`BIOQ_CLUSTER`（kind 集群名，默认 `bioq`）、
 `BIOQ_BUILD`（`auto|always|never`）、`BIOQ_DB_BACKEND`（`postgres|sqlite`）、
+`BIOQ_KEYCLOAK`（`1` 默认内置 Keycloak；`0` 关闭退回 api-key）、`BIOQ_KC_PORT`（默认 8081）、
 `BIOQ_DOCKERHUB_MIRROR`（Docker Hub 镜像加速）。细节见 `deploy/openfaas/local-up.sh` 头部注释。
 
 ## 添加新服务
