@@ -43,7 +43,16 @@ def require_auth(request: Request) -> AuthIdentity:
                 issuer=settings.auth.jwt_issuer or None,
                 ttl_sec=settings.auth.jwt_jwks_cache_ttl_sec,
             )
-            return AuthIdentity(account_id=claims.get("sub", ""), method="jwt",
+            account_id = claims.get("sub", "")
+            groups = claims.get(settings.auth.jwt_groups_claim) or []
+            if isinstance(groups, str):
+                groups = [groups]
+            role = "admin" if settings.auth.jwt_admin_group in groups else "user"
+            display = claims.get("preferred_username") or claims.get("email")
+            # JIT provisioning: IdP is the source of truth for OIDC users' role,
+            # so upsert on every login keeps `require_admin` + accounts page in sync.
+            request.app.state.db.upsert_user(account_id, display_name=display, role=role)
+            return AuthIdentity(account_id=account_id, method="jwt",
                                 raw_token_id=claims.get("jti"))
         except JWTError as e:
             logger.info("auth: jwt verify failed (%s); fall through to api_key", e)

@@ -13,6 +13,7 @@ from fastapi import HTTPException
 from server.auth import jwt_verifier as jv
 from server.auth.api_key import hash_secret
 from server.auth.deps import require_admin, require_auth
+from server.db.store import GatewayDB
 from server.settings import AuthSettings
 
 
@@ -210,3 +211,79 @@ def test_require_admin_vpc_not_admin_when_disabled():
     with pytest.raises(HTTPException) as e:
         require_admin(r)
     assert e.value.status_code == 403
+
+
+# --- OIDC: groups->role mapping + JIT provisioning on JWT auth ---
+def _jwt_req(url, tok, db, auth=None):
+    return _req(auth=auth or _jwt_auth(url), db=db,
+                headers={"authorization": f"Bearer {tok}", "host": "public.example.com"})
+
+
+def _oidc_token(priv, *, sub, groups, extra=None):
+    now = datetime.now(timezone.utc)
+    payload = {"sub": sub, "iat": now, "exp": now + timedelta(hours=1),
+               "aud": "gateway-server", "jti": "j", "groups": groups}
+    if extra:
+        payload.update(extra)
+    return _sign(priv, payload)
+
+
+def test_jwt_admin_group_provisions_admin(tmp_path):
+    priv, jwks = _keypair_and_jwks()
+    url = "https://fake.example/oidc-a.json"; jv._clear_cache(url)
+    db = GatewayDB(f"sqlite:///{tmp_path/'gw.db'}"); db.create_all()
+    tok = _oidc_token(priv, sub="u1", groups=["bioq-admins"],
+                      extra={"preferred_username": "u1"})
+    with patch("server.auth.jwt_verifier.httpx.get", lambda u, timeout: _JwksResp(jwks)):
+        ident = require_auth(_jwt_req(url, tok, db))
+    jv._clear_cache(url)
+    assert ident.account_id == "u1" and ident.method == "jwt"
+    assert db.get_user("u1").role == "admin"
+    assert db.get_user("u1").display_name == "u1"
+
+
+def test_jwt_non_admin_group_is_user(tmp_path):
+    priv, jwks = _keypair_and_jwks()
+    url = "https://fake.example/oidc-b.json"; jv._clear_cache(url)
+    db = GatewayDB(f"sqlite:///{tmp_path/'gw.db'}"); db.create_all()
+    tok = _oidc_token(priv, sub="u2", groups=["some-other-group"])
+    with patch("server.auth.jwt_verifier.httpx.get", lambda u, timeout: _JwksResp(jwks)):
+        require_auth(_jwt_req(url, tok, db))
+    jv._clear_cache(url)
+    assert db.get_user("u2").role == "user"
+
+
+def test_jwt_role_syncs_on_relogin(tmp_path):
+    priv, jwks = _keypair_and_jwks()
+    url = "https://fake.example/oidc-c.json"; jv._clear_cache(url)
+    db = GatewayDB(f"sqlite:///{tmp_path/'gw.db'}"); db.create_all()
+    with patch("server.auth.jwt_verifier.httpx.get", lambda u, timeout: _JwksResp(jwks)):
+        require_auth(_jwt_req(url, _oidc_token(priv, sub="u3", groups=["bioq-admins"]), db))
+        assert db.get_user("u3").role == "admin"
+        require_auth(_jwt_req(url, _oidc_token(priv, sub="u3", groups=[]), db))
+    jv._clear_cache(url)
+    assert db.get_user("u3").role == "user"     # IdP 组变化被同步
+
+
+def test_jwt_custom_admin_group(tmp_path):
+    priv, jwks = _keypair_and_jwks()
+    url = "https://fake.example/oidc-d.json"; jv._clear_cache(url)
+    db = GatewayDB(f"sqlite:///{tmp_path/'gw.db'}"); db.create_all()
+    auth = AuthSettings(bypass_vpc=False, jwt_jwks_url=url, jwt_audience="gateway-server",
+                        jwt_admin_group="platform-admins")
+    tok = _oidc_token(priv, sub="u4", groups=["platform-admins"])
+    with patch("server.auth.jwt_verifier.httpx.get", lambda u, timeout: _JwksResp(jwks)):
+        require_auth(_jwt_req(url, tok, db, auth=auth))
+    jv._clear_cache(url)
+    assert db.get_user("u4").role == "admin"
+
+
+def test_require_admin_via_jwt(tmp_path):
+    priv, jwks = _keypair_and_jwks()
+    url = "https://fake.example/oidc-e.json"; jv._clear_cache(url)
+    db = GatewayDB(f"sqlite:///{tmp_path/'gw.db'}"); db.create_all()
+    tok = _oidc_token(priv, sub="u5", groups=["bioq-admins"])
+    with patch("server.auth.jwt_verifier.httpx.get", lambda u, timeout: _JwksResp(jwks)):
+        ident = require_admin(_jwt_req(url, tok, db))
+    jv._clear_cache(url)
+    assert ident.account_id == "u5" and ident.method == "jwt"
