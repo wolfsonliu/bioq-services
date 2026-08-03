@@ -51,6 +51,17 @@ PG_USER="${BIOQ_PG_USER:-bioagent}"
 PG_PASSWORD="${BIOQ_PG_PASSWORD:-bioq-local-pg}"
 PG_DB="${BIOQ_PG_DB:-gateway}"
 
+# In-cluster Keycloak (OIDC IdP). BIOQ_KEYCLOAK=0 skips it (api-key-only local mode).
+# Browser/bioq reach it via port-forward at localhost:$KC_PORT; the gateway pod
+# reaches it via cluster DNS. KC_HOSTNAME pins the frontend issuer to the host URL
+# while KC_HOSTNAME_BACKCHANNEL_DYNAMIC lets token/jwks follow the caller's host.
+KEYCLOAK="${BIOQ_KEYCLOAK:-1}"
+KC_IMAGE="${BIOQ_KC_IMAGE:-quay.io/keycloak/keycloak:26.0}"
+KC_PORT="${BIOQ_KC_PORT:-8081}"
+KC_FRONTEND="http://localhost:${KC_PORT}"
+KC_ISSUER_FRONTEND="${KC_FRONTEND}/realms/bioq"
+KC_INCLUSTER="http://keycloak.bioq.svc.cluster.local:8080/realms/bioq"
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"   # repos/bioq-services
 BIN_DIR="$WORKDIR/bin"
 SHARED_DIR="$WORKDIR/shared"
@@ -346,6 +357,68 @@ EOF
   kubectl -n bioq rollout status deploy/bioq-postgres --timeout=180s
 }
 
+# In-cluster Keycloak (OIDC IdP). Realm imported from keycloak-realm.json via a
+# ConfigMap; H2 data persisted on the shared hostPath so users created with
+# `make local-user` survive pod restarts. See KC_HOSTNAME notes above.
+deploy_keycloak() {
+  kubectl create namespace bioq >/dev/null 2>&1 || true
+  if ! docker image inspect "$KC_IMAGE" >/dev/null 2>&1; then
+    log "pulling $KC_IMAGE via $MIRROR"
+    docker pull "$KC_IMAGE" >/dev/null 2>&1 \
+      || docker pull "$MIRROR/keycloak/keycloak:26.0" >/dev/null && docker tag "$MIRROR/keycloak/keycloak:26.0" "$KC_IMAGE" \
+      || die "cannot obtain $KC_IMAGE"
+  fi
+  kind load docker-image "$KC_IMAGE" --name "$CLUSTER" >/dev/null
+  log "deploying keycloak ($KC_IMAGE)"
+  kubectl -n bioq create configmap keycloak-realm \
+    --from-file=realm.json="$REPO_ROOT/deploy/openfaas/keycloak-realm.json" \
+    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+  cat > "$MANIFEST_DIR/keycloak.yaml" <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: keycloak, namespace: bioq, labels: { app: keycloak } }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: keycloak } }
+  template:
+    metadata: { labels: { app: keycloak } }
+    spec:
+      volumes:
+        - { name: kcdata, hostPath: { path: /shared/keycloak, type: DirectoryOrCreate } }
+        - { name: realm, configMap: { name: keycloak-realm } }
+      containers:
+        - name: keycloak
+          image: $KC_IMAGE
+          imagePullPolicy: IfNotPresent
+          args: ["start-dev", "--import-realm"]
+          env:
+            - { name: KC_BOOTSTRAP_ADMIN_USERNAME, value: "admin" }
+            - { name: KC_BOOTSTRAP_ADMIN_PASSWORD, value: "admin" }
+            - { name: KC_HOSTNAME, value: "$KC_FRONTEND" }
+            - { name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC, value: "true" }
+            - { name: KC_HTTP_ENABLED, value: "true" }
+          ports: [ { containerPort: 8080 } ]
+          volumeMounts:
+            - { name: kcdata, mountPath: /opt/keycloak/data }
+            - { name: realm, mountPath: /opt/keycloak/data/import }
+          readinessProbe:
+            httpGet: { path: /realms/bioq, port: 8080 }
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            failureThreshold: 40
+---
+apiVersion: v1
+kind: Service
+metadata: { name: keycloak, namespace: bioq }
+spec:
+  selector: { app: keycloak }
+  ports: [ { name: http, port: 8080, targetPort: 8080 } ]
+EOF
+  kubectl apply -f "$MANIFEST_DIR/keycloak.yaml" >/dev/null
+  kubectl -n bioq rollout status deploy/keycloak --timeout=240s
+}
+
 # --- per-service build + deploy -------------------------------------------
 for svc in "${SERVICES[@]}"; do
   [ -d "$REPO_ROOT/services/$svc" ] || die "unknown service: $svc (no services/$svc)"
@@ -410,6 +483,23 @@ for svc in "${SERVICES[@]}"; do
 "
 done
 
+# --- in-cluster Keycloak + gateway OIDC wiring ----------------------------
+GW_OIDC_ENV=""
+if [ "$KEYCLOAK" = 1 ]; then
+  deploy_keycloak
+  # JWKS/token via cluster DNS (pod-reachable, backchannel-dynamic); issuer pinned
+  # to the frontend host URL (what browser/bioq see). OIDC discovery for the SSO
+  # code flow also goes via cluster DNS → authorize URL comes back as localhost.
+  GW_OIDC_ENV="            - { name: GATEWAY_AUTH__JWT_JWKS_URL, value: ${KC_INCLUSTER}/protocol/openid-connect/certs }
+            - { name: GATEWAY_AUTH__JWT_ISSUER, value: ${KC_ISSUER_FRONTEND} }
+            - { name: GATEWAY_AUTH__JWT_AUDIENCE, value: gateway-server }
+            - { name: GATEWAY_AUTH__OIDC_ISSUER, value: ${KC_INCLUSTER} }
+            - { name: GATEWAY_AUTH__OIDC_CLIENT_ID, value: bioq-gateway }
+            - { name: GATEWAY_AUTH__OIDC_CLIENT_SECRET, value: bioq-gateway-secret }
+            - { name: GATEWAY_SESSION_SECRET, value: bioq-local-session-secret }
+"
+fi
+
 log "deploying bioq gateway (openfaas + file storage, db=$DB_BACKEND)"
 cat > "$MANIFEST_DIR/gateway.yaml" <<EOF
 apiVersion: v1
@@ -450,7 +540,7 @@ $GW_INIT      containers:
             - { name: GATEWAY_DB_URL, value: "$DB_URL" }
             - { name: GATEWAY_JOBS_BASE_DIR, value: /shared/gw_jobs }
             - { name: GATEWAY_AUTH__BYPASS_VPC, value: "false" }
-          volumeMounts:
+$GW_OIDC_ENV          volumeMounts:
             - { name: shared, mountPath: /shared }
             - { name: registry, mountPath: /etc/bioq }
           readinessProbe: { httpGet: { path: /healthz, port: 9000 }, initialDelaySeconds: 5, periodSeconds: 5 }
@@ -484,7 +574,29 @@ setsid kubectl -n bioq port-forward svc/bioq-gateway "$GATEWAY_PORT:9000" --addr
 echo $! > "$PF_PID_FILE"
 sleep 4
 
+# Keycloak port-forward (browser + bioq reach the IdP at localhost:$KC_PORT).
+if [ "$KEYCLOAK" = 1 ]; then
+  KC_PF_PID_FILE="$WORKDIR/keycloak-port-forward.pid"
+  if [ -f "$KC_PF_PID_FILE" ] && kill -0 "$(cat "$KC_PF_PID_FILE")" 2>/dev/null; then
+    kill "$(cat "$KC_PF_PID_FILE")" 2>/dev/null || true
+  fi
+  setsid kubectl -n bioq port-forward svc/keycloak "$KC_PORT:8080" --address 127.0.0.1 \
+    >"$WORKDIR/keycloak-port-forward.log" 2>&1 </dev/null &
+  echo $! > "$KC_PF_PID_FILE"
+  sleep 2
+fi
+
 # --- summary --------------------------------------------------------------
+KC_INFO=""
+if [ "$KEYCLOAK" = 1 ]; then
+  KC_INFO="
+  OIDC (Keycloak):
+    console SSO : open http://127.0.0.1:$GATEWAY_PORT/admin/login -> \"Sign in with SSO\" (admin/admin)
+    bioq login  : bioq --gateway-url http://127.0.0.1:$GATEWAY_PORT login --oidc --issuer $KC_ISSUER_FRONTEND --client-id bioq-cli
+    make users  : make local-user ACCOUNT=alice PASSWORD=pw [ADMIN=1]
+"
+fi
+
 log "waiting for functions to become ready..."
 for svc in "${SERVICES[@]}"; do
   kubectl -n openfaas-fn rollout status "deploy/$svc" --timeout=120s || warn "[$svc] not ready yet"
@@ -495,6 +607,7 @@ cat <<EOF
 $(printf '\033[1;32m[local-up] ready\033[0m')
   gateway URL : http://127.0.0.1:$GATEWAY_PORT
   API key     : $API_KEY   (header: X-API-Key)
+  keycloak    : $([ "$KEYCLOAK" = 1 ] && echo "$KC_FRONTEND   (realm bioq; console admin/admin at /admin/master)" || echo "(disabled; BIOQ_KEYCLOAK=0)")
   db backend  : $DB_BACKEND$([ "$DB_BACKEND" = postgres ] && echo "   (svc bioq-postgres in ns bioq)")
   services    : ${SERVICES[*]}$([ "$GPU" = 1 ] && echo "   (gpu: nvidia.com/gpu x1)")
   weights dir : $MODELS_DIR -> /data/models   (put weights in <dir>/<svc>/)
@@ -508,6 +621,6 @@ $(printf '\033[1;32m[local-up] ready\033[0m')
     cd $REPO_ROOT/gateway && \\
     GATEWAY_BASE_URL=http://127.0.0.1:$GATEWAY_PORT GATEWAY_API_KEY=$API_KEY RUN_LOCAL_TESTS=1 \\
       uv run --with pytest --with pytest-asyncio python -m pytest tests/test_local_openfaas.py -v
-
+${KC_INFO}
   tear down:  ./local-down.sh
 EOF

@@ -47,7 +47,7 @@ KUBECTL := KUBECONFIG=$(BIOQ_WORKDIR)/kubeconfig PATH="$(BIOQ_WORKDIR)/bin:$$PAT
 
 .PHONY: help build push clean list version login-harbor bump sif \
 	local-up local-down local-purge local-status local-logs local-test \
-	local-info local-forward local-user
+	local-info local-forward local-user local-users
 
 # Keep intermediate pattern targets around (no auto-rm after the recipe runs).
 .PRECIOUS: build-% tag-%
@@ -91,7 +91,8 @@ help:
 	@echo "  make local-status            Show local pods + services"
 	@echo "  make local-logs [LOCAL_SVC=..]  Tail logs (LOCAL_SVC=gateway for the gateway)"
 	@echo "  make local-test              Run the dockq functional test vs the local deploy"
-	@echo "  make local-user ACCOUNT=bob [ADMIN=1]  Create a user + API key (ADMIN=1 for console access)"
+	@echo "  make local-user ACCOUNT=bob PASSWORD=pw [ADMIN=1]  Create a Keycloak user (ADMIN=1 -> admin)"
+	@echo "  make local-users             List Keycloak users + bioq-admins members"
 	@echo "  make local-info              Print gateway URL / API key / paths"
 	@echo "  make local-forward           (Re)establish the gateway port-forward"
 	@echo "  make local-down              Tear down (make local-purge also wipes $(BIOQ_WORKDIR))"
@@ -219,6 +220,7 @@ local-forward:
 
 local-info:
 	@echo "gateway URL : http://127.0.0.1:$(BIOQ_GATEWAY_PORT)   (header X-API-Key: $(BIOQ_API_KEY))"
+	@echo "keycloak    : http://localhost:$(or $(BIOQ_KC_PORT),8081)   (realm bioq; master console admin/admin; BIOQ_KEYCLOAK=0 to disable)"
 	@echo "kubeconfig  : $(BIOQ_WORKDIR)/kubeconfig"
 	@echo "shared dir  : $(BIOQ_WORKDIR)/shared   (jobs/<acct>-<id>/, users/<acct>/<id>/; pgdata/ or gateway.db)"
 	@echo "gateway db  : postgres (svc bioq-postgres, ns bioq) by default; BIOQ_DB_BACKEND=sqlite for the old single-file DB"
@@ -229,21 +231,26 @@ local-test:
 		GATEWAY_API_KEY=$(BIOQ_API_KEY) RUN_LOCAL_TESTS=1 \
 		uv run --with pytest --with pytest-asyncio python -m pytest tests/test_local_openfaas.py -v
 
-# Create a gateway user + API key in the local deploy. Runs seed_key.py inside
-# the gateway pod, which reads GATEWAY_DB_URL — so it works the same whether the
-# DB is postgres or sqlite. The secret is printed ONCE (only its hash is stored);
-# pass SECRET=.. for a fixed one, else a random secret is generated.
-#   make local-user ACCOUNT=alice
-#   make local-user ACCOUNT=alice SECRET=s3cret KEY_ID=gk_alice DISPLAY_NAME="Alice"
-#   make local-user ACCOUNT=root ADMIN=1        # grant the admin role (console access)
+# Create/update a user in the local deploy's Keycloak (realm bioq), via kcadm
+# inside the keycloak pod. Role comes from group membership: ADMIN=1 adds the
+# user to `bioq-admins` (→ admin in the gateway via groups→role JIT); otherwise
+# a normal user. The gateway account is created just-in-time on first login.
+#   make local-user ACCOUNT=alice PASSWORD=pw            # normal user
+#   make local-user ACCOUNT=root  PASSWORD=pw ADMIN=1    # admin user
 local-user:
-	@if [ -z "$(ACCOUNT)" ]; then \
-		echo "usage: make local-user ACCOUNT=<name> [SECRET=..] [KEY_ID=..] [DISPLAY_NAME=..] [ADMIN=1]"; \
+	@if [ -z "$(ACCOUNT)" ] || [ -z "$(PASSWORD)" ]; then \
+		echo "usage: make local-user ACCOUNT=<name> PASSWORD=<pw> [ADMIN=1]"; \
 		exit 2; \
 	fi
-	@$(KUBECTL) -n bioq exec deploy/bioq-gateway -- /opt/gateway/.venv/bin/python \
-		/opt/gateway/scripts/seed_key.py --account-id "$(ACCOUNT)" \
-		$(if $(SECRET),--secret "$(SECRET)") \
-		$(if $(KEY_ID),--key-id "$(KEY_ID)") \
-		$(if $(DISPLAY_NAME),--display-name "$(DISPLAY_NAME)") \
-		$(if $(ADMIN),--admin)
+	@$(KUBECTL) -n bioq exec -i deploy/keycloak -- bash -s -- \
+		"$(ACCOUNT)" "$(PASSWORD)" "$(if $(ADMIN),admin,)" < deploy/openfaas/kc-user.sh
+
+# List Keycloak users + bioq-admins members.
+local-users:
+	@$(KUBECTL) -n bioq exec deploy/keycloak -- bash -c '\
+		K=/opt/keycloak/bin/kcadm.sh; \
+		$$K config credentials --server http://localhost:8080 --realm master --user admin --password admin >/dev/null; \
+		echo "== users =="; $$K get users -r bioq --fields username,email --format csv --noquotes; \
+		echo "== bioq-admins =="; \
+		gid=$$($$K get groups -r bioq -q search=bioq-admins --fields id --format csv --noquotes | head -1); \
+		$$K get "groups/$$gid/members" -r bioq --fields username --format csv --noquotes'

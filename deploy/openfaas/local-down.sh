@@ -13,11 +13,13 @@ export PATH="$WORKDIR/bin:$PATH"
 
 log() { printf '\033[1;34m[local-down]\033[0m %s\n' "$*"; }
 
-PF_PID_FILE="$WORKDIR/port-forward.pid"
-if [ -f "$PF_PID_FILE" ]; then
-  kill "$(cat "$PF_PID_FILE")" 2>/dev/null && log "stopped port-forward" || true
-  rm -f "$PF_PID_FILE"
-fi
+for pf in port-forward keycloak-port-forward; do
+  PF_PID_FILE="$WORKDIR/$pf.pid"
+  if [ -f "$PF_PID_FILE" ]; then
+    kill "$(cat "$PF_PID_FILE")" 2>/dev/null && log "stopped $pf" || true
+    rm -f "$PF_PID_FILE"
+  fi
+done
 
 if command -v kind >/dev/null 2>&1 && kind get clusters 2>/dev/null | grep -qx "$CLUSTER"; then
   log "deleting kind cluster '$CLUSTER'"
