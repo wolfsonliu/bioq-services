@@ -23,6 +23,13 @@ Three-layer: VPC bypass (internal) → JWT (`Authorization: Bearer`) → API key
 (`X-API-Key`, looked up in the DB). The key maps to an `account_id` — the
 identity jobs are owned by (one account may hold several keys).
 
+**OIDC / JWT**: point `GATEWAY_AUTH__JWT_JWKS_URL` at an IdP's JWKS (Keycloak/Dex/
+corp SSO). Verified tokens authenticate as `account_id = sub`; the user is
+provisioned just-in-time and its `role` is derived from a groups claim
+(`GATEWAY_AUTH__JWT_ADMIN_GROUP`, default `bioq-admins` → admin). Production MUST
+set `GATEWAY_AUTH__JWT_ISSUER` so tokens from other realms are rejected. See the
+local IdP spike in `deploy/keycloak/`.
+
 ## Local dev
 ```bash
 # create/upgrade the schema first (alembic; app startup no longer create_all()s)

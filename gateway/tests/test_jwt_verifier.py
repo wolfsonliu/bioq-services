@@ -79,3 +79,17 @@ def test_rejects_expired(keypair, jwks_url, mock_jwks):
 def test_disabled_when_empty_url():
     with pytest.raises(JWTError, match="disabled"):
         verify_jwt("x", jwks_url="", audience=None)
+
+
+def test_issuer_enforced(keypair, jwks_url, mock_jwks):
+    now = datetime.now(timezone.utc)
+    tok = _sign(keypair, {"sub": "x", "iat": now, "exp": now + timedelta(hours=1),
+                          "aud": "gateway-server", "iss": "https://idp.a/realms/bioq"})
+    # matching issuer accepted
+    claims = verify_jwt(tok, jwks_url=jwks_url, audience="gateway-server",
+                        issuer="https://idp.a/realms/bioq")
+    assert claims["sub"] == "x"
+    # wrong issuer rejected (prod must set GATEWAY_AUTH__JWT_ISSUER)
+    with pytest.raises(JWTError):
+        verify_jwt(tok, jwks_url=jwks_url, audience="gateway-server",
+                   issuer="https://idp.b/realms/bioq")
