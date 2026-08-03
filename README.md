@@ -84,6 +84,66 @@ make sif-<service>             # Docker → Apptainer SIF（HPC/Slurm）
 镜像构建上下文是仓库根（`docker build -f <svc-dir>/Dockerfile .`，`<svc-dir>` 由 Makefile 按名跨层解析），
 `.dockerignore` 已按此裁剪。
 
+## 本地启动（kind + OpenFaaS）
+
+一条命令把整套控制面 + 选定的算力 worker 拉起在本地 kind 集群里，用于端到端联调。
+
+**前置**：只需 `docker`；`kind` / `kubectl` / `helm` 会自动下载到 `$BIOQ_WORKDIR/bin`
+（默认 `~/.cache/bioq-local`）。所有状态（kubeconfig、下载的工具、共享卷里的 `gateway.db` +
+job 目录）都在 `BIOQ_WORKDIR` 下。
+
+```bash
+make local-up                                   # 起默认服务（dockq-server）
+make local-up LOCAL_SERVICES="dockq-server plip-server"   # 指定要起的 worker
+```
+
+`local-up` 幂等地拉起：kind 集群 → OpenFaaS → bundled PostgreSQL → bioq gateway → 选定 worker，
+并把 gateway 端口转发到 **`http://127.0.0.1:9000`**（默认 API key `bioq-local-secret`）。
+
+### 常用命令
+
+```bash
+make local-status              # 看 pods / services
+make local-logs LOCAL_SVC=gateway   # 跟踪日志（LOCAL_SVC=gateway 看 gateway，缺省看 dockq-server）
+make local-info                # 打印 gateway URL / API key / kubeconfig / 共享目录
+make local-forward             # 端口转发断了重新建立
+make local-test                # 跑 dockq 功能测试打一遍本地部署
+make local-user ACCOUNT=alice              # 建普通用户 + API key（secret 只打印一次）
+make local-user ACCOUNT=root ADMIN=1       # 建 admin 用户（可进管理控制台）
+make local-down                # 拆掉部署（保留 BIOQ_WORKDIR 状态）
+make local-purge               # 拆掉并清空 BIOQ_WORKDIR
+```
+
+### 访问
+
+```bash
+curl -H "X-API-Key: bioq-local-secret" http://127.0.0.1:9000/v1/services
+```
+
+- **管理控制台**：`http://127.0.0.1:9000/admin` —— 经 `127.0.0.1` 属内网（VPC bypass），
+  **免登录直接进**（视为 admin）。想验证 cookie 登录流程用 `/admin/login` +
+  `make local-user ACCOUNT=x ADMIN=1` 种的 key（需以非 localhost 的 Host 访问）。
+
+### 改了代码后重新部署
+
+`make local-up` **不会重建已存在的镜像**（复用本地 `<svc>:latest` / `gateway:latest`）。改了代码要生效：
+
+```bash
+make local-up BIOQ_BUILD=always            # 强制重建所有镜像（worker + gateway）再重部署，较慢
+
+# 只更新 gateway（改了 gateway/ 代码时更快）：重建 → load 进 kind → 重启
+make build-gateway
+export KUBECONFIG=$HOME/.cache/bioq-local/kubeconfig PATH="$HOME/.cache/bioq-local/bin:$PATH"
+kind load docker-image gateway:latest --name bioq
+kubectl -n bioq rollout restart deploy/bioq-gateway
+```
+
+### 可调环境变量
+
+`BIOQ_WORKDIR`（状态目录）、`BIOQ_API_KEY`、`BIOQ_GATEWAY_PORT`、`BIOQ_CLUSTER`（kind 集群名，默认 `bioq`）、
+`BIOQ_BUILD`（`auto|always|never`）、`BIOQ_DB_BACKEND`（`postgres|sqlite`）、
+`BIOQ_DOCKERHUB_MIRROR`（Docker Hub 镜像加速）。细节见 `deploy/openfaas/local-up.sh` 头部注释。
+
 ## 添加新服务
 
 **先读 [`docs/adding-a-service.md`](docs/adding-a-service.md)** —— repo-local 落地指南（代码放哪、
