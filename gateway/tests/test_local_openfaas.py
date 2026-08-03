@@ -18,10 +18,12 @@ The end-to-end / describe tests are parametrized over a spec per CPU service
 (queried from ``/v1/services``). So ``make local-up LOCAL_SERVICES="dockq-server
 plip-server"`` then ``make local-test`` exercises exactly what's up.
 
+Auth: hits the gateway over localhost, which is VPC-bypassed in the local deploy
+(api keys were retired) — so no credential header is sent.
+
 Run against the deployed gateway:
 
     GATEWAY_BASE_URL=http://127.0.0.1:9000 \
-    GATEWAY_API_KEY=<seeded secret> \
     RUN_LOCAL_TESTS=1 \
     uv run --with pytest --with pytest-asyncio python -m pytest tests/test_local_openfaas.py -v
 """
@@ -43,7 +45,6 @@ import httpx
 import pytest
 
 BASE_URL = os.environ.get("GATEWAY_BASE_URL", "").rstrip("/")
-API_KEY = os.environ.get("GATEWAY_API_KEY", "")
 TIMEOUT = 60.0
 POLL_INTERVAL_S = int(os.environ.get("LOCAL_POLL_INTERVAL_S", "5"))
 # Global cap; per-service overrides via ServiceSpec.poll_timeout_s (clamped to this).
@@ -52,8 +53,8 @@ POLL_TIMEOUT_S = int(os.environ.get("LOCAL_POLL_TIMEOUT_S", "900"))
 _REPO = Path(__file__).resolve().parents[2]
 
 _needs = pytest.mark.skipif(
-    not (os.environ.get("RUN_LOCAL_TESTS") and BASE_URL and API_KEY),
-    reason="set RUN_LOCAL_TESTS=1 + GATEWAY_BASE_URL + GATEWAY_API_KEY",
+    not (os.environ.get("RUN_LOCAL_TESTS") and BASE_URL),
+    reason="set RUN_LOCAL_TESTS=1 + GATEWAY_BASE_URL",
 )
 
 
@@ -127,10 +128,9 @@ _IDS = [s.service for s in SPECS]
 @pytest.fixture()
 def client():
     return httpx.Client(
-        base_url=BASE_URL,
-        headers={"X-API-Key": API_KEY, "Host": "public.example.com"},
+        base_url=BASE_URL,  # localhost → VPC bypass, no auth header needed
         timeout=TIMEOUT,
-        follow_redirects=True,  # download 302 -> same-origin /v1/files (API key carried)
+        follow_redirects=True,  # download 302 -> same-origin /v1/files
     )
 
 
@@ -140,11 +140,7 @@ _deployed_cache: Optional[set[str]] = None
 def _deployed() -> set[str]:
     global _deployed_cache
     if _deployed_cache is None:
-        with httpx.Client(
-            base_url=BASE_URL,
-            headers={"X-API-Key": API_KEY, "Host": "public.example.com"},
-            timeout=TIMEOUT,
-        ) as c:
+        with httpx.Client(base_url=BASE_URL, timeout=TIMEOUT) as c:
             _deployed_cache = set(c.get("/v1/services").json().get("services", []))
     return _deployed_cache
 

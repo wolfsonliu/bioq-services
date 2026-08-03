@@ -9,8 +9,8 @@ Credentials + base URL come from ``gateway/tests/.env``
 (gitignored), or from the environment:
 
     GATEWAY_BASE_URL   e.g. http://172.27.167.158:9000
-    GATEWAY_API_KEY    the seeded X-API-Key secret
-    GATEWAY_PRINCIPAL  the principal that key maps to (for uri assertions)
+    GATEWAY_TOKEN      an OIDC access token (sent as Authorization: Bearer)
+    GATEWAY_PRINCIPAL  the principal (token sub) — for uri assertions
 
 These hit the REAL gateway (and, for discovery/presign, the real downstream
 services + OSS). They do NOT launch GPU compute — `/v1/run` is intentionally
@@ -49,21 +49,22 @@ def _load_env(path: Path) -> None:
 _load_env(Path(__file__).resolve().parent / ".env")
 
 BASE_URL = os.environ.get("GATEWAY_BASE_URL", "").rstrip("/")
-API_KEY = os.environ.get("GATEWAY_API_KEY", "")
+TOKEN = os.environ.get("GATEWAY_TOKEN", "")
 PRINCIPAL = os.environ.get("GATEWAY_PRINCIPAL", "")
 
 TIMEOUT = httpx.Timeout(connect=10, read=60, write=60, pool=10)
 
 _needs = pytest.mark.skipif(
-    not (BASE_URL and API_KEY),
-    reason="set GATEWAY_BASE_URL + GATEWAY_API_KEY (gateway/tests/.env)",
+    not (BASE_URL and TOKEN),
+    reason="set GATEWAY_BASE_URL + GATEWAY_TOKEN (gateway/tests/.env)",
 )
 
 
 @pytest.fixture(scope="module")
 def client():
     with httpx.Client(
-        base_url=BASE_URL, timeout=TIMEOUT, headers={"X-API-Key": API_KEY}
+        base_url=BASE_URL, timeout=TIMEOUT,
+        headers={"Authorization": f"Bearer {TOKEN}"}
     ) as c:
         yield c
 
@@ -95,15 +96,15 @@ class TestSmoke:
 @pytest.mark.fc
 @_needs
 class TestAuth:
-    def test_no_key_401(self):
-        # No X-API-Key, non-VPC host → must be rejected.
+    def test_no_token_401(self):
+        # No token, non-VPC host → must be rejected.
         r = httpx.get(f"{BASE_URL}/v1/services", timeout=TIMEOUT)
         assert r.status_code == 401
 
-    def test_bad_key_401(self):
+    def test_bad_token_401(self):
         r = httpx.get(
             f"{BASE_URL}/v1/services",
-            headers={"X-API-Key": "definitely-wrong"},
+            headers={"Authorization": "Bearer not.a.real.token"},
             timeout=TIMEOUT,
         )
         assert r.status_code == 401

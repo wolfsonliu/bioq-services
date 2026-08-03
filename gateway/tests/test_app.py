@@ -19,6 +19,18 @@ def client(tmp_path, monkeypatch):
     # App startup no longer create_all()s (schema is Alembic-managed in prod);
     # bootstrap the throwaway sqlite schema for the test.
     appmod.app.state.db.create_all()
+    # Auth is OIDC/JWT + VPC only now; for these /v1 tests we override require_auth
+    # to trust a test header carrying the account (real auth is covered in
+    # test_auth.py). No header → 401 (so "auth required" tests still pass).
+    from fastapi import Header, HTTPException
+    from server.auth.deps import AuthIdentity, require_auth
+
+    def _fake_auth(x_test_account: str | None = Header(default=None)):
+        if not x_test_account:
+            raise HTTPException(401, "no auth")
+        return AuthIdentity(account_id=x_test_account, method="jwt")
+
+    appmod.app.dependency_overrides[require_auth] = _fake_auth
     return TestClient(appmod.app)
 
 
@@ -28,9 +40,9 @@ def test_healthz_ok(client):
     assert r.json()["status"] == "ok"
 
 
-def _seed_key(appmod, account_id="alice", secret="s3cr3t", key_id="gk_1"):
+def _seed_key(appmod, account_id="alice", secret=None, key_id=None):
+    # API keys are retired — just ensure the account row exists (jobs FK to it).
     appmod.app.state.db.create_user(account_id)
-    appmod.app.state.db.create_api_key(account_id, secret=secret, key_id=key_id)
 
 
 def test_v1_requires_auth(client):
@@ -55,7 +67,7 @@ def test_run_and_status_happy(client):
 
     appmod.app.state.dispatch = _Disp()
 
-    hdr = {"x-api-key": "s3cr3t", "host": "public.example.com"}
+    hdr = {"x-test-account": "alice"}
     r = client.post("/v1/run/openbpmd-server/score", json={"nreps": 1}, headers=hdr)
     assert r.status_code == 202, r.text
     job_id = r.json()["job_id"]
@@ -69,7 +81,7 @@ def test_run_and_status_happy(client):
 def test_run_unknown_service_404(client):
     import server.app as appmod
     _seed_key(appmod, key_id="gk_2", secret="k2")
-    hdr = {"x-api-key": "k2", "host": "public.example.com"}
+    hdr = {"x-test-account": "alice"}
     r = client.post("/v1/run/nope/score", json={}, headers=hdr)
     assert r.status_code == 404
 
@@ -92,8 +104,8 @@ def test_tenant_isolation(client):
 
     appmod.app.state.dispatch = _Disp()
 
-    alice = {"x-api-key": "alice-sec", "host": "public.example.com"}
-    bob = {"x-api-key": "bob-sec", "host": "public.example.com"}
+    alice = {"x-test-account": "alice"}
+    bob = {"x-test-account": "bob"}
 
     r = client.post("/v1/run/openbpmd-server/score", json={}, headers=alice)
     assert r.status_code == 202
@@ -121,7 +133,7 @@ def test_presign_route(client):
                 exists=False, url="https://oss.put/signed")
 
     appmod.app.state.storage = _FakePresigner()
-    hdr = {"x-api-key": "p-sec", "host": "public.example.com"}
+    hdr = {"x-test-account": "alice"}
     r = client.post("/v1/uploads/presign",
                     json={"job_id": "job1", "filename": "x.rst7"}, headers=hdr)
     assert r.status_code == 200, r.text
@@ -151,7 +163,7 @@ def test_download_redirects_to_oss_when_present(client):
 
     appmod.app.state.storage = _Presigner()
 
-    hdr = {"x-api-key": "d-sec", "host": "public.example.com"}
+    hdr = {"x-test-account": "alice"}
     r = client.post("/v1/run/openbpmd-server/score",
                     json={}, headers={**hdr, "x-bioagent-job-id": "cjob1"})
     assert r.status_code == 202
@@ -189,7 +201,7 @@ def test_download_falls_back_to_proxy_when_not_on_oss(client):
 
     appmod.app.state.storage = _Presigner()
 
-    hdr = {"x-api-key": "f-sec", "host": "public.example.com"}
+    hdr = {"x-test-account": "alice"}
     r = client.post("/v1/run/openbpmd-server/score",
                     json={}, headers={**hdr, "x-bioagent-job-id": "fjob1"})
     assert r.status_code == 202
@@ -217,7 +229,7 @@ def test_run_rewrites_oss_inputs_to_mount_for_mounted_service(client):
 
     appmod.app.state.dispatch = _Disp()
 
-    hdr = {"x-api-key": "m-sec", "host": "public.example.com"}
+    hdr = {"x-test-account": "alice"}
     r = client.post(
         "/v1/run/openbpmd-server/score",
         headers={**hdr, "x-bioagent-job-id": "mjob1"},
@@ -249,7 +261,7 @@ def test_run_keeps_oss_uris_for_unmounted_service(client):
 
     appmod.app.state.dispatch = _Disp()
 
-    hdr = {"x-api-key": "u-sec", "host": "public.example.com"}
+    hdr = {"x-test-account": "alice"}
     r = client.post(
         "/v1/run/openbpmd-server/score",
         headers={**hdr, "x-bioagent-job-id": "ujob1"},
@@ -266,7 +278,7 @@ def test_file_backend_put_get_roundtrip(client, tmp_path):
     shared = tmp_path / "shared"
     appmod.app.state.storage = FileStorage(shared)
 
-    hdr = {"x-api-key": "fa", "host": "public.example.com"}
+    hdr = {"x-test-account": "alice"}
     key = "users/alice/j1/input/x.pdb"
     r = client.put(f"/v1/files/{key}", content=b"HELLO", headers=hdr)
     assert r.status_code == 200, r.text
@@ -283,7 +295,7 @@ def test_file_backend_tenant_guard(client, tmp_path):
     _seed_key(appmod, account_id="alice", secret="fa", key_id="gk_fa")
     appmod.app.state.storage = FileStorage(tmp_path / "shared")
 
-    hdr = {"x-api-key": "fa", "host": "public.example.com"}
+    hdr = {"x-test-account": "alice"}
     # alice may not write under bob's prefix
     r = client.put("/v1/files/users/bob/j1/input/x.pdb", content=b"x", headers=hdr)
     assert r.status_code == 403
@@ -303,7 +315,7 @@ def test_file_routes_404_on_non_file_backend(client):
             return None
 
     appmod.app.state.storage = _NotFile()
-    hdr = {"x-api-key": "fa", "host": "public.example.com"}
+    hdr = {"x-test-account": "alice"}
     r = client.put("/v1/files/users/alice/j1/input/x.pdb", content=b"x", headers=hdr)
     assert r.status_code == 404
 
@@ -330,7 +342,7 @@ def test_file_backend_download_redirects_to_gateway_file_url(client, tmp_path):
     out.parent.mkdir(parents=True)
     out.write_bytes(b"RESULTZIP")
 
-    hdr = {"x-api-key": "fa", "host": "public.example.com"}
+    hdr = {"x-test-account": "alice"}
     r = client.post("/v1/run/openbpmd-server/score", json={},
                     headers={**hdr, "x-bioagent-job-id": "dljob"})
     assert r.status_code == 202
