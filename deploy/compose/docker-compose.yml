@@ -1,8 +1,9 @@
-# Local single-node deployment of bioq-services — no Alibaba FC / OSS.
+# Single-node deployment of bioq-services (Docker Compose).
 #
 #   Dispatch: http  — gateway POSTs /api/<endpoint>, polls /api/jobs/<id>
-#   Storage:  file  — gateway /v1/files IO over the `shared` volume; workers read
-#                     the file:// inputs the gateway staged there
+#             (switch to fc + OSS storage to front Alibaba Cloud FC — see README)
+#   Storage:  file  — gateway /v1/files IO over the `shared` volume
+#   Auth:     OIDC/JWT (bundled Keycloak) + VPC bypass for localhost (dev)
 #
 # Build the images first, from the repo root:
 #   make build-gateway
@@ -10,11 +11,31 @@
 # then bring the stack up:
 #   docker compose -f deploy/compose/docker-compose.yml up -d
 #
-# See README.md for seeding an API key and running a job.
+# See README.md for creating users (Keycloak) and running a job.
 
 name: bioq-local
 
 services:
+  # OIDC IdP. Browser/bioq reach it at localhost:${KC_PORT}; the gateway reaches
+  # it in-network at http://keycloak:8080. KC_HOSTNAME pins the frontend issuer to
+  # the host URL while KC_HOSTNAME_BACKCHANNEL_DYNAMIC lets token/jwks follow the
+  # caller's host — so one issuer works for both. Realm shared with the kind deploy.
+  keycloak:
+    image: ${KC_IMAGE:-quay.io/keycloak/keycloak:26.0}
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:-admin}
+      KC_HOSTNAME: http://localhost:${KC_PORT:-8081}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "${KC_PORT:-8081}:8080"
+    volumes:
+      # `:z` relabels for SELinux hosts (Fedora/RHEL); harmless elsewhere.
+      - ../openfaas/keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro,z
+      - kcdata:/opt/keycloak/data
+
   gateway:
     image: ${GATEWAY_IMAGE:-gateway:latest}
     environment:
@@ -23,8 +44,16 @@ services:
       GATEWAY_FILE_BASE_DIR: /shared
       GATEWAY_REGISTRY_PATH: /opt/gateway/services.yaml
       GATEWAY_DB_URL: sqlite:////data/gateway/gateway.db
-      # Exercise real API-key auth locally (VPC bypass off).
-      GATEWAY_AUTH__BYPASS_VPC: "false"
+      # localhost = VPC bypass (dev); set false for a public-facing deploy.
+      GATEWAY_AUTH__BYPASS_VPC: "${BYPASS_VPC:-true}"
+      # OIDC/JWT: verify via in-network JWKS; issuer is the host-facing URL.
+      GATEWAY_AUTH__JWT_JWKS_URL: http://keycloak:8080/realms/bioq/protocol/openid-connect/certs
+      GATEWAY_AUTH__JWT_ISSUER: http://localhost:${KC_PORT:-8081}/realms/bioq
+      GATEWAY_AUTH__JWT_AUDIENCE: gateway-server
+      GATEWAY_AUTH__OIDC_ISSUER: http://keycloak:8080/realms/bioq
+      GATEWAY_AUTH__OIDC_CLIENT_ID: bioq-gateway
+      GATEWAY_AUTH__OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-bioq-gateway-secret}
+      GATEWAY_SESSION_SECRET: ${GATEWAY_SESSION_SECRET:-bioq-compose-session-secret}
     ports:
       - "${GATEWAY_PORT:-9000}:9000"
     volumes:
@@ -32,6 +61,7 @@ services:
       - shared:/shared
       - gwdata:/data/gateway
     depends_on:
+      - keycloak
       - dockq-server
 
   # Example CPU worker. Add more the same way (one service block each) and list
@@ -57,3 +87,4 @@ volumes:
   shared:   # gateway + workers share this: staged inputs + (optional) results
   gwdata:   # gateway sqlite DB
   wdata:    # worker job dirs
+  kcdata:   # keycloak H2 (realm + users persist across restarts)
