@@ -1,4 +1,4 @@
-"""GatewayDB — thin SQLAlchemy wrapper for users / api_keys / jobs.
+"""GatewayDB — thin SQLAlchemy wrapper for users / jobs.
 
 MVP: SQLite, single process. Swap `db_url` to RDS/PostgreSQL when the
 gateway needs HA/multi-instance (SQLite couples it to one instance).
@@ -6,14 +6,10 @@ gateway needs HA/multi-instance (SQLite couples it to one instance).
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from server.auth.api_key import hash_secret
-
-from .models import ApiKey, Base, Job, User
+from .models import Base, Job, User
 
 
 class GatewayDB:
@@ -72,30 +68,6 @@ class GatewayDB:
                 if display_name and u.display_name != display_name:
                     u.display_name = display_name
 
-    def create_api_key(self, account_id: str, *, secret: str, key_id: str) -> None:
-        with self._Session() as s, s.begin():
-            s.add(ApiKey(key_id=key_id, account_id=account_id, secret_hash=hash_secret(secret)))
-
-    def find_api_key(self, secret_hash: str) -> ApiKey | None:
-        with self._Session() as s:
-            return s.scalars(
-                select(ApiKey).where(ApiKey.secret_hash == secret_hash,
-                                     ApiKey.status == "active")
-            ).first()
-
-    def touch_api_key(self, key_id: str) -> None:
-        with self._Session() as s, s.begin():
-            row = s.get(ApiKey, key_id)
-            if row is not None:
-                row.last_used_at = datetime.now(timezone.utc)
-
-    def revoke_api_key(self, key_id: str) -> None:
-        with self._Session() as s, s.begin():
-            row = s.get(ApiKey, key_id)
-            if row is None:
-                raise KeyError(key_id)
-            row.status = "revoked"
-
     # ---- jobs ----
     def create_job(self, *, job_id: str, account_id: str, svc: str, endpoint: str,
                    input_params: dict | None, output_prefix: str | None) -> None:
@@ -129,13 +101,6 @@ class GatewayDB:
     def count_users(self) -> int:
         with self._Session() as s:
             return s.scalar(select(func.count()).select_from(User)) or 0
-
-    def list_api_keys(self, account_id: str) -> list[ApiKey]:
-        with self._Session() as s:
-            return list(s.scalars(
-                select(ApiKey).where(ApiKey.account_id == account_id)
-                .order_by(ApiKey.created_at)
-            ))
 
     def list_all_jobs(self, *, status: str | None = None, svc: str | None = None,
                       account_id: str | None = None, limit: int = 200,

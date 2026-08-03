@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from server.auth.api_key import hash_secret
 from server.db.store import GatewayDB
 
 
@@ -10,15 +9,12 @@ def _db(tmp_path):
     return db
 
 
-def test_user_and_key_roundtrip(tmp_path):
+def test_user_roundtrip(tmp_path):
     db = _db(tmp_path)
-    db.create_user("alice")
-    db.create_api_key("alice", secret="s3cr3t", key_id="gk_alice")
-    row = db.find_api_key(hash_secret("s3cr3t"))
-    assert row is not None
-    assert row.key_id == "gk_alice"
-    assert row.account_id == "alice"
-    assert db.find_api_key(hash_secret("wrong")) is None
+    db.create_user("alice", display_name="Alice")
+    u = db.get_user("alice")
+    assert u is not None and u.account_id == "alice" and u.role == "user"
+    assert db.get_user("nobody") is None
 
 
 def test_job_lifecycle(tmp_path):
@@ -48,23 +44,10 @@ def test_upsert_user(tmp_path):
     assert db.get_user("u1").display_name == "U One"
 
 
-def test_revoke_api_key(tmp_path):
-    db = _db(tmp_path)
-    db.create_user("alice")
-    db.create_api_key("alice", secret="s3cr3t", key_id="gk_a")
-    assert db.find_api_key(hash_secret("s3cr3t")) is not None
-    db.revoke_api_key("gk_a")
-    assert db.find_api_key(hash_secret("s3cr3t")) is None   # only active keys found
-    import pytest
-    with pytest.raises(KeyError):
-        db.revoke_api_key("nope")
-
-
 def test_admin_queries(tmp_path):
     db = _db(tmp_path)
     db.create_user("alice")
     db.create_user("bob", role="admin")
-    db.create_api_key("alice", secret="s1", key_id="k1")
     db.create_job(job_id="j1", account_id="alice", svc="rfdiffusion-server",
                   endpoint="generate", input_params={}, output_prefix=None)
     db.update_job("alice", "j1", status="completed")
@@ -73,8 +56,6 @@ def test_admin_queries(tmp_path):
     db.update_job("bob", "j2", status="running")
 
     assert {u.account_id for u in db.list_users()} == {"alice", "bob"}
-    assert [k.key_id for k in db.list_api_keys("alice")] == ["k1"]
-    assert db.list_api_keys("bob") == []
     assert db.count_jobs_by_status() == {"completed": 1, "running": 1}
     assert {j.job_id for j in db.list_all_jobs()} == {"j1", "j2"}
     assert [j.job_id for j in db.list_all_jobs(status="running")] == ["j2"]

@@ -1,4 +1,5 @@
-"""SQLAlchemy 2.0 models: User / ApiKey / Job (gateway user + job store)."""
+"""SQLAlchemy 2.0 models: User / Job (gateway user + job store). API keys were
+retired (Phase E) — identity is OIDC/JWT + VPC bypass."""
 
 from __future__ import annotations
 
@@ -23,16 +24,6 @@ class User(Base):
     status: Mapped[str] = mapped_column(String, default="active")
     role: Mapped[str] = mapped_column(String, default="user")   # user | admin
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
-
-
-class ApiKey(Base):
-    __tablename__ = "api_keys"
-    key_id: Mapped[str] = mapped_column(String, primary_key=True)
-    account_id: Mapped[str] = mapped_column(ForeignKey("users.account_id"), index=True)
-    secret_hash: Mapped[str] = mapped_column(String, index=True)
-    status: Mapped[str] = mapped_column(String, default="active")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
-    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class Job(Base):

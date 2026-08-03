@@ -11,7 +11,6 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import HTTPException
 
 from server.auth import jwt_verifier as jv
-from server.auth.api_key import hash_secret
 from server.auth.deps import require_admin, require_auth
 from server.db.store import GatewayDB
 from server.settings import AuthSettings
@@ -81,24 +80,8 @@ def test_vpc_bypass():
     assert ident.account_id == "internal_vpc"
 
 
-def test_api_key_success():
-    db = MagicMock()
-    key_row = MagicMock()
-    key_row.key_id = "gk_1"
-    key_row.account_id = "alice"
-    db.find_api_key.return_value = key_row
-    r = _req(auth=AuthSettings(bypass_vpc=False), db=db,
-             headers={"x-api-key": "s3cr3t", "host": "public.example.com"})
-    ident = require_auth(r)
-    assert ident.method == "api_key"
-    assert ident.account_id == "alice"
-    db.find_api_key.assert_called_once_with(hash_secret("s3cr3t"))
-
-
 def test_no_creds_401():
-    db = MagicMock()
-    db.find_api_key.return_value = None
-    r = _req(auth=AuthSettings(bypass_vpc=False), db=db,
+    r = _req(auth=AuthSettings(bypass_vpc=False), db=MagicMock(),
              headers={"host": "public.example.com"})
     with pytest.raises(HTTPException) as e:
         require_auth(r)
@@ -132,30 +115,18 @@ def test_jwt_success():
     assert ident.method == "jwt"
     assert ident.account_id == "acme"
     assert ident.raw_token_id == "jti-1"
-    db.find_api_key.assert_not_called()
 
 
-def test_jwt_failure_falls_through_to_api_key():
-    url = "https://fake.example/deps-jwks-2.json"
-    jv._clear_cache(url)
-    db = MagicMock()
-    key_row = MagicMock()
-    key_row.key_id = "gk_fb"
-    key_row.account_id = "fallback"
-    db.find_api_key.return_value = key_row
+def test_jwt_failure_is_401():
+    # An invalid Bearer with no VPC bypass → 401 (no api-key fallback anymore).
     r = _req(
-        auth=_jwt_auth(url),
-        db=db,
-        headers={
-            "authorization": "Bearer not.a.real.token",
-            "x-api-key": "sekret",
-            "host": "public.example.com",
-        },
+        auth=_jwt_auth("https://fake.example/deps-jwks-2.json"),
+        db=MagicMock(),
+        headers={"authorization": "Bearer not.a.real.token", "host": "public.example.com"},
     )
-    ident = require_auth(r)
-    jv._clear_cache(url)
-    assert ident.method == "api_key"
-    assert ident.account_id == "fallback"
+    with pytest.raises(HTTPException) as e:
+        require_auth(r)
+    assert e.value.status_code == 401
 
 
 def test_vpc_beats_jwt():
@@ -177,26 +148,7 @@ def _admin_db(role: str | None):
         u = MagicMock()
         u.role = role
         db.get_user.return_value = u
-    key_row = MagicMock()
-    key_row.key_id = "gk"
-    key_row.account_id = "acct"
-    db.find_api_key.return_value = key_row
     return db
-
-
-def test_require_admin_allows_admin_user():
-    r = _req(auth=AuthSettings(bypass_vpc=False), db=_admin_db("admin"),
-             headers={"x-api-key": "s", "host": "public.example.com"})
-    ident = require_admin(r)
-    assert ident.account_id == "acct"
-
-
-def test_require_admin_rejects_non_admin():
-    r = _req(auth=AuthSettings(bypass_vpc=False), db=_admin_db("user"),
-             headers={"x-api-key": "s", "host": "public.example.com"})
-    with pytest.raises(HTTPException) as e:
-        require_admin(r)
-    assert e.value.status_code == 403
 
 
 def test_require_admin_vpc_bypass_is_admin_by_default():
