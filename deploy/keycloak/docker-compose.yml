@@ -1,0 +1,19 @@
+# Local Keycloak (OIDC IdP) for the gateway JWT-auth spike.
+# Dev mode + realm import: brings up realm `bioq` with a public client
+# `bioq-gateway` (direct access grants + an audience mapper -> aud=gateway-server)
+# and a test user alice/alice in group bioq-admins.
+#
+#   docker compose up -d      # start (first boot imports the realm, ~30-60s)
+#   docker compose down       # stop + remove (dev mode = in-memory, nothing persists)
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - "8080:8080"
+    volumes:
+      # `:z` relabels for SELinux hosts (Fedora/RHEL); harmless elsewhere.
+      - ./realm-export.json:/opt/keycloak/data/import/realm-export.json:ro,z
