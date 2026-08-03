@@ -548,7 +548,9 @@ $GW_INIT      containers:
             - { name: GATEWAY_REGISTRY_PATH, value: /etc/bioq/services.yaml }
             - { name: GATEWAY_DB_URL, value: "$DB_URL" }
             - { name: GATEWAY_JOBS_BASE_DIR, value: /shared/gw_jobs }
-            - { name: GATEWAY_AUTH__BYPASS_VPC, value: "false" }
+            # Local break-glass: localhost/VPC hosts bypass auth. Non-VPC Host
+            # still requires an OIDC JWT (so SSO/token flows are testable).
+            - { name: GATEWAY_AUTH__BYPASS_VPC, value: "true" }
 $GW_OIDC_ENV          volumeMounts:
             - { name: shared, mountPath: /shared }
             - { name: registry, mountPath: /etc/bioq }
@@ -566,11 +568,9 @@ kubectl apply -f "$MANIFEST_DIR/gateway.yaml" >/dev/null
 kubectl -n bioq rollout restart deploy/bioq-gateway >/dev/null 2>&1 || true
 kubectl -n bioq rollout status deploy/bioq-gateway --timeout=180s
 
-# --- seed API key (idempotent) --------------------------------------------
-log "seeding API key (account=$ACCOUNT)"
-kubectl -n bioq exec deploy/bioq-gateway -- /opt/gateway/.venv/bin/python \
-  /opt/gateway/scripts/seed_key.py --account-id "$ACCOUNT" --secret "$API_KEY" --key-id gk_local \
-  >/dev/null 2>&1 || warn "key may already exist (ok)"
+# API keys were retired (Phase E): no seeding. Local access = VPC bypass
+# (localhost) for dev; OIDC (Keycloak) for the real auth flow; users via
+# `make local-user`.
 
 # --- port-forward ---------------------------------------------------------
 PF_PID_FILE="$WORKDIR/port-forward.pid"
@@ -614,21 +614,20 @@ done
 cat <<EOF
 
 $(printf '\033[1;32m[local-up] ready\033[0m')
-  gateway URL : http://127.0.0.1:$GATEWAY_PORT
-  API key     : $API_KEY   (header: X-API-Key)
+  gateway URL : http://127.0.0.1:$GATEWAY_PORT   (localhost = VPC bypass, no creds)
+  auth        : OIDC/JWT only (api keys retired); localhost bypassed for dev
   keycloak    : $([ "$KEYCLOAK" = 1 ] && echo "$KC_FRONTEND   (realm bioq; console admin/admin at /admin/master)" || echo "(disabled; BIOQ_KEYCLOAK=0)")
   db backend  : $DB_BACKEND$([ "$DB_BACKEND" = postgres ] && echo "   (svc bioq-postgres in ns bioq)")
   services    : ${SERVICES[*]}$([ "$GPU" = 1 ] && echo "   (gpu: nvidia.com/gpu x1)")
   weights dir : $MODELS_DIR -> /data/models   (put weights in <dir>/<svc>/)
   kubeconfig  : $KUBECONFIG   (export KUBECONFIG=... to use kubectl)
 
-  smoke test:
-    curl -s -H "X-API-Key: $API_KEY" -H "Host: public.example.com" \\
-      http://127.0.0.1:$GATEWAY_PORT/v1/services
+  smoke test (localhost VPC bypass):
+    curl -s http://127.0.0.1:$GATEWAY_PORT/v1/services
 
   run the gateway functional test (dockq-server):
     cd $REPO_ROOT/gateway && \\
-    GATEWAY_BASE_URL=http://127.0.0.1:$GATEWAY_PORT GATEWAY_API_KEY=$API_KEY RUN_LOCAL_TESTS=1 \\
+    GATEWAY_BASE_URL=http://127.0.0.1:$GATEWAY_PORT RUN_LOCAL_TESTS=1 \\
       uv run --with pytest --with pytest-asyncio python -m pytest tests/test_local_openfaas.py -v
 ${KC_INFO}
   tear down:  ./local-down.sh

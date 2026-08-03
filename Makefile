@@ -219,7 +219,7 @@ local-forward:
 	$(KUBECTL) -n bioq port-forward svc/bioq-gateway $(BIOQ_GATEWAY_PORT):9000 --address 127.0.0.1
 
 local-info:
-	@echo "gateway URL : http://127.0.0.1:$(BIOQ_GATEWAY_PORT)   (header X-API-Key: $(BIOQ_API_KEY))"
+	@echo "gateway URL : http://127.0.0.1:$(BIOQ_GATEWAY_PORT)   (localhost = VPC bypass, no creds; OIDC/JWT otherwise)"
 	@echo "keycloak    : http://localhost:$(or $(BIOQ_KC_PORT),8081)   (realm bioq; master console admin/admin; BIOQ_KEYCLOAK=0 to disable)"
 	@echo "kubeconfig  : $(BIOQ_WORKDIR)/kubeconfig"
 	@echo "shared dir  : $(BIOQ_WORKDIR)/shared   (jobs/<acct>-<id>/, users/<acct>/<id>/; pgdata/ or gateway.db)"
@@ -227,8 +227,7 @@ local-info:
 	@echo "weights dir : $(BIOQ_WORKDIR)/shared/models -> /data/models (put GPU weights in <dir>/<svc>/; BIOQ_GPU=1 to schedule a GPU)"
 
 local-test:
-	cd gateway && GATEWAY_BASE_URL=http://127.0.0.1:$(BIOQ_GATEWAY_PORT) \
-		GATEWAY_API_KEY=$(BIOQ_API_KEY) RUN_LOCAL_TESTS=1 \
+	cd gateway && GATEWAY_BASE_URL=http://127.0.0.1:$(BIOQ_GATEWAY_PORT) RUN_LOCAL_TESTS=1 \
 		uv run --with pytest --with pytest-asyncio python -m pytest tests/test_local_openfaas.py -v
 
 # Create/update a user in the local deploy's Keycloak (realm bioq), via kcadm

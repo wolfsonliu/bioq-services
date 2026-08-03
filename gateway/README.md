@@ -19,16 +19,18 @@ dispatch to downstream + status/download proxy. See design + plan:
 | GET | /healthz | health |
 
 ## Auth
-Three-layer: VPC bypass (internal) → JWT (`Authorization: Bearer`) → API key
-(`X-API-Key`, looked up in the DB). The key maps to an `account_id` — the
-identity jobs are owned by (one account may hold several keys).
+Two layers: **VPC bypass** (internal/localhost, break-glass) → **JWT/OIDC**
+(`Authorization: Bearer <token>`). API keys were retired — humans use OIDC device
+flow / SSO, machines use OIDC client-credentials.
 
 **OIDC / JWT**: point `GATEWAY_AUTH__JWT_JWKS_URL` at an IdP's JWKS (Keycloak/Dex/
 corp SSO). Verified tokens authenticate as `account_id = sub`; the user is
 provisioned just-in-time and its `role` is derived from a groups claim
 (`GATEWAY_AUTH__JWT_ADMIN_GROUP`, default `bioq-admins` → admin). Production MUST
-set `GATEWAY_AUTH__JWT_ISSUER` so tokens from other realms are rejected. See the
-local IdP spike in `deploy/keycloak/`.
+set `GATEWAY_AUTH__JWT_ISSUER` so tokens from other realms are rejected, and keep
+`GATEWAY_AUTH__BYPASS_VPC=false` unless the VPC host is genuinely trusted. The
+admin console (`/admin`) logs in via SSO (or VPC bypass internally). See the local
+IdP spike in `deploy/keycloak/` and the in-cluster Keycloak in `deploy/openfaas/`.
 
 ## Local dev
 ```bash
@@ -85,56 +87,33 @@ before uvicorn — so the schema is created/updated automatically. Point
 `GATEWAY_DB_URL` at an external DB in `.env` to bypass the bundled postgres (see
 [Database & migrations](#database--migrations)).
 
-## Users & API keys
-Users and API keys live in the gateway's DB (tables `users` / `api_keys`).
-An account (`account_id`) is the identity jobs are owned by and may hold several
-keys; the secret is stored only as a sha256 hash. A user has a `role`
-(`user` | `admin`); admins may access the [admin console](#admin-console).
-Bootstrap keys with `scripts/seed_key.py` (pass `--admin` to grant the admin
-role). The schema is created by `alembic upgrade head` (run automatically by the
-container entrypoint on start) before seeding.
+## Users & roles
+Users live in the gateway's DB (table `users`): an account (`account_id` = the
+JWT `sub`) with a `role` (`user` | `admin`). **There is no user/key CRUD in the
+gateway** — identity is owned by the IdP. Users are **provisioned just-in-time**
+on first authenticated request, and their `role` is derived from the token's
+groups claim (`GATEWAY_AUTH__JWT_ADMIN_GROUP`, default `bioq-admins` → admin).
 
-**With the bundled PostgreSQL** (docker-compose default) the DB lives in a
-container volume, so seed from *inside* the gateway container — it has the DB
-URL in `$GATEWAY_DB_URL`, so no `--db`/`--db-url` needed:
+Create/manage users in the IdP:
+- **Local (in-cluster Keycloak)**: `make local-user ACCOUNT=alice PASSWORD=pw [ADMIN=1]`
+  (see the repo README's local-dev section).
+- **Production**: manage users/groups in the managed IdP (which may front LDAP/AD).
 
+Authenticate with a Bearer token (see [Auth](#auth)):
 ```bash
-cd gateway/deploy
-docker compose exec gateway python scripts/seed_key.py --account-id alice
-# inserts account "alice" (if new) + a new API key;
-# prints key_id + secret  (store the secret — only its sha256 hash is persisted)
-
-# another key for an existing account (rotation / per-client) — distinct --key-id:
-docker compose exec gateway python scripts/seed_key.py --account-id alice --key-id gk_alice_ci
+curl -H "Authorization: Bearer <OIDC token>" https://<gateway-host>/v1/services
 ```
-
-**With a SQLite DB** (local dev / single node) seed against the DB file directly
-(stdlib-only, no container needed):
-
-```bash
-python gateway/scripts/seed_key.py \
-    --db gateway/deploy/data/gateway/gateway.db \
-    --account-id alice
-```
-
-Options: `--secret` (default: random), `--key-id` (default: `gk_<random>`),
-`--display-name`, `--admin` (grant the admin role). Then authenticate:
-
-```bash
-curl -H "X-API-Key: <secret>" https://<gateway-host>/v1/services
-```
-
-Internal (VPC) callers hitting the gateway's `*-vpc.fcapp.run` / localhost host
-are auto-bypassed and need no key.
+Internal (VPC) callers hitting `*-vpc.fcapp.run` / localhost are auto-bypassed.
 
 ## Admin console
 A server-side-rendered, terminal-styled management UI at `/admin` (read-only
-dashboard, accounts, jobs, services + write ops: create account / create+revoke
-API key / cancel job / reload `services.yaml`). Browser auth is a cookie session:
-navigate to `/admin/login` and enter an **admin** API key (seed one with
-`seed_key.py --admin`). Internal VPC hosts are bypassed and land on `/admin`
-directly. Write forms are CSRF-protected; the session cookie is `SameSite=lax`
-and signed with `GATEWAY_SESSION_SECRET` (set it explicitly for multi-instance).
+dashboard, accounts, jobs, services + write ops: create account / cancel job /
+reload `services.yaml`). Browser auth is a cookie session established via **OIDC
+SSO**: navigate to `/admin/login` → "Sign in with SSO" (requires `oidc_issuer` /
+`oidc_client_id` / `oidc_client_secret` configured); only `bioq-admins` users get
+in. Internal VPC hosts are bypassed and land on `/admin` directly. Write forms are
+CSRF-protected; the session cookie is `SameSite=lax` and signed with
+`GATEWAY_SESSION_SECRET` (set it explicitly for multi-instance).
 
 ## Tests
 ```bash
