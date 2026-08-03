@@ -387,6 +387,15 @@ spec:
       volumes:
         - { name: kcdata, hostPath: { path: /shared/keycloak, type: DirectoryOrCreate } }
         - { name: realm, configMap: { name: keycloak-realm } }
+      # hostPath is root-owned; Keycloak runs as uid 1000 and needs to write H2 +
+      # transaction-logs under /opt/keycloak/data. chmod it writable first.
+      initContainers:
+        - name: fix-perms
+          image: $KC_IMAGE
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "mkdir -p /data && chmod -R 777 /data"]
+          securityContext: { runAsUser: 0 }
+          volumeMounts: [ { name: kcdata, mountPath: /data } ]
       containers:
         - name: keycloak
           image: $KC_IMAGE
