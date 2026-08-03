@@ -30,39 +30,10 @@ def test_login_required_redirects(client):
 
 
 def test_login_page_public(client):
+    # SSO not configured here → page still renders (shows the "no SSO" hint).
     r = client.get("/admin/login", headers=PUB)
     assert r.status_code == 200
     assert "text/html" in r.headers["content-type"]
-
-
-def test_login_rejects_non_admin(client):
-    import server.app as appmod
-    appmod.app.state.db.create_user("u")  # role defaults to "user"
-    appmod.app.state.db.create_api_key("u", secret="k", key_id="ku")
-    r = client.post("/admin/login", data={"api_key": "k"}, headers=PUB)
-    assert r.status_code == 401
-
-
-def test_login_admin_then_access(client):
-    import server.app as appmod
-    appmod.app.state.db.create_user("root", role="admin")
-    appmod.app.state.db.create_api_key("root", secret="ak", key_id="kr")
-    r = client.post("/admin/login", data={"api_key": "ak"}, headers=PUB,
-                    follow_redirects=False)
-    assert r.status_code == 303
-    r2 = client.get("/admin", headers=PUB)
-    assert r2.status_code == 200
-
-
-def test_logout_clears_session(client):
-    import server.app as appmod
-    appmod.app.state.db.create_user("root", role="admin")
-    appmod.app.state.db.create_api_key("root", secret="ak", key_id="kr")
-    client.post("/admin/login", data={"api_key": "ak"}, headers=PUB,
-                follow_redirects=False)
-    client.get("/admin/logout", headers=PUB, follow_redirects=False)
-    r = client.get("/admin", headers=PUB, follow_redirects=False)
-    assert r.status_code == 307
 
 
 def test_vpc_bypass_no_login(client):

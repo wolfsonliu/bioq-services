@@ -9,16 +9,11 @@
 <body class="login-body">
   <div class="login-box">
     <div class="prompt-line"><span class="prompt">root@gateway:~$</span> login</div>
-    {% if error %}<p class="error">! {{ t('login_error', lang) }}</p>{% endif %}
     {% if sso_enabled %}
     <a class="sso-btn" href="/admin/auth/login">{{ t('login_sso', lang) }}</a>
-    <div class="sep-or">— {{ t('or', lang) }} —</div>
+    {% else %}
+    <p class="muted small">{{ t('login_no_sso', lang) }}</p>
     {% endif %}
-    <form method="post" action="/admin/login">
-      <label for="api_key">{{ t('login_prompt', lang) }}</label>
-      <input type="password" id="api_key" name="api_key" autofocus autocomplete="off">
-      <button type="submit">{{ t('submit', lang) }}</button>
-    </form>
     <div class="lang small">
       <a href="/admin/setlang?code=zh&next=/admin/login" class="{{ 'on' if lang == 'zh' else '' }}">中文</a>
       <span class="sep">|</span>

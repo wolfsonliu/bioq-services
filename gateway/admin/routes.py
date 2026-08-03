@@ -4,7 +4,6 @@ page routes take `Depends(require_admin_web)` (redirect to /admin/login if not).
 from __future__ import annotations
 
 import secrets
-import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -14,7 +13,7 @@ from fastapi.templating import Jinja2Templates
 from server.auth.jwt_verifier import verify_jwt
 
 from . import sso
-from .auth import csrf_token, require_admin_web, verify_admin_key, verify_csrf
+from .auth import csrf_token, require_admin_web, verify_csrf
 from .i18n import LANGS, lang_of, t
 
 _HERE = Path(__file__).resolve().parent
@@ -50,18 +49,8 @@ PAGE_SIZE = 50
 # --- public: login / logout / language ---
 @router.get("/login", response_class=HTMLResponse)
 def login_form(request: Request):
-    return _render(request, "login.html", "login", error=False,
+    return _render(request, "login.html", "login",
                    sso_enabled=sso.sso_enabled(request.app.state.settings))
-
-
-@router.post("/login", response_class=HTMLResponse)
-def login_submit(request: Request, api_key: str = Form(...)):
-    acct = verify_admin_key(request, api_key)
-    if acct is None:
-        return _render(request, "login.html", "login", status_code=401, error=True,
-                       sso_enabled=sso.sso_enabled(request.app.state.settings))
-    request.session["admin_account"] = acct
-    return RedirectResponse("/admin", status_code=303)
 
 
 # --- OIDC Authorization Code (browser SSO login) ---
@@ -134,7 +123,6 @@ def _accounts_rows(db) -> list[dict]:
     return [
         {"account_id": u.account_id, "display_name": u.display_name,
          "role": u.role, "status": u.status, "created_at": u.created_at,
-         "key_count": len(db.list_api_keys(u.account_id)),
          "job_count": len(db.list_jobs(u.account_id))}
         for u in db.list_users()
     ]
@@ -172,39 +160,8 @@ def account_detail(account_id: str, request: Request,
     user = db.get_user(account_id)
     if user is None:
         raise HTTPException(404, "account not found")
-    # One-time plaintext secret from a just-created key (PRG flash), shown once.
-    new_key = request.session.pop("flash_key", None)
     return _render(request, "account_detail.html", "accounts", admin=admin,
-                   user=user, keys=db.list_api_keys(account_id),
-                   jobs=db.list_all_jobs(account_id=account_id, limit=20),
-                   new_key=new_key)
-
-
-@router.post("/accounts/{account_id}/keys")
-def create_key(account_id: str, request: Request,
-               admin: str = Depends(require_admin_web),
-               _c: None = Depends(verify_csrf)):
-    db = request.app.state.db
-    if db.get_user(account_id) is None:
-        raise HTTPException(404, "account not found")
-    secret = secrets.token_urlsafe(24)
-    key_id = f"gk_{uuid.uuid4().hex[:12]}"
-    db.create_api_key(account_id, secret=secret, key_id=key_id)
-    # Plaintext secret is unrecoverable (only its hash is stored) — flash it once.
-    request.session["flash_key"] = {"key_id": key_id, "secret": secret}
-    return RedirectResponse(f"/admin/accounts/{account_id}", status_code=303)
-
-
-@router.post("/keys/{key_id}/revoke")
-def revoke_key(key_id: str, request: Request,
-               admin: str = Depends(require_admin_web),
-               _c: None = Depends(verify_csrf),
-               account_id: str = Form(...)):
-    try:
-        request.app.state.db.revoke_api_key(key_id)
-    except KeyError:
-        pass  # already gone — redirect back regardless
-    return RedirectResponse(f"/admin/accounts/{account_id}", status_code=303)
+                   user=user, jobs=db.list_all_jobs(account_id=account_id, limit=20))
 
 
 @router.get("/jobs", response_class=HTMLResponse)

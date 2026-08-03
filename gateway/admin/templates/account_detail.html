@@ -4,58 +4,12 @@
 <p><a href="/admin/accounts">&larr; {{ t('back', lang) }}</a></p>
 <h1>{{ user.account_id }}</h1>
 
-{% if new_key %}
-<div class="flash">
-  <strong>{{ t('new_key_secret', lang) }}</strong> ({{ t('shown_once', lang) }})<br>
-  {{ t('key_id', lang) }}: <code>{{ new_key.key_id }}</code><br>
-  secret: <code>{{ new_key.secret }}</code>
-</div>
-{% endif %}
 <table>
   <tbody>
     <tr><th>{{ t('display_name', lang) }}</th><td>{{ user.display_name or '' }}</td></tr>
     <tr><th>{{ t('role', lang) }}</th><td>{{ user.role }}</td></tr>
     <tr><th>{{ t('status', lang) }}</th><td>{{ user.status }}</td></tr>
     <tr><th>{{ t('created_at', lang) }}</th><td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') if user.created_at else '' }}</td></tr>
-  </tbody>
-</table>
-
-<h2>{{ t('api_keys', lang) }}</h2>
-<form class="filter" method="post" action="/admin/accounts/{{ user.account_id }}/keys">
-  <input type="hidden" name="csrf" value="{{ csrf }}">
-  <button type="submit">{{ t('create_key', lang) }}</button>
-</form>
-<table>
-  <thead>
-    <tr>
-      <th>{{ t('key_id', lang) }}</th>
-      <th>{{ t('status', lang) }}</th>
-      <th>{{ t('created_at', lang) }}</th>
-      <th>{{ t('last_used', lang) }}</th>
-      <th></th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for k in keys %}
-    <tr>
-      <td>{{ k.key_id }}</td>
-      <td>{{ k.status }}</td>
-      <td>{{ k.created_at.strftime('%Y-%m-%d %H:%M') if k.created_at else '' }}</td>
-      <td>{{ k.last_used_at.strftime('%Y-%m-%d %H:%M') if k.last_used_at else t('none', lang) }}</td>
-      <td>
-        {% if k.status == 'active' %}
-        <form class="inline" method="post" action="/admin/keys/{{ k.key_id }}/revoke"
-              onsubmit="return confirm('{{ t('confirm_revoke', lang) }}')">
-          <input type="hidden" name="csrf" value="{{ csrf }}">
-          <input type="hidden" name="account_id" value="{{ user.account_id }}">
-          <button type="submit" class="link">{{ t('revoke', lang) }}</button>
-        </form>
-        {% endif %}
-      </td>
-    </tr>
-    {% else %}
-    <tr><td colspan="5" class="muted">{{ t('none', lang) }}</td></tr>
-    {% endfor %}
   </tbody>
 </table>
 

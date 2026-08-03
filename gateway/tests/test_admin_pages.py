@@ -57,21 +57,17 @@ def test_accounts_list(client):
     db = appmod.app.state.db
     db.create_user("alice")
     db.create_user("bob", role="admin")
-    db.create_api_key("alice", secret="s1", key_id="k1")
     r = client.get("/admin/accounts", headers=VPC)
     assert r.status_code == 200
     assert "alice" in r.text and "bob" in r.text
 
 
-def test_account_detail_hides_secret(client):
+def test_account_detail(client):
     import server.app as appmod
-    db = appmod.app.state.db
-    db.create_user("alice")
-    db.create_api_key("alice", secret="super-secret-value", key_id="k1")
+    appmod.app.state.db.create_user("alice", display_name="Alice")
     r = client.get("/admin/accounts/alice", headers=VPC)
     assert r.status_code == 200
-    assert "k1" in r.text
-    assert "super-secret-value" not in r.text   # secret never rendered
+    assert "alice" in r.text
 
 
 def test_account_detail_404(client):

@@ -81,6 +81,9 @@ def test_sso_callback_admin_logs_in(sso_app, monkeypatch):
     assert r.status_code == 303 and r.headers["location"] == "/admin"
     assert sso_app.app.state.db.get_user("u1").role == "admin"
     assert c.get("/admin", headers=PUB).status_code == 200
+    # logout clears the session → back to redirect
+    c.get("/admin/logout", headers=PUB, follow_redirects=False)
+    assert c.get("/admin", headers=PUB, follow_redirects=False).status_code == 307
 
 
 def test_sso_callback_non_admin_403(sso_app, monkeypatch):
