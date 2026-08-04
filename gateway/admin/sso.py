@@ -47,7 +47,10 @@ def authorize_url(settings, redirect_uri: str, state: str) -> str:
         "response_type": "code",
         "client_id": settings.auth.oidc_client_id,
         "redirect_uri": redirect_uri,
-        "scope": "openid profile groups",
+        # groups is delivered by the client's group-membership protocol mapper,
+        # not a client scope — requesting it as a scope trips Keycloak's
+        # invalid_scope check. openid+profile suffice (profile → preferred_username).
+        "scope": "openid profile",
         "state": state,
     })
     return f"{meta['authorization_endpoint']}?{q}"
