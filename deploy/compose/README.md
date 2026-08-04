@@ -43,6 +43,15 @@ credentials**; OIDC is the real path (and what to use with `BYPASS_VPC=false`).
   docker compose -f deploy/compose/docker-compose.yml exec -T keycloak \
       bash -s -- root  pw admin < deploy/openfaas/kc-user.sh   # admin
   ```
+- **Machine / CI** (client-credentials service account) via the shared kcadm helper
+  (`[admin]` 3rd arg → `bioq-admins`); realm also ships a ready `bioq-svc` (secret
+  `bioq-svc-secret`):
+  ```bash
+  docker compose -f deploy/compose/docker-compose.yml exec -T keycloak \
+      bash -s -- ci ci-secret < deploy/openfaas/kc-svc.sh
+  # then: bioq login --client-credentials --issuer .../realms/bioq --client-id ci
+  #       (secret via BIOQ_OIDC_CLIENT_SECRET)
+  ```
 - **Admin console**: `http://localhost:9000/admin` (localhost → bypass, straight in;
   or `/admin/login` → "Sign in with SSO").
 

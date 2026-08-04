@@ -111,23 +111,34 @@ make local-test                # 跑 dockq 功能测试打一遍本地部署
 make local-user ACCOUNT=alice PASSWORD=pw          # 在 Keycloak 建普通用户
 make local-user ACCOUNT=root  PASSWORD=pw ADMIN=1  # 建管理员（加入 bioq-admins 组）
 make local-users               # 列出 Keycloak 用户 + bioq-admins 成员
+make local-svc CLIENT=ci [ADMIN=1]  # 建/轮换机器账号（client-credentials，secret 默认 <client>-secret）
+make local-svcs                # 列出 service-account clients
 make local-down                # 拆掉部署（保留 BIOQ_WORKDIR 状态）
 make local-purge               # 拆掉并清空 BIOQ_WORKDIR
 ```
 
 ### 认证（Keycloak / OIDC）
 
-本地部署内置 **Keycloak**（realm `bioq`），鉴权走 OIDC；`BYPASS_VPC=false`，故都需真凭据。
+本地部署内置 **Keycloak**（realm `bioq`），鉴权走 OIDC/JWT（api key 已退役）。`BYPASS_VPC=true`：
+localhost 免凭据（break-glass），非 localhost Host 需 OIDC token。
 - **Keycloak**：`http://localhost:8081`（master 控制台 `admin`/`admin`；bootstrap 应用管理员 `admin`/`admin` 在 realm `bioq`、组 `bioq-admins`）。
 - **用户/权限**：`make local-user ... [ADMIN=1]` 经 kcadm 建用户;角色由**组**决定（`bioq-admins` → gateway 里 `role=admin`，首次登录 JIT 落库）。
-- **管理控制台 SSO**：开 `http://127.0.0.1:9000/admin/login` → 「Sign in with SSO」→ Keycloak 登录（admin/admin）→ 回控制台。
-- **bioq CLI**（device flow）：
+- **管理控制台 SSO**：开 `http://127.0.0.1:9000/admin/login` → 「Sign in with SSO」→ Keycloak 登录（admin/admin）→ 回控制台（localhost 也可免登录直接进）。
+- **bioq CLI**（人类，device flow）：
   ```bash
   bioq --gateway-url http://127.0.0.1:9000 login --oidc \
        --issuer http://localhost:8081/realms/bioq --client-id bioq-cli
   bioq services       # 带 Bearer JWT → gateway 验（JWKS 集群内 / issuer=localhost:8081）
   ```
-- `BIOQ_KEYCLOAK=0` 可关掉 Keycloak，退回旧的 api-key 种子本地模式。
+- **机器/CI**（client-credentials, service account）：`make local-svc CLIENT=ci [ADMIN=1]` 建一个 confidential client，然后
+  ```bash
+  export BIOQ_OIDC_CLIENT_SECRET=ci-secret        # 默认 <client>-secret，勿写进配置文件
+  bioq --gateway-url http://127.0.0.1:9000 login --client-credentials \
+       --issuer http://localhost:8081/realms/bioq --client-id ci
+  bioq services       # 每次用 client_id+secret 现换 token（无人值守）
+  ```
+  realm 自带示例 `bioq-svc`（普通权限，secret `bioq-svc-secret`）可直接用。
+- `BIOQ_KEYCLOAK=0` 关掉 Keycloak（则仅 localhost VPC bypass 可用，无 OIDC）。
 
 > 关键机制:Keycloak 用 `KC_HOSTNAME=http://localhost:8081`(浏览器/bioq 可达的 frontend issuer)
 > + `KC_HOSTNAME_BACKCHANNEL_DYNAMIC=true`(gateway pod 用集群 DNS 取 token/jwks);一个 issuer、两条可达路径。
