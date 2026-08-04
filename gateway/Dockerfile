@@ -34,9 +34,6 @@ COPY gateway/migrations/ /opt/gateway/migrations/
 COPY gateway/entrypoint.sh /opt/gateway/entrypoint.sh
 RUN chmod +x /opt/gateway/entrypoint.sh
 
-# admin helper: seed users/API keys (docker compose exec gateway python scripts/seed_key.py)
-COPY gateway/scripts/ /opt/gateway/scripts/
-
 # downstream registry (svc -> ServiceRecord)
 COPY services.yaml /opt/gateway/services.yaml
 
