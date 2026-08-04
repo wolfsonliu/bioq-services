@@ -6,7 +6,7 @@ from __future__ import annotations
 import secrets
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -128,29 +128,12 @@ def _accounts_rows(db) -> list[dict]:
     ]
 
 
+# Accounts are read-only in the console: users are provisioned just-in-time from
+# the IdP (account_id = token sub, role from groups). Manage them in Keycloak.
 @router.get("/accounts", response_class=HTMLResponse)
 def accounts(request: Request, admin: str = Depends(require_admin_web)):
     return _render(request, "accounts.html", "accounts", admin=admin,
                    rows=_accounts_rows(request.app.state.db))
-
-
-@router.post("/accounts", response_class=HTMLResponse)
-def create_account(request: Request, admin: str = Depends(require_admin_web),
-                   _c: None = Depends(verify_csrf),
-                   account_id: str = Form(...), display_name: str = Form(""),
-                   role: str = Form("user")):
-    db = request.app.state.db
-    account_id = account_id.strip()
-    error = None
-    if not account_id or role not in ("user", "admin"):
-        error = "invalid_input"
-    elif db.get_user(account_id) is not None:
-        error = "exists"
-    if error:
-        return _render(request, "accounts.html", "accounts", status_code=400,
-                       admin=admin, rows=_accounts_rows(db), error=error)
-    db.create_user(account_id, display_name or None, role=role)
-    return RedirectResponse("/admin/accounts", status_code=303)
 
 
 @router.get("/accounts/{account_id}", response_class=HTMLResponse)

@@ -63,5 +63,9 @@ def exchange_code(settings, code: str, redirect_uri: str) -> dict:
             "client_secret": settings.auth.oidc_client_secret})
         r.raise_for_status()
         return r.json()
+    except httpx.HTTPStatusError as e:
+        # Surface Keycloak's error/error_description body — a bare status code
+        # hides the actual cause (invalid_grant / redirect_uri / client auth).
+        raise SSOError(f"code exchange failed: {e} :: {e.response.text}") from e
     except httpx.HTTPError as e:
         raise SSOError(f"code exchange failed: {e}") from e
