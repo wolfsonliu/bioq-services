@@ -31,6 +31,20 @@ a:hover { text-decoration: underline; }
   border-bottom: 1px solid var(--border);
   background: #000;
 }
+.masthead { display: flex; align-items: stretch; }
+.brand-block {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1rem;
+  background: #000;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.brand-block:hover { text-decoration: none; }
+.brand { display: block; width: 46px; height: 46px; filter: drop-shadow(0 0 5px rgba(0, 255, 156, 0.3)); }
+.bars { flex: 1; min-width: 0; }
+
 .prompt { color: var(--accent); font-weight: bold; }
 .cwd { color: var(--amber); }
 .spacer { flex: 1; }
