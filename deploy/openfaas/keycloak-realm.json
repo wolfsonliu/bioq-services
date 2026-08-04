@@ -89,7 +89,8 @@
       "firstName": "Admin",
       "lastName": "Bootstrap",
       "credentials": [ { "type": "password", "value": "admin", "temporary": false } ],
-      "groups": ["/bioq-admins"]
+      "groups": ["/bioq-admins"],
+      "realmRoles": ["offline_access"]
     }
   ]
 }
