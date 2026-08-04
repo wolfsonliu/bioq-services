@@ -47,7 +47,7 @@ KUBECTL := KUBECONFIG=$(BIOQ_WORKDIR)/kubeconfig PATH="$(BIOQ_WORKDIR)/bin:$$PAT
 
 .PHONY: help build push clean list version login-harbor bump sif \
 	local-up local-down local-purge local-status local-logs local-test \
-	local-info local-forward local-user local-users
+	local-info local-forward local-user local-users local-svc local-svcs
 
 # Keep intermediate pattern targets around (no auto-rm after the recipe runs).
 .PRECIOUS: build-% tag-%
@@ -93,6 +93,8 @@ help:
 	@echo "  make local-test              Run the dockq functional test vs the local deploy"
 	@echo "  make local-user ACCOUNT=bob PASSWORD=pw [ADMIN=1]  Create a Keycloak user (ADMIN=1 -> admin)"
 	@echo "  make local-users             List Keycloak users + bioq-admins members"
+	@echo "  make local-svc CLIENT=ci [SECRET=..] [ADMIN=1]  Create/rotate a service-account (client-credentials) client"
+	@echo "  make local-svcs              List service-account clients"
 	@echo "  make local-info              Print gateway URL / API key / paths"
 	@echo "  make local-forward           (Re)establish the gateway port-forward"
 	@echo "  make local-down              Tear down (make local-purge also wipes $(BIOQ_WORKDIR))"
@@ -253,3 +255,23 @@ local-users:
 		echo "== bioq-admins =="; \
 		gid=$$($$K get groups -r bioq -q search=bioq-admins --fields id --format csv --noquotes | head -1); \
 		$$K get "groups/$$gid/members" -r bioq --fields username --format csv --noquotes'
+
+# Create/rotate a Keycloak service-account client (machine/CI, client-credentials).
+# Role from group: ADMIN=1 puts the service account in bioq-admins. Secret defaults
+# to <client>-secret; use it as BIOQ_OIDC_CLIENT_SECRET for `bioq login --client-credentials`.
+#   make local-svc CLIENT=ci-runner                 # normal service account
+#   make local-svc CLIENT=ci-runner SECRET=s3cret ADMIN=1
+local-svc:
+	@if [ -z "$(CLIENT)" ]; then \
+		echo "usage: make local-svc CLIENT=<client_id> [SECRET=..] [ADMIN=1]"; \
+		exit 2; \
+	fi
+	@$(KUBECTL) -n bioq exec -i deploy/keycloak -- bash -s -- \
+		"$(CLIENT)" "$(or $(SECRET),$(CLIENT)-secret)" "$(if $(ADMIN),admin,)" < deploy/openfaas/kc-svc.sh
+
+# List service-account (confidential + serviceAccounts) clients.
+local-svcs:
+	@$(KUBECTL) -n bioq exec deploy/keycloak -- bash -c '\
+		K=/opt/keycloak/bin/kcadm.sh; \
+		$$K config credentials --server http://localhost:8080 --realm master --user admin --password admin >/dev/null; \
+		$$K get clients -r bioq --fields clientId,serviceAccountsEnabled,publicClient --format csv --noquotes'
