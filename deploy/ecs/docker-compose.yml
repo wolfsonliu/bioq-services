@@ -77,3 +77,40 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  # Bundled OIDC IdP (Keycloak) — OPTIONAL, gated by the "idp" compose profile so
+  # an internal deployment gets a working IdP with no external SSO to stand up.
+  # Enable by setting COMPOSE_PROFILES=idp in .env; to front a managed/corp IdP
+  # instead, leave the profile unset and point GATEWAY_AUTH__* at it in .env.
+  #
+  # !!! The imported realm (deploy/openfaas/keycloak-realm.json) ships THROWAWAY
+  # DEV credentials — admin/admin, client secret bioq-gateway-secret — and only
+  # whitelists localhost:9000 admin-console redirect URIs. Fine for an internal /
+  # staging box; HARDEN before real production (rotate the admin password + client
+  # secret, switch to `start` + a real DB + TLS, restrict redirect URIs). See the
+  # .env.example bundled-IdP notes.
+  keycloak:
+    image: ${KC_IMAGE:-quay.io/keycloak/keycloak:26.0}
+    container_name: gateway-keycloak
+    profiles: ["idp"]
+    restart: always
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:-admin}
+      # Frontend issuer that clients (browser + bioq) see and that lands in the
+      # token `iss`. MUST be reachable by them — set KC_HOSTNAME to this host's URL
+      # in .env (e.g. http://10.0.0.5:8081); localhost only works via a tunnel.
+      # BACKCHANNEL_DYNAMIC lets the gateway's in-network JWKS fetch still resolve.
+      KC_HOSTNAME: ${KC_HOSTNAME:-http://localhost:${KC_PORT:-8081}}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "${KC_PORT:-8081}:8080"
+    volumes:
+      # `:z` relabels for SELinux hosts (Fedora/RHEL); harmless elsewhere.
+      - ../openfaas/keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro,z
+      - kcdata:/opt/keycloak/data
+
+volumes:
+  kcdata:   # bundled keycloak H2 (realm + users persist across restarts)

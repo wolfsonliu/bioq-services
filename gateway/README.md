@@ -93,6 +93,19 @@ before uvicorn — so the schema is created/updated automatically. Point
 `GATEWAY_DB_URL` at an external DB in `.env` to bypass the bundled postgres (see
 [Database & migrations](#database--migrations)).
 
+### Bundled IdP (quickstart, optional)
+The ECS compose can also bring up a **bundled Keycloak** so an internal deployment
+has a working OIDC IdP with no external SSO to stand up. It's gated by the `idp`
+compose profile: set `COMPOSE_PROFILES=idp` in `.env` plus `KC_HOSTNAME` /
+`GATEWAY_AUTH__JWT_ISSUER` / `GATEWAY_AUTH__OIDC_ISSUER` pointing at this host (see
+the `deploy/ecs/.env.example` bundled-IdP section). To front a managed/corp IdP
+instead, leave the profile unset and override the JWKS/issuer/client in `.env`.
+The imported realm ships **throwaway dev credentials** and only whitelists
+`localhost:9000` admin-console redirect URIs — fine for an internal/staging box,
+but **harden before production** (rotate admin pw + client secret, `start` + a real
+DB + TLS, and add this host's redirect URI to the `bioq-gateway` client for remote
+admin-console SSO).
+
 ## Users & roles
 Users live in the gateway's DB (table `users`): an account (`account_id` = the
 JWT `sub`) with a `role` (`user` | `admin`). **There is no user/key CRUD in the
