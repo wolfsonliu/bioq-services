@@ -38,20 +38,18 @@ services:
 
   gateway:
     image: ${GATEWAY_IMAGE:-gateway:latest}
+    # Layered config: shared + compose topology (checked in) then .env (optional,
+    # gitignored, wins). Non-secret topology lives in ../config/gateway.*.env.
+    env_file:
+      - ../config/gateway.common.env
+      - ../config/gateway.compose.env
+      - path: .env
+        required: false
     environment:
-      GATEWAY_DISPATCH_BACKEND: http
-      GATEWAY_STORAGE_BACKEND: file
-      GATEWAY_FILE_BASE_DIR: /shared
-      GATEWAY_REGISTRY_PATH: /opt/gateway/services.yaml
-      GATEWAY_DB_URL: sqlite:////data/gateway/gateway.db
-      # localhost = VPC bypass (dev); set false for a public-facing deploy.
-      GATEWAY_AUTH__BYPASS_VPC: "${BYPASS_VPC:-true}"
-      # OIDC/JWT: verify via in-network JWKS; issuer is the host-facing URL.
-      GATEWAY_AUTH__JWT_JWKS_URL: http://keycloak:8080/realms/bioq/protocol/openid-connect/certs
-      GATEWAY_AUTH__JWT_ISSUER: http://localhost:${KC_PORT:-8081}/realms/bioq
-      GATEWAY_AUTH__JWT_AUDIENCE: gateway-server
-      GATEWAY_AUTH__OIDC_ISSUER: http://keycloak:8080/realms/bioq
-      GATEWAY_AUTH__OIDC_CLIENT_ID: bioq-gateway
+      # Local dev secrets — throwaway defaults matching the committed realm, so
+      # `docker compose up` works with no .env. For a real setup, set the bare
+      # OIDC_CLIENT_SECRET / GATEWAY_SESSION_SECRET (or full GATEWAY_AUTH__* in
+      # .env). Override BYPASS_VPC etc. by setting GATEWAY_AUTH__* in .env.
       GATEWAY_AUTH__OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-bioq-gateway-secret}
       GATEWAY_SESSION_SECRET: ${GATEWAY_SESSION_SECRET:-bioq-compose-session-secret}
     ports:

@@ -30,8 +30,9 @@ provisioned just-in-time and its `role` is derived from a groups claim
 (`GATEWAY_AUTH__JWT_ADMIN_GROUP`, default `bioq-admins` → admin). Production MUST
 set `GATEWAY_AUTH__JWT_ISSUER` so tokens from other realms are rejected, and keep
 `GATEWAY_AUTH__BYPASS_VPC=false` unless the VPC host is genuinely trusted. The
-admin console (`/admin`) logs in via SSO (or VPC bypass internally). See the local
-IdP spike in `deploy/keycloak/` and the in-cluster Keycloak in `deploy/openfaas/`.
+admin console (`/admin`) logs in via SSO (or VPC bypass internally). For a local
+IdP, see the bundled Keycloak in `deploy/compose/` and the in-cluster one in
+`deploy/openfaas/`.
 
 ## Local dev
 ```bash
@@ -70,19 +71,23 @@ GATEWAY_DB_URL=sqlite:///$PWD/gw.db uv run alembic revision --autogenerate -m "<
 ```
 
 ## Deploy (ECS)
-Deploy assets live in `deploy/` (docker-compose, persistent `/data` volume,
-`restart: always`, healthcheck). On the ECS host:
+Deploy assets live in `deploy/ecs/` (docker-compose, persistent `/data` volume,
+`restart: always`, healthcheck). Config is layered: non-secret topology in the
+checked-in `deploy/config/gateway.common.env` + `gateway.ecs.env`, secrets in a
+gitignored `.env`. On the ECS host:
 
 ```bash
-cd gateway/deploy
-cp .env.example .env          # set POSTGRES_PASSWORD + OSS creds, bucket, optional JWT JWKS URL
+cd deploy/ecs
+cp .env.example .env          # set POSTGRES_PASSWORD + OSS/FC creds; optional site overrides
 ./deploy.sh --build           # build image from repo root, then `docker compose up -d`
 ```
 
-`.env` supplies secrets + config: `POSTGRES_PASSWORD` (for the bundled postgres),
-`OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET`, `GATEWAY_OSS_BUCKET`,
-`GATEWAY_OSS_REGION`, and (for external JWT access) `GATEWAY_AUTH__JWT_JWKS_URL`.
-`.env` is gitignored. `docker compose up` starts a **PostgreSQL 18** service, waits
+`.env` supplies **secrets only**: `POSTGRES_PASSWORD` (bundled postgres),
+`OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET`, `ALI_AK` / `ALI_SK` (FC OpenAPI),
+`GATEWAY_AUTH__OIDC_CLIENT_SECRET`, `GATEWAY_SESSION_SECRET`, plus any per-site
+override (e.g. `GATEWAY_AUTH__JWT_ISSUER`). Non-secret bucket/region/backend
+values now live in `deploy/config/gateway.ecs.env` (checked in). `.env` is
+gitignored. `docker compose up` starts a **PostgreSQL 18** service, waits
 for it to be healthy, then the gateway entrypoint runs `alembic upgrade head`
 before uvicorn — so the schema is created/updated automatically. Point
 `GATEWAY_DB_URL` at an external DB in `.env` to bypass the bundled postgres (see

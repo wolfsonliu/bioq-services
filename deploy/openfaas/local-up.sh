@@ -49,7 +49,7 @@ BYPASS_VPC="${BYPASS_VPC:-true}"
 VPC_ACCOUNT_ID="${VPC_ACCOUNT_ID:-internal_vpc}"
 
 # Gateway DB: postgres (bundled pod, like the ECS compose) or sqlite (single file
-# on the shared volume). Postgres tunables mirror gateway/deploy/.env.example.
+# on the shared volume). Postgres tunables mirror deploy/ecs/.env.example.
 DB_BACKEND="${BIOQ_DB_BACKEND:-postgres}"
 PG_IMAGE="${BIOQ_PG_IMAGE:-postgres:18.4-trixie}"
 PG_USER="${BIOQ_PG_USER:-bioagent}"
@@ -497,20 +497,20 @@ for svc in "${SERVICES[@]}"; do
 "
 done
 
-# --- in-cluster Keycloak + gateway OIDC wiring ----------------------------
-GW_OIDC_ENV=""
-if [ "$KEYCLOAK" = 1 ]; then
-  deploy_keycloak
-  # JWKS/token via cluster DNS (pod-reachable, backchannel-dynamic); issuer pinned
-  # to the frontend host URL (what browser/bioq see). OIDC discovery for the SSO
-  # code flow also goes via cluster DNS → authorize URL comes back as localhost.
-  GW_OIDC_ENV="            - { name: GATEWAY_AUTH__JWT_JWKS_URL, value: ${KC_INCLUSTER}/protocol/openid-connect/certs }
-            - { name: GATEWAY_AUTH__JWT_ISSUER, value: ${KC_ISSUER_FRONTEND} }
-            - { name: GATEWAY_AUTH__JWT_AUDIENCE, value: gateway-server }
-            - { name: GATEWAY_AUTH__OIDC_ISSUER, value: ${KC_INCLUSTER} }
-            - { name: GATEWAY_AUTH__OIDC_CLIENT_ID, value: bioq-gateway }
-            - { name: GATEWAY_AUTH__OIDC_CLIENT_SECRET, value: bioq-gateway-secret }
-            - { name: GATEWAY_SESSION_SECRET, value: bioq-local-session-secret }
+# --- in-cluster Keycloak ---------------------------------------------------
+# OIDC topology (JWKS/issuer/client-id) lives in deploy/config/gateway.openfaas.env
+# → the gateway-config ConfigMap (created below). Only the dev secrets + DB URL go
+# in the gateway-secrets Secret. When Keycloak is off, clear JWT so it's disabled.
+[ "$KEYCLOAK" = 1 ] && deploy_keycloak
+
+# Per-run env overrides (win over the ConfigMap/Secret via envFrom): the Makefile
+# BYPASS_VPC / VPC_ACCOUNT_ID dev shortcuts, and (no-IdP) JWT disable.
+GW_ENV_OVERRIDES="            - { name: GATEWAY_AUTH__BYPASS_VPC, value: \"$BYPASS_VPC\" }
+            - { name: GATEWAY_AUTH__VPC_ACCOUNT_ID, value: \"$VPC_ACCOUNT_ID\" }
+"
+if [ "$KEYCLOAK" != 1 ]; then
+  GW_ENV_OVERRIDES+="            - { name: GATEWAY_AUTH__JWT_JWKS_URL, value: \"\" }
+            - { name: GATEWAY_AUTH__OIDC_ISSUER, value: \"\" }
 "
 fi
 
@@ -545,19 +545,13 @@ $GW_INIT      containers:
           image: gateway:latest
           imagePullPolicy: IfNotPresent
           ports: [ { containerPort: 9000 } ]
+          # Non-secret topology from the gateway-config ConfigMap; secrets + DB URL
+          # from the gateway-secrets Secret (last → wins); then per-run env: overrides.
+          envFrom:
+            - { configMapRef: { name: gateway-config } }
+            - { secretRef: { name: gateway-secrets } }
           env:
-            - { name: GATEWAY_DISPATCH_BACKEND, value: openfaas }
-            - { name: GATEWAY_OPENFAAS_GATEWAY_URL, value: http://gateway.openfaas.svc.cluster.local:8080 }
-            - { name: GATEWAY_STORAGE_BACKEND, value: file }
-            - { name: GATEWAY_FILE_BASE_DIR, value: /shared }
-            - { name: GATEWAY_REGISTRY_PATH, value: /etc/bioq/services.yaml }
-            - { name: GATEWAY_DB_URL, value: "$DB_URL" }
-            - { name: GATEWAY_JOBS_BASE_DIR, value: /shared/gw_jobs }
-            # Local break-glass: localhost/VPC hosts bypass auth. Non-VPC Host
-            # still requires an OIDC JWT (so SSO/token flows are testable).
-            - { name: GATEWAY_AUTH__BYPASS_VPC, value: "$BYPASS_VPC" }
-            - { name: GATEWAY_AUTH__VPC_ACCOUNT_ID, value: "$VPC_ACCOUNT_ID" }
-$GW_OIDC_ENV          volumeMounts:
+$GW_ENV_OVERRIDES          volumeMounts:
             - { name: shared, mountPath: /shared }
             - { name: registry, mountPath: /etc/bioq }
           readinessProbe: { httpGet: { path: /healthz, port: 9000 }, initialDelaySeconds: 5, periodSeconds: 5 }
@@ -569,6 +563,33 @@ spec:
   selector: { app: bioq-gateway }
   ports: [ { name: http, port: 9000, targetPort: 9000 } ]
 EOF
+# Layered config as k8s objects: non-secret ConfigMap from the checked-in
+# deploy/config files; Secret from the gitignored .env.local (dev defaults if
+# absent) + the computed DB URL. Each object is built from ONE merged env-file —
+# older kubectl rejects multiple --from-env-file and mixing it with --from-literal.
+CONFIG_DIR="$REPO_ROOT/deploy/config"
+OF_DIR="$REPO_ROOT/deploy/openfaas"
+kubectl create namespace bioq >/dev/null 2>&1 || true
+
+CONF_ENV="$MANIFEST_DIR/gateway-config.env"
+cat "$CONFIG_DIR/gateway.common.env" "$CONFIG_DIR/gateway.openfaas.env" > "$CONF_ENV"
+kubectl create configmap gateway-config -n bioq --from-env-file="$CONF_ENV" \
+  --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+
+# Secret env-file (contains the DB pw) — kept under the local workdir only.
+SEC_ENV="$MANIFEST_DIR/gateway-secrets.env"
+if [ -f "$OF_DIR/.env.local" ]; then
+  cp "$OF_DIR/.env.local" "$SEC_ENV"
+else
+  # Zero-config dev defaults (match the committed realm); real secrets go in
+  # deploy/openfaas/.env.local (see .env.local.example).
+  printf 'GATEWAY_AUTH__OIDC_CLIENT_SECRET=bioq-gateway-secret\nGATEWAY_SESSION_SECRET=bioq-local-session-secret\n' > "$SEC_ENV"
+fi
+# DB URL carries the pw → keep it in the Secret (skip if .env.local set its own).
+grep -q '^GATEWAY_DB_URL=' "$SEC_ENV" || printf 'GATEWAY_DB_URL=%s\n' "$DB_URL" >> "$SEC_ENV"
+chmod 600 "$SEC_ENV"
+kubectl create secret generic gateway-secrets -n bioq --from-env-file="$SEC_ENV" \
+  --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 kubectl apply -f "$MANIFEST_DIR/gateway.yaml" >/dev/null
 # ConfigMap change doesn't restart the pod; force a fresh rollout so the registry + image update.
 kubectl -n bioq rollout restart deploy/bioq-gateway >/dev/null 2>&1 || true

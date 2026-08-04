@@ -50,7 +50,10 @@ services:
         condition: service_healthy
     ports:
       - "${GATEWAY_PORT:-9000}:9000"
+    # Layered config: non-secret topology (checked in) then secrets (.env, wins).
     env_file:
+      - ../config/gateway.common.env
+      - ../config/gateway.ecs.env
       - .env
     environment:
       # Point the gateway at the bundled postgres by default; setting

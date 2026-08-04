@@ -16,7 +16,7 @@ AI 药物研发（AIDD）算法服务舰队 + 共享服务框架。每个 `servi
 ```
 framework/             — 共享服务框架（库，非服务，无 Dockerfile），PyPI 分发名 bioq-service-framework，
 │                        import 名 bioq_service（JobAdapter / SubprocessRunner / CLIEndpoint / uris 等）
-gateway/               — 控制面：认证 / presign / FC 异步调度（ECS，docker-compose 部署，见 gateway/deploy/）
+gateway/               — 控制面：认证 / 上传协商 / FC 异步调度（ECS，docker-compose 部署，见 deploy/ecs/）
 edge/                  — 非 worker 边缘组件
 ├── jwt/               — JWT 签发辅助
 └── protein-design-mcp/— MCP 协议适配器

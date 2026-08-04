@@ -38,8 +38,10 @@ SIF_DIR ?= sif
 BIOQ_WORKDIR ?= $(HOME)/.cache/bioq-local
 BIOQ_API_KEY ?= bioq-local-secret
 BIOQ_GATEWAY_PORT ?= 9000
-# Auth knobs for local-up: BYPASS_VPC=false forces OIDC JWT (jobs run under the
-# token's account instead of the synthetic VPC_ACCOUNT_ID).
+# Ad-hoc auth overrides for local-up (applied as pod env: patches, win over the
+# gateway-config ConfigMap). Durable non-secret config lives in deploy/config/
+# gateway.openfaas.env; secrets in deploy/openfaas/.env.local. BYPASS_VPC=false
+# forces OIDC JWT (jobs run under the token's account, not VPC_ACCOUNT_ID).
 BYPASS_VPC ?= true
 VPC_ACCOUNT_ID ?= internal_vpc
 export BIOQ_WORKDIR BIOQ_API_KEY BIOQ_GATEWAY_PORT BYPASS_VPC VPC_ACCOUNT_ID

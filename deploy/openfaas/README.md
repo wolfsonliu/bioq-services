@@ -48,7 +48,7 @@ Key env overrides: `BIOQ_CLUSTER`, `BIOQ_WORKDIR`, `BIOQ_API_KEY`,
 `BIOQ_DB_BACKEND` (postgres|sqlite), `BIOQ_MODELS_DIR`, `BIOQ_GPU` (0|1).
 
 **Gateway DB:** defaults to a bundled **PostgreSQL** pod (`bioq-postgres` in the
-`bioq` namespace), mirroring the ECS `gateway/deploy/docker-compose.yml` default;
+`bioq` namespace), mirroring the ECS `deploy/ecs/docker-compose.yml` default;
 its data persists on the shared hostPath (`$BIOQ_WORKDIR/shared/pgdata`) across a
 non-purge `local-down`. Pass `BIOQ_DB_BACKEND=sqlite` for the old single-file DB
 (`$BIOQ_WORKDIR/shared/gateway.db`) instead. The postgres image is pulled via the
