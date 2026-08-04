@@ -38,7 +38,11 @@ SIF_DIR ?= sif
 BIOQ_WORKDIR ?= $(HOME)/.cache/bioq-local
 BIOQ_API_KEY ?= bioq-local-secret
 BIOQ_GATEWAY_PORT ?= 9000
-export BIOQ_WORKDIR BIOQ_API_KEY BIOQ_GATEWAY_PORT
+# Auth knobs for local-up: BYPASS_VPC=false forces OIDC JWT (jobs run under the
+# token's account instead of the synthetic VPC_ACCOUNT_ID).
+BYPASS_VPC ?= true
+VPC_ACCOUNT_ID ?= internal_vpc
+export BIOQ_WORKDIR BIOQ_API_KEY BIOQ_GATEWAY_PORT BYPASS_VPC VPC_ACCOUNT_ID
 # LOCAL_SERVICES: services to start (space-separated). LOCAL_SVC: which service's
 # logs `make local-logs` tails (use "gateway" for the bioq gateway itself).
 LOCAL_SERVICES ?= dockq-server
@@ -88,6 +92,7 @@ help:
 	@echo "Local dev (kind + OpenFaaS):"
 	@echo "  make local-up                Start local deploy (LOCAL_SERVICES=\"$(LOCAL_SERVICES)\")"
 	@echo "  make local-up LOCAL_SERVICES=\"dockq-server plip-server\"   Pick services"
+	@echo "  make local-up BYPASS_VPC=false   Require OIDC JWT (jobs run under the token account)"
 	@echo "  make local-status            Show local pods + services"
 	@echo "  make local-logs [LOCAL_SVC=..]  Tail logs (LOCAL_SVC=gateway for the gateway)"
 	@echo "  make local-test              Run the dockq functional test vs the local deploy"

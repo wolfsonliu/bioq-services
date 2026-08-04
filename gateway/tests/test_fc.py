@@ -84,7 +84,7 @@ class TestSmoke:
 
     def test_openapi_registers_v1(self, client):
         paths = client.get("/openapi.json").json()["paths"]
-        for p in ("/v1/services", "/v1/run/{svc}/{endpoint}", "/v1/uploads/presign"):
+        for p in ("/v1/services", "/v1/run/{svc}/{endpoint}", "/v1/uploads/prepare"):
             assert p in paths, f"missing {p}"
 
 
@@ -145,33 +145,33 @@ class TestDiscovery:
 
 @pytest.mark.fc
 @_needs
-class TestPresign:
-    def test_presign_mint(self, client):
+class TestUploadPrepare:
+    def test_prepare_mint(self, client):
         job_id = uuid.uuid4().hex[:20]
         r = client.post(
-            "/v1/uploads/presign",
+            "/v1/uploads/prepare",
             json={"job_id": job_id, "filename": "smoke.txt", "sha256": uuid.uuid4().hex},
         )
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["exists"] is False
-        assert body["url"], "no presigned URL returned"
+        assert body["put_url"], "no presigned URL returned"
         if PRINCIPAL:
             assert f"users/{PRINCIPAL}/{job_id}/input/smoke.txt" in body["uri"]
 
-    def test_presign_upload_and_dedup(self, client):
-        """presign -> PUT to OSS -> re-presign sees the object (exists=True)."""
+    def test_prepare_upload_and_dedup(self, client):
+        """prepare -> PUT to OSS -> re-prepare sees the object (exists=True)."""
         job_id = uuid.uuid4().hex[:20]
         payload = {"job_id": job_id, "filename": "smoke.txt", "sha256": uuid.uuid4().hex}
-        first = client.post("/v1/uploads/presign", json=payload).json()
-        assert first["exists"] is False and first["url"]
+        first = client.post("/v1/uploads/prepare", json=payload).json()
+        assert first["exists"] is False and first["put_url"]
 
-        put = httpx.put(first["url"], content=b"hello-gateway", timeout=TIMEOUT)
+        put = httpx.put(first["put_url"], content=b"hello-gateway", timeout=TIMEOUT)
         assert put.status_code in (200, 201), f"OSS PUT failed: {put.status_code} {put.text!r}"
 
-        second = client.post("/v1/uploads/presign", json=payload).json()
+        second = client.post("/v1/uploads/prepare", json=payload).json()
         assert second["exists"] is True, "dedup: object should be found after upload"
-        assert second["url"] is None
+        assert second["put_url"] is None
         assert second["uri"] == first["uri"]
 
 
@@ -188,14 +188,14 @@ RUN_POLL_TIMEOUT_S = 900
 RUN_POLL_INTERVAL_S = 10
 
 
-def _upload_via_presign(client, job_id: str, filename: str, data: bytes) -> str:
+def _upload_via_prepare(client, job_id: str, filename: str, data: bytes) -> str:
     sha = hashlib.sha256(data).hexdigest()
     pre = client.post(
-        "/v1/uploads/presign",
+        "/v1/uploads/prepare",
         json={"job_id": job_id, "filename": filename, "sha256": sha},
     ).json()
     if not pre["exists"]:
-        put = httpx.put(pre["url"], content=data, timeout=TIMEOUT)
+        put = httpx.put(pre["put_url"], content=data, timeout=TIMEOUT)
         assert put.status_code in (200, 201), f"OSS PUT failed: {put.status_code} {put.text!r}"
     return pre["uri"]
 
@@ -332,7 +332,7 @@ class TestEndToEndProteinMPNN:
 
     def test_design_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        pdb_uri = _upload_via_presign(client, job_id, "5L33.pdb", _PDB.read_bytes())
+        pdb_uri = _upload_via_prepare(client, job_id, "5L33.pdb", _PDB.read_bytes())
 
         r = client.post(
             "/v1/run/proteinmpnn-server/design",
@@ -371,7 +371,7 @@ class TestEndToEndProteinMPNN:
     def test_score_end_to_end(self, client):
         """Score-only path: writes per-position scores as score_only .npz."""
         job_id = uuid.uuid4().hex[:20]
-        pdb_uri = _upload_via_presign(client, job_id, "5L33.pdb", _PDB.read_bytes())
+        pdb_uri = _upload_via_prepare(client, job_id, "5L33.pdb", _PDB.read_bytes())
         content = _run_poll_zip(
             client, svc="proteinmpnn-server", endpoint="score", job_id=job_id,
             body={"pdb_uri": pdb_uri, "name": "gw_score", "num_seq_per_target": 2},
@@ -383,7 +383,7 @@ class TestEndToEndProteinMPNN:
     def test_probs_end_to_end(self, client):
         """Conditional probability path: writes conditional_probs_only .npz."""
         job_id = uuid.uuid4().hex[:20]
-        pdb_uri = _upload_via_presign(client, job_id, "5L33.pdb", _PDB.read_bytes())
+        pdb_uri = _upload_via_prepare(client, job_id, "5L33.pdb", _PDB.read_bytes())
         content = _run_poll_zip(
             client, svc="proteinmpnn-server", endpoint="probs", job_id=job_id,
             body={"pdb_uri": pdb_uri, "name": "gw_probs", "kind": "conditional"},
@@ -438,7 +438,7 @@ class TestEndToEndAlphaFold:
 
     def test_fold_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        fasta_uri = _upload_via_presign(client, job_id, "input.fasta", _AF_FASTA)
+        fasta_uri = _upload_via_prepare(client, job_id, "input.fasta", _AF_FASTA)
 
         r = client.post(
             "/v1/run/alphafold-server/fold",
@@ -480,7 +480,7 @@ class TestEndToEndAlphaFold:
         """Multimer preset over a small heterodimer. Requires the uniprot.fasta
         Jackhmmer DB on NAS (extra paired-MSA pass monomer presets skip)."""
         job_id = uuid.uuid4().hex[:20]
-        fasta_uri = _upload_via_presign(client, job_id, "input.fasta", _AF_MULTIMER_FASTA)
+        fasta_uri = _upload_via_prepare(client, job_id, "input.fasta", _AF_MULTIMER_FASTA)
         _run_poll_download(
             client, svc="alphafold-server", endpoint="fold", job_id=job_id,
             body={
@@ -595,7 +595,7 @@ class TestEndToEndRFdiffusion:
 
     def test_generate_motif_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        input_uri = _upload_via_presign(
+        input_uri = _upload_via_prepare(
             client, job_id, "5TPN.pdb", _fixture("rfdiffusion-server", "5TPN.pdb")
         )
         _run_poll_download(
@@ -610,7 +610,7 @@ class TestEndToEndRFdiffusion:
 
     def test_generate_binder_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        input_uri = _upload_via_presign(
+        input_uri = _upload_via_prepare(
             client, job_id, "insulin_target.pdb",
             _fixture("rfdiffusion-server", "insulin_target.pdb"),
         )
@@ -663,7 +663,7 @@ class TestEndToEndRFdiffusion:
 class TestEndToEndRFdiffusion2:
     def test_generate_active_site_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        input_uri = _upload_via_presign(
+        input_uri = _upload_via_prepare(
             client, job_id, "M0584_1ldm.pdb",
             _fixture("rfdiffusion2-server", "M0584_1ldm.pdb"),
         )
@@ -684,7 +684,7 @@ class TestEndToEndRFdiffusion2:
 
     def test_generate_small_molecule_binder_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        input_uri = _upload_via_presign(
+        input_uri = _upload_via_prepare(
             client, job_id, "trimmed_ec2_M0151_NO_ORI_zero_com0.pdb",
             _fixture("rfdiffusion2-server", "trimmed_ec2_M0151_NO_ORI_zero_com0.pdb"),
         )
@@ -703,7 +703,7 @@ class TestEndToEndRFdiffusion2:
     def test_generate_custom_end_to_end(self, client):
         """Freeform endpoint — active-site via raw contigs + extra_overrides."""
         job_id = uuid.uuid4().hex[:20]
-        input_uri = _upload_via_presign(
+        input_uri = _upload_via_prepare(
             client, job_id, "M0584_1ldm.pdb",
             _fixture("rfdiffusion2-server", "M0584_1ldm.pdb"),
         )
@@ -745,10 +745,10 @@ class TestEndToEndRFantibody:
     def _rfdiffusion_qv(self, client) -> bytes:
         """Run stage 1 and return the 1_rfdiffusion.qv bytes."""
         job_id = uuid.uuid4().hex[:20]
-        target_uri = _upload_via_presign(
+        target_uri = _upload_via_prepare(
             client, job_id, "rsv_site3.pdb", _fixture("rfantibody-server", "rsv_site3.pdb")
         )
-        framework_uri = _upload_via_presign(
+        framework_uri = _upload_via_prepare(
             client, job_id, "hu-4D5-8_Fv.pdb", _fixture("rfantibody-server", "hu-4D5-8_Fv.pdb")
         )
         content = _run_poll_zip(
@@ -765,10 +765,10 @@ class TestEndToEndRFantibody:
 
     def test_rfdiffusion_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        target_uri = _upload_via_presign(
+        target_uri = _upload_via_prepare(
             client, job_id, "rsv_site3.pdb", _fixture("rfantibody-server", "rsv_site3.pdb")
         )
-        framework_uri = _upload_via_presign(
+        framework_uri = _upload_via_prepare(
             client, job_id, "hu-4D5-8_Fv.pdb", _fixture("rfantibody-server", "hu-4D5-8_Fv.pdb")
         )
         _run_poll_download(
@@ -788,7 +788,7 @@ class TestEndToEndRFantibody:
 
         # stage 2: proteinmpnn (1_rfdiffusion.qv -> 2_proteinmpnn.qv)
         mpnn_job = uuid.uuid4().hex[:20]
-        mpnn_input_uri = _upload_via_presign(client, mpnn_job, "1_rfdiffusion.qv", rfd_qv)
+        mpnn_input_uri = _upload_via_prepare(client, mpnn_job, "1_rfdiffusion.qv", rfd_qv)
         mpnn_zip = _run_poll_zip(
             client, svc="rfantibody-server", endpoint="proteinmpnn", job_id=mpnn_job,
             body={"input_uri": mpnn_input_uri, "seqs_per_struct": 1, "deterministic": True},
@@ -798,7 +798,7 @@ class TestEndToEndRFantibody:
 
         # stage 3: rf2 (2_proteinmpnn.qv -> 3_rf2.qv)
         rf2_job = uuid.uuid4().hex[:20]
-        rf2_input_uri = _upload_via_presign(client, rf2_job, "2_proteinmpnn.qv", mpnn_qv)
+        rf2_input_uri = _upload_via_prepare(client, rf2_job, "2_proteinmpnn.qv", mpnn_qv)
         _run_poll_download(
             client, svc="rfantibody-server", endpoint="rf2", job_id=rf2_job,
             body={"input_uri": rf2_input_uri, "num_recycles": 2},
@@ -818,7 +818,7 @@ class TestEndToEndPPIflow:
 
     def test_sample_binder_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        target_uri = _upload_via_presign(
+        target_uri = _upload_via_prepare(
             client, job_id, "1IJZ_IL13.pdb", _fixture("ppiflow-server", "1IJZ_IL13.pdb")
         )
         _run_poll_download(
@@ -834,10 +834,10 @@ class TestEndToEndPPIflow:
 
     def test_sample_antibody_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        antigen_uri = _upload_via_presign(
+        antigen_uri = _upload_via_prepare(
             client, job_id, "1IJZ_IL13.pdb", _fixture("ppiflow-server", "1IJZ_IL13.pdb")
         )
-        framework_uri = _upload_via_presign(
+        framework_uri = _upload_via_prepare(
             client, job_id, "6nou_scfv_framework.pdb",
             _fixture("ppiflow-server", "6nou_scfv_framework.pdb"),
         )
@@ -855,10 +855,10 @@ class TestEndToEndPPIflow:
 
     def test_sample_nanobody_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        antigen_uri = _upload_via_presign(
+        antigen_uri = _upload_via_prepare(
             client, job_id, "1IJZ_IL13.pdb", _fixture("ppiflow-server", "1IJZ_IL13.pdb")
         )
-        framework_uri = _upload_via_presign(
+        framework_uri = _upload_via_prepare(
             client, job_id, "7eow_nanobody_framework.pdb",
             _fixture("ppiflow-server", "7eow_nanobody_framework.pdb"),
         )
@@ -888,10 +888,10 @@ class TestEndToEndPPIflow:
 class TestEndToEndIgGM:
     def test_design_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        fasta_uri = _upload_via_presign(
+        fasta_uri = _upload_via_prepare(
             client, job_id, "ab_CDR_H3.fasta", _fixture("iggm-server", "ab_CDR_H3.fasta")
         )
-        antigen_uri = _upload_via_presign(
+        antigen_uri = _upload_via_prepare(
             client, job_id, "antigen.pdb", _fixture("iggm-server", "antigen.pdb")
         )
         _run_poll_download(
@@ -906,13 +906,13 @@ class TestEndToEndIgGM:
     def test_epitope_end_to_end(self, client):
         """Epitope prediction over an antibody-antigen complex -> epitope.json."""
         job_id = uuid.uuid4().hex[:20]
-        fasta_uri = _upload_via_presign(
+        fasta_uri = _upload_via_prepare(
             client, job_id, "complex.fasta", _fixture("iggm-server", "complex.fasta")
         )
         # complex.fasta chain A matches complex.pdb (not antigen.pdb, whose chain A
         # is a different RBD variant); cal_ppi loads the receptor chain with the
         # fasta sequence, so the structure and fasta must be the same complex.
-        antigen_uri = _upload_via_presign(
+        antigen_uri = _upload_via_prepare(
             client, job_id, "complex.pdb", _fixture("iggm-server", "complex.pdb")
         )
         content = _run_poll_zip(
@@ -946,10 +946,10 @@ class TestEndToEndDockQ:
         """Single score; assert the DockQ JSON in results.zip carries a valid
         headline score + best_result with DockQ in [0, 1]."""
         job_id = uuid.uuid4().hex[:20]
-        model_uri = _upload_via_presign(
+        model_uri = _upload_via_prepare(
             client, job_id, "model.pdb", _fixture("dockq-server", "model.pdb")
         )
-        native_uri = _upload_via_presign(
+        native_uri = _upload_via_prepare(
             client, job_id, "native.pdb", _fixture("dockq-server", "native.pdb")
         )
         content = _run_poll_zip(
@@ -967,10 +967,10 @@ class TestEndToEndDockQ:
     def test_score_no_align_end_to_end(self, client):
         """--no_align flag path — trusts residue numbering, still produces JSON."""
         job_id = uuid.uuid4().hex[:20]
-        model_uri = _upload_via_presign(
+        model_uri = _upload_via_prepare(
             client, job_id, "model.pdb", _fixture("dockq-server", "model.pdb")
         )
-        native_uri = _upload_via_presign(
+        native_uri = _upload_via_prepare(
             client, job_id, "native.pdb", _fixture("dockq-server", "native.pdb")
         )
         _run_poll_download(
@@ -993,14 +993,14 @@ class TestEndToEndDockQ:
         with distinct scores, so the descending-sort assertion is meaningful.
         """
         job_id = uuid.uuid4().hex[:20]
-        native_uri = _upload_via_presign(
+        native_uri = _upload_via_prepare(
             client, job_id, "native.pdb", _fixture("dockq-server", "native.pdb")
         )
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.writestr("model.pdb", _fixture("dockq-server", "model.pdb"))
             zf.writestr("self.pdb", _fixture("dockq-server", "native.pdb"))
-        models_zip_uri = _upload_via_presign(client, job_id, "models.zip", buf.getvalue())
+        models_zip_uri = _upload_via_prepare(client, job_id, "models.zip", buf.getvalue())
         content = _run_poll_zip(
             client, svc="dockq-server", endpoint="score_batch", job_id=job_id,
             body={
@@ -1026,7 +1026,7 @@ class TestEndToEndDockQ:
 class TestEndToEndDeepRankAb:
     def test_score_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        input_pdb_uri = _upload_via_presign(
+        input_pdb_uri = _upload_via_prepare(
             client, job_id, "test.pdb", _fixture("deeprank-ab-server", "test.pdb")
         )
         _run_poll_download(
@@ -1044,7 +1044,7 @@ class TestEndToEndDeepRankAb:
 class TestEndToEndPlip:
     def test_profile_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        input_pdb_uri = _upload_via_presign(
+        input_pdb_uri = _upload_via_prepare(
             client, job_id, "1vsn.pdb", _fixture("plip-server", "1vsn.pdb")
         )
         content = _run_poll_zip(
@@ -1067,10 +1067,10 @@ class TestEndToEndPlip:
 class TestEndToEndDiffDock:
     def test_dock_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        protein_uri = _upload_via_presign(
+        protein_uri = _upload_via_prepare(
             client, job_id, "protein.pdb", _fixture("diffdock-server", "1a0q_protein.pdb")
         )
-        ligand_uri = _upload_via_presign(
+        ligand_uri = _upload_via_prepare(
             client, job_id, "ligand.sdf", _fixture("diffdock-server", "1a0q_ligand.sdf")
         )
         _run_poll_download(
@@ -1089,10 +1089,10 @@ class TestEndToEndDiffDock:
 class TestEndToEndDiffDockPP:
     def test_dock_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        receptor_uri = _upload_via_presign(
+        receptor_uri = _upload_via_prepare(
             client, job_id, "receptor.pdb", _fixture("diffdock-pp-server", "1a2k_receptor.pdb")
         )
-        ligand_uri = _upload_via_presign(
+        ligand_uri = _upload_via_prepare(
             client, job_id, "ligand.pdb", _fixture("diffdock-pp-server", "1a2k_ligand.pdb")
         )
         _run_poll_download(
@@ -1110,10 +1110,10 @@ class TestEndToEndDiffDockPP:
 class TestEndToEndOpenBPMD:
     def test_score_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        structure_uri = _upload_via_presign(
+        structure_uri = _upload_via_prepare(
             client, job_id, "solvated.rst7", _fixture("openbpmd-server", "solvated.rst7")
         )
-        parameters_uri = _upload_via_presign(
+        parameters_uri = _upload_via_prepare(
             client, job_id, "solvated.prm7", _fixture("openbpmd-server", "solvated.prm7")
         )
         _run_poll_download(
@@ -1135,11 +1135,11 @@ class TestEndToEndDiffusionHopping:
 
     def _run_variant(self, client, variant: str) -> None:
         job_id = uuid.uuid4().hex[:20]
-        protein_uri = _upload_via_presign(
+        protein_uri = _upload_via_prepare(
             client, job_id, "1a0q_protein.pdb",
             _fixture("diffusion-hopping-server", "1a0q_protein.pdb"),
         )
-        reference_ligand_uri = _upload_via_presign(
+        reference_ligand_uri = _upload_via_prepare(
             client, job_id, "1a0q_ligand.sdf",
             _fixture("diffusion-hopping-server", "1a0q_ligand.sdf"),
         )
@@ -1164,10 +1164,10 @@ class TestEndToEndDiffusionHopping:
 class TestEndToEndDrugHive:
     def test_generate_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        target_uri = _upload_via_presign(
+        target_uri = _upload_via_prepare(
             client, job_id, "5d3h_pocket.pdb", _fixture("drughive-server", "5d3h_pocket.pdb")
         )
-        ligand_uri = _upload_via_presign(
+        ligand_uri = _upload_via_prepare(
             client, job_id, "5d3h_ligand.sdf", _fixture("drughive-server", "5d3h_ligand.sdf")
         )
         _run_poll_download(
@@ -1182,10 +1182,10 @@ class TestEndToEndDrugHive:
     def test_generate_spatial_end_to_end(self, client):
         """Scaffold hopping via a SMARTS substructure pattern (no extra file)."""
         job_id = uuid.uuid4().hex[:20]
-        target_uri = _upload_via_presign(
+        target_uri = _upload_via_prepare(
             client, job_id, "5d3h_pocket.pdb", _fixture("drughive-server", "5d3h_pocket.pdb")
         )
-        ligand_uri = _upload_via_presign(
+        ligand_uri = _upload_via_prepare(
             client, job_id, "5d3h_ligand.sdf", _fixture("drughive-server", "5d3h_ligand.sdf")
         )
         _run_poll_download(
@@ -1202,13 +1202,13 @@ class TestEndToEndDrugHive:
     def test_optimize_end_to_end(self, client):
         """Multi-cycle QVina2 optimization; needs the target .pdbqt for docking."""
         job_id = uuid.uuid4().hex[:20]
-        target_uri = _upload_via_presign(
+        target_uri = _upload_via_prepare(
             client, job_id, "5d3h_pocket.pdb", _fixture("drughive-server", "5d3h_pocket.pdb")
         )
-        ligand_uri = _upload_via_presign(
+        ligand_uri = _upload_via_prepare(
             client, job_id, "5d3h_ligand.sdf", _fixture("drughive-server", "5d3h_ligand.sdf")
         )
-        target_pdbqt_uri = _upload_via_presign(
+        target_pdbqt_uri = _upload_via_prepare(
             client, job_id, "5d3h_pocket.pdbqt", _fixture("drughive-server", "5d3h_pocket.pdbqt")
         )
         _run_poll_download(
@@ -1230,11 +1230,11 @@ class TestEndToEndDrugHive:
 class TestEndToEndPocketXMol:
     def test_dock_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        protein_uri = _upload_via_presign(
+        protein_uri = _upload_via_prepare(
             client, job_id, "8C7Y_TXV_protein.pdb",
             _fixture("pocketxmol-server", "8C7Y_TXV_protein.pdb"),
         )
-        ligand_uri = _upload_via_presign(
+        ligand_uri = _upload_via_prepare(
             client, job_id, "8C7Y_TXV_ligand_start_conf.sdf",
             _fixture("pocketxmol-server", "8C7Y_TXV_ligand_start_conf.sdf"),
         )
@@ -1251,7 +1251,7 @@ class TestEndToEndPocketXMol:
     def test_sbdd_end_to_end(self, client):
         """Structure-based de novo design into a pocket (protein only)."""
         job_id = uuid.uuid4().hex[:20]
-        protein_uri = _upload_via_presign(
+        protein_uri = _upload_via_prepare(
             client, job_id, "2ar9_A.pdb", _fixture("pocketxmol-server", "2ar9_A.pdb")
         )
         _run_poll_download(
@@ -1267,10 +1267,10 @@ class TestEndToEndPocketXMol:
     def test_linking_end_to_end(self, client):
         """Fragment growing/linking from an input fragment SDF."""
         job_id = uuid.uuid4().hex[:20]
-        protein_uri = _upload_via_presign(
+        protein_uri = _upload_via_prepare(
             client, job_id, "2ar9_A.pdb", _fixture("pocketxmol-server", "2ar9_A.pdb")
         )
-        input_ligand_uri = _upload_via_presign(
+        input_ligand_uri = _upload_via_prepare(
             client, job_id, "fragment.sdf", _fixture("pocketxmol-server", "fragment.sdf")
         )
         _run_poll_download(
@@ -1286,10 +1286,10 @@ class TestEndToEndPocketXMol:
     def test_pepdesign_end_to_end(self, client):
         """De novo linear peptide design targeting a pocket."""
         job_id = uuid.uuid4().hex[:20]
-        protein_uri = _upload_via_presign(
+        protein_uri = _upload_via_prepare(
             client, job_id, "3bik_A.pdb", _fixture("pocketxmol-server", "3bik_A.pdb")
         )
-        ref_ligand_uri = _upload_via_presign(
+        ref_ligand_uri = _upload_via_prepare(
             client, job_id, "3bik_A_pocket_coord.sdf",
             _fixture("pocketxmol-server", "3bik_A_pocket_coord.sdf"),
         )
@@ -1407,7 +1407,7 @@ class TestEndToEndBoltzGen:
         """protein-anything design; assert results.zip carries a structure AND
         the analysis metrics CSV (not just any single output)."""
         job_id = uuid.uuid4().hex[:20]
-        design_yaml_uri = _upload_via_presign(
+        design_yaml_uri = _upload_via_prepare(
             client, job_id, "design_spec.yaml", _fixture("boltzgen-server", "fc_design.yaml")
         )
         content = _run_poll_zip(
@@ -1426,7 +1426,7 @@ class TestEndToEndBoltzGen:
         """peptide-anything protocol — a distinct filter/analysis path (auto-Cys
         filtering, stricter RMSD) over a short designed peptide."""
         job_id = uuid.uuid4().hex[:20]
-        design_yaml_uri = _upload_via_presign(
+        design_yaml_uri = _upload_via_prepare(
             client, job_id, "design_spec.yaml", _fixture("boltzgen-server", "fc_peptide.yaml")
         )
         _run_poll_download(
@@ -1445,13 +1445,13 @@ class TestEndToEndBoltzGen:
         passed via `ref_files_zip_uri` since the gateway can't upload ref_files.
         """
         job_id = uuid.uuid4().hex[:20]
-        design_yaml_uri = _upload_via_presign(
+        design_yaml_uri = _upload_via_prepare(
             client, job_id, "design_spec.yaml", _fixture("boltzgen-server", "1brs.yaml")
         )
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.writestr("1brs.cif", _fixture("boltzgen-server", "1brs.cif"))
-        ref_zip_uri = _upload_via_presign(client, job_id, "ref_files.zip", buf.getvalue())
+        ref_zip_uri = _upload_via_prepare(client, job_id, "ref_files.zip", buf.getvalue())
         _run_poll_download(
             client, svc="boltzgen-server", endpoint="inverse_fold", job_id=job_id,
             body={
@@ -1469,7 +1469,7 @@ class TestEndToEndBoltzGen:
 class TestEndToEndProMera:
     def test_cofold_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        input_schema_uri = _upload_via_presign(
+        input_schema_uri = _upload_via_prepare(
             client, job_id, "cofold.json", _fixture("promera-server", "test_target.json")
         )
         _run_poll_download(
@@ -1484,7 +1484,7 @@ class TestEndToEndProMera:
     def test_design_end_to_end(self, client):
         """Minibinder backbone design -> backbone.cif."""
         job_id = uuid.uuid4().hex[:20]
-        target_schema_uri = _upload_via_presign(
+        target_schema_uri = _upload_via_prepare(
             client, job_id, "target.json", _fixture("promera-server", "test_target.json")
         )
         _run_poll_download(
@@ -1549,7 +1549,7 @@ class TestEndToEndGenie3:
 
     def test_generate_motif_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        dataset_uri = _upload_via_presign(
+        dataset_uri = _upload_via_prepare(
             client, job_id, "motif.zip", _genie3_motif_zip()
         )
         _run_poll_download(
@@ -1561,7 +1561,7 @@ class TestEndToEndGenie3:
 
     def test_generate_binder_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        dataset_uri = _upload_via_presign(
+        dataset_uri = _upload_via_prepare(
             client, job_id, "binder.zip", _genie3_binder_zip()
         )
         _run_poll_download(
@@ -1625,7 +1625,7 @@ class TestEndToEndESMFold2:
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.writestr("A.a3m", f">A\n{_ESMFOLD2_SEQ}\n")
-        msa_zip_uri = _upload_via_presign(client, job_id, "msa.zip", buf.getvalue())
+        msa_zip_uri = _upload_via_prepare(client, job_id, "msa.zip", buf.getvalue())
         _run_poll_download(
             client, svc="esmfold2-server", endpoint="fold", job_id=job_id,
             body={
@@ -1754,7 +1754,7 @@ class TestEndToEndReinvent:
 
     def test_scoring_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        smiles_uri = _upload_via_presign(
+        smiles_uri = _upload_via_prepare(
             client, job_id, "compounds.smi",
             b"CCO\nc1ccccc1\nCC(=O)O\nCC(=O)Oc1ccccc1C(=O)O\n",
         )
@@ -1772,11 +1772,11 @@ class TestEndToEndReinvent:
         uppercase to match).
         """
         job_id = uuid.uuid4().hex[:20]
-        peptide_uri = _upload_via_presign(
+        peptide_uri = _upload_via_prepare(
             client, job_id, "peptides.smi",
             b"N[C@@H](CS)C(=O)|?|N[C@@H](C)C(=O)|?|N[C@@H](C)C(=O)O\n",
         )
-        library_uri = _upload_via_presign(
+        library_uri = _upload_via_prepare(
             client, job_id, "amino_acids.csv",
             b"SMILES,NAME\n"
             b"N[C@@H](Cn1c(S)nnc1-c1ccc(F)cc1)C(=O)O,ZN9\n"
@@ -1800,7 +1800,7 @@ class TestEndToEndReinvent:
     def test_transfer_learning_end_to_end(self, client):
         """Fine-tune the reinvent prior for 1 epoch on a tiny SMILES set."""
         job_id = uuid.uuid4().hex[:20]
-        smiles_uri = _upload_via_presign(
+        smiles_uri = _upload_via_prepare(
             client, job_id, "tl_reinvent.smi",
             b"Cc1ccc(-c2cc(C(F)(F)F)nn2-c2ccc(S(N)(=O)=O)cc2)cc1\n"
             b"O=C(Nc1ccc(Oc2nccc(-c3cccnc3)n2)cc1)c1ccc(Cl)cc1\n"
@@ -1882,7 +1882,7 @@ class TestEndToEndHaddock3:
 
     def test_restrain_bodies_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        structure_uri = _upload_via_presign(
+        structure_uri = _upload_via_prepare(
             client, job_id, "complex.pdb", _fixture("haddock3-server", "complex.pdb")
         )
         _run_poll_download(
@@ -1905,10 +1905,10 @@ class TestEndToEndLightDock:
 
     def test_dock_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        receptor_uri = _upload_via_presign(
+        receptor_uri = _upload_via_prepare(
             client, job_id, "receptor.pdb", _fixture("lightdock-server", "receptor.pdb")
         )
-        ligand_uri = _upload_via_presign(
+        ligand_uri = _upload_via_prepare(
             client, job_id, "ligand.pdb", _fixture("lightdock-server", "ligand.pdb")
         )
         _run_poll_download(
@@ -1934,7 +1934,7 @@ class TestEndToEndLASErMPNN:
 
     def test_design_end_to_end(self, client):
         job_id = uuid.uuid4().hex[:20]
-        pdb_uri = _upload_via_presign(
+        pdb_uri = _upload_via_prepare(
             client, job_id, "4jnj-1_prot.pdb", _fixture("lasermpnn-server", "4jnj-1_prot.pdb")
         )
         _run_poll_download(

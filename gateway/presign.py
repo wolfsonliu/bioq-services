@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from .models import PresignResponse
+from .models import UploadTarget
 
 
 def _oss_error_info(exc: BaseException) -> tuple[int | None, str | None]:
@@ -76,20 +76,20 @@ class Presigner:
                 return False
             raise
 
-    def presign_put(self, account_id: str, job_id: str, filename: str,
-                    sha256: str | None = None) -> PresignResponse:
+    def prepare_upload(self, account_id: str, job_id: str, filename: str,
+                       sha256: str | None = None) -> UploadTarget:
         import alibabacloud_oss_v2 as oss
         key = self.input_key(account_id, job_id, filename)
         uri = self.uri_for(key)
         if self._exists(key):
-            return PresignResponse(uri=uri, exists=True, url=None)
+            return UploadTarget(uri=uri, exists=True, put_url=None)
         result = self._client.presign(
             oss.models.PutObjectRequest(bucket=self._bucket, key=key),
             expires=timedelta(seconds=self._expiry),
         )
-        return PresignResponse(uri=uri, exists=False, url=result.url)
+        return UploadTarget(uri=uri, exists=False, put_url=result.url)
 
-    def presign_get_if_exists(self, account_id: str, job_id: str, filename: str) -> str | None:
+    def result_url_if_exists(self, account_id: str, job_id: str, filename: str) -> str | None:
         import alibabacloud_oss_v2 as oss
         key = self.output_key(account_id, job_id, filename)
         if not self._exists(key):

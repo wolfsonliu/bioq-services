@@ -22,7 +22,7 @@ from .auth.deps import AuthIdentity, require_auth
 from .db.store import GatewayDB
 from .discover import Discovery
 from .dispatchers import make_dispatcher
-from .models import JobView, PresignRequest, PresignResponse
+from .models import JobView, PrepareUploadRequest, UploadTarget
 from .oss_map import map_oss_inputs_to_mount
 from .registry import ServiceRegistry
 from .settings import GatewaySettings
@@ -181,9 +181,9 @@ def download_job(job_id: str, request: Request,
     job = _owned_job(request, job_id, ident)
     reg = request.app.state.registry
     try:
-        url = _get_storage(request).presign_get_if_exists(ident.account_id, job_id, "results.zip")
+        url = _get_storage(request).result_url_if_exists(ident.account_id, job_id, "results.zip")
     except Exception as exc:  # noqa: BLE001 — OSS not configured / down => fall back to proxy
-        # `presign_get_if_exists` returns None for a genuinely-absent object; an
+        # `result_url_if_exists` returns None for a genuinely-absent object; an
         # exception here means a real OSS problem (auth/5xx/transport). We still
         # fall back to proxying the downstream (resilience), but log it — otherwise
         # an OSS outage silently masquerades as "results just not on OSS".
@@ -246,10 +246,10 @@ def _get_storage(request: Request):
     return s
 
 
-@app.post("/v1/uploads/presign", response_model=PresignResponse)
-def presign_upload(request: Request, body: PresignRequest,
-                   ident: AuthIdentity = Depends(require_auth)) -> PresignResponse:
-    return _get_storage(request).presign_put(
+@app.post("/v1/uploads/prepare", response_model=UploadTarget)
+def prepare_upload(request: Request, body: PrepareUploadRequest,
+                   ident: AuthIdentity = Depends(require_auth)) -> UploadTarget:
+    return _get_storage(request).prepare_upload(
         ident.account_id, body.job_id, body.filename, body.sha256
     )
 

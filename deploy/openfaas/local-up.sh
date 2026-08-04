@@ -42,6 +42,11 @@ API_KEY="${BIOQ_API_KEY:-bioq-local-secret}"
 GATEWAY_PORT="${BIOQ_GATEWAY_PORT:-9000}"
 BUILD_MODE="${BIOQ_BUILD:-auto}"
 ACCOUNT="local"
+# Auth: localhost/VPC hosts bypass auth (dev break-glass). Set BYPASS_VPC=false
+# to force OIDC JWT for every request (jobs then run under the token's account).
+# VPC_ACCOUNT_ID renames the synthetic bypass account (default internal_vpc).
+BYPASS_VPC="${BYPASS_VPC:-true}"
+VPC_ACCOUNT_ID="${VPC_ACCOUNT_ID:-internal_vpc}"
 
 # Gateway DB: postgres (bundled pod, like the ECS compose) or sqlite (single file
 # on the shared volume). Postgres tunables mirror gateway/deploy/.env.example.
@@ -550,7 +555,8 @@ $GW_INIT      containers:
             - { name: GATEWAY_JOBS_BASE_DIR, value: /shared/gw_jobs }
             # Local break-glass: localhost/VPC hosts bypass auth. Non-VPC Host
             # still requires an OIDC JWT (so SSO/token flows are testable).
-            - { name: GATEWAY_AUTH__BYPASS_VPC, value: "true" }
+            - { name: GATEWAY_AUTH__BYPASS_VPC, value: "$BYPASS_VPC" }
+            - { name: GATEWAY_AUTH__VPC_ACCOUNT_ID, value: "$VPC_ACCOUNT_ID" }
 $GW_OIDC_ENV          volumeMounts:
             - { name: shared, mountPath: /shared }
             - { name: registry, mountPath: /etc/bioq }

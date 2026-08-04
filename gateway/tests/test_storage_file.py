@@ -9,29 +9,29 @@ from server.presign import Presigner
 from server.storage import FileStorage, StorageBackend, make_storage
 
 
-def test_presign_put_missing_returns_gateway_url(tmp_path):
+def test_prepare_upload_missing_returns_gateway_url(tmp_path):
     fs = FileStorage(tmp_path)
-    r = fs.presign_put("alice", "job1", "x.pdb")
+    r = fs.prepare_upload("alice", "job1", "x.pdb")
     assert r.exists is False
-    assert r.url == "/v1/files/users/alice/job1/input/x.pdb"
+    assert r.put_url == "/v1/files/users/alice/job1/input/x.pdb"
     assert r.uri == f"file://{(tmp_path / 'users/alice/job1/input/x.pdb').resolve()}"
 
 
-def test_presign_put_existing_skips(tmp_path):
+def test_prepare_upload_existing_skips(tmp_path):
     p = tmp_path / "users/alice/job1/input/x.pdb"
     p.parent.mkdir(parents=True)
     p.write_text("data")
-    r = FileStorage(tmp_path).presign_put("alice", "job1", "x.pdb")
-    assert r.exists is True and r.url is None
+    r = FileStorage(tmp_path).prepare_upload("alice", "job1", "x.pdb")
+    assert r.exists is True and r.put_url is None
 
 
-def test_presign_get_hit_and_miss(tmp_path):
+def test_result_url_hit_and_miss(tmp_path):
     fs = FileStorage(tmp_path)
-    assert fs.presign_get_if_exists("alice", "job1", "results.zip") is None
+    assert fs.result_url_if_exists("alice", "job1", "results.zip") is None
     out = tmp_path / "users/alice/job1/results.zip"
     out.parent.mkdir(parents=True)
     out.write_bytes(b"z")
-    assert fs.presign_get_if_exists("alice", "job1", "results.zip") == \
+    assert fs.result_url_if_exists("alice", "job1", "results.zip") == \
         "/v1/files/users/alice/job1/results.zip"
 
 

@@ -22,17 +22,17 @@ from typing import Protocol, runtime_checkable
 
 from fastapi import HTTPException
 
-from .models import PresignResponse
+from .models import UploadTarget
 from .presign import Presigner, build_oss_client
 
 
 @runtime_checkable
 class StorageBackend(Protocol):
-    def presign_put(self, account_id: str, job_id: str, filename: str,
-                    sha256: str | None = None) -> PresignResponse: ...
+    def prepare_upload(self, account_id: str, job_id: str, filename: str,
+                       sha256: str | None = None) -> UploadTarget: ...
 
-    def presign_get_if_exists(self, account_id: str, job_id: str,
-                              filename: str) -> str | None: ...
+    def result_url_if_exists(self, account_id: str, job_id: str,
+                             filename: str) -> str | None: ...
 
 
 class FileStorage:
@@ -58,19 +58,19 @@ class FileStorage:
             raise HTTPException(400, f"invalid file key: {key!r}")
         return p
 
-    def presign_put(self, account_id: str, job_id: str, filename: str,
-                    sha256: str | None = None) -> PresignResponse:
+    def prepare_upload(self, account_id: str, job_id: str, filename: str,
+                       sha256: str | None = None) -> UploadTarget:
         key = self._input_key(account_id, job_id, filename)
         path = self.resolve(key)
         uri = f"file://{path}"
         if path.is_file():
-            return PresignResponse(uri=uri, exists=True, url=None)
+            return UploadTarget(uri=uri, exists=True, put_url=None)
         # Gateway-relative PUT URL; the client PUTs through the gateway (same
         # origin, so auth carries over) rather than direct-to-object.
-        return PresignResponse(uri=uri, exists=False, url=f"/v1/files/{key}")
+        return UploadTarget(uri=uri, exists=False, put_url=f"/v1/files/{key}")
 
-    def presign_get_if_exists(self, account_id: str, job_id: str,
-                              filename: str) -> str | None:
+    def result_url_if_exists(self, account_id: str, job_id: str,
+                             filename: str) -> str | None:
         key = self._output_key(account_id, job_id, filename)
         if not self.resolve(key).is_file():
             return None

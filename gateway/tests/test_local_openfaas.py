@@ -151,14 +151,14 @@ def _skip_if_absent(spec: ServiceSpec) -> None:
 
 
 def _upload(client: httpx.Client, job_id: str, filename: str, data: bytes) -> str:
-    """Presign + PUT through the gateway (file backend). Returns the file:// uri."""
+    """Prepare + PUT through the gateway (file backend). Returns the file:// uri."""
     sha = hashlib.sha256(data).hexdigest()
     pre = client.post(
-        "/v1/uploads/presign",
+        "/v1/uploads/prepare",
         json={"job_id": job_id, "filename": filename, "sha256": sha},
     ).json()
     if not pre["exists"]:
-        put = client.put(pre["url"], content=data)  # relative URL -> base_url, API key carried
+        put = client.put(pre["put_url"], content=data)  # relative URL -> base_url, API key carried
         assert put.status_code in (200, 201), f"gateway PUT failed: {put.status_code} {put.text!r}"
     return pre["uri"]
 

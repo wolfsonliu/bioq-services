@@ -121,20 +121,20 @@ def test_tenant_isolation(client):
     assert c.json()["status"] == "cancelled"
 
 
-def test_presign_route(client):
+def test_prepare_upload_route(client):
     import server.app as appmod
     _seed_key(appmod, account_id="alice", secret="p-sec", key_id="gk_p")
-    from server.models import PresignResponse
+    from server.models import UploadTarget
 
     class _FakePresigner:
-        def presign_put(self, account_id, job_id, filename, sha256=None):
-            return PresignResponse(
+        def prepare_upload(self, account_id, job_id, filename, sha256=None):
+            return UploadTarget(
                 uri=f"oss://b/users/{account_id}/{job_id}/input/{filename}",
-                exists=False, url="https://oss.put/signed")
+                exists=False, put_url="https://oss.put/signed")
 
     appmod.app.state.storage = _FakePresigner()
     hdr = {"x-test-account": "alice"}
-    r = client.post("/v1/uploads/presign",
+    r = client.post("/v1/uploads/prepare",
                     json={"job_id": "job1", "filename": "x.rst7"}, headers=hdr)
     assert r.status_code == 200, r.text
     body = r.json()
@@ -158,7 +158,7 @@ def test_download_redirects_to_oss_when_present(client):
     appmod.app.state.dispatch = _Disp()
 
     class _Presigner:
-        def presign_get_if_exists(self, account_id, job_id, filename):
+        def result_url_if_exists(self, account_id, job_id, filename):
             return "https://oss.get/signed-results"
 
     appmod.app.state.storage = _Presigner()
@@ -196,7 +196,7 @@ def test_download_falls_back_to_proxy_when_not_on_oss(client):
     appmod.app.state.dispatch = _Disp()
 
     class _Presigner:
-        def presign_get_if_exists(self, account_id, job_id, filename):
+        def result_url_if_exists(self, account_id, job_id, filename):
             return None  # not on OSS => fall back to proxying the downstream
 
     appmod.app.state.storage = _Presigner()
@@ -308,10 +308,10 @@ def test_file_routes_404_on_non_file_backend(client):
     _seed_key(appmod, account_id="alice", secret="fa", key_id="gk_fa")
 
     class _NotFile:
-        def presign_put(self, *a, **k):
+        def prepare_upload(self, *a, **k):
             raise AssertionError
 
-        def presign_get_if_exists(self, *a, **k):
+        def result_url_if_exists(self, *a, **k):
             return None
 
     appmod.app.state.storage = _NotFile()

@@ -1,7 +1,8 @@
 # gateway-server
 
 Persistent API gateway (ECS) fronting the FC GPU services. Single public
-entry: auth + user/key management (SQLite) + presigned-OSS upload + async
+entry: auth + user/key management (SQLite) + storage-backed upload (OSS presign
+or gateway-proxied file) + async
 dispatch to downstream + status/download proxy. See design + plan:
 `engineering/decisions/2026-07-09-unified-service-access-cli.md`,
 `engineering/decisions/2026-07-09-gateway-server-plan.md`.
@@ -15,7 +16,7 @@ dispatch to downstream + status/download proxy. See design + plan:
 | GET | /v1/jobs/{job_id} | status |
 | GET | /v1/jobs/{job_id}/download | result zip |
 | POST | /v1/jobs/{job_id}/cancel | cancel (MVP: local mark) |
-| POST | /v1/uploads/presign | presigned OSS PUT for a large input |
+| POST | /v1/uploads/prepare | mint an upload target (OSS presigned PUT or gateway /v1/files) for an input |
 | GET | /healthz | health |
 
 ## Auth

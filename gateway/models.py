@@ -17,13 +17,19 @@ class JobView(BaseModel):
     detail: Optional[str] = None  # e.g. why a downstream status refresh failed
 
 
-class PresignRequest(BaseModel):
+class PrepareUploadRequest(BaseModel):
     job_id: str
     filename: str
     sha256: Optional[str] = None
 
 
-class PresignResponse(BaseModel):
-    uri: str                 # oss://bucket/users/<account_id>/<job_id>/input/<name>
-    exists: bool             # True => already uploaded, skip PUT
-    url: Optional[str] = None  # presigned PUT URL when exists is False
+class UploadTarget(BaseModel):
+    """Where/how to upload one input, minted by the active storage backend.
+
+    Storage-agnostic: `put_url` is an OSS presigned PUT (direct-to-object) for
+    the oss backend, or a gateway-relative /v1/files/<key> path for the file
+    backend (client PUTs back through the gateway).
+    """
+    uri: str                 # oss://<bucket>/... or file:///... — injected as <field>_uri
+    exists: bool             # True => already uploaded (sha256 dedup), skip PUT
+    put_url: Optional[str] = None  # PUT target when exists is False
