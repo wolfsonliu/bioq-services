@@ -41,7 +41,6 @@ services:
     # Layered config: shared + compose topology (checked in) then .env (optional,
     # gitignored, wins). Non-secret topology lives in ../config/gateway.*.env.
     env_file:
-      - ../config/gateway.common.env
       - ../config/gateway.compose.env
       - path: .env
         required: false

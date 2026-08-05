@@ -19,6 +19,7 @@ from .admin.routes import make_templates, mount_admin_static
 from .admin.routes import router as admin_router
 from .adapter import GatewayAdapter
 from .auth.deps import AuthIdentity, require_auth
+from .config_validate import validate_settings
 from .db.store import GatewayDB
 from .discover import Discovery
 from .dispatchers import make_dispatcher
@@ -31,6 +32,14 @@ from .storage import FileStorage, make_storage
 logger = logging.getLogger(__name__)
 
 settings = GatewaySettings()
+
+# Fail fast on invalid config (before make_dispatcher, so our message wins).
+_fatals, _warnings = validate_settings(settings)
+for _w in _warnings:
+    logger.warning("gateway config: %s", _w)
+if _fatals:
+    raise SystemExit("gateway config invalid:\n- " + "\n- ".join(_fatals))
+
 adapter = GatewayAdapter(settings=settings)
 
 app = create_app(

@@ -72,9 +72,9 @@ GATEWAY_DB_URL=sqlite:///$PWD/gw.db uv run alembic revision --autogenerate -m "<
 
 ## Deploy (ECS)
 Deploy assets live in `deploy/ecs/` (docker-compose, persistent `/data` volume,
-`restart: always`, healthcheck). Config is layered: non-secret topology in the
-checked-in `deploy/config/gateway.common.env` + `gateway.ecs.env`, secrets in a
-gitignored `.env`. On the ECS host:
+`restart: always`, healthcheck). Config is layered: complete non-secret topology
+in the checked-in, generated `deploy/config/gateway.ecs.env` (`make gen-config`),
+secrets in a gitignored `.env`. On the ECS host:
 
 ```bash
 cd deploy/ecs

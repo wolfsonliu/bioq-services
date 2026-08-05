@@ -17,18 +17,26 @@ kind cluster, install OpenFaaS, load images, ConfigMap/Secret, port-forward,
 Keycloak user/service-account management) is a tight local dev loop, so it lives as
 `make local-*` targets in the repo-root `Makefile` (`make help` lists them).
 
-## Config: 3 layers, one schema
+## Config: generated per-target file + secrets
 
 All targets feed the same `GATEWAY_*` pydantic-settings schema
-(`gateway/settings.py`). Precedence (later wins):
+(`gateway/settings.py`). Two inputs, precedence later-wins:
 
-1. **Defaults** — `gateway/settings.py` + Dockerfile `ENV`.
-2. **Non-secret topology** — `config/gateway.common.env` + `config/gateway.<target>.env` (checked in).
-3. **Secrets + site overrides** — each target's gitignored `.env` (compose/ecs) or
+1. **Complete non-secret file per target** — `config/gateway.<target>.env`,
+   **generated from the schema** (`make gen-config`), lists every knob + default +
+   comment with that target's values baked in. Checked in, editable-in-place for
+   non-secret changes; secrets appear only as commented placeholders. See
+   [config/README.md](config/README.md).
+2. **Secrets + site overrides** — each target's gitignored `.env` (compose/ecs) or
    `.env.local` (openfaas). Secrets (OSS AK/SK, `ALI_SK`, Postgres pw, OIDC client
    secret, session secret, external DB URL) live **only** here — never in `config/`.
 
-Design rationale: monorepo ADR `engineering/decisions/2026-08-04-deploy-config-layering.md`.
+The gateway **validates config at startup and refuses to boot on fatal misconfig**
+(bad `fc_endpoint`, placeholder OSS bucket, `bypass_vpc=false` with no JWKS, …);
+`python -m server config` / `check` inspect the effective config.
+
+Design rationale: monorepo ADRs `2026-08-04-deploy-config-layering.md` (layering)
+and `2026-08-05-gateway-config-generation.md` (generation + validation).
 
 ## Auth / IdP
 

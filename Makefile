@@ -53,7 +53,8 @@ KUBECTL := KUBECONFIG=$(BIOQ_WORKDIR)/kubeconfig PATH="$(BIOQ_WORKDIR)/bin:$$PAT
 
 .PHONY: help build push clean list version login-harbor bump sif \
 	local-up local-down local-purge local-status local-logs local-test \
-	local-info local-forward local-user local-users local-svc local-svcs
+	local-info local-forward local-user local-users local-svc local-svcs \
+	gen-config check-config
 
 # Keep intermediate pattern targets around (no auto-rm after the recipe runs).
 .PRECIOUS: build-% tag-%
@@ -85,6 +86,10 @@ help:
 	@echo "  make bump-<service>          Bump patch version (v0.0.5 → v0.0.6)"
 	@echo "  make version                 Show every service's current tag"
 	@echo ""
+	@echo "Deploy config (generated from gateway/settings.py schema):"
+	@echo "  make gen-config              (Re)generate deploy/config/gateway.<target>.env"
+	@echo "  make check-config            Fail if any committed config file is stale (CI gate)"
+	@echo ""
 	@echo "Misc:"
 	@echo "  make clean                   Remove all local service images"
 	@echo "  make clean-<service>         Remove one"
@@ -108,6 +113,14 @@ help:
 	@echo ""
 	@echo "Current state:"
 	@$(foreach svc,$(SERVICES),echo "  $(svc): $(call service_version,$(svc))";)
+
+# Regenerate / verify the per-target deploy config from the gateway settings
+# schema (single source of truth). Runs in the gateway venv (has the framework).
+gen-config:
+	cd gateway && uv run python -m server generate --target all --write
+
+check-config:
+	cd gateway && uv run python -m server generate --target all --check
 
 version:
 	@$(foreach svc,$(SERVICES),echo "$(svc): $(call service_version,$(svc))";)
