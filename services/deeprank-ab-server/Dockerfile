@@ -58,9 +58,10 @@ ENV PATH=/opt/conda/envs/deeprank-ab/bin:$PATH
 # ---------------------------------------------------------------------------
 # Mirror configuration for pip + conda.
 # pip.conf: used by micromamba's pip: section during env create.
-# .condarc: TUNA mirrors for standard conda channels.
+# .condarc: PKU mirrors for standard conda channels.
 # uv: controlled by UV_INDEX_URL env above (post-env pip installs).
 # ---------------------------------------------------------------------------
+COPY deploy/conda/mirrors.condarc /tmp/mirrors.condarc
 RUN mkdir -p /root/.config/pip \
     && printf '[global]\nindex-url = https://repo.huaweicloud.com/repository/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
        > /root/.config/pip/pip.conf \
@@ -68,14 +69,8 @@ RUN mkdir -p /root/.config/pip \
 channels:
   - defaults
 show_channel_urls: true
-default_channels:
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/msys2
-custom_channels:
-  conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
-  pytorch: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
 EOF
+RUN cat /tmp/mirrors.condarc >> /root/.condarc
 
 # ---------------------------------------------------------------------------
 # Create the conda env from the server's curated environment file.
