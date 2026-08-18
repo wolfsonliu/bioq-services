@@ -133,7 +133,7 @@ curl -X POST $URL/api/generate \
   -F 'extra_overrides={"scaffoldguided.scaffoldguided": true, "scaffoldguided.target_pdb": true, "ppi.hotspot_res": "[A59,A83]"}'
 ```
 
-### 支持的 `input_uri` schemes
+### 支持的 `input_pdb_uri` schemes
 
 适用于 `/motif`、`/binder`、`/api/generate` 的 PDB 输入：
 
@@ -182,7 +182,7 @@ ProteinMPNN (proteinmpnn-server)   ← 序列设计
 AlphaFold2 / RF2                    ← 重新 fold 校验
 ```
 
-ProteinMPNN server 接受 `input_uri=job://<rfdiffusion_job_id>/design_0.pdb`，可直接零拷贝链式调用。
+ProteinMPNN server 接受 `input_pdb_uri=job://<rfdiffusion_job_id>/design_0.pdb`，可直接零拷贝链式调用。
 
 ## 配置
 

@@ -159,7 +159,7 @@ class RFdiffusionAdapter(JobAdapter):
                 "RFdiffusion outputs backbone-only poly-G PDBs. Standard next steps: "
                 "(1) ProteinMPNN for sequence design (see proteinmpnn-server), "
                 "(2) AF2 / RF2 for structure validation. The proteinmpnn-server accepts "
-                "`input_uri=job://<rfdiffusion_job_id>/design_0.pdb` for zero-copy chaining."
+                "`input_pdb_uri=job://<rfdiffusion_job_id>/design_0.pdb` for zero-copy chaining."
             ),
         }
 

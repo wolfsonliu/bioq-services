@@ -133,9 +133,9 @@ def generate_unconditional(
 @app.post("/api/generate/motif", response_model=JobInfo)
 def generate_motif(
     input_pdb: Optional[UploadFile] = File(
-        None, description="Input PDB carrying the motif. Mutually exclusive with `input_uri`."
+        None, description="Input PDB carrying the motif. Mutually exclusive with `input_pdb_uri`."
     ),
-    input_uri: Optional[str] = Form(
+    input_pdb_uri: Optional[str] = Form(
         None,
         description=(
             "URI to fetch the input PDB instead of uploading. Schemes: "
@@ -147,7 +147,7 @@ def generate_motif(
     """Motif scaffolding — contig references chain+residue ranges in the input PDB."""
 
     def _build(_job_id: str, job_dir: Path) -> list[str]:
-        pdb_path = resolve_input(input_pdb, input_uri, job_dir / "input" / "motif.pdb", settings)
+        pdb_path = resolve_input(input_pdb, input_pdb_uri, job_dir / "input" / "motif.pdb", settings, field_name="input_pdb")
         return motif_argv(params, pdb_path, job_dir, settings)
 
     return app.state.runner.submit(
@@ -159,15 +159,15 @@ def generate_motif(
 @app.post("/api/generate/binder", response_model=JobInfo)
 def generate_binder(
     input_pdb: Optional[UploadFile] = File(
-        None, description="Target PDB. Mutually exclusive with `input_uri`."
+        None, description="Target PDB. Mutually exclusive with `input_pdb_uri`."
     ),
-    input_uri: Optional[str] = Form(None, description="URI to fetch the target PDB (see /motif)."),
+    input_pdb_uri: Optional[str] = Form(None, description="URI to fetch the target PDB (see /motif)."),
     params: BinderRequest = Depends(model_form_depends(BinderRequest)),
 ) -> JobInfo:
     """PPI binder design vs a target PDB; supply hotspots for site control."""
 
     def _build(_job_id: str, job_dir: Path) -> list[str]:
-        pdb_path = resolve_input(input_pdb, input_uri, job_dir / "input" / "target.pdb", settings)
+        pdb_path = resolve_input(input_pdb, input_pdb_uri, job_dir / "input" / "target.pdb", settings, field_name="input_pdb")
         return binder_argv(params, pdb_path, job_dir, settings)
 
     return app.state.runner.submit(
@@ -194,9 +194,9 @@ def generate_symmetry(
 @app.post("/api/generate", response_model=JobInfo)
 def generate_custom(
     input_pdb: Optional[UploadFile] = File(
-        None, description="Optional input PDB (motif / partial diffusion). Or pass `input_uri`."
+        None, description="Optional input PDB (motif / partial diffusion). Or pass `input_pdb_uri`."
     ),
-    input_uri: Optional[str] = Form(None, description="URI to fetch the input PDB (see /motif)."),
+    input_pdb_uri: Optional[str] = Form(None, description="URI to fetch the input PDB (see /motif)."),
     params: CustomRequest = Depends(model_form_depends(CustomRequest)),
 ) -> JobInfo:
     """Raw contig + arbitrary Hydra overrides — partial diffusion, fold conditioning, ..."""
@@ -204,8 +204,8 @@ def generate_custom(
     def _build(_job_id: str, job_dir: Path) -> list[str]:
         # input PDB is optional here; resolve only if the caller asked for one.
         pdb_path = None
-        if input_pdb is not None or input_uri:
-            pdb_path = resolve_input(input_pdb, input_uri, job_dir / "input" / "input.pdb", settings)
+        if input_pdb is not None or input_pdb_uri:
+            pdb_path = resolve_input(input_pdb, input_pdb_uri, job_dir / "input" / "input.pdb", settings, field_name="input_pdb")
         return custom_argv(params, pdb_path, job_dir, settings)
 
     return app.state.runner.submit(
@@ -224,7 +224,7 @@ if settings.task_endpoints_enabled:
     def generate_motif_task(
         request: Request,
         input_pdb: Optional[UploadFile] = File(None),
-        input_uri: Optional[str] = Form(None),
+        input_pdb_uri: Optional[str] = Form(None),
         params: MotifRequest = Depends(model_form_depends(MotifRequest)),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
@@ -234,7 +234,7 @@ if settings.task_endpoints_enabled:
         paths: dict[str, Path] = {}
 
         def _save(_req, input_dir: Path) -> None:
-            paths["pdb"] = resolve_input(input_pdb, input_uri, input_dir / "motif.pdb", settings)
+            paths["pdb"] = resolve_input(input_pdb, input_pdb_uri, input_dir / "motif.pdb", settings, field_name="input_pdb")
 
         def _build(req, _job_id: str, job_dir: Path) -> list[str]:
             return motif_argv(req, paths["pdb"], job_dir, settings)
@@ -248,7 +248,7 @@ if settings.task_endpoints_enabled:
     def generate_binder_task(
         request: Request,
         input_pdb: Optional[UploadFile] = File(None),
-        input_uri: Optional[str] = Form(None),
+        input_pdb_uri: Optional[str] = Form(None),
         params: BinderRequest = Depends(model_form_depends(BinderRequest)),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
@@ -258,7 +258,7 @@ if settings.task_endpoints_enabled:
         paths: dict[str, Path] = {}
 
         def _save(_req, input_dir: Path) -> None:
-            paths["pdb"] = resolve_input(input_pdb, input_uri, input_dir / "target.pdb", settings)
+            paths["pdb"] = resolve_input(input_pdb, input_pdb_uri, input_dir / "target.pdb", settings, field_name="input_pdb")
 
         def _build(req, _job_id: str, job_dir: Path) -> list[str]:
             return binder_argv(req, paths["pdb"], job_dir, settings)
@@ -272,7 +272,7 @@ if settings.task_endpoints_enabled:
     def generate_custom_task(
         request: Request,
         input_pdb: Optional[UploadFile] = File(None),
-        input_uri: Optional[str] = Form(None),
+        input_pdb_uri: Optional[str] = Form(None),
         params: CustomRequest = Depends(model_form_depends(CustomRequest)),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
@@ -282,9 +282,9 @@ if settings.task_endpoints_enabled:
         paths: dict[str, Optional[Path]] = {"pdb": None}
 
         def _save(_req, input_dir: Path) -> None:
-            if input_pdb is not None or input_uri:
+            if input_pdb is not None or input_pdb_uri:
                 paths["pdb"] = resolve_input(
-                    input_pdb, input_uri, input_dir / "input.pdb", settings
+                    input_pdb, input_pdb_uri, input_dir / "input.pdb", settings, field_name="input_pdb"
                 )
 
         def _build(req, _job_id: str, job_dir: Path) -> list[str]:
