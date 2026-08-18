@@ -49,8 +49,9 @@ ENV MAMBA_ROOT_PREFIX=/opt/conda
 ENV PATH=/opt/conda/envs/diffusion_hopping/bin:$PATH
 
 # ---------------------------------------------------------------------------
-# Mirror configuration (Huawei pip + TUNA conda) for CN-friendly builds.
+# Mirror configuration (Huawei pip + PKU conda) for CN-friendly builds.
 # ---------------------------------------------------------------------------
+COPY deploy/conda/mirrors.condarc /tmp/mirrors.condarc
 RUN mkdir -p /root/.config/pip \
     && printf '[global]\nindex-url = https://repo.huaweicloud.com/repository/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
        > /root/.config/pip/pip.conf \
@@ -62,19 +63,8 @@ show_channel_urls: true
 # big channels like conda-forge.  Without this, the old pytorch 1.13.1 +
 # cu117 + pyg 2.2 + Py3.10 resolve takes 2+ hours and risks timing out.
 channel_priority: strict
-default_channels:
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/msys2
-# custom_channels: only map channels that TUNA actually hosts.
-# IMPORTANT: do NOT map `pyg` or `nvidia` here — TUNA returns 404 for those
-# channels (verified 2026-06-28).  They fall through to the upstream
-# https://conda.anaconda.org/{pyg,nvidia}/ which works fine.
-custom_channels:
-  conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
-  bioconda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
-  pytorch: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
 EOF
+RUN cat /tmp/mirrors.condarc >> /root/.condarc
 
 # ---------------------------------------------------------------------------
 # Conda env — based on upstream's environment.yml (Python 3.10 + pytorch
