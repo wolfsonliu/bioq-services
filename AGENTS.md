@@ -3,8 +3,10 @@
 Guidance for agents developing inside this repository. This file is intentionally short and
 routing-oriented: it holds only what every task needs. Detailed guidance lives in the `docs/topics/`
 topic documents — load one only when its trigger applies. Each topic document has an English
-original (`*.md`) and a Chinese version (`*.zh.md`). All paths are relative to the repository root;
-never reference paths outside this repository.
+original (`*.md`) and a Chinese version (`*.zh.md`). Topics stay flat under `docs/topics/`; promote
+one to a `docs/<area>/` subdirectory (with an `index.md`) only when it splits into several
+sub-pages — [docs/adding-a-new-service/](docs/adding-a-new-service/index.zh.md) is the sole example.
+All paths are relative to the repository root; never reference paths outside this repository.
 
 ---
 
@@ -67,6 +69,7 @@ One-line pointer plus the condition under which to load it.
 | [conventions](docs/topics/conventions.md) | you need the full rationale (why / when / removal) and checklist behind the hard constraints. |
 | [gateway](docs/topics/gateway.md) | you change the control plane under `gateway/`. |
 | [testing](docs/topics/testing.md) | you run or write tests at any layer. |
+| [fc-testing](docs/topics/fc-testing.md) | you run/write the opt-in `@pytest.mark.fc` tests against a live FC deployment, or hit FC session-affinity / VPC-access / cold-start / 429 issues. |
 | [build-deploy](docs/topics/build-deploy.md) | you build / tag / push / bump / SIF an image. |
 | [local-dev](docs/topics/local-dev.md) | you use the local kind + OpenFaaS stack (`make local-*`). |
 | [adding-a-service](docs/adding-a-new-service/index.zh.md) | you add a new service end-to-end. |

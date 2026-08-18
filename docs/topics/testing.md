@@ -15,6 +15,8 @@ uv run --group dev python -m pytest tests/ -q
 
 # FC integration tests (require a deployed service; skipped by default)
 RUN_FC_TESTS=1 uv run --group dev python -m pytest -m fc tests/ -v
+# hitting the live deployment? read fc-testing.md first (session affinity /
+# VPC vs public URL / cold start / 429).
 
 # framework itself
 cd framework && uv run --extra dev python -m pytest tests/ -q
@@ -45,7 +47,8 @@ make local-test
 - A few services' tests read the vendored `upstream/` (git-ignored). Run that service's
   `scripts/vendor.sh` first, or those tests fail on missing files.
 - FC tests (`@pytest.mark.fc`) deliberately skip by default; `RUN_FC_TESTS=1` (or `-m fc`) enables
-  them against a live deployment.
+  them against a live deployment — before that, read [fc-testing.md](fc-testing.md) (session
+  affinity header `bioagent-session-id`, VPC vs public URL, cold start, 429).
 - Offline service tests mock the subprocess; they need only the lightweight `[dependency-groups] dev`
   deps, not the heavy runtime stack.
 - `make local-test` targets the local deployment (`http://127.0.0.1:9000`); it is a gateway test,

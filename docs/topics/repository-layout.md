@@ -23,6 +23,19 @@ Makefile        — build/push/bump/SIF + local kind integration (make local-*).
 scripts/        — misc scripts (e.g. bench_concurrency.py).
 ```
 
+## Docs organization
+
+| dir | purpose |
+|---|---|
+| `docs/topics/` | flat topic set — one topic per bilingual pair (`<topic>.md` + `<topic>.zh.md`) |
+| `docs/adding-a-new-service/` | multi-page cookbook — `index.md` + sub-pages |
+| `docs/specs/` | dated `YYYY-MM-DD-*` design docs |
+| `docs/plans/` | dated plan / decision notes |
+
+**Flat vs subdirectory:** keep a topic flat under `docs/topics/` unless it genuinely splits into
+several sub-pages. Only then promote it to `docs/<area>/` with an `index.md` (each page `.md` +
+`.zh.md`). `docs/adding-a-new-service/` is the sole such example today.
+
 ## Workers (38)
 
 alphafold / bindflow / boltz / boltzgen / chembounce / deeprank-ab / diamond / diffdock /

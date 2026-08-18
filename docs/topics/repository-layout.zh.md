@@ -24,6 +24,19 @@ Makefile        — 镜像构建/推送/bump/SIF + 本地 kind 联调（make loc
 scripts/        — 杂项脚本（如 bench_concurrency.py）。
 ```
 
+## 文档组织
+
+| 目录 | 用途 |
+|---|---|
+| `docs/topics/` | 平铺话题集 —— 一个话题一对双语文件（`<topic>.md` + `<topic>.zh.md`） |
+| `docs/adding-a-new-service/` | 多页 cookbook —— `index.md` + 子页 |
+| `docs/specs/` | 带日期的 `YYYY-MM-DD-*` 设计文档 |
+| `docs/plans/` | 带日期的计划 / 决策说明 |
+
+**平铺 vs 子目录：** 话题默认在 `docs/topics/` 平铺；只有当其真正拆成多个子页时，才升级为
+`docs/<area>/` 子目录（带 `index.md`，每页 `.md` + `.zh.md`）。当前唯一例是
+`docs/adding-a-new-service/`。
+
 ## Worker（38 个）
 
 alphafold / bindflow / boltz / boltzgen / chembounce / deeprank-ab / diamond / diffdock /

@@ -324,6 +324,11 @@ def client(base_url: str) -> httpx.Client:
         yield c
 
 
+> ⚠️ The skeleton above is the **minimal** form. Before writing real FC tests, add the
+> session-affinity header (`bioagent-session-id`) and handle public/VPC access, cold start
+> and 429 — see [fc-testing.md](../topics/fc-testing.md).
+
+
 # ----- Smoke -----
 
 def test_healthz(client: httpx.Client) -> None:

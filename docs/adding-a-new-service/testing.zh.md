@@ -294,6 +294,10 @@ def client(base_url: str) -> httpx.Client:
         yield c
 
 
+> ⚠️ 上面是**最简骨架**。写正式 FC 测试前，务必加上会话亲和 header（`bioagent-session-id`）、
+> 处理公网/VPC 访问、冷启动与 429 —— 见 [fc-testing.zh.md](../topics/fc-testing.zh.md)。
+
+
 # ----- Smoke -----
 
 def test_healthz(client: httpx.Client) -> None:
