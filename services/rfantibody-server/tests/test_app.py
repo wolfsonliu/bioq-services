@@ -149,7 +149,15 @@ def test_manifest_exposes_service_specific_extras(client: TestClient) -> None:
 
 
 def test_openapi_lists_service_request_models() -> None:
-    """The 'real' app (server.app) registers RFdiffusionRequest et al via Annotated[..., Form()]."""
+    """The real app (server.app) registers all six service endpoints.
+
+    The per-endpoint request models (RFdiffusionRequest / ProteinMPNNRequest /
+    RF2Request) are consumed via ``Depends(model_form_depends(Model))``, which
+    flattens each model into individual ``Form()`` fields.  FastAPI therefore
+    emits one ``Body_run_*`` multipart schema per route rather than the named
+    request models.  Assert the observable contract instead: six body schemas
+    (3 tools x sync/task) plus the shared ``JobInfo`` response model.
+    """
     # Import lazily so the settings constructed there don't fail on our dev box.
     import importlib
     import os
@@ -162,10 +170,18 @@ def test_openapi_lists_service_request_models() -> None:
     schema = TestClient(server_app.app).get("/openapi.json").json()
 
     models = set(schema["components"]["schemas"].keys())
-    assert "RFdiffusionRequest" in models
-    assert "ProteinMPNNRequest" in models
-    assert "RF2Request" in models
     assert "JobInfo" in models
+
+    expected_bodies = {
+        "Body_run_rfdiffusion_api_rfdiffusion_post",
+        "Body_run_rfdiffusion_task_api_tasks_rfdiffusion_post",
+        "Body_run_proteinmpnn_api_proteinmpnn_post",
+        "Body_run_proteinmpnn_task_api_tasks_proteinmpnn_post",
+        "Body_run_rf2_api_rf2_post",
+        "Body_run_rf2_task_api_tasks_rf2_post",
+    }
+    missing = expected_bodies - models
+    assert not missing, f"missing request-body schemas: {sorted(missing)}"
 
 
 def _real_app_client(tmp_path: Path) -> TestClient:

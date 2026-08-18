@@ -85,6 +85,12 @@ def base_url() -> str:
 
 @pytest.fixture(scope="module")
 def client(base_url: str):
+    # No client-level session-affinity header here: FC rejects
+    # ``X-Fc-Invocation-Type: Async`` requests that also carry
+    # ``bioagent-session-id`` ("SessionAffinity is not supported for async
+    # invocation").  Async task mode pins the run instance via
+    # ``X-Fc-Async-Task-Id`` instead; the sync status polls read job state from
+    # shared NAS, so cross-instance reads work without an affinity header.
     with httpx.Client(base_url=base_url, timeout=TIMEOUT) as c:
         yield c
 

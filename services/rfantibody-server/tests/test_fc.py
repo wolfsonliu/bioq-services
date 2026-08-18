@@ -59,8 +59,14 @@ def base_url() -> str:
 
 
 @pytest.fixture(scope="module")
-def client(base_url: str):
-    with httpx.Client(base_url=base_url, timeout=TIMEOUT) as c:
+def client(base_url: str, session_headers: dict[str, str]):
+    # Attach the bioagent-session-id header to EVERY request so FC's session
+    # affinity (`affinityHeaderFieldName: bioagent-session-id`) pins the whole
+    # suite — smoke/manifest/error probes AND jobs/files/download/log/delete —
+    # to a single instance.  Un-pinned requests each open a new session, so FC
+    # scales out many on-demand GPU instances and exhausts the account quota
+    # (surfaces as 429 ResourceExhausted on even trivial GETs).
+    with httpx.Client(base_url=base_url, timeout=TIMEOUT, headers=session_headers) as c:
         yield c
 
 
