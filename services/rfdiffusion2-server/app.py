@@ -66,9 +66,9 @@ app = create_app(
 def generate_active_site(
     input_pdb: Optional[UploadFile] = File(
         None,
-        description="Input PDB carrying the motif + ligand. Mutually exclusive with `input_uri`.",
+        description="Input PDB carrying the motif + ligand. Mutually exclusive with `input_pdb_uri`.",
     ),
-    input_uri: Optional[str] = Form(
+    input_pdb_uri: Optional[str] = Form(
         None,
         description=(
             "URI to fetch the input PDB instead of uploading. Schemes: "
@@ -80,7 +80,7 @@ def generate_active_site(
     """Active-site scaffolding around an atomic motif + ligand."""
 
     def _build(_job_id: str, job_dir: Path) -> list[str]:
-        pdb_path = resolve_input(input_pdb, input_uri, job_dir / "input" / "motif.pdb", settings)
+        pdb_path = resolve_input(input_pdb, input_pdb_uri, job_dir / "input" / "motif.pdb", settings, field_name="input_pdb")
         return active_site_argv(params, pdb_path, job_dir, settings)
 
     return app.state.runner.submit(
@@ -93,15 +93,15 @@ def generate_active_site(
 def generate_small_molecule_binder(
     input_pdb: Optional[UploadFile] = File(
         None,
-        description="Input PDB carrying the small molecule. Mutually exclusive with `input_uri`.",
+        description="Input PDB carrying the small molecule. Mutually exclusive with `input_pdb_uri`.",
     ),
-    input_uri: Optional[str] = Form(None, description="URI to fetch the input PDB (see /active_site)."),
+    input_pdb_uri: Optional[str] = Form(None, description="URI to fetch the input PDB (see /active_site)."),
     params: SmallMoleculeBinderRequest = Depends(model_form_depends(SmallMoleculeBinderRequest)),
 ) -> JobInfo:
     """Small-molecule binder design, optionally RASA-conditioned."""
 
     def _build(_job_id: str, job_dir: Path) -> list[str]:
-        pdb_path = resolve_input(input_pdb, input_uri, job_dir / "input" / "ligand.pdb", settings)
+        pdb_path = resolve_input(input_pdb, input_pdb_uri, job_dir / "input" / "ligand.pdb", settings, field_name="input_pdb")
         return small_molecule_binder_argv(params, pdb_path, job_dir, settings)
 
     return app.state.runner.submit(
@@ -115,15 +115,15 @@ def generate_custom(
     input_pdb: Optional[UploadFile] = File(
         None, description="Optional input PDB. Required iff `input_pdb_required=true`."
     ),
-    input_uri: Optional[str] = Form(None, description="URI to fetch the input PDB."),
+    input_pdb_uri: Optional[str] = Form(None, description="URI to fetch the input PDB."),
     params: CustomRequest = Depends(model_form_depends(CustomRequest)),
 ) -> JobInfo:
     """Raw contig + freeform Hydra overrides — any config under config/inference/."""
 
     def _build(_job_id: str, job_dir: Path) -> list[str]:
         pdb_path = None
-        if input_pdb is not None or input_uri:
-            pdb_path = resolve_input(input_pdb, input_uri, job_dir / "input" / "input.pdb", settings)
+        if input_pdb is not None or input_pdb_uri:
+            pdb_path = resolve_input(input_pdb, input_pdb_uri, job_dir / "input" / "input.pdb", settings, field_name="input_pdb")
         return custom_argv(params, pdb_path, job_dir, settings)
 
     return app.state.runner.submit(
@@ -142,7 +142,7 @@ if settings.task_endpoints_enabled:
     def generate_active_site_task(
         request: Request,
         input_pdb: Optional[UploadFile] = File(None),
-        input_uri: Optional[str] = Form(None),
+        input_pdb_uri: Optional[str] = Form(None),
         params: ActiveSiteRequest = Depends(model_form_depends(ActiveSiteRequest)),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
@@ -152,7 +152,7 @@ if settings.task_endpoints_enabled:
         paths: dict[str, Path] = {}
 
         def _save(_req, input_dir: Path) -> None:
-            paths["pdb"] = resolve_input(input_pdb, input_uri, input_dir / "motif.pdb", settings)
+            paths["pdb"] = resolve_input(input_pdb, input_pdb_uri, input_dir / "motif.pdb", settings, field_name="input_pdb")
 
         def _build(req, _job_id: str, job_dir: Path) -> list[str]:
             return active_site_argv(req, paths["pdb"], job_dir, settings)
@@ -166,7 +166,7 @@ if settings.task_endpoints_enabled:
     def generate_small_molecule_binder_task(
         request: Request,
         input_pdb: Optional[UploadFile] = File(None),
-        input_uri: Optional[str] = Form(None),
+        input_pdb_uri: Optional[str] = Form(None),
         params: SmallMoleculeBinderRequest = Depends(model_form_depends(SmallMoleculeBinderRequest)),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
@@ -176,7 +176,7 @@ if settings.task_endpoints_enabled:
         paths: dict[str, Path] = {}
 
         def _save(_req, input_dir: Path) -> None:
-            paths["pdb"] = resolve_input(input_pdb, input_uri, input_dir / "ligand.pdb", settings)
+            paths["pdb"] = resolve_input(input_pdb, input_pdb_uri, input_dir / "ligand.pdb", settings, field_name="input_pdb")
 
         def _build(req, _job_id: str, job_dir: Path) -> list[str]:
             return small_molecule_binder_argv(req, paths["pdb"], job_dir, settings)
@@ -190,7 +190,7 @@ if settings.task_endpoints_enabled:
     def generate_custom_task(
         request: Request,
         input_pdb: Optional[UploadFile] = File(None),
-        input_uri: Optional[str] = Form(None),
+        input_pdb_uri: Optional[str] = Form(None),
         params: CustomRequest = Depends(model_form_depends(CustomRequest)),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
@@ -200,9 +200,9 @@ if settings.task_endpoints_enabled:
         paths: dict[str, Optional[Path]] = {"pdb": None}
 
         def _save(_req, input_dir: Path) -> None:
-            if input_pdb is not None or input_uri:
+            if input_pdb is not None or input_pdb_uri:
                 paths["pdb"] = resolve_input(
-                    input_pdb, input_uri, input_dir / "input.pdb", settings
+                    input_pdb, input_pdb_uri, input_dir / "input.pdb", settings, field_name="input_pdb"
                 )
 
         def _build(req, _job_id: str, job_dir: Path) -> list[str]:

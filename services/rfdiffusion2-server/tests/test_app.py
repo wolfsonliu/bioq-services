@@ -101,3 +101,28 @@ def test_generate_custom_task_endpoint_returns_terminal_status(client):
     assert "job_id" in body
     assert body["status"] in {"completed", "failed"}
     assert body["completed_at"] is not None
+
+
+def test_uri_field_matches_upload_field(client):
+    """Regression: the URI field must be `input_pdb_uri`, not `input_uri`.
+
+    bioq CLI's `--file input_pdb=<path>` uploads the file and emits the body
+    field ``input_pdb_uri`` (see bioq/upload.py). Every input-PDB endpoint must
+    expose ``input_pdb`` (upload) + ``input_pdb_uri`` (URI) — and must NOT
+    expose the old ``input_uri`` name.
+    """
+    body = client.get("/api/manifest").json()
+    eps = {e["path"]: e for e in body["endpoints"]}
+    for path in (
+        "/api/generate/active_site",
+        "/api/generate/small_molecule_binder",
+        "/api/generate",
+        "/api/tasks/generate/active_site",
+        "/api/tasks/generate/small_molecule_binder",
+        "/api/tasks/generate",
+    ):
+        fields = {f["name"]: f for f in eps[path]["request_fields"]}
+        assert "input_pdb" in fields, f"{path}: missing input_pdb upload field"
+        assert fields["input_pdb"]["is_file"] is True, f"{path}: input_pdb not marked file"
+        assert "input_pdb_uri" in fields, f"{path}: missing input_pdb_uri URI field"
+        assert "input_uri" not in fields, f"{path}: stale input_uri field still exposed"

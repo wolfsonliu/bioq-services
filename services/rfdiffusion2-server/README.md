@@ -78,7 +78,7 @@ curl -X POST $URL/api/generate/active_site \
 
 | 字段 | 必填 | 说明 |
 |---|---|---|
-| `input_pdb` 或 `input_uri` | 是 | 含 motif + 配体的 PDB |
+| `input_pdb` 或 `input_pdb_uri` | 是 | 含 motif + 配体的 PDB |
 | `contigs` | 是 | Hydra contig 串，例：`46,A106-106,59,...`；裸数字 = 待设计的长度，`<chain><resnum>-<resnum>` = motif 锚 |
 | `contig_atoms` | 是 | 每个 motif 残基锚定哪些侧链原子；JSON dict：`{"A106":"NE,CD,CZ"}` |
 | `ligand` | 是 | 逗号分隔的配体残基名，例 `NAD,OXM` |
@@ -112,7 +112,7 @@ curl -X POST $URL/api/generate/small_molecule_binder \
 
 | 字段 | 必填 | 说明 |
 |---|---|---|
-| `input_pdb` 或 `input_uri` | 是 | 含小分子的 PDB |
+| `input_pdb` 或 `input_pdb_uri` | 是 | 含小分子的 PDB |
 | `contigs` | 是 | 单段长度 contig，例 `150` |
 | `length` | 否 | 长度硬约束，例 `150-150` |
 | `ligand` | 是 | 配体残基名（单个）|
@@ -156,10 +156,10 @@ bool 会被转成 `true` / `false`。
 | 字段/scheme | 用途 |
 |---|---|
 | `input_pdb=@<file>` | multipart upload |
-| `input_uri=job://<job_id>/<filename>` | 复用 NAS 上前一个 job 的输出文件（零拷贝）|
-| `input_uri=file:///abs/path` | NAS 上的绝对路径（多个服务共享 mount）|
-| `input_uri=oss://<bucket>/<key>` | 阿里云 OSS 对象 |
-| `input_uri=https://...` | 任意 HTTP(S) URL（含 OSS 预签名）|
+| `input_pdb_uri=job://<job_id>/<filename>` | 复用 NAS 上前一个 job 的输出文件（零拷贝）|
+| `input_pdb_uri=file:///abs/path` | NAS 上的绝对路径（多个服务共享 mount）|
+| `input_pdb_uri=oss://<bucket>/<key>` | 阿里云 OSS 对象 |
+| `input_pdb_uri=https://...` | 任意 HTTP(S) URL（含 OSS 预签名）|
 
 ## 输出
 
