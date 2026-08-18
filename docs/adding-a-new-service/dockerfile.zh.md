@@ -1,14 +1,12 @@
 # Dockerfile — 构建骨架
 
-日期: 2026-07-14
-适用: [新增 bioagent service cookbook](./index.md) 的镜像构建部分
-相关: [conda-pitfalls](./conda-pitfalls.md) · [skeleton](./skeleton.md) · [总览](./index.md)
+[English](dockerfile.md) | 中文
 
-> ← 返回 [新增 service cookbook 总览](./index.md)
+> ← 返回 [新增 service cookbook 总览](./index.zh.md)
 
 本页覆盖 `vendor.sh` / `fetch_weights.sh` / uv venv 与 conda/micromamba 两套 Dockerfile
 骨架 / 上游修改的 wrapper vs patch 决策。包装 conda-based upstream 的踩坑单独见
-[conda-pitfalls](./conda-pitfalls.md)。
+[conda-pitfalls](./conda-pitfalls.zh.md)。
 
 ### 8. `services/<svc>/Dockerfile`
 
@@ -28,8 +26,6 @@
 - ✅ 服务自包含（`services/<svc>/` 含 upstream + scripts + 框架 wrapper）
 - ✅ 上游 SHA 写在脚本里显式可见 + 重试 + 校验
 - ✅ 镜像里只有代码栈 → 缩到 1.5-3 GB（vs 5-18 GB），FC 拉取更快、权重独立打版
-
-详情见 Service 权重 NAS 外置化设计。
 
 #### 8.1 vendor.sh 模板
 
@@ -187,10 +183,10 @@ expected = {
 #### 8.3 Dockerfile
 
 默认采用「uv venv + Huawei 镜像」骨架。其他场景（多阶段构建 / system Python /
-conda 依赖）见 uv-dockerfile-patterns 的模式对照表。
+conda 依赖）见下文「Conda / micromamba 替代骨架」。
 
 ```dockerfile
-# Build from bioagent project root:
+# Build from the bioq-services repo root:
 #   docker build --platform linux/amd64 -t <svc> -f services/<svc>/Dockerfile .
 #
 # Prerequisites (一次性，重跑可升级 SHA / 权重):
@@ -234,7 +230,7 @@ COPY services/<svc>/upstream /opt/<svc>/upstream
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python -e ./upstream
 
-# Shared bioagent service framework + remote-fetch deps —— 单独一层，框架变动不会
+# Shared service framework + remote-fetch deps —— 单独一层，框架变动不会
 # 让算法层缓存失效
 COPY framework /tmp/service-framework
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -262,7 +258,7 @@ RUN mkdir -p /data/<svc>_jobs
 # job dir 镜像到 <此挂载>/users/<user>/<job_id>/ 并写 results.zip，gateway 据此
 # 走 OSS 302 提供 download。framework 默认值已是 /mnt/oss，此处显式声明作自文档。
 # 需在 FC 控制台把数据面 OSS bucket 挂到 /mnt/oss（见「FC 控制台配置」）；缺挂载
-# => no-op（仅 NAS）。详见 迁移到 OSS mount。
+# => no-op（仅 NAS）。
 ENV <SVC>_OSS_OUTPUT_MOUNT=/mnt/oss
 
 ENV PORT=9000
@@ -271,15 +267,15 @@ CMD [".venv/bin/python", "-m", "uvicorn", "server.app:app", \
      "--host", "0.0.0.0", "--port", "9000", "--timeout-keep-alive", "900"]
 ```
 
-关键约束（详情见 uv-dockerfile-patterns）：
+关键约束：
 
 - **`-runtime` 而非 `-devel`** —— 算法走 prebuilt wheel 时不需要 nvcc / CUDA headers，可省 ~3.6 GB
 - **通常不在 apt 装 git** —— vendor.sh 在 host 上跑，image 内不需要。装了反而误导未来 contributor 以为可以 in-build clone。**例外**：`uv pip install "<pkg> @ git+https://..."`（openfold / dllogger / github fork 等）需要 `git` CLI，此时**必须** apt-install git —— uv 0.11+ 不再 bundle libgit2，缺 git 报 "Git executable not found"（见 [diffdock-server Dockerfile](../../services/diffdock-server/Dockerfile) 参考）
 - **WORKDIR 必须在 `server/` 父目录** —— 否则 Docker 模式下 `server.app` import 失败
-- **`ENV PYTHONPATH=<workdir>` 必填** —— Apptainer/Singularity 不尊重 WORKDIR，必须通过 PYTHONPATH 让 `server` 包在任何 CWD 下可导入（见 apptainer-compatibility）
+- **`ENV PYTHONPATH=<workdir>` 必填** —— Apptainer/Singularity 不尊重 WORKDIR，必须通过 PYTHONPATH 让 `server` 包在任何 CWD 下可导入
 - **`uv venv` 先于 `COPY services/<svc>/upstream`** —— `.venv/` 不会被源码覆盖
 - **CMD 用 `.venv/bin/python` 绝对路径** —— 不依赖 PATH
-- **每个 RUN 加 `--mount=type=cache,target=/root/.cache/uv`** —— 加速重建，缓存不写镜像层（见 uv-cache-mount）
+- **每个 RUN 加 `--mount=type=cache,target=/root/.cache/uv`** —— 加速重建，缓存不写镜像层
 - **不要 `COPY services/<svc>/weights/`** —— 权重在 NAS。如果一定要烘焙小权重（如 < 100 MB 且无版本管理需求），可以例外，但需在 Dockerfile 注释里写明原因
 
 #### 8.4 上游需要修改：wrapper vs patch 决策

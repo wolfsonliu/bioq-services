@@ -162,4 +162,4 @@ DB preparation runs offline on an HPC node; see
 - [Design](../../engineering/decisions/2026-06-23-mmseqs2-server-design.md)
 - [Implementation plan](../../engineering/decisions/2026-06-23-mmseqs2-server-plan.md)
 - [ColabFold MSA pipeline reference (Mirdita et al. 2022)](https://www.nature.com/articles/s41592-022-01488-1)
-- [adding-a-new-service guide](../../engineering/guides/adding-a-new-service.md)
+- [adding-a-new-service guide](../../docs/adding-a-new-service/index.zh.md)

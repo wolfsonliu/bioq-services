@@ -88,7 +88,7 @@ curl -O $URL/api/jobs/<job_id>/file/output/output_0.sdf
 ### `POST /api/tasks/generate`
 
 FC 异步任务模式（HTTP 立即返回 202，FC 把请求和计算的生命周期绑在一起）。
-控制台需要打开「异步任务模式」——详见 [新增服务 cookbook](../../engineering/guides/adding-a-new-service/deploy.md#fc-异步任务模式控制台配置)。
+控制台需要打开「异步任务模式」——详见 [新增服务 cookbook](../../docs/adding-a-new-service/deploy.zh.md#fc-异步任务模式控制台配置)。
 
 大文件（口袋 PDB 常见 > 128 KiB）需要走 URI fallback，因为 FC async
 event payload cap 是 128 KiB。示例：
@@ -158,7 +158,7 @@ curl http://localhost:9000/healthz
 make push-turbohopp-server
 ```
 
-FC 部署 checklist 见 [新增服务 cookbook](../../engineering/guides/adding-a-new-service/deploy.md#部署到-fc)。
+FC 部署 checklist 见 [新增服务 cookbook](../../docs/adding-a-new-service/deploy.zh.md#部署到-fc)。
 架构决策：[engineering/decisions/2026-07-01-turbohopp-server-design.md](../../engineering/decisions/2026-07-01-turbohopp-server-design.md)。
 
 ## 配置项（环境变量）

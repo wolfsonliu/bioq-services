@@ -147,6 +147,6 @@ plenty for batches up to ~100 candidates.
 ## Related
 
 - [`opensource/DockQ`](../../opensource/DockQ/) — upstream source
-- [adding-a-new-service guide](../../engineering/guides/adding-a-new-service.md)
+- [adding-a-new-service guide](../../docs/adding-a-new-service/index.zh.md)
 - [testing-fc-services guide](../../engineering/guides/testing-fc-services.md)
 - [DockQ v2 paper](https://academic.oup.com/bioinformatics/article/40/10/btae586/7796530) — Mirabello & Wallner 2024

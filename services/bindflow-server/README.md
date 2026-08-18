@@ -214,7 +214,7 @@ apptainer pull bindflow-server.sif docker://harbor.ruosheng.bio/aliyun_fc/bindfl
 - [bindflow-server 设计文档](../../engineering/decisions/2026-07-06-bindflow-server-design.md)
 - [Service 框架抽象设计](../../engineering/decisions/2026-05-12-service-framework-design.md)
 - [CLI 批处理模式设计](../../engineering/decisions/2026-05-29-cli-batch-mode.md)
-- [新增服务 cookbook](../../engineering/guides/adding-a-new-service.md)
+- [新增服务 cookbook](../../docs/adding-a-new-service/index.zh.md)
 - [apptainer/singularity 兼容性](../../engineering/guides/apptainer-compatibility.md)
 - 上游：[ale94mleon/BindFlow](https://github.com/ale94mleon/BindFlow)（GPL-3.0）
 - gmx_MMPBSA：[Valdes-Tresanco-MS/gmx_MMPBSA](https://github.com/Valdes-Tresanco-MS/gmx_MMPBSA) @ pinned commit

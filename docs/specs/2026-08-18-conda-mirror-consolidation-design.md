@@ -198,7 +198,7 @@ GREEN，最后全绿提交。详细步骤见关联计划。
 | PKU 镜像某 channels 后端实际缺包 | 个别 solve 失败 | 已逐个子频道返回 200 + 真实 repodata JSON 验证；且 PKU 是官方长期镜像站，比 TUNA 当前状态更完整 |
 | `cat >>` 拼接出非法 YAML | 构建期 condarc 解析失败 | 两段 key 不重叠；守护脚本 + 人工抽查 |
 | 额外映射（bioconda/pytorch 全集）引入串扰 | 求解慢 / 误选 | 因 `channel_priority` 不变、多数走 strict；未引用的 custom_channel 只是未用表项，不参与求解 |
-| 漏改/回退（新服务复制旧模板） | 故障复发 | 守护脚本列为 CI/本地门禁，模板更新到 `docs/adding-a-new-service/dockerfile.md` |
+| 漏改/回退（新服务复制旧模板） | 故障复发 | 守护脚本列为 CI/本地门禁，模板更新到 `docs/adding-a-new-service/dockerfile.zh.md` |
 
 ---
 

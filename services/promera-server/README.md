@@ -376,7 +376,7 @@ The directory is gitignored (`services/*/tests/fc_outputs/`). Use it to:
 
 - [`opensource/promera`](../../opensource/promera/) — upstream source
 - [`opensource/tinyprot`](../../opensource/tinyprot/) — featurization + MSA library
-- [adding-a-new-service guide](../../engineering/guides/adding-a-new-service.md)
+- [adding-a-new-service guide](../../docs/adding-a-new-service/index.zh.md)
 - [testing-fc-services guide](../../engineering/guides/testing-fc-services.md)
 - [FC async task mode decision](../../engineering/decisions/2026-06-17-fc-async-task-mode.md)
 - [promera tinyprot/triton runtime traps](../../engineering/guides/promera-tinyprot-cache.md)

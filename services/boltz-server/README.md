@@ -299,7 +299,7 @@ fast if PyPI wheel versions drift apart.
 ## Related
 
 - [`opensource/boltz`](../../opensource/boltz/) — upstream source
-- [adding-a-new-service guide](../../engineering/guides/adding-a-new-service.md)
+- [adding-a-new-service guide](../../docs/adding-a-new-service/index.zh.md)
 - [testing-fc-services guide](../../engineering/guides/testing-fc-services.md)
 - [boltz-server design](../../engineering/decisions/2026-05-19-boltz-server-design.md)
 - [Boltz-2 paper (Passaro et al. 2025)](https://doi.org/10.1101/2025.06.14.659707)

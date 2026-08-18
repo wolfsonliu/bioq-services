@@ -1,15 +1,13 @@
 # Testing — 测试骨架
 
-日期: 2026-07-14
-适用: [新增 bioagent service cookbook](./index.md) 的测试部分
-相关: [skeleton](./skeleton.md) · [deploy](./deploy.md) · [总览](./index.md)
+[English](testing.md) | 中文
 
-> ← 返回 [新增 service cookbook 总览](./index.md)
+> ← 返回 [新增 service cookbook 总览](./index.zh.md)
 
 本页覆盖四套测试骨架：`test_app.py`（离线 HTTP 单测）/ `test_cli.py`（CLI 批处理）/
 `test_fc.py`（FC 部署后回归）/ `test_fc_task.py`（FC 异步任务模式集成）。经 gateway
 调用的服务还应在 `gateway/tests/test_fc.py` 加一个 `TestEndToEnd<Svc>`
-e2e 类（见 迁移到 OSS mount）。
+e2e 类（见 [deploy.zh.md](./deploy.zh.md) 的 OSS mount 配置）。
 
 ### 10. `services/<svc>/tests/test_app.py`
 
@@ -378,7 +376,7 @@ def pytest_collection_modifyitems(config, items):
 
 > **为什么需要 `importlib.util`？** 离线测试直接 `uv run pytest services/<svc>/tests/` 运行——Python 搜索路径上没有 `server` 包。这段代码把 `services/<svc>/` 目录注册为 `server` 模块，之后 `from server.settings import ...` 就能正常解析。大部分现有 service 已经用这个 pattern。
 
-详细测试流程 / MCP 协议层 / 失败模式速查见 testing-fc-services.md。
+离线 / FC 测试的通用约定见 [testing.zh.md](../topics/testing.zh.md)。
 
 ### 12b. `services/<svc>/tests/test_fc_task.py`
 
@@ -656,9 +654,7 @@ poll_job(client, "", task_id,
          max_transient_errors=60)  # 60 × 20s = 20 min buffer
 ```
 
-同时所有非 poll_job 的 GET / DELETE 都要走 `_get_with_retry` 一样的包装。参考
-[project 记忆 `project_fc_http_polling_unreliable_at_concurrency.md`]
- —— 高并发下 GET 端点必然会漏抖。
+同时所有非 poll_job 的 GET / DELETE 都要走 `_get_with_retry` 一样的包装——高并发下 GET 端点必然会漏抖。
 
 #### 参考实现
 

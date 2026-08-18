@@ -148,4 +148,4 @@ apptainer exec --nv lasermpnn-server.sif \
 
 GPU instance; enable async task mode; clear the keepalive URL; mount NAS
 (`/data/models/lasermpnn`, `/data/lasermpnn_jobs`) and the OSS bucket at
-`/mnt/oss`. See [engineering/guides/adding-a-new-service/deploy.md](../../engineering/guides/adding-a-new-service/deploy.md).
+`/mnt/oss`. See [docs/adding-a-new-service/deploy.zh.md](../../docs/adding-a-new-service/deploy.zh.md).

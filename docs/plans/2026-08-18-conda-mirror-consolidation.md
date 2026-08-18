@@ -18,7 +18,7 @@
 - **Create** `scripts/check_conda_mirrors.py` — TDD 守护脚本（标准库）。
 - **Modify** 21 个 `services/*-server/Dockerfile` — 删内联 URL 块，改 `COPY` + `cat >>`。
 - **Modify** `docs/specs/2026-08-18-conda-mirror-consolidation-design.md`、`docs/plans/本文件` — 文档（本计划产物）。
-- **Modify** `docs/adding-a-new-service/dockerfile.md` — 同步「新增 conda 服务」模板（见 Task 7）。
+- **Modify** `docs/adding-a-new-service/dockerfile.zh.md` — 同步「新增 conda 服务」模板（见 Task 7）。
 
 受改的 21 个服务（写 `/root/.condarc` 者）：alphafold、bindflow、chembounce、deeprank-ab、
 diffdock、diffdock-pp、diffusion-hopping、drughive、flowmol、iggm、immunebuilder、megalodon、
@@ -391,14 +391,14 @@ git commit -m "docs: conda mirror consolidation design + plan"
 ### Task 6: 更新「新增服务」模板
 
 **Files:**
-- Modify: `docs/adding-a-new-service/dockerfile.md`
+- Modify: `docs/adding-a-new-service/dockerfile.zh.md`
 
 - [ ] **Step 1: 把文档中「内联 `.condarc` 写 TUNA mirror」的示例改为「`COPY deploy/conda/mirrors.condarc /tmp/mirrors.condarc` + heredoc 只保留 channels/priority + `cat /tmp/mirrors.condarc >> /root/.condarc`」，并指向本设计文档。**
 
 - [ ] **Step 2: Commit**
 
 ```bash
-git add docs/adding-a-new-service/dockerfile.md
+git add docs/adding-a-new-service/dockerfile.zh.md
 git commit -m "docs: new-service conda template uses shared mirror file"
 ```
 

@@ -1,14 +1,12 @@
 # Skeleton — 服务源码文件
 
-日期: 2026-07-14
-适用: [新增 bioagent service cookbook](./index.md) 的源码骨架部分
-相关: [dockerfile](./dockerfile.md) · [testing](./testing.md) · [总览](./index.md)
+[English](skeleton.md) | 中文
 
-> ← 返回 [新增 service cookbook 总览](./index.md)
+> ← 返回 [新增 service cookbook 总览](./index.zh.md)
 
 本页覆盖服务的源码文件骨架：`__init__.py` / `settings.py` / `models.py` / `adapter.py` /
 `app.py`（含 task endpoint）/ `__main__.py` / `pyproject.toml` / `VERSION` / `README.md`。
-Dockerfile 见 [dockerfile](./dockerfile.md)；测试见 [testing](./testing.md)。
+Dockerfile 见 [dockerfile](./dockerfile.zh.md)；测试见 [testing](./testing.zh.md)。
 
 ## 5 分钟 echo skeleton
 
@@ -40,8 +38,7 @@ class <Svc>Settings(ServiceSettings):
 
     # 权重目录 —— **统一约定**默认指向 NAS 挂载点 /data/models/<svc>/。
     # FC 自动挂载；SIF / 本地 docker 需 --bind /scratch/models/<svc>:/data/models/<svc>。
-    # 不在 image 内烘焙权重。详见
-    # engineering/decisions/2026-06-26-service-weights-externalization.md。
+    # 不在 image 内烘焙权重。
     weights_dir: Path = Field(default=Path("/data/models/<svc>"))
     # ... add what your tool needs
 ```
@@ -217,7 +214,7 @@ attach_mcp(app)
 | 实例占用 | 子进程在后台跑，HTTP 已结束 → FC 可能回收实例 | HTTP 请求与计算同生死 → 不会回收 |
 | 并发控制 | 客户端控制 | FC 平台层管理 |
 
-详细设计动机见 FC 异步任务模式设计。
+详细配置见 [deploy.zh.md](./deploy.zh.md)（FC 异步任务模式控制台配置）。
 
 **两种注册方式：**
 
@@ -297,7 +294,7 @@ if settings.task_endpoints_enabled:
 
 每个服务需要一个 `__main__.py`，让同一个 Docker 镜像支持 `python -m server <endpoint> ...` 一次性批处理模式。CLI 模式复用 `tools.py` 的 argv builder、`adapter.py` 的输出检测、`settings.py` 的配置——不启动 FastAPI / uvicorn。
 
-详细设计见 CLI 批处理模式设计。
+详细钩子签名见 [framework-api.zh.md](../topics/framework-api.zh.md)（CLI 批处理）。
 
 ```python
 """CLI batch-mode entry point for <svc>-server.

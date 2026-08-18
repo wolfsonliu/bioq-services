@@ -273,7 +273,7 @@ RUN_FC_TESTS=1 uv run python -m pytest -m fc \
 | Keepalive URL | 清空（走 task endpoint，不需要 legacy keepalive） |
 
 详细 deploy + 异步任务模式控制台配置见
-[新增服务 cookbook](../../engineering/guides/adding-a-new-service.md) 的
+[新增服务 cookbook](../../docs/adding-a-new-service/index.zh.md) 的
 "部署到 FC" 和 "FC 异步任务模式控制台配置" 章节。
 
 ## 相关文档
@@ -282,6 +282,6 @@ RUN_FC_TESTS=1 uv run python -m pytest -m fc \
 - [FlowMol3 wiki](../../wiki/small-molecule-design/flowmol3.md) — 上游算法 + 三个 self-correction 技巧详解
 - [Service 框架抽象设计](../../engineering/decisions/2026-05-12-service-framework-design.md)
 - [Weights externalization design](../../engineering/decisions/2026-06-26-service-weights-externalization.md)
-- [新增服务 cookbook](../../engineering/guides/adding-a-new-service.md)
+- [新增服务 cookbook](../../docs/adding-a-new-service/index.zh.md)
 - 上游：[Dunni3/FlowMol](https://github.com/Dunni3/FlowMol)（MIT）
 - 论文：[Dunn & Koes, arXiv:2508.12629 (2025)](https://arxiv.org/abs/2508.12629)

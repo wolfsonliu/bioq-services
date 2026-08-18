@@ -174,7 +174,7 @@ make push-proteinmpnn-server
 ## 相关文档
 
 - [proteinmpnn-server 设计](../../engineering/decisions/2026-05-13-proteinmpnn-server-design.md)
-- [新增 bioagent service cookbook](../../engineering/guides/adding-a-new-service.md)
+- [新增 service cookbook](../../docs/adding-a-new-service/index.zh.md)
 - [bioq-service-framework](../_framework/README.md)
 - [调用 bioagent service](../../engineering/guides/calling-bioagent-services.md)
 - [ProteinMPNN 上游 README](../../opensource/ProteinMPNN/README.md)

@@ -237,6 +237,6 @@ RUN_FC_TESTS=1 uv run python -m pytest -m fc \
 - [chembounce-server 设计文档](../../engineering/decisions/2026-06-28-chembounce-server-design.md)
 - [diffusion-hopping-server 设计](../../engineering/decisions/2026-06-28-diffusion-hopping-server-design.md) — 互补的 pocket-conditional scaffold hopping
 - [Service 框架抽象设计](../../engineering/decisions/2026-05-12-service-framework-design.md)
-- [新增服务 cookbook](../../engineering/guides/adding-a-new-service.md)
+- [新增服务 cookbook](../../docs/adding-a-new-service/index.zh.md)
 - 上游：[jyryu3161/chembounce](https://github.com/jyryu3161/chembounce)（**无 LICENSE**）
 - Zenodo data：https://zenodo.org/records/16741967

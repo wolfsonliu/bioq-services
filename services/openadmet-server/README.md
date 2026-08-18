@@ -313,7 +313,7 @@ RUN_FC_TESTS=1 uv run python -m pytest -m fc \
 - [openadmet-server design](../../engineering/decisions/2026-07-05-openadmet-server-design.md)
 - [Service framework abstraction](../../engineering/decisions/2026-05-12-service-framework-design.md)
 - [Service weights externalization](../../engineering/decisions/2026-06-26-service-weights-externalization.md)
-- [Adding a new service (cookbook)](../../engineering/guides/adding-a-new-service.md)
+- [Adding a new service (cookbook)](../../docs/adding-a-new-service/index.zh.md)
 - Upstream: [OpenADMET/openadmet-models](https://github.com/OpenADMET/openadmet-models) (MIT)
 - CheMeleon foundation: [Zenodo record 15460715](https://zenodo.org/records/15460715)
 - Pre-staged models: [huggingface.co/openadmet](https://huggingface.co/openadmet)

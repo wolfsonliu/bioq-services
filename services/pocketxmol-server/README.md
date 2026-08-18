@@ -406,7 +406,7 @@ apptainer exec --nv \
 ## 相关设计与文档
 
 - [pocketxmol-server 设计](../../engineering/decisions/2026-07-06-pocketxmol-server-design.md) — 完整设计文档
-- [新增服务 cookbook](../../engineering/guides/adding-a-new-service.md) — 骨架 + 规范
+- [新增服务 cookbook](../../docs/adding-a-new-service/index.zh.md) — 骨架 + 规范
 - [Service 权重 NAS 外置化设计](../../engineering/decisions/2026-06-26-service-weights-externalization.md)
 - [FC 异步任务模式](../../engineering/decisions/2026-06-17-fc-async-task-mode.md)
 

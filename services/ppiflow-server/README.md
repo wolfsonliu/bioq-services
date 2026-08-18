@@ -298,7 +298,7 @@ make push-ppiflow-server    # 自动用 services/ppiflow-server/VERSION 里的 t
 
 ## 相关文档
 
-- [新增 bioagent service cookbook](../../engineering/guides/adding-a-new-service.md) —— 本 service 按这份建
+- [新增 service cookbook](../../docs/adding-a-new-service/index.zh.md) —— 本 service 按这份建
 - [bioq-service-framework](../_framework/README.md) —— 通用 HTTP / job / 错误处理 / manifest 层
 - [调用 bioagent service](../../engineering/guides/calling-bioagent-services.md) —— Agent / client 调用协议
 - [PPIFlow 上游 README](../../opensource/PPIFlow/tool/PPIFlow/README.md) —— 算法本身的参数细节

@@ -1,19 +1,13 @@
 # 包装 conda-based upstream 的常见陷阱
 
-日期: 2026-07-14
-适用: [新增 bioagent service cookbook](./index.md) —— conda/micromamba 骨架的踩坑参考
-相关: [dockerfile](./dockerfile.md) · [总览](./index.md)
+[English](conda-pitfalls.md) | 中文
 
-> ← 返回 [新增 service cookbook 总览](./index.md)
+> ← 返回 [新增 service cookbook 总览](./index.zh.md)
 
-diffdock-pp-server v0.0.1 → v0.0.7 的 7 次 rebuild + diffdock-server 双坑回填出来的一组
-陷阱。**新 conda 服务落地前请把这一页过一遍。** conda/micromamba Dockerfile 骨架本身见
-[dockerfile](./dockerfile.md)。
-
-##### 包装 conda-based upstream 的常见陷阱
-
-diffdock-pp-server v0.0.1 → v0.0.7 的 7 次 rebuild 里踩到 8 个坑，每个都值得
-上升到 guide 层——同样的错在下一个 conda-based service 上很可能复现。**新 conda 服务落地前请把这一节过一遍。**
+diffdock-pp-server v0.0.1 → v0.0.7 的 7 次 rebuild（+ diffdock-server 双坑回填）踩到的 8 个坑，
+每个都值得上升到 guide 层——同样的错在下一个 conda-based service 上很可能复现。
+**新 conda 服务落地前请把这一页过一遍。** conda/micromamba Dockerfile 骨架本身见
+[dockerfile](./dockerfile.zh.md)。
 
 **1. `ENV LANG=C.UTF-8` 必备**（v0.0.7 修复）
 
@@ -167,7 +161,7 @@ Docker COPY 只看 host 上 `upstream/` 现在的内容，不看 vendor.sh 脚�
 ├─▶ Git operation failed
 ╰─▶ Git executable not found. Ensure that Git is installed and available.
 ```
-→ apt-install `git` 到 builder（详见 [dockerfile.md](./dockerfile.md) 的 8.3 骨架内注释）。
+→ apt-install `git` 到 builder（详见 [dockerfile.zh.md](./dockerfile.zh.md) 的 8.3 骨架内注释）。
 
 **坑 B：setup.py 顶层 `import torch` × PEP 517 隔离 build env**
 ```

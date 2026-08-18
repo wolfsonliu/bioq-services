@@ -217,12 +217,12 @@ RUN_FC_TESTS=1 uv run python -m pytest -m fc \
 | 异步任务模式 | **启用**（解锁 `/api/tasks/generate`） |
 
 详细 deploy + 异步任务模式控制台配置见
-[新增服务 cookbook](../../engineering/guides/adding-a-new-service.md)
+[新增服务 cookbook](../../docs/adding-a-new-service/index.zh.md)
 的"部署到 FC"和"FC 异步任务模式控制台配置"章节。
 
 ## 相关文档
 
 - [Service 框架抽象设计](../../engineering/decisions/2026-05-12-service-framework-design.md)
 - [Weights externalization design](../../engineering/decisions/2026-06-26-service-weights-externalization.md)
-- [新增服务 cookbook](../../engineering/guides/adding-a-new-service.md)
+- [新增服务 cookbook](../../docs/adding-a-new-service/index.zh.md)
 - 上游：[jostorge/diffusion-hopping](https://github.com/jostorge/diffusion-hopping)（MIT）

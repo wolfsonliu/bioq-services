@@ -1,10 +1,8 @@
 # Deploy — 部署到 FC + 控制台配置
 
-日期: 2026-07-14
-适用: [新增 bioagent service cookbook](./index.md) 的部署部分
-相关: [testing](./testing.md) · 迁移到 OSS mount · [总览](./index.md)
+[English](deploy.md) | 中文
 
-> ← 返回 [新增 service cookbook 总览](./index.md)
+> ← 返回 [新增 service cookbook 总览](./index.zh.md)
 
 本页覆盖部署到 FC 的通用约束、FC 控制台配置（异步任务模式 + OSS mount）、以及并发能力测试。
 
@@ -81,7 +79,5 @@ curl https://fc-<svc>-XXX.cn-hangzhou-vpc.fcapp.run/api/jobs/smoke-001 \
 
 如果第 2 步返回 200 而不是 202，说明控制台异步任务模式没启用，或 `X-Fc-Invocation-Type` header 没被网关识别。
 
-上述 smoke 命令都覆盖在 [`tests/test_fc_task.py`](#12b-servicessvctestsstest_fc_taskpy) 里 ——
+上述 smoke 命令都覆盖在 [`tests/test_fc_task.py`](./testing.zh.md#12b-servicessvctestsstest_fc_taskpy) 里 ——
 控制台配置改完之后跑一遍 `pytest -m fc services/<svc>/tests/test_fc_task.py` 就是完整回归。
-
-详细操作手册见 fc-gpu-instance-keepalive.md。

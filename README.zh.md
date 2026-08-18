@@ -1,6 +1,6 @@
 # bioq-services
 
-> English: [README.md](README.md)
+[English](README.md) | 中文
 
 AI 药物研发（AIDD）算法服务舰队 + 共享服务框架。每个 `services/<name>-server/` 把一个第三方
 生物信息 / AIDD 工具包成**双模 Docker 镜像**：
@@ -165,15 +165,13 @@ kubectl -n bioq rollout restart deploy/bioq-gateway
 
 ## 添加新服务
 
-**先读 [`docs/adding-a-service.md`](docs/adding-a-service.md)** —— repo-local 落地指南（代码放哪、
+**先读 [`docs/adding-a-service.zh.md`](docs/adding-a-service.zh.md)** —— repo-local 落地指南（代码放哪、
 `bioq_service` 命名、vendor/测试/构建/注册的具体命令）。
 
-完整流程与设计原则（骨架 / Dockerfile 两套 / conda 踩坑 / 测试骨架 / FC 部署 / 提交 checklist）在
-`bioagent` 仓库的 `engineering/guides/adding-a-new-service/` cookbook + `engineering/CONVENTIONS.md`
-（跨仓库文档）。
+完整流程（设计文档先行 → 骨架 → Dockerfile 两套 / conda 踩坑 → 测试骨架 → FC 部署 → 提交清单）在
+[`docs/adding-a-new-service/index.zh.md`](docs/adding-a-new-service/index.zh.md) 及其子页。
 
-> 分工：服务**代码**只在本仓开发；**设计文档**（`engineering/decisions/...-design.md`）留在
-> `bioagent` monorepo。详见 [`docs/adding-a-service.md`](docs/adding-a-service.md)。
+> 设计文档统一归档到 [`docs/specs/`](docs/specs/)。
 
 ## 相关仓库
 
