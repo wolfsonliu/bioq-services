@@ -1,7 +1,7 @@
 # Conda 镜像映射集中化设计
 
 - **日期**：2026-08-18
-- **状态**：草案（待评审）
+- **状态**：已完成（分支 `chore/conda-mirror-consolidation`，待合并）
 - **范围**：`services/*/Dockerfile` 中所有写 `/root/.condarc` 的服务（共 21 个）的构建期 conda 镜像映射
 - **关联计划**：`docs/plans/2026-08-18-conda-mirror-consolidation.md`
 

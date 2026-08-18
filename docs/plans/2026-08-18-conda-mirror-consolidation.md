@@ -158,15 +158,22 @@ def main() -> int:
                 errors.append(f"{SHARED} missing {PKU}/{channel}")
 
     # Invariant 2 + 3: every conda-using Dockerfile is TUNA-free and consumes
-    # the shared file via COPY + cat append.
+    # the shared file via COPY + a STANDALONE `RUN cat ... >>` append (the glued
+    # `&& cat ...` after heredoc EOF is an invalid-shell antipattern).
     for df in conda_dockerfiles():
         text = df.read_text()
         if TUNA in text:
             errors.append(f"{df}: still references TUNA mirror")
         if "COPY deploy/conda/mirrors.condarc" not in text:
             errors.append(f"{df}: missing COPY of shared mirrors.condarc")
-        if "cat /tmp/mirrors.condarc >> /root/.condarc" not in text:
-            errors.append(f"{df}: missing cat-append of shared mirrors.condarc")
+        if not any(
+            ln.strip() == "RUN cat /tmp/mirrors.condarc >> /root/.condarc"
+            for ln in text.splitlines()
+        ):
+            errors.append(
+                f"{df}: missing standalone 'RUN cat /tmp/mirrors.condarc >> /root/.condarc'"
+                " (append must be its own RUN, not glued with '&&' after heredoc EOF)"
+            )
 
     if errors:
         print(f"FAILED ({len(errors)} issues):")
