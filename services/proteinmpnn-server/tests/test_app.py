@@ -21,6 +21,28 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("PROTEINMPNN_WEIGHTS_DIR", str(tmp_path / "pmpnn"))
     (tmp_path / "pmpnn").mkdir(parents=True, exist_ok=True)
 
+    # `prepare_inputs` runs the upstream helper_scripts/*.py synchronously during
+    # job submission (via runner.submit -> build_argv). Without these stubs the
+    # endpoint returns 500 ("Helper script not found") instead of accepting the
+    # job, so install the ones `prepare_inputs` may invoke. The stubs just write
+    # an empty JSONL to the requested `--output_path`, which is all build_argv
+    # needs to compose the argv — the actual model run happens asynchronously.
+    stub = (
+        "import sys, pathlib\n"
+        "args = dict(zip(sys.argv[1::2], sys.argv[2::2]))\n"
+        "pathlib.Path(args['--output_path']).write_text('{}')\n"
+    )
+    helpers = tmp_path / "pmpnn" / "helper_scripts"
+    helpers.mkdir(parents=True, exist_ok=True)
+    for name in (
+        "parse_multiple_chains.py",
+        "assign_fixed_chains.py",
+        "make_fixed_positions_dict.py",
+        "make_tied_positions_dict.py",
+        "make_bias_AA.py",
+    ):
+        (helpers / name).write_text(stub)
+
     # Force a fresh import so the module-level `settings = ProteinMPNNSettings()`
     # call picks up the patched env vars.
     sys.modules.pop("server.app", None)

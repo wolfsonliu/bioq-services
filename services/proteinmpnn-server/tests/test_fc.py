@@ -12,6 +12,7 @@ suite is self-contained). Each inference call generates 2 sequences max.
 from __future__ import annotations
 
 import json
+import uuid
 from pathlib import Path
 
 import httpx
@@ -20,6 +21,13 @@ import pytest
 from bioq_service.fc_testing import fc_url, poll_job
 
 TEST_PDB = Path(__file__).resolve().parent / "data" / "5L33.pdb"
+
+# FC is configured with HeaderField session affinity on this header
+# (see deploy/fc.yaml: sessionAffinity=HEADER_FIELD, sessionConcurrencyPerInstance=1).
+# Every request from this module must carry the same value so the submit + all its
+# polls bind to a single instance; without it FC treats each call as a new session
+# and fans out to many instances.
+SESSION_HEADER = "bioagent-session-id"
 
 pytestmark = pytest.mark.fc
 
@@ -30,8 +38,21 @@ def base_url() -> str:
 
 
 @pytest.fixture(scope="module")
-def client(base_url: str) -> httpx.Client:
-    with httpx.Client(base_url=base_url, timeout=httpx.Timeout(120.0)) as c:
+def session_headers() -> dict[str, str]:
+    """One session id per test module so FC pins the run to a single instance."""
+    return {SESSION_HEADER: f"test-{uuid.uuid4().hex[:12]}"}
+
+
+@pytest.fixture(scope="module")
+def client(base_url: str, session_headers: dict[str, str]) -> httpx.Client:
+    # Send the session header on every request (submit, poll_job, smoke, download).
+    # client-level headers are merged into each request, so poll_job's polls — which
+    # never pass an explicit header — still carry it.
+    with httpx.Client(
+        base_url=base_url,
+        timeout=httpx.Timeout(120.0),
+        headers=session_headers,
+    ) as c:
         yield c
 
 
