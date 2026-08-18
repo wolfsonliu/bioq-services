@@ -49,6 +49,7 @@ ENV PATH=/opt/conda/envs/openbpmd/bin:$PATH
 # ---------------------------------------------------------------------------
 # Mirror configuration for CN-friendly builds.
 # ---------------------------------------------------------------------------
+COPY deploy/conda/mirrors.condarc /tmp/mirrors.condarc
 RUN mkdir -p /root/.config/pip \
     && printf '[global]\nindex-url = https://repo.huaweicloud.com/repository/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
        > /root/.config/pip/pip.conf \
@@ -57,9 +58,8 @@ channels:
   - conda-forge
 show_channel_urls: true
 channel_priority: flexible
-custom_channels:
-  conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
 EOF
+RUN cat /tmp/mirrors.condarc >> /root/.condarc
 
 # ---------------------------------------------------------------------------
 # Create conda env. Only ~7 packages (all conda-forge) — a single solve stays
