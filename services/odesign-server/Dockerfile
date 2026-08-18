@@ -62,9 +62,10 @@ ENV PATH=/opt/conda/envs/odesign/bin:$PATH
 # ---------------------------------------------------------------------------
 # Mirror configuration for pip + conda.
 # pip.conf: Huawei Cloud (kept for any pip invocations inside conda env).
-# .condarc: TUNA (Tsinghua) for standard channels.
+# .condarc: PKU for standard channels.
 # uv: controlled by UV_INDEX_URL env above (post-env pip installs).
 # ---------------------------------------------------------------------------
+COPY deploy/conda/mirrors.condarc /tmp/mirrors.condarc
 RUN mkdir -p /root/.config/pip \
     && printf '[global]\nindex-url = https://repo.huaweicloud.com/repository/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
        > /root/.config/pip/pip.conf \
@@ -72,14 +73,8 @@ RUN mkdir -p /root/.config/pip \
 channels:
   - defaults
 show_channel_urls: true
-default_channels:
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/msys2
-custom_channels:
-  conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
-  pytorch: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
 EOF
+RUN cat /tmp/mirrors.condarc >> /root/.condarc
 
 # ---------------------------------------------------------------------------
 # Create conda env with Python 3.10 (ODesign only has requirements.txt, no
