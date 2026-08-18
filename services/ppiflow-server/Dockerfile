@@ -114,46 +114,18 @@ RUN mkdir -p /root/.config/pip && \
     > /root/.pydistutils.cfg
 
 # ---------------------------------------------------------------------------
-# Redirect conda channels to TUNA (Tsinghua) mirror via `.condarc`.
-#
-# Upstream env.yml lists 8 境外 channels (defaults / conda-forge / nvidia /
-# pytorch / schrodinger / bioconda / ostrokach / anaconda) BEFORE the 3 TUNA
-# fallback URLs at the bottom. micromamba probes in order, so most metadata
-# requests hit the slow upstream channels first → 5–10 min of round-trips
-# before falling back to TUNA.
-#
-# `~/.condarc` with `custom_channels` remaps channel-name → mirror-URL on
-# every micromamba request. We use this instead of sed-rewriting env.yml
-# because (a) it works even when env.yml channels list updates upstream and
-# (b) it doesn't need to know which YAML lines to delete.
-#
-# Mirror coverage (verified 2026-05-15):
-#   - conda-forge / pytorch / bioconda / pkgs/main → TUNA ✅
-#   - nvidia → NOT mirrored by TUNA/USTC/Aliyun/Huawei (404). The `nvidia`
-#     channel only supplies `cuda-nvcc=12.1.66` (~50MB) in this env.yml, so
-#     we leave it to fall through to upstream `conda.anaconda.org/nvidia`
-#     by NOT listing it in custom_channels. Slow once, then cache mount
-#     catches it.
-#   - schrodinger / ostrokach / anaconda: also fall through to upstream;
-#     no packages in env.yml's `dependencies:` actually originate there.
-#
-# Previously tried Huawei mirror (commit before this one) — it kept failing
-# with "Could not load repodata.json for conda-forge". TUNA is more reliable
-# for cloud channels.
+# Redirect conda channels to the shared mirror mapping via `.condarc`
+# (deploy/conda/mirrors.condarc — single source of truth). The upstream
+# channels nvidia / schrodinger / ostrokach / anaconda are intentionally
+# NOT remapped: they fall through to conda.anaconda.org (slow, but works).
 # ---------------------------------------------------------------------------
+COPY deploy/conda/mirrors.condarc /tmp/mirrors.condarc
 RUN cat > /root/.condarc <<'EOF'
 channels:
   - defaults
 show_channel_urls: true
-default_channels:
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/msys2
-custom_channels:
-  conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
-  pytorch: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
-  bioconda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
 EOF
+RUN cat /tmp/mirrors.condarc >> /root/.condarc
 
 # ---------------------------------------------------------------------------
 # Create the `ppiflow` conda env from upstream's environment.yml.
