@@ -139,9 +139,10 @@ custom_channels:
 2. heredoc 里**只保留** `channels:` / `show_channel_urls:` / `channel_priority:` 以及描述这些键的
    YAML 注释；**删除** `default_channels:` / `custom_channels:` 整块 URL 映射，以及描述映射的
    YAML 注释（如「only map channels that TUNA hosts / do NOT map pyg/nvidia」——该知识已迁入共享文件头）。
-3. 在 `EOF` 之后追加：
+3. 在 `EOF` 之后追加一行**独立 `RUN`**（**不能**写成 `&& cat ...` 接在 `EOF` 后——那是非法 shell，
+   会报 `syntax error near unexpected token '&&'`）：
    ```dockerfile
-       && cat /tmp/mirrors.condarc >> /root/.condarc
+   RUN cat /tmp/mirrors.condarc >> /root/.condarc
    ```
 
 变换前后示意（rfdiffusion2）：
@@ -169,7 +170,7 @@ channels:
   - defaults
 show_channel_urls: true
 EOF
-    && cat /tmp/mirrors.condarc >> /root/.condarc
+RUN cat /tmp/mirrors.condarc >> /root/.condarc
 ```
 
 ---

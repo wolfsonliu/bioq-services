@@ -2,8 +2,8 @@
 # Dockerfile. Each builder stage does:
 #
 #     COPY deploy/conda/mirrors.condarc /tmp/mirrors.condarc
-#     ... && cat > /root/.condarc <<'EOF' ... EOF
-#         && cat /tmp/mirrors.condarc >> /root/.condarc
+#     RUN cat > /root/.condarc <<'EOF' ... EOF
+#     RUN cat /tmp/mirrors.condarc >> /root/.condarc
 #
 # i.e. the keys below are appended to the service's own `channels:` /
 # `show_channel_urls` / `channel_priority` keys, which stay in each Dockerfile

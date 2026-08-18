@@ -38,8 +38,9 @@ COPY deploy/conda/mirrors.condarc /tmp/mirrors.condarc
 #     YAML 注释）；删除 default_channels + custom_channels 整块 URL，以及描述映射的
 #     YAML 注释（"only map channels that TUNA hosts / do NOT map pyg|nvidia" 类）。
 
-# (3) 在 heredoc 结束标记 EOF 之后，追加：
-    && cat /tmp/mirrors.condarc >> /root/.condarc
+# (3) 在 heredoc 结束标记 EOF 之后，追加一行独立 RUN（不可写成 `&& cat ...` 接在 EOF 后，
+#     那是非法 shell：`syntax error near unexpected token '&&'`）：
+    RUN cat /tmp/mirrors.condarc >> /root/.condarc
 ```
 
 ---
@@ -56,8 +57,8 @@ COPY deploy/conda/mirrors.condarc /tmp/mirrors.condarc
 # Dockerfile. Each builder stage does:
 #
 #     COPY deploy/conda/mirrors.condarc /tmp/mirrors.condarc
-#     ... && cat > /root/.condarc <<'EOF' ... EOF
-#         && cat /tmp/mirrors.condarc >> /root/.condarc
+#     RUN cat > /root/.condarc <<'EOF' ... EOF
+#     RUN cat /tmp/mirrors.condarc >> /root/.condarc
 #
 # i.e. the keys below are appended to the service's own `channels:` /
 # `show_channel_urls` / `channel_priority` keys, which stay in each Dockerfile
@@ -254,7 +255,7 @@ channels:
   - defaults
 show_channel_urls: true
 EOF
-    && cat /tmp/mirrors.condarc >> /root/.condarc
+RUN cat /tmp/mirrors.condarc >> /root/.condarc
 ```
 
 - [ ] **Step 2: 运行守护脚本**
