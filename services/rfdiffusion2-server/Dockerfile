@@ -99,9 +99,9 @@ RUN --mount=type=bind,source=services/rfdiffusion2-server/upstream/envs,target=/
 #
 # NOTE: `baker-laboratory/ipd` is NOT pip-installed here. Its github HEAD has
 # moved past the RFdiffusion2 cut and now imports `evn` at module load, which
-# isn't in the conda env. We instead vendor opensource/RFdiffusion2/ipd/ into
-# upstream/ipd/ (see scripts/vendor.sh) so the contemporary copy lives on
-# PYTHONPATH alongside rf_diffusion/.
+# isn't in the conda env. We instead vendor ipd/ from the pinned RFdiffusion2
+# checkout into upstream/ipd/ (see scripts/vendor.sh) so the contemporary copy
+# lives on PYTHONPATH alongside rf_diffusion/.
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/conda/envs/rfd2/bin/python \

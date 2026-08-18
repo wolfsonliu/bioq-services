@@ -137,7 +137,7 @@ curl -X POST $URL/api/generate \
 `extra_overrides` 是 JSON dict，每条 `"key.path": value` 被拼成 `key.path=value` 加到 argv。
 bool 会被转成 `true` / `false`。
 
-可用 config 在 `opensource/RFdiffusion2/rf_diffusion/config/inference/` 下，常见的：
+可用 config 在 `upstream/rf_diffusion/config/inference/`（vendor 后，同步自上游 repo）下，常见的：
 
 | Config | 用途 |
 |---|---|
@@ -178,17 +178,17 @@ bool 会被转成 `true` / `false`。
 ```
 
 `design_<N>.pdb` 中：motif 残基保留侧链坐标，diffused 残基只有 backbone。下游需配 LigandMPNN
-（包含在镜像内的 `rf_diffusion/third_party_model_weights/ligand_mpnn/` 权重）做序列设计。
+（权重在上游 `rf_diffusion/third_party_model_weights/ligand_mpnn/`，本服务的 vendor/权重脚本不拉取）做序列设计。
 
 ## 配置（环境变量）
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
-| `RFDIFFUSION2_ROOT` | `/opt/rfdiffusion2` | 上游源码 + 模型根目录 |
-| `RFDIFFUSION2_MODELS_DIR` | `/opt/rfdiffusion2/rf_diffusion/model_weights` | RFD_*.pt 所在 |
-| `RFDIFFUSION2_INFERENCE_SCRIPT` | `/opt/rfdiffusion2/rf_diffusion/run_inference.py` | Hydra 入口 |
+| `RFDIFFUSION2_ROOT` | `/opt/rfdiffusion2-server` | 上游源码根目录（subprocess cwd）|
+| `RFDIFFUSION2_MODELS_DIR` | `/opt/rfdiffusion2-server/upstream/rf_diffusion/model_weights` | RFD_*.pt 所在 |
+| `RFDIFFUSION2_INFERENCE_SCRIPT` | `/opt/rfdiffusion2-server/upstream/rf_diffusion/run_inference.py` | Hydra 入口 |
 | `RFDIFFUSION2_PYTHON` | `/opt/conda/envs/rfd2/bin/python` | conda env 内的 python |
-| `RFDIFFUSION2_PYTHONPATH` | `/opt/rfdiffusion2` | 注入子进程的 PYTHONPATH |
+| `RFDIFFUSION2_PYTHONPATH` | `/opt/rfdiffusion2-server/upstream` | 注入子进程的 PYTHONPATH |
 | `RFDIFFUSION2_JOBS_BASE_DIR` | `/data/rfdiffusion2_jobs` | 任务持久化目录 |
 | `RFDIFFUSION2_OSS_REGION` | `cn-hangzhou` | OSS URI 解析区域 |
 
@@ -197,18 +197,20 @@ OSS 凭证从标准环境变量读取（`OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SE
 ## 本地开发
 
 ```bash
-# 拉源码 + 权重
-cd opensource/RFdiffusion2 && python setup.py
+# 1. vendor 源码（upstream/）+ 下载权重（weights/）—— 两者 gitignored
+./services/rfdiffusion2-server/scripts/vendor.sh
+./services/rfdiffusion2-server/scripts/fetch_weights.sh
 
-# 创建 conda env（参考 envs/cuda124_env.yml）— 至少需要 16 GB GPU 显存
-micromamba env create -n rfd2 -f opensource/RFdiffusion2/envs/cuda124_env.yml
-micromamba run -n rfd2 pip install \
-    git+https://github.com/RalphMao/PyTimer.git \
-    git+https://github.com/baker-laboratory/ipd.git
+# 2. 创建 conda env（用 vendored 的 env spec）— 至少需要 16 GB GPU 显存
+micromamba env create -n rfd2 -f services/rfdiffusion2-server/upstream/envs/cuda124_env.yml
+micromamba run -n rfd2 pip install git+https://github.com/RalphMao/PyTimer.git
 
-# 启动服务
+# 3. 启动服务（路径都指向 vendored 产物）
 cd services/rfdiffusion2-server
-RFDIFFUSION2_ROOT=$(pwd)/../../opensource/RFdiffusion2 \
+RFDIFFUSION2_ROOT=$(pwd)/upstream \
+RFDIFFUSION2_PYTHONPATH=$(pwd)/upstream \
+RFDIFFUSION2_INFERENCE_SCRIPT=$(pwd)/upstream/rf_diffusion/run_inference.py \
+RFDIFFUSION2_MODELS_DIR=$(pwd)/weights \
 RFDIFFUSION2_PYTHON=/path/to/rfd2/bin/python \
 RFDIFFUSION2_JOBS_BASE_DIR=/tmp/rfd2_jobs \
 micromamba run -n rfd2 uvicorn server.app:app --reload --port 9000
@@ -224,7 +226,7 @@ uv run --with bioq-service-framework --with httpx --with pytest \
 
 ## Vendor 与权重
 
-RFdiffusion2 上游不是 pip-installable 包，官方安装方式是 conda env + 设 `PYTHONPATH` 指向源码（见 [installation doc](https://rosettacommons.github.io/RFdiffusion2/installation.html)）。本服务为了与 `opensource/` 解耦，把运行时所需源码 vendor 到 `upstream/`，权重放到 `weights/`，两者都 **gitignored**，由 `scripts/` 下的脚本从 `opensource/RFdiffusion2/` 派生：
+RFdiffusion2 上游不是 pip-installable 包，官方安装方式是 conda env + 设 `PYTHONPATH` 指向源码（见 [installation doc](https://rosettacommons.github.io/RFdiffusion2/installation.html)）。本服务把运行时所需源码 vendor 到 `upstream/`，权重下载到 `weights/`，两者都 **gitignored**，由 `scripts/` 下的脚本派生（源码按 pinned SHA 从 GitHub clone，权重从 UW 文件站直下，不再依赖 `opensource/RFdiffusion2/`）：
 
 - `upstream/rf_diffusion/` — Python 源码 + Hydra configs + benchmark/input/
 - `upstream/envs/{cuda124_env.yml, requirements_cuda124.txt}` — conda env spec
@@ -236,17 +238,17 @@ RFdiffusion2 上游不是 pip-installable 包，官方安装方式是 conda env 
 ./services/rfdiffusion2-server/scripts/vendor.sh
 ```
 
-排除规则在脚本内：`test_data/` / `goldens/` / `dev/` / `exec/` / `*.pkl` / `*.pse` / `model_weights/` 等不进 vendor。Re-run 后 `git status` 看不到改动（gitignored），但 `du -sh upstream/` 可以确认大小。
+脚本把 `RosettaCommons/RFdiffusion2` 按 pinned SHA clone 到临时目录再 rsync（5 次重试 + SHA 校验）。改 pin 编辑脚本顶部的 `RFDIFFUSION2_SHA`；CN 网络可用 `RFDIFFUSION2_REPO=https://ghproxy.cn/https://github.com/RosettaCommons/RFdiffusion2.git` 覆盖镜像。
+
+排除规则在脚本内：`test_data/` / `goldens/` / `exec/` / `model_weights/` / `third_party_model_weights/` / `*.pkl` / `*.pse` / `__pycache__` 等不进 vendor。Re-run 后 `git status` 看不到改动（gitignored），但 `du -sh upstream/` 可以确认大小。
 
 ### 填充权重
 
 ```bash
-# 1. 先按 upstream 文档下权重到 opensource/
-cd opensource/RFdiffusion2 && python setup.py && cd -
-
-# 2. 再 rsync 到本服务
 ./services/rfdiffusion2-server/scripts/fetch_weights.sh
 ```
+
+脚本直接从 `https://files.ipd.uw.edu/pub/rfdiffusion2/model_weights/` 下载 `RFD_140.pt` / `RFD_173.pt`（~2.6 GB 合计），不再需要在 `opensource/RFdiffusion2/` 里先跑 `setup.py`。需要直接下到 NAS 时用 `WEIGHTS_DST=` 覆盖目标目录。
 
 `docker build` 之前必须先跑这两个脚本，否则 Dockerfile 会因为 `upstream/` 或 `weights/` 不存在而 build 失败。
 
@@ -257,8 +259,9 @@ cd opensource/RFdiffusion2 && python setup.py && cd -
 镜像从项目根目录构建：
 
 ```bash
-# 1. 先在本机下载权重（~2.6 GB）
-cd opensource/RFdiffusion2 && python setup.py
+# 1. vendor 源码 + 下载权重（~2.6 GB；两者 gitignored）
+./services/rfdiffusion2-server/scripts/vendor.sh
+./services/rfdiffusion2-server/scripts/fetch_weights.sh
 
 # 2. 构建（首次约 30 分钟：torch + dgl + pyg-lib + pyrosetta + 2.6GB 权重）
 make build-rfdiffusion2-server
@@ -313,7 +316,7 @@ FC 上限是 15 GB **per layer**（总大小可以更大），所以分层要注
 
 下游推荐：
 
-- 序列设计：[proteinmpnn-server](../proteinmpnn-server/)（仅蛋白）或 LigandMPNN（含小分子，目前打包在
-  RFdiffusion2 镜像内）。
+- 序列设计：[proteinmpnn-server](../proteinmpnn-server/)（仅蛋白）或 LigandMPNN（含小分子；其权重在
+  上游 `rf_diffusion/third_party_model_weights/ligand_mpnn/`，需自行拉取后走下游流程）。
 - 结构验证：本仓库未独立提供 RF2/Chai-1 服务；可调上游 RFdiffusion2 的 pipeline.py 串联（依赖
   `rf_diffusion/exec/chai.sif`，FC 不支持 .sif）。

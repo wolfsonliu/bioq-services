@@ -1,31 +1,47 @@
 #!/usr/bin/env bash
-# Populate services/rfdiffusion2-server/weights/ from
-# opensource/RFdiffusion2/rf_diffusion/model_weights/. Run this once before
+# Download the RFdiffusion2 diffusion checkpoints into
+# services/rfdiffusion2-server/weights/. Run this once before
 # `make build-rfdiffusion2-server` on a fresh checkout.
 #
-# Prereq: opensource/RFdiffusion2/rf_diffusion/model_weights/ must be populated
-# (upstream provides `setup.py` to download them; run it once in that dir).
+#   ./services/rfdiffusion2-server/scripts/fetch_weights.sh
+#
+# Download straight to NAS (recommended for FC staging — weights are baked
+# into the image today, see Dockerfile):
+#
+#   WEIGHTS_DST=/mnt/nas/data/models/rfdiffusion2 \
+#     ./services/rfdiffusion2-server/scripts/fetch_weights.sh
+#
+# Sources the same UW file host that upstream's setup.py reads
+# (https://files.ipd.uw.edu/pub/rfdiffusion2/), so this no longer depends on a
+# local opensource/RFdiffusion2/ checkout having run `setup.py` beforehand.
+#
+# Upstream publishes no checksums; `wget -c` resumes partial downloads and we
+# only require each file to be non-empty afterward.
 set -euo pipefail
 
-PROJECT_ROOT="$(git rev-parse --show-toplevel)"
-SRC="$PROJECT_ROOT/opensource/RFdiffusion2/rf_diffusion/model_weights"
-DST="$PROJECT_ROOT/services/rfdiffusion2-server/weights"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DST="${WEIGHTS_DST:-$SCRIPT_DIR/../weights}"
+BASE_URL="https://files.ipd.uw.edu/pub/rfdiffusion2/model_weights"
 
-if [[ ! -d "$SRC" ]]; then
-    echo "ERROR: $SRC not found." >&2
-    echo "Populate it first by running:" >&2
-    echo "    cd $PROJECT_ROOT/opensource/RFdiffusion2 && python setup.py" >&2
-    exit 1
-fi
-
-if [[ -z "$(ls -A "$SRC" 2>/dev/null)" ]]; then
-    echo "ERROR: $SRC is empty." >&2
-    exit 1
-fi
+# RFdiffusion2 ships two diffusion checkpoints today. The default config
+# (aa.yaml) points at RFD_140.pt; RFD_173.pt is the newer benchmark model,
+# selected via `model=rfd_173`. The LigandMPNN weights under
+# rf_diffusion/third_party_model_weights/ are consumed by downstream sequence
+# design, not by run_inference.py itself, so they are NOT fetched here.
+FILES=(RFD_140.pt RFD_173.pt)
 
 mkdir -p "$DST"
-rsync -a --delete "$SRC/" "$DST/"
 
-echo "Synced weights to $DST"
-du -sh "$DST"
+for f in "${FILES[@]}"; do
+    dest="$DST/$f"
+    if [[ -s "$dest" ]]; then
+        echo "  skip (already present): $f"
+        continue
+    fi
+    echo "  downloading: $f"
+    wget -c -O "$dest" "$BASE_URL/$f" \
+        || curl -L -# -o "$dest" "$BASE_URL/$f"
+done
+
+echo "Weights in: $DST"
 ls -lh "$DST"

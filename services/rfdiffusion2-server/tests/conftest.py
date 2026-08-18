@@ -1,7 +1,7 @@
 """Test setup: import the service modules as `server` without installing.
 
 Mirrors rfdiffusion-server's pattern — the Dockerfile copies this dir to
-`/opt/rfdiffusion2/server/`, so tests reference modules via `from server.*`.
+`/opt/rfdiffusion2-server/server/`, so tests reference modules via `from server.*`.
 """
 
 from __future__ import annotations

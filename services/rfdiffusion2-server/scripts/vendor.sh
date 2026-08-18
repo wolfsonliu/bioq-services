@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
-# Re-vendor RFdiffusion2 source from opensource/RFdiffusion2/ into upstream/.
-# Run this whenever you pull new upstream changes.
+# Re-vendor RFdiffusion2 source into services/rfdiffusion2-server/upstream/ at
+# a pinned SHA, so `docker build` does no network access to github and does NOT
+# depend on a local opensource/RFdiffusion2/ checkout (the old path).
+#
+#   ./services/rfdiffusion2-server/scripts/vendor.sh
+#
+# Github mirror override (CN networks):
+#
+#   RFDIFFUSION2_REPO=https://ghproxy.cn/https://github.com/RosettaCommons/RFdiffusion2.git \
+#       ./services/rfdiffusion2-server/scripts/vendor.sh
 #
 # Excludes test/dev/data files per the vendor design doc; keeps all *.py +
 # config/ + benchmark/input/ + envs/cuda124_env.yml + requirements_cuda124.txt.
@@ -16,18 +24,42 @@
 # Why vendor `ipd` instead of `pip install` from github: baker-laboratory/ipd
 # HEAD has progressed past the version RFdiffusion2 was built against and
 # now imports `evn` at module load, which isn't in the conda env. Vendoring
-# the contemporary copy from opensource/RFdiffusion2/ipd/ avoids the
-# version skew. (`lib/` and `fused_mpnn/` are not imported by rf_diffusion
+# the contemporary copy from the pinned RFdiffusion2 checkout's ipd/ avoids
+# the version skew. (`lib/` and `fused_mpnn/` are not imported by rf_diffusion
 # at runtime, so they're skipped.)
 set -euo pipefail
 
+RFDIFFUSION2_REPO="${RFDIFFUSION2_REPO:-https://github.com/RosettaCommons/RFdiffusion2.git}"
+RFDIFFUSION2_SHA="${RFDIFFUSION2_SHA:-d365cbf4db3958814a9f8e4f6f94fa309dfebc2b}"
+
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"
-SRC="$PROJECT_ROOT/opensource/RFdiffusion2"
 DST="$PROJECT_ROOT/services/rfdiffusion2-server/upstream"
+TMP="$(mktemp -d -t rfdiffusion2-vendor.XXXXXX)"
+trap "rm -rf '$TMP'" EXIT
+
+# Clone at the pinned SHA directly from GitHub — no dependency on the old
+# local opensource/RFdiffusion2/ checkout. --filter=blob:none defers blob
+# download until checkout, keeping the initial fetch light on CN networks.
+for i in 1 2 3 4 5; do
+    rm -rf "$TMP/repo"
+    if git clone --filter=blob:none --no-checkout "$RFDIFFUSION2_REPO" "$TMP/repo"; then break; fi
+    [ "$i" = "5" ] && { echo "ERROR: git clone failed after 5 attempts" >&2; exit 1; }
+    echo "  clone failed, retrying in $((i*10))s ..."; sleep $((i*10))
+done
+
+git -C "$TMP/repo" checkout "$RFDIFFUSION2_SHA"
+actual="$(git -C "$TMP/repo" rev-parse HEAD)"
+[[ "$actual" = "$RFDIFFUSION2_SHA" ]] || {
+    echo "ERROR: HEAD mismatch (got $actual, expected $RFDIFFUSION2_SHA)" >&2
+    exit 1
+}
+rm -rf "$TMP/repo/.git"
+
+SRC="$TMP/repo"
 
 if [[ ! -d "$SRC/rf_diffusion" ]]; then
-    echo "ERROR: $SRC/rf_diffusion not found." >&2
-    echo "Make sure opensource/RFdiffusion2/ is checked out." >&2
+    echo "ERROR: $SRC/rf_diffusion not found after clone." >&2
+    echo "Check RFDIFFUSION2_REPO / RFDIFFUSION2_SHA point at RosettaCommons/RFdiffusion2." >&2
     exit 1
 fi
 

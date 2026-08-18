@@ -108,8 +108,8 @@ class RFdiffusion2Adapter(JobAdapter):
                     notes=(
                         "Escape hatch for any inference config or override not exposed "
                         "by the structured endpoints. See "
-                        "`opensource/RFdiffusion2/rf_diffusion/config/inference/` for "
-                        "the catalogue of configs."
+                        "`rf_diffusion/config/inference/` in the vendored upstream "
+                        "source for the catalogue of configs."
                     ),
                 ),
             ],
