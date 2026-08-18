@@ -1,0 +1,37 @@
+# Single source of truth for the conda mirror mapping used by every service
+# Dockerfile. Each builder stage does:
+#
+#     COPY deploy/conda/mirrors.condarc /tmp/mirrors.condarc
+#     ... && cat > /root/.condarc <<'EOF' ... EOF
+#         && cat /tmp/mirrors.condarc >> /root/.condarc
+#
+# i.e. the keys below are appended to the service's own `channels:` /
+# `show_channel_urls` / `channel_priority` keys, which stay in each Dockerfile
+# because they genuinely differ per service (channel list, strict vs flexible).
+# The keys never collide with those, so concatenation stays valid YAML.
+#
+# WHY PKU (not TUNA): TUNA (Tsinghua) dropped pkgs/r and pkgs/msys2 from its
+# mirror (both answer 404 today); libmamba 2.x treats a 404 repodata.json as a
+# fatal error and aborts env create. PKU still mirrors the full defaults set.
+#
+# `bioconda` is mapped unconditionally — harmless for services that never
+# resolve it, and keeps this file the only thing a mirror switch touches.
+#
+# Intentionally NOT mapped (fall through to upstream conda.anaconda.org, which
+# works fine but is slow); Chinese mirrors 404 on their `label/*` or return
+# stale/incomplete metadata:
+#   - nvidia / nvidia/label/cuda-*   (cuda-nvcc, cuda toolkit labels)
+#   - pyg                            (torch-scatter / sparse / cluster)
+#   - dglteam / dglteam/label/*      (dgl CPU/CUDA builds)
+#   - conda.rosettacommons.org       (pyrosetta, proprietary, no mirror)
+# Do NOT add those as custom_channels entries here.
+#
+# To switch mirrors (TUNA / PKU / Aliyun / ...), edit ONLY the URLs in this file.
+default_channels:
+  - https://mirrors.pku.edu.cn/anaconda/pkgs/main
+  - https://mirrors.pku.edu.cn/anaconda/pkgs/r
+  - https://mirrors.pku.edu.cn/anaconda/pkgs/msys2
+custom_channels:
+  conda-forge: https://mirrors.pku.edu.cn/anaconda/cloud
+  pytorch: https://mirrors.pku.edu.cn/anaconda/cloud
+  bioconda: https://mirrors.pku.edu.cn/anaconda/cloud
