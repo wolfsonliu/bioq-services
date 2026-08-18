@@ -52,10 +52,11 @@ ENV MAMBA_ROOT_PREFIX=/opt/conda
 ENV PATH=/opt/conda/envs/diffdock_pp/bin:$PATH
 
 # ---------------------------------------------------------------------------
-# Mirror configuration (Huawei pip + TUNA conda) for CN-friendly builds.
+# Mirror configuration (Huawei pip + PKU conda) for CN-friendly builds.
 # Same rationale as diffusion-hopping-server: strict channel_priority is
 # essential for old pytorch/pyg resolves.
 # ---------------------------------------------------------------------------
+COPY deploy/conda/mirrors.condarc /tmp/mirrors.condarc
 RUN mkdir -p /root/.config/pip \
     && printf '[global]\nindex-url = https://repo.huaweicloud.com/repository/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
        > /root/.config/pip/pip.conf \
@@ -64,18 +65,8 @@ channels:
   - defaults
 show_channel_urls: true
 channel_priority: strict
-default_channels:
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/msys2
-# custom_channels: only map channels that TUNA actually hosts.
-# Do NOT map `pyg` or `nvidia` — TUNA returns 404 for those; they fall
-# through to the upstream conda.anaconda.org URLs which work fine.
-custom_channels:
-  conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
-  bioconda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
-  pytorch: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
 EOF
+RUN cat /tmp/mirrors.condarc >> /root/.condarc
 
 # ---------------------------------------------------------------------------
 # Conda env — matches upstream DiffDock-PP README dependencies (Python
