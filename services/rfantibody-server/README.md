@@ -32,7 +32,7 @@ NAS: <jobs_base_dir>/<job_id>/{input/, output/{1,2,3}_*.qv, logs/run.log, job.js
 ```
 
 **没有 `/api/pipeline`**。三步组合（v0.1 的 `/api/pipeline`）已剥离到客户端 / Agent 编排层 ——
-借助共享 NAS，把上一步的 `job://<id>/<file>` 直接作为下一步 `input_uri` 即可，无需重新上传 .qv。
+借助共享 NAS，把上一步的 `job://<id>/<file>` 直接作为下一步 `input_quiver_uri` 即可，无需重新上传 .qv。
 
 ## API 速览
 
@@ -54,7 +54,7 @@ curl -X POST http://localhost:9000/api/rfdiffusion \
 
 ### Step 2 — ProteinMPNN
 
-可上传 Quiver 文件，**也可** 用 `input_uri` 直接引用上一步的 NAS 路径（推荐 —— 零拷贝）：
+可上传 Quiver 文件，**也可** 用 `input_quiver_uri` 直接引用上一步的 NAS 路径（推荐 —— 零拷贝）：
 
 ```bash
 # 方式 A: 上传
@@ -64,7 +64,7 @@ curl -X POST http://localhost:9000/api/proteinmpnn \
 
 # 方式 B: NAS 共享路径 (推荐)
 curl -X POST http://localhost:9000/api/proteinmpnn \
-  -F "input_uri=job://<rfdiffusion_job_id>/1_rfdiffusion.qv" \
+  -F "input_quiver_uri=job://<rfdiffusion_job_id>/1_rfdiffusion.qv" \
   -F "seqs_per_struct=4"
 ```
 
@@ -74,13 +74,13 @@ curl -X POST http://localhost:9000/api/proteinmpnn \
 
 ```bash
 curl -X POST http://localhost:9000/api/rf2 \
-  -F "input_uri=job://<proteinmpnn_job_id>/2_proteinmpnn.qv" \
+  -F "input_quiver_uri=job://<proteinmpnn_job_id>/2_proteinmpnn.qv" \
   -F "num_recycles=10"
 ```
 
 输出：`output/3_rf2.qv`
 
-### 支持的 `input_uri` schemes
+### 支持的 `input_quiver_uri` schemes
 
 | 形式 | 说明 |
 |---|---|
