@@ -165,11 +165,9 @@ kubectl -n bioq rollout restart deploy/bioq-gateway
 
 ## 添加新服务
 
-**先读 [`docs/adding-a-service.zh.md`](docs/adding-a-service.zh.md)** —— repo-local 落地指南（代码放哪、
-`bioq_service` 命名、vendor/测试/构建/注册的具体命令）。
-
-完整流程（设计文档先行 → 骨架 → Dockerfile 两套 / conda 踩坑 → 测试骨架 → FC 部署 → 提交清单）在
-[`docs/adding-a-new-service/index.zh.md`](docs/adding-a-new-service/index.zh.md) 及其子页。
+**先读 [`docs/adding-a-new-service/index.zh.md`](docs/adding-a-new-service/index.zh.md)** —— 权威流程
+（设计文档先行 → 骨架 → Dockerfile 两套 / conda 踩坑 → 测试骨架 → FC 部署 → 提交清单），以及
+`bioq_service` 命名、vendor/测试/构建/注册的具体命令。
 
 > 设计文档统一归档到 [`docs/specs/`](docs/specs/)。
 

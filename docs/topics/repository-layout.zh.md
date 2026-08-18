@@ -17,7 +17,7 @@ edge/        — 非 worker 边缘组件：jwt/（JWT 签发）、protein-design
 services/    — 算力 worker（每张一张 FC/OpenFaaS 函数镜像，保留 -server 后缀）。
 deploy/      — 部署目标：ecs/（生产 ECS+FC）、compose/（本地全栈）、
 │              openfaas/（本地 kind+OpenFaaS）、config/（生成的共享非密配置）。
-docs/        — adding-a-service.zh.md + adding-a-new-service/（cookbook）+ specs/（设计文档）
+docs/        — adding-a-new-service/（cookbook）+ specs/（设计文档）
 │              + topics/（本套双语话题文档）。
 services.yaml   — fleet registry（已部署服务的 url / tier / function / oss_mount）。
 Makefile        — 镜像构建/推送/bump/SIF + 本地 kind 联调（make local-*）。

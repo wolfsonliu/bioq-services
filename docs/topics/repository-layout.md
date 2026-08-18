@@ -17,8 +17,7 @@ edge/        — non-worker edge components: jwt/ (JWT signing), protein-design-
 services/    — compute workers, one FC/OpenFaaS function image each, keep the -server suffix.
 deploy/      — deploy targets: ecs/ (prod ECS+FC), compose/ (local full-stack),
 │              openfaas/ (local kind+OpenFaaS), config/ (generated shared non-secret config).
-docs/        — adding-a-service.zh.md + adding-a-new-service/ (cookbook) + specs/ (design docs)
-│              + topics/ (this bilingual topic set).
+docs/        — adding-a-new-service/ (cookbook) + specs/ (design docs) + topics/ (this bilingual topic set).
 services.yaml   — fleet registry (url / tier / function / oss_mount per deployed service).
 Makefile        — build/push/bump/SIF + local kind integration (make local-*).
 scripts/        — misc scripts (e.g. bench_concurrency.py).

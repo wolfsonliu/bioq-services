@@ -186,14 +186,11 @@ default `bioq`), `BIOQ_BUILD` (`auto|always|never`), `BIOQ_DB_BACKEND` (`postgre
 
 ## Adding a new service
 
-**Read [`docs/adding-a-service.zh.md`](docs/adding-a-service.zh.md) first** — the repo-local
-landing guide (where the code goes, `bioq_service` naming, and concrete commands for vendor /
-testing / building / registry).
-
-The full process (design doc first → skeleton → the two Dockerfile approaches / conda pitfalls →
-test skeleton → FC deployment / submission checklist) lives in
-[`docs/adding-a-new-service/index.zh.md`](docs/adding-a-new-service/index.zh.md) and its sub-pages.
-These guides are Chinese for now; English translations are on the way.
+**Read [`docs/adding-a-new-service/index.zh.md`](docs/adding-a-new-service/index.zh.md) first** — the
+authoritative process (design doc first → skeleton → the two Dockerfile approaches / conda pitfalls →
+test skeleton → FC deployment / submission checklist), plus `bioq_service` naming and concrete
+commands for vendor / testing / building / registry. Chinese for now; English translations are on
+the way.
 
 > Design docs are archived in [`docs/specs/`](docs/specs/).
 

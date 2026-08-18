@@ -3,27 +3,26 @@
 [English](adding-a-service.md) | 中文
 
 > **适用**：在本仓端到端新增一个服务时。
-> **来源**：指向现有权威文档（目前为中文）——[`../adding-a-service.zh.md`](../adding-a-service.zh.md)（repo-local 落地指南）与 [`../adding-a-new-service/index.zh.md`](../adding-a-new-service/index.zh.md)（cookbook）。
-> **刷新/删除条件**：这些权威文档移动、或二者分工变化时。
+> **来源**：指向权威 cookbook（目前为中文）——[`../adding-a-new-service/index.zh.md`](../adding-a-new-service/index.zh.md) 及其子页。
+> **刷新/删除条件**：cookbook 结构变化时。
 
 ## 流程（总览）
 
-1. **先写设计文档（开工前必做）**：`YYYY-MM-DD-<svc>-server-design.md`（归档到
-   [`../specs/`](../specs/)），必备章节见
+1. **先写设计文档（开工前必做）**：`YYYY-MM-DD-<svc>-server-design.md` 归档到
+   [`../specs/`](../specs/)，必备章节见
    [`../adding-a-new-service/index.zh.md`](../adding-a-new-service/index.zh.md#0-先写设计文档开工前必做)。
-2. **照 cookbook 起骨架**：子页 [`skeleton`](../adding-a-new-service/skeleton.zh.md)、
-   [`dockerfile`](../adding-a-new-service/dockerfile.zh.md)、[`conda-pitfalls`](../adding-a-new-service/conda-pitfalls.zh.md)、
-   [`testing`](../adding-a-new-service/testing.zh.md)、[`deploy`](../adding-a-new-service/deploy.zh.md)；
-   repo-local 落地步骤（命名 / 必备文件 / pyproject / Dockerfile 约定 / 注册 / 清单）见
-   [`../adding-a-service.zh.md`](../adding-a-service.zh.md)。文件布局 + 起步参考：[service-anatomy.md](./service-anatomy.md)。
+2. **照 cookbook 起骨架**：子页
+   [`skeleton`](../adding-a-new-service/skeleton.zh.md) ·
+   [`dockerfile`](../adding-a-new-service/dockerfile.zh.md) ·
+   [`conda-pitfalls`](../adding-a-new-service/conda-pitfalls.zh.md) ·
+   [`testing`](../adding-a-new-service/testing.zh.md) ·
+   [`deploy`](../adding-a-new-service/deploy.zh.md)；
+   命名 / 必备文件 / 验证 / 注册 / 提交清单都在 [`index.zh.md`](../adding-a-new-service/index.zh.md)。
+   文件布局 + 起步参考：[service-anatomy.md](./service-anatomy.md)。
 3. **注册 + 网关联通**：`services.yaml` 加 `<svc>-server:` 条目（有文件输入加 `oss_mount: true`）；
    经 gateway 调用的服务在 `gateway/tests/test_fc.py` 加 `TestEndToEnd<Svc>` e2e 类。
 4. **过一遍硬约束**（`AGENTS.md`）与
    [`../adding-a-new-service/index.zh.md`](../adding-a-new-service/index.zh.md) 的提交清单。
-
-## ignore 坑
-
-- 把 `services/<svc>-server/upstream/` 与 `services/<svc>-server/weights/` 加进 `.gitignore`。
 
 ## 提交前快速验证
 
