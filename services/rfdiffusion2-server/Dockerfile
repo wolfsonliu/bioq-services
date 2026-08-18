@@ -79,7 +79,7 @@ channels:
   - defaults
 show_channel_urls: true
 EOF
-    && cat /tmp/mirrors.condarc >> /root/.condarc
+RUN cat /tmp/mirrors.condarc >> /root/.condarc
 
 # ---------------------------------------------------------------------------
 # Create the rfd2 conda env from the vendored env files.
