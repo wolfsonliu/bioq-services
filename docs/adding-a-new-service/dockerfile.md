@@ -349,17 +349,23 @@ RUN cd /opt/<svc>/upstream && for p in /tmp/<svc>-patches/*.patch; do \
 
 #### Conda / micromamba 替代骨架
 
-当上游依赖**必须**通过 conda 管理（例如 PyTorch + PyG 组合、CUDA 版本特殊限制、`environment*.yml` 中有 conda-only 包），应使用 **micromamba + multistage** 构建，而非 uv venv。典型场景：DeepRank-Ab（Python 3.9 + PyTorch 2.0.1 + CUDA 11.8 + PyG）、PPIFlow。
+当上游依赖**必须**通过 conda 管理（例如 PyTorch + PyG 组合、CUDA 版本特殊限制、`environment*.yml` 中有 conda-only 包），应使用 **micromamba + multistage** 构建，而非 uv venv。典型场景：DeepRank-Ab（Python 3.9 + PyTorch 2.0.1 + CUDA 11.8 + PyG）、PPIFlow。conda 镜像映射已集中到 `deploy/conda/mirrors.condarc`（构建时 `COPY` + `cat >>` 拼接到各自的 `.condarc`）；改完 Dockerfile 后跑 `python3 scripts/check_conda_mirrors.py` 做回归，详见 conda 镜像集中化设计文档 `docs/specs/2026-08-18-conda-mirror-consolidation-design.md`。
 
 ```dockerfile
 # ---- builder ----
 FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04 AS builder
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Aliyun pip mirror + TUNA conda mirror（按需选择国内镜像）
-RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/
-RUN micromamba config append channels conda-forge \
-    && micromamba config set channel_alias https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+# 华为 pip 镜像 + 共享 conda 镜像映射（deploy/conda/mirrors.condarc —— 单点来源）。
+# 不要在各自 Dockerfile 里内联 TUNA/阿里 conda 镜像 URL；换镜像只改那一个文件。
+RUN pip config set global.index-url https://repo.huaweicloud.com/repository/pypi/simple/
+COPY deploy/conda/mirrors.condarc /tmp/mirrors.condarc
+RUN cat > /root/.condarc <<'EOF'
+channels:
+  - conda-forge
+show_channel_urls: true
+EOF
+RUN cat /tmp/mirrors.condarc >> /root/.condarc
 
 # micromamba + conda env from vendored upstream yml
 # (vendor.sh 必须先在 host 上跑过，产物在 services/<svc>/upstream/)
