@@ -49,4 +49,4 @@ then after FC deploy run `test_fc` / `test_fc_task` (see [testing.md](./testing.
 ## Related
 
 - Local kind deployment: [local-dev.md](./local-dev.md)
-- Full new-service flow: [adding-a-service.md](./adding-a-service.md)
+- Full new-service flow: [adding-a-new-service cookbook](../adding-a-new-service/index.zh.md)

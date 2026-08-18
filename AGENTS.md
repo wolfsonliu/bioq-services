@@ -69,7 +69,7 @@ One-line pointer plus the condition under which to load it.
 | [testing](docs/topics/testing.md) | you run or write tests at any layer. |
 | [build-deploy](docs/topics/build-deploy.md) | you build / tag / push / bump / SIF an image. |
 | [local-dev](docs/topics/local-dev.md) | you use the local kind + OpenFaaS stack (`make local-*`). |
-| [adding-a-service](docs/topics/adding-a-service.md) | you add a new service end-to-end. |
+| [adding-a-service](docs/adding-a-new-service/index.zh.md) | you add a new service end-to-end. |
 
 ## Everyday Norms
 

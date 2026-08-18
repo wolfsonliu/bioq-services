@@ -48,4 +48,4 @@ make clean                    # 删除全部本地服务镜像
 ## 相关
 
 - 本地 kind 部署：[local-dev.md](./local-dev.md)
-- 完整新服务流程：[adding-a-service.md](./adding-a-service.md)
+- 完整新服务流程：[新增服务 cookbook](../adding-a-new-service/index.zh.md)
