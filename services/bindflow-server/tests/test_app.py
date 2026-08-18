@@ -129,6 +129,26 @@ def test_manifest_lists_both_endpoints(client):
     assert "/api/calculate/mmpbsa" in paths
 
 
+def test_zip_uri_fields_match_upload_fields(client):
+    """Regression: zip URI fields must be `<upload>_uri`, not the short form.
+
+    bioq CLI's `--file custom_ff_zip=<path>` emits ``custom_ff_zip_uri`` (see
+    bioq/upload.py); the endpoint must expose that exact URI field name, not the
+    old ``custom_ff_uri`` / ``topology_uri``.
+    """
+    body = client.get("/api/manifest").json()
+    eps = {e["path"]: e for e in body["endpoints"]}
+    for path in ("/api/calculate/fep", "/api/calculate/mmpbsa"):
+        fields = {f["name"]: f for f in eps[path]["request_fields"]}
+        assert "custom_ff_zip" in fields, f"{path}: missing custom_ff_zip upload field"
+        assert fields["custom_ff_zip"]["is_file"] is True, f"{path}: custom_ff_zip not marked file"
+        assert "custom_ff_zip_uri" in fields, f"{path}: missing custom_ff_zip_uri URI field"
+        assert "custom_ff_uri" not in fields, f"{path}: stale custom_ff_uri field still exposed"
+        assert "topology_zip" in fields, f"{path}: missing topology_zip upload field"
+        assert "topology_zip_uri" in fields, f"{path}: missing topology_zip_uri URI field"
+        assert "topology_uri" not in fields, f"{path}: stale topology_uri field still exposed"
+
+
 def test_manifest_task_endpoints_absent(client):
     """Task endpoints are disabled — /api/tasks/* must NOT appear."""
     body = client.get("/openapi.json").json()

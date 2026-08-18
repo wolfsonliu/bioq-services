@@ -53,8 +53,8 @@ Multipart form (recommended for small ligand sets):
 | `ligands` | List[UploadFile] (.sdf/.mol) | ✓（或 `ligands_zip_uri`） | — | ≥1 配体 |
 | `cofactor` / `cofactor_uri` | 可选 | ✗ | — | 辅因子 |
 | `membrane` / `membrane_uri` | 可选 (.pdb, 需 CRYST1) | ✗ | — | 膜 |
-| `custom_ff_zip` / `custom_ff_uri` | 可选 zip | ✗ | — | 自定义 `*.ff` 目录 |
-| `topology_zip` / `topology_uri` | 可选 zip | ✗ | — | 每 ligand 一份 .top+.gro |
+| `custom_ff_zip` / `custom_ff_zip_uri` | 可选 zip | ✗ | — | 自定义 `*.ff` 目录 |
+| `topology_zip` / `topology_zip_uri` | 可选 zip | ✗ | — | 每 ligand 一份 .top+.gro |
 | `water_model` | enum | ✗ | `amber/tip3p` | 见 models.py `WaterModel` |
 | `hmr_factor` | float\|null | ✗ | `2.5` | 若已 HMR 则设 null |
 | `replicas` | int | ✗ | `3` | 独立重复次数 |

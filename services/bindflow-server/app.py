@@ -140,9 +140,9 @@ def _stage_inputs(
     membrane: Optional[UploadFile],
     membrane_uri: Optional[str],
     custom_ff_zip: Optional[UploadFile],
-    custom_ff_uri: Optional[str],
+    custom_ff_zip_uri: Optional[str],
     topology_zip: Optional[UploadFile],
-    topology_uri: Optional[str],
+    topology_zip_uri: Optional[str],
 ) -> dict[str, Path | None]:
     """Persist all input files under `<job_dir>/input/`; return absolute paths."""
     input_dir.mkdir(parents=True, exist_ok=True)
@@ -170,11 +170,11 @@ def _stage_inputs(
         required=False, field_name="membrane",
     )
     custom_ff_dir = resolve_dir_zip(
-        custom_ff_zip, custom_ff_uri, input_dir / "custom_ff", settings,
+        custom_ff_zip, custom_ff_zip_uri, input_dir / "custom_ff", settings,
         field_name="custom_ff",
     )
     topology_dir = resolve_dir_zip(
-        topology_zip, topology_uri, input_dir / "topology", settings,
+        topology_zip, topology_zip_uri, input_dir / "topology", settings,
         field_name="topology",
     )
     return {
@@ -204,9 +204,9 @@ def post_fep(
     membrane: Optional[UploadFile] = File(default=None),
     membrane_uri: Optional[str] = Form(default=None),
     custom_ff_zip: Optional[UploadFile] = File(default=None),
-    custom_ff_uri: Optional[str] = Form(default=None),
+    custom_ff_zip_uri: Optional[str] = Form(default=None),
     topology_zip: Optional[UploadFile] = File(default=None),
-    topology_uri: Optional[str] = Form(default=None),
+    topology_zip_uri: Optional[str] = Form(default=None),
 ) -> JobInfo:
     """Submit a FEP calculation.  Long-running — poll /api/jobs/<id>."""
 
@@ -217,8 +217,8 @@ def post_fep(
             ligands=ligands, ligands_zip_uri=ligands_zip_uri,
             cofactor=cofactor, cofactor_uri=cofactor_uri,
             membrane=membrane, membrane_uri=membrane_uri,
-            custom_ff_zip=custom_ff_zip, custom_ff_uri=custom_ff_uri,
-            topology_zip=topology_zip, topology_uri=topology_uri,
+            custom_ff_zip=custom_ff_zip, custom_ff_zip_uri=custom_ff_zip_uri,
+            topology_zip=topology_zip, topology_zip_uri=topology_zip_uri,
         )
         return calculate_argv(
             params,
@@ -257,9 +257,9 @@ def post_mmpbsa(
     membrane: Optional[UploadFile] = File(default=None),
     membrane_uri: Optional[str] = Form(default=None),
     custom_ff_zip: Optional[UploadFile] = File(default=None),
-    custom_ff_uri: Optional[str] = Form(default=None),
+    custom_ff_zip_uri: Optional[str] = Form(default=None),
     topology_zip: Optional[UploadFile] = File(default=None),
-    topology_uri: Optional[str] = Form(default=None),
+    topology_zip_uri: Optional[str] = Form(default=None),
 ) -> JobInfo:
     """Submit an MM(P/G)BSA calculation.  Requires gmx_MMPBSA in the image."""
 
@@ -270,8 +270,8 @@ def post_mmpbsa(
             ligands=ligands, ligands_zip_uri=ligands_zip_uri,
             cofactor=cofactor, cofactor_uri=cofactor_uri,
             membrane=membrane, membrane_uri=membrane_uri,
-            custom_ff_zip=custom_ff_zip, custom_ff_uri=custom_ff_uri,
-            topology_zip=topology_zip, topology_uri=topology_uri,
+            custom_ff_zip=custom_ff_zip, custom_ff_zip_uri=custom_ff_zip_uri,
+            topology_zip=topology_zip, topology_zip_uri=topology_zip_uri,
         )
         return calculate_argv(
             params,
