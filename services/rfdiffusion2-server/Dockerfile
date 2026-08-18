@@ -61,13 +61,16 @@ ENV PATH=/opt/conda/envs/rfd2/bin:$PATH
 # `pip:` section invokes pip during env create and would otherwise hit pypi.org.
 # uv: controlled by UV_INDEX_URL env above (post-env pip installs).
 #
-# conda: TUNA (Tsinghua) for the standard channels. Three upstream channels
-# we leave alone (fall through to conda.anaconda.org):
+# conda: PKU Open Source mirror for the standard channels, sourced from the
+# shared deploy/conda/mirrors.condarc (single source of truth — see
+# docs/specs/2026-08-18-conda-mirror-consolidation-design.md). Three upstream
+# channels we leave alone (fall through to conda.anaconda.org):
 #   - conda.rosettacommons.org    pyrosetta (proprietary, no Chinese mirror)
-#   - nvidia/label/cuda-12.4.0    TUNA has `cloud/nvidia` (main) but NOT
-#                                 `label/*` — mapping it 404s the build.
+#   - nvidia/label/cuda-12.4.0    Chinese mirrors carry `cloud/nvidia` (main)
+#                                 but NOT `label/*` — mapping it 404s the build.
 #   - dglteam/label/th24_cu124    same limitation.
 # ---------------------------------------------------------------------------
+COPY deploy/conda/mirrors.condarc /tmp/mirrors.condarc
 RUN mkdir -p /root/.config/pip \
     && printf '[global]\nindex-url = https://repo.huaweicloud.com/repository/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
        > /root/.config/pip/pip.conf \
@@ -75,14 +78,8 @@ RUN mkdir -p /root/.config/pip \
 channels:
   - defaults
 show_channel_urls: true
-default_channels:
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/msys2
-custom_channels:
-  conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
-  pytorch: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
 EOF
+    && cat /tmp/mirrors.condarc >> /root/.condarc
 
 # ---------------------------------------------------------------------------
 # Create the rfd2 conda env from the vendored env files.
