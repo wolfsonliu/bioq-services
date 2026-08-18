@@ -65,13 +65,14 @@ ENV MAMBA_ROOT_PREFIX=/opt/conda
 ENV PATH=/opt/conda/envs/openadmet-models/bin:$PATH
 
 # ---------------------------------------------------------------------------
-# CN mirrors — Huawei for pip, TUNA for conda-forge.  Note: upstream
+# CN mirrors — Huawei for pip, PKU for conda-forge.  Note: upstream
 # openadmet-models-gpu.yaml uses ONLY conda-forge (no pytorch/nvidia/defaults
 # channels).  If we drop the yaml's channel constraint by adding `-c pytorch`
 # etc., the solver — under `channel_priority: strict` — picks pytorch-gpu
 # 1.9.1 from the `pytorch` channel (old py3.6 build), which conflicts with
 # every modern package.  So: mirror upstream exactly — conda-forge only.
 # ---------------------------------------------------------------------------
+COPY deploy/conda/mirrors.condarc /tmp/mirrors.condarc
 RUN mkdir -p /root/.config/pip \
     && printf '[global]\nindex-url = https://repo.huaweicloud.com/repository/pypi/simple/\nextra-index-url = https://pypi.org/simple\ntimeout = 120\nretries = 5\n' \
        > /root/.config/pip/pip.conf \
@@ -84,9 +85,8 @@ show_channel_urls: true
 # pinning old datamol).  strict would freeze at the first-found build and
 # create false conflicts.
 channel_priority: flexible
-custom_channels:
-  conda-forge: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
 EOF
+RUN cat /tmp/mirrors.condarc >> /root/.condarc
 
 # ---------------------------------------------------------------------------
 # Conda env — mirrors upstream devtools/conda-envs/openadmet-models-gpu.yaml
