@@ -251,7 +251,7 @@ def proteinmpnn_submit_response(
     return client.post(
         "/api/tasks/proteinmpnn",
         data={
-            "input_uri": f"job://{rfd_id}/1_rfdiffusion.qv",
+            "input_quiver_uri": f"job://{rfd_id}/1_rfdiffusion.qv",
             "seqs_per_struct": "1",
             "deterministic": "true",
         },
@@ -283,7 +283,7 @@ def rf2_submit_response(
     return client.post(
         "/api/tasks/rf2",
         data={
-            "input_uri": f"job://{mpnn_id}/2_proteinmpnn.qv",
+            "input_quiver_uri": f"job://{mpnn_id}/2_proteinmpnn.qv",
             "num_recycles": "2",
         },
         headers=_async_headers(rf2_task_id),
@@ -517,7 +517,7 @@ class TestAsyncDuplicateDedup:
         r2 = client.post(
             "/api/tasks/proteinmpnn",
             data={
-                "input_uri": f"job://{rfd_id}/1_rfdiffusion.qv",
+                "input_quiver_uri": f"job://{rfd_id}/1_rfdiffusion.qv",
                 "seqs_per_struct": "3",  # different from first run's 1
                 "deterministic": "true",
             },

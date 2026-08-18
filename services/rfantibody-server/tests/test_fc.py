@@ -187,7 +187,7 @@ def proteinmpnn_job(
     r = _retry_post(
         client, "/api/proteinmpnn",
         data={
-            "input_uri": f"job://{rfd_id}/1_rfdiffusion.qv",
+            "input_quiver_uri": f"job://{rfd_id}/1_rfdiffusion.qv",
             "seqs_per_struct": "1",
             "deterministic": "true",
         },
@@ -216,7 +216,7 @@ def rf2_job(
     r = _retry_post(
         client, "/api/rf2",
         data={
-            "input_uri": f"job://{mpnn_id}/2_proteinmpnn.qv",
+            "input_quiver_uri": f"job://{mpnn_id}/2_proteinmpnn.qv",
             "num_recycles": "2",
         },
         headers=session_headers,

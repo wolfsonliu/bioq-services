@@ -132,8 +132,8 @@ def run_rfdiffusion(
     """
 
     def _build(job_id: str, job_dir: Path) -> list[str]:
-        target_path = resolve_input(target, target_uri, job_dir / "input" / "target.pdb", settings)
-        framework_path = resolve_input(framework, framework_uri, job_dir / "input" / "framework.pdb", settings)
+        target_path = resolve_input(target, target_uri, job_dir / "input" / "target.pdb", settings, field_name="target")
+        framework_path = resolve_input(framework, framework_uri, job_dir / "input" / "framework.pdb", settings, field_name="framework")
         return rfdiffusion_argv(params, target_path, framework_path, job_dir, settings)
 
     return app.state.runner.submit(
@@ -145,9 +145,9 @@ def run_rfdiffusion(
 @app.post("/api/proteinmpnn", response_model=JobInfo)
 def run_proteinmpnn(
     input_quiver: Optional[UploadFile] = File(
-        None, description="Input Quiver (from RFdiffusion). Mutually exclusive with `input_uri`."
+        None, description="Input Quiver (from RFdiffusion). Mutually exclusive with `input_quiver_uri`."
     ),
-    input_uri: Optional[str] = Form(
+    input_quiver_uri: Optional[str] = Form(
         None,
         description=(
             "URI to fetch the input Quiver instead of uploading. Schemes: "
@@ -159,7 +159,7 @@ def run_proteinmpnn(
     """ProteinMPNN CDR sequence design over an RFdiffusion-generated backbone set."""
 
     def _build(job_id: str, job_dir: Path) -> list[str]:
-        qv_path = resolve_input(input_quiver, input_uri, job_dir / "input" / "input.qv", settings)
+        qv_path = resolve_input(input_quiver, input_quiver_uri, job_dir / "input" / "input.qv", settings, field_name="input_quiver")
         return proteinmpnn_argv(params, qv_path, job_dir, settings)
 
     return app.state.runner.submit(
@@ -171,15 +171,15 @@ def run_proteinmpnn(
 @app.post("/api/rf2", response_model=JobInfo)
 def run_rf2(
     input_quiver: Optional[UploadFile] = File(
-        None, description="Input Quiver (from ProteinMPNN). Mutually exclusive with `input_uri`."
+        None, description="Input Quiver (from ProteinMPNN). Mutually exclusive with `input_quiver_uri`."
     ),
-    input_uri: Optional[str] = Form(None, description="URI to fetch input Quiver from (see /proteinmpnn)."),
+    input_quiver_uri: Optional[str] = Form(None, description="URI to fetch input Quiver from (see /proteinmpnn)."),
     params: RF2Request = Depends(model_form_depends(RF2Request)),
 ) -> JobInfo:
     """RF2 structure prediction + filtering over MPNN-designed sequences."""
 
     def _build(job_id: str, job_dir: Path) -> list[str]:
-        qv_path = resolve_input(input_quiver, input_uri, job_dir / "input" / "input.qv", settings)
+        qv_path = resolve_input(input_quiver, input_quiver_uri, job_dir / "input" / "input.qv", settings, field_name="input_quiver")
         return rf2_argv(params, qv_path, job_dir, settings)
 
     return app.state.runner.submit(
@@ -210,8 +210,8 @@ if settings.task_endpoints_enabled:
         paths: dict[str, Path] = {}
 
         def _save(_req, input_dir: Path) -> None:
-            paths["target"] = resolve_input(target, target_uri, input_dir / "target.pdb", settings)
-            paths["framework"] = resolve_input(framework, framework_uri, input_dir / "framework.pdb", settings)
+            paths["target"] = resolve_input(target, target_uri, input_dir / "target.pdb", settings, field_name="target")
+            paths["framework"] = resolve_input(framework, framework_uri, input_dir / "framework.pdb", settings, field_name="framework")
 
         def _build(req, _job_id: str, job_dir: Path) -> list[str]:
             return rfdiffusion_argv(req, paths["target"], paths["framework"], job_dir, settings)
@@ -225,7 +225,7 @@ if settings.task_endpoints_enabled:
     def run_proteinmpnn_task(
         request: Request,
         input_quiver: Optional[UploadFile] = File(None),
-        input_uri: Optional[str] = Form(None),
+        input_quiver_uri: Optional[str] = Form(None),
         params: ProteinMPNNRequest = Depends(model_form_depends(ProteinMPNNRequest)),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
@@ -235,7 +235,7 @@ if settings.task_endpoints_enabled:
         paths: dict[str, Path] = {}
 
         def _save(_req, input_dir: Path) -> None:
-            paths["qv"] = resolve_input(input_quiver, input_uri, input_dir / "input.qv", settings)
+            paths["qv"] = resolve_input(input_quiver, input_quiver_uri, input_dir / "input.qv", settings, field_name="input_quiver")
 
         def _build(req, _job_id: str, job_dir: Path) -> list[str]:
             return proteinmpnn_argv(req, paths["qv"], job_dir, settings)
@@ -249,7 +249,7 @@ if settings.task_endpoints_enabled:
     def run_rf2_task(
         request: Request,
         input_quiver: Optional[UploadFile] = File(None),
-        input_uri: Optional[str] = Form(None),
+        input_quiver_uri: Optional[str] = Form(None),
         params: RF2Request = Depends(model_form_depends(RF2Request)),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
@@ -259,7 +259,7 @@ if settings.task_endpoints_enabled:
         paths: dict[str, Path] = {}
 
         def _save(_req, input_dir: Path) -> None:
-            paths["qv"] = resolve_input(input_quiver, input_uri, input_dir / "input.qv", settings)
+            paths["qv"] = resolve_input(input_quiver, input_quiver_uri, input_dir / "input.qv", settings, field_name="input_quiver")
 
         def _build(req, _job_id: str, job_dir: Path) -> list[str]:
             return rf2_argv(req, paths["qv"], job_dir, settings)

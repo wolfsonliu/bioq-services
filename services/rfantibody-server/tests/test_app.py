@@ -200,7 +200,7 @@ def test_rfdiffusion_task_endpoint_accepts_uploads(tmp_path: Path) -> None:
 
 
 def test_proteinmpnn_task_endpoint_accepts_uri_fallback(tmp_path: Path) -> None:
-    """`/api/tasks/proteinmpnn` accepts either input_quiver upload or input_uri.
+    """`/api/tasks/proteinmpnn` accepts either input_quiver upload or input_quiver_uri.
 
     Passing a nonexistent file:// URI exercises the URI-resolution branch of
     `_save` — execute_task surfaces the resolver's 404 directly. Any of
@@ -210,7 +210,7 @@ def test_proteinmpnn_task_endpoint_accepts_uri_fallback(tmp_path: Path) -> None:
     client = _real_app_client(tmp_path)
     resp = client.post(
         "/api/tasks/proteinmpnn",
-        data={"seqs_per_struct": 2, "input_uri": "file:///nonexistent/input.qv"},
+        data={"seqs_per_struct": 2, "input_quiver_uri": "file:///nonexistent/input.qv"},
     )
     assert resp.status_code in (200, 404, 422, 500)
 
@@ -224,3 +224,29 @@ def test_rf2_task_endpoint_accepts_upload(tmp_path: Path) -> None:
         files={"input_quiver": ("in.qv", b"fake-qv\n", "application/octet-stream")},
     )
     assert resp.status_code in (200, 422, 500)
+
+
+def test_quiver_uri_field_matches_upload_field(tmp_path: Path) -> None:
+    """Regression: the URI field must be named `input_quiver_uri`, not `input_uri`.
+
+    bioq CLI's `--file input_quiver=<path>` uploads the file and emits the body
+    field ``input_quiver_uri`` (see bioq/upload.py). The four proteinmpnn / rf2
+    endpoints must expose exactly ``input_quiver`` (upload) + ``input_quiver_uri``
+    (URI) — and must NOT expose the old ``input_uri`` name, otherwise
+    ``bioq describe`` lists a stray ``--set input_uri`` and
+    ``bioq run --file input_quiver=...`` 422s with neither field bound.
+    """
+    client = _real_app_client(tmp_path)
+    manifest = client.get("/api/manifest").json()
+    eps = {e["path"]: e for e in manifest["endpoints"]}
+    for path in (
+        "/api/proteinmpnn",
+        "/api/rf2",
+        "/api/tasks/proteinmpnn",
+        "/api/tasks/rf2",
+    ):
+        fields = {f["name"]: f for f in eps[path]["request_fields"]}
+        assert "input_quiver" in fields, f"{path}: missing input_quiver upload field"
+        assert fields["input_quiver"]["is_file"] is True, f"{path}: input_quiver not marked file"
+        assert "input_quiver_uri" in fields, f"{path}: missing input_quiver_uri URI field"
+        assert "input_uri" not in fields, f"{path}: stale input_uri field still exposed"

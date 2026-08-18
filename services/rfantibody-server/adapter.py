@@ -78,14 +78,14 @@ class RFantibodyAdapter(JobAdapter):
                     title="chain from a previous rfdiffusion job",
                     curl=(
                         "curl -X POST $URL/api/proteinmpnn "
-                        "-F 'input_uri=job://abc123def456/1_rfdiffusion.qv' "
+                        "-F 'input_quiver_uri=job://abc123def456/1_rfdiffusion.qv' "
                         "-F seqs_per_struct=4"
                     ),
                     python=(
                         "r = httpx.post(\n"
                         "    f'{base_url}/api/proteinmpnn',\n"
                         "    data={\n"
-                        "        'input_uri': f'job://{rfdiffusion_job_id}/1_rfdiffusion.qv',\n"
+                        "        'input_quiver_uri': f'job://{rfdiffusion_job_id}/1_rfdiffusion.qv',\n"
                         "        'seqs_per_struct': 4,\n"
                         "    },\n"
                         ")"
@@ -111,14 +111,14 @@ class RFantibodyAdapter(JobAdapter):
                     title="chain from a previous proteinmpnn job",
                     curl=(
                         "curl -X POST $URL/api/rf2 "
-                        "-F 'input_uri=job://xyz789ghi012/2_proteinmpnn.qv' "
+                        "-F 'input_quiver_uri=job://xyz789ghi012/2_proteinmpnn.qv' "
                         "-F num_recycles=10"
                     ),
                     python=(
                         "r = httpx.post(\n"
                         "    f'{base_url}/api/rf2',\n"
                         "    data={\n"
-                        "        'input_uri': f'job://{proteinmpnn_job_id}/2_proteinmpnn.qv',\n"
+                        "        'input_quiver_uri': f'job://{proteinmpnn_job_id}/2_proteinmpnn.qv',\n"
                         "        'num_recycles': 10,\n"
                         "    },\n"
                         ")"
@@ -150,8 +150,8 @@ class RFantibodyAdapter(JobAdapter):
             },
             "chaining_tip": (
                 "Run /api/rfdiffusion first, then call /api/proteinmpnn with "
-                "input_uri=job://<rfdiffusion_job_id>/1_rfdiffusion.qv. Same pattern "
-                "for /api/rf2 with input_uri=job://<proteinmpnn_job_id>/2_proteinmpnn.qv. "
+                "input_quiver_uri=job://<rfdiffusion_job_id>/1_rfdiffusion.qv. Same pattern "
+                "for /api/rf2 with input_quiver_uri=job://<proteinmpnn_job_id>/2_proteinmpnn.qv. "
                 "Avoids re-uploading multi-MB Quiver files since the NAS is shared."
             ),
             "weights": {
