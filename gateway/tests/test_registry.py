@@ -30,3 +30,29 @@ def test_unknown_service(tmp_path):
     reg = ServiceRegistry(_yaml(tmp_path))
     with pytest.raises(KeyError):
         reg.base_url("nope")
+
+
+def _manifest_tree(tmp_path):
+    p = _yaml(tmp_path)
+    mdir = tmp_path / "manifests"
+    mdir.mkdir()
+    (mdir / "openbpmd-server.manifest.json").write_text(
+        '{"service": "openbpmd", "endpoints": [{"path": "/api/score"}]}',
+        encoding="utf-8",
+    )
+    (mdir / "openbpmd-server.openapi.json").write_text(
+        '{"paths": {"/api/score": {}}}', encoding="utf-8",
+    )
+    return p
+
+
+def test_manifest_reads_manifests_dir(tmp_path):
+    reg = ServiceRegistry(_manifest_tree(tmp_path))
+    assert reg.manifest("openbpmd-server")["service"] == "openbpmd"
+    assert reg.openapi("openbpmd-server")["paths"] == {"/api/score": {}}
+
+
+def test_manifest_missing_returns_none(tmp_path):
+    reg = ServiceRegistry(_yaml(tmp_path))  # no manifests/ dir
+    assert reg.manifest("openbpmd-server") is None
+    assert reg.openapi("openbpmd-server") is None
