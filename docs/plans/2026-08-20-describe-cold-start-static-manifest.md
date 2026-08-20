@@ -343,8 +343,15 @@ class Discovery:
         read_timeout_sec: float = 8.0,
     ) -> None:
         if client is None:
+            # httpx 0.28 requires a default or all four params; bound every
+            # phase explicitly (write/pool ride the read budget).
             client = httpx.Client(
-                timeout=httpx.Timeout(connect=connect_timeout_sec, read=read_timeout_sec)
+                timeout=httpx.Timeout(
+                    connect=connect_timeout_sec,
+                    read=read_timeout_sec,
+                    write=read_timeout_sec,
+                    pool=read_timeout_sec,
+                )
             )
         self._client = client
         self._ttl = ttl_sec
