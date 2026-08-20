@@ -176,9 +176,18 @@ def check() -> int:
                 print(f"check-manifests: MISSING manifest for {svc}", file=sys.stderr)
                 rc = 1
                 continue
-            render_one(svc, tmp_dir)
+            try:
+                render_one(svc, tmp_dir)
+            except Exception as exc:  # noqa: BLE001 — report + keep sweeping
+                print(f"check-manifests: ERROR rendering {svc}: {exc}", file=sys.stderr)
+                rc = 1
+                continue
             for kind, committed in (("manifest", committed_m), ("openapi", committed_o)):
                 fresh = tmp_dir / f"{svc}.{kind}.json"
+                if not fresh.is_file():
+                    print(f"check-manifests: ERROR {svc} produced no {kind}", file=sys.stderr)
+                    rc = 1
+                    continue
                 if committed.read_text(encoding="utf-8") != fresh.read_text(encoding="utf-8"):
                     print(f"check-manifests: STALE {committed} (re-run make gen-manifests)",
                           file=sys.stderr)

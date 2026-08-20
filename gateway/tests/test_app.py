@@ -417,3 +417,24 @@ def test_describe_falls_back_to_live_when_no_static(client):
     assert r.json()["source"] == "live"
     assert r.json()["status"] == "warming"
     assert disc.last_base == "https://svc.local"
+
+
+def test_describe_static_without_openapi(client, tmp_path):
+    import server.app as appmod
+    from bioq_service.service_registry import ServiceRecord
+    appmod.app.state.registry._services = {
+        "openbpmd-server": ServiceRecord(url="https://svc.local")
+    }
+    mdir = tmp_path / "manifests"
+    mdir.mkdir()
+    (mdir / "openbpmd-server.manifest.json").write_text(
+        '{"service": "openbpmd", "endpoints": [{"path": "/api/score"}]}',
+        encoding="utf-8",
+    )
+    # no openapi.json committed -> degrade to {}
+    r = client.get("/v1/services/openbpmd-server", headers={"x-test-account": "alice"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["source"] == "registry"
+    assert body["manifest"]["service"] == "openbpmd"
+    assert body["openapi"] == {}

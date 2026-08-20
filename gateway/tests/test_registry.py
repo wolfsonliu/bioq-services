@@ -56,3 +56,12 @@ def test_manifest_missing_returns_none(tmp_path):
     reg = ServiceRegistry(_yaml(tmp_path))  # no manifests/ dir
     assert reg.manifest("openbpmd-server") is None
     assert reg.openapi("openbpmd-server") is None
+
+
+def test_manifest_corrupt_returns_none(tmp_path):
+    p = _yaml(tmp_path)
+    mdir = tmp_path / "manifests"
+    mdir.mkdir()
+    (mdir / "openbpmd-server.manifest.json").write_text("{not json", encoding="utf-8")
+    reg = ServiceRegistry(p)
+    assert reg.manifest("openbpmd-server") is None

@@ -10,9 +10,12 @@ docs/specs/2026-08-20-describe-cold-start-static-manifest-design.md).
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 from bioq_service.service_registry import ServiceRecord, load_services
+
+logger = logging.getLogger(__name__)
 
 
 class ServiceRegistry:
@@ -55,5 +58,9 @@ class ServiceRegistry:
     def _load_json(self, path: Path) -> dict | None:
         try:
             return json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        except OSError:
+            # Not materialized yet (normal) — silent fallback to live.
+            return None
+        except ValueError:
+            logger.warning("static contract %s is invalid JSON; falling back to live", path)
             return None
