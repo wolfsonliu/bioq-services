@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Optional
 
 from bioq_service import FailureKind, JobInfo, JobStatus  # re-exports
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field
 
 __all__ = [
@@ -35,6 +36,7 @@ class _GenerationCommon(BaseModel):
         default=None,
         ge=1,
         description="Override genie3's GPU auto-detect. Leave unset to use all visible devices.",
+        json_schema_extra=default_semantics("auto", "auto-detect available devices/processes"),
     )
 
 
@@ -56,6 +58,7 @@ class MotifRequest(_GenerationCommon):
     selections: Optional[str] = Field(
         default=None,
         description="Comma-separated problem names from the dataset. Default: all problems.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     direction_scale: float = Field(default=0.1)
 
@@ -66,5 +69,6 @@ class BinderRequest(_GenerationCommon):
     selections: Optional[str] = Field(
         default=None,
         description="Comma-separated problem names from the dataset. Default: all problems.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     direction_scale: float = Field(default=0.0)
