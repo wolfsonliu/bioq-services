@@ -230,7 +230,8 @@ def post_dock(
 # ===========================================================================
 if settings.task_endpoints_enabled:
 
-    @app.post("/api/tasks/dock", response_model=JobInfo)
+    @app.post("/api/tasks/dock", response_model=JobInfo,
+              summary="Protein-ligand docking (single atomic task).")
     def post_dock_task(
         request: Request,
         params: DockRequest = Depends(model_form_depends(DockRequest)),
