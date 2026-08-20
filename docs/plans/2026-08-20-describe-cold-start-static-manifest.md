@@ -115,6 +115,14 @@ git commit -m "feat(gateway): add discovery timeout/ttl settings"
 - Modify: `gateway/discover.py`（整体重写）
 - Modify: `gateway/tests/test_discover.py`（改 3 个、新增 5 个）
 
+> **修订（执行期）**：实际以「整体替换」落地，`test_discover.py` 最终 14 个测试。
+> review 后追加硬化：`_get_json` 的三个非 warming 错误臂加 `logger.warning`
+> （`HTTPStatusError`/`ValueError`/兜底 `Exception`）；`_DETAIL["warming"]` 去掉
+> 硬编码 `~15s`（改用「retry shortly」）；新增 4 个覆盖测试（502→warming、
+> no_manifest 不缓存、200 非 JSON→error、ConnectError→warming）。Step 4 的
+> `10 passed` 相应改为 `14 passed`。httpx 0.28 的 `Timeout` 需 `connect/read/write/pool`
+> 四参数显式给出（正文已更正）。
+
 - [ ] **Step 1: 改写/新增失败测试**
 
 把 `gateway/tests/test_discover.py` 整体替换为下面内容（保留的 3 个测试语义不变、断言不变；`test_describe_errors_degrade` 增加 `status` 断言；两个 `_not_cache_*` 改为新语义；新增分类/短接/负缓存/单飞测试）：
@@ -997,6 +1005,8 @@ git status --short   # 确认仅剩本计划预期改动 + dockq manifests
 - **`bioq` CLI 仓库**：client 超时拉长到 > 网关最坏读超时（如 30s）；读 `status`/`detail` 时打印 `"服务冷启动中，约 Ns 后重试"` 替代裸 `ReadTimeout`。现有 `--wait`/`--timeout` 已可复用。
 - **esmfold2-server 框架自描述落地**：独立任务；`make check-manifests` 会在全量物化时以 `MISSING` 暴露它。
 - **全量物化**：在各服务 release 流水线（依赖齐全）跑 `make gen-manifests`，随后 `make check-manifests` 作为 CI 门禁；`make bump-<svc>` 后必须重跑，否则 CI 报 `STALE`。
+- **OpenFaaS 目标静态契约**：其 `services.yaml` 由 ConfigMap 挂在 `/etc/bioq`（无同级 `manifests/`），静态优先暂不可达、回退 live（OpenFaaS 本地常暖，无冷启动挂死）；后续以显式 `manifests_dir` 或 ConfigMap 挂入 `manifests/` 补齐。
+- **admin 控制台 describe**：`/admin/services?describe=` 直接走 `discover.describe`，未接入静态优先；对齐留作后续。
 
 ## 验证清单（完成判定）
 

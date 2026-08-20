@@ -253,6 +253,13 @@ describe 预算 ≈ read 超时（~8s），满足「≤8s 返回或明确哨兵�
   已把爆炸半径压小，v1 不上共享锁。
 - **物化依赖服务源码可 import**：个别服务模块顶层 import 重型库会拉高 dump
   成本，但只发生在 release（离线、依赖齐全），不影响运行时。
+- **OpenFaaS 目标静态契约暂不可达**：该部署形态的 `services.yaml` 由 ConfigMap
+  挂载在 `/etc/bioq`（无同级 `manifests/`），镜像内 `/opt/gateway/manifests/`
+  因而不可达，`describe` 回退 live。OpenFaaS 栈本地常暖、无冷启动挂死，故可接受；
+  后续以显式 `manifests_dir` 配置或把 `manifests/` 一并挂入 ConfigMap 补齐。
+- **admin 控制台（`/admin/services?describe=`）仍走 live**：其直接调用
+  `discover.describe`，不经 `describe_service` 的静态优先路径；本方案范围限定在
+  `/v1/services/{svc}`（CLI 消费入口），admin 页面对齐留作后续。
 
 ## 范围外 / 交底
 
