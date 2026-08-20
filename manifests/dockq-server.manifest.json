@@ -1,0 +1,566 @@
+{
+  "service": "dockq",
+  "title": "DockQ Server",
+  "version": "0.0.12",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/score",
+      "summary": "Score a single (model, native) pair via DockQ; returns DockQ's JSON output.",
+      "description": "Score a single (model, native) pair via DockQ; returns DockQ's JSON output.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_score_api_score_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "model",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null
+        },
+        {
+          "name": "native",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null
+        },
+        {
+          "name": "model_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null
+        },
+        {
+          "name": "native_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
+          "is_file": false,
+          "default": "run"
+        },
+        {
+          "name": "mapping",
+          "type": "string",
+          "required": false,
+          "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
+          "is_file": false,
+          "default": null
+        },
+        {
+          "name": "small_molecule",
+          "type": "boolean",
+          "required": false,
+          "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
+          "is_file": false,
+          "default": false
+        },
+        {
+          "name": "capri_peptide",
+          "type": "boolean",
+          "required": false,
+          "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
+          "is_file": false,
+          "default": false
+        },
+        {
+          "name": "no_align",
+          "type": "boolean",
+          "required": false,
+          "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
+          "is_file": false,
+          "default": false
+        },
+        {
+          "name": "allowed_mismatches",
+          "type": "integer",
+          "required": false,
+          "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
+          "is_file": false,
+          "default": 0
+        },
+        {
+          "name": "optDockQF1",
+          "type": "boolean",
+          "required": false,
+          "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
+          "is_file": false,
+          "default": false
+        },
+        {
+          "name": "n_cpu",
+          "type": "integer",
+          "required": false,
+          "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+          "is_file": false,
+          "default": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "basic protein-protein scoring",
+          "curl": "curl -X POST $URL/api/score -F model=@model.pdb -F native=@native.pdb -F name=demo",
+          "python": null,
+          "body": null,
+          "notes": "Result lands in output/demo.json once the job completes."
+        },
+        {
+          "title": "antibody-antigen with explicit chain mapping",
+          "curl": "curl -X POST $URL/api/score -F model=@design.pdb -F native=@reference.pdb -F mapping=HLA:BCX -F name=ab_ag",
+          "python": null,
+          "body": null,
+          "notes": "`mapping` follows DockQ's MODELCHAINS:NATIVECHAINS format. Wildcards (`*`) allowed."
+        },
+        {
+          "title": "small-molecule complex (mmCIF input)",
+          "curl": "curl -X POST $URL/api/score -F model=@1HHO_hem.cif -F native=@2HHB_hem.cif -F small_molecule=true -F mapping=:ABEFG -F name=hem",
+          "python": null,
+          "body": null,
+          "notes": "Required for HEM / cofactor / ligand chains; otherwise their interfaces are ignored."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/score_batch",
+      "summary": "Score N candidate models against 1 reference native.",
+      "description": "Score N candidate models against 1 reference native.\n\nModels come either as repeated `models` uploads OR as a single zip\nreferenced by `models_zip_uri` (oss://, file://, job://, http(s)://) — the\ngateway uses the zip form since it can't multipart-upload the `models` list.\n\nPer-model JSONs land in `output/per_model/<basename>.json`; the sorted\nsummary is `output/scores.csv`. Models that errored show up in\n`output/failed.csv` (job still completes successfully if at least one\nmodel produced a valid score).",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_score_batch_api_score_batch_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "native",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null
+        },
+        {
+          "name": "native_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null
+        },
+        {
+          "name": "models",
+          "type": "array[file]",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null
+        },
+        {
+          "name": "models_zip_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
+          "is_file": false,
+          "default": "run"
+        },
+        {
+          "name": "mapping",
+          "type": "string",
+          "required": false,
+          "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
+          "is_file": false,
+          "default": null
+        },
+        {
+          "name": "small_molecule",
+          "type": "boolean",
+          "required": false,
+          "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
+          "is_file": false,
+          "default": false
+        },
+        {
+          "name": "capri_peptide",
+          "type": "boolean",
+          "required": false,
+          "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
+          "is_file": false,
+          "default": false
+        },
+        {
+          "name": "no_align",
+          "type": "boolean",
+          "required": false,
+          "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
+          "is_file": false,
+          "default": false
+        },
+        {
+          "name": "allowed_mismatches",
+          "type": "integer",
+          "required": false,
+          "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
+          "is_file": false,
+          "default": 0
+        },
+        {
+          "name": "optDockQF1",
+          "type": "boolean",
+          "required": false,
+          "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
+          "is_file": false,
+          "default": false
+        },
+        {
+          "name": "n_cpu",
+          "type": "integer",
+          "required": false,
+          "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+          "is_file": false,
+          "default": null
+        },
+        {
+          "name": "sort_by",
+          "type": "string",
+          "required": false,
+          "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
+          "is_file": false,
+          "default": "DockQ"
+        }
+      ],
+      "examples": [
+        {
+          "title": "rank N candidate designs against one reference",
+          "curl": "curl -X POST $URL/api/score_batch -F native=@reference_complex.pdb -F models=@design_001.pdb -F models=@design_002.pdb -F models=@design_003.pdb -F sort_by=DockQ -F name=batch1",
+          "python": null,
+          "body": null,
+          "notes": "scores.csv lists models sorted by DockQ (descending); raw per-model JSONs under output/per_model/. Models that errored land in failed.csv."
+        },
+        {
+          "title": "chain mapping shared across all models",
+          "curl": "curl -X POST $URL/api/score_batch -F native=@ab_native.pdb -F models=@cand_01.pdb -F models=@cand_02.pdb -F mapping=HLA:BCX -F sort_by=DockQ",
+          "python": null,
+          "body": null,
+          "notes": "`mapping` is forwarded to every DockQ invocation; cuts mapping-enumeration time substantially."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/score",
+      "summary": "Score a single (model, native) pair as a single atomic task.",
+      "description": "Score a single (model, native) pair as a single atomic task.\n\nBlocks until DockQ completes.  For the submit/poll interface, use POST /api/score.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_score_task_api_tasks_score_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "model",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null
+        },
+        {
+          "name": "native",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null
+        },
+        {
+          "name": "model_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null
+        },
+        {
+          "name": "native_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
+          "is_file": false,
+          "default": "run"
+        },
+        {
+          "name": "mapping",
+          "type": "string",
+          "required": false,
+          "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
+          "is_file": false,
+          "default": null
+        },
+        {
+          "name": "small_molecule",
+          "type": "boolean",
+          "required": false,
+          "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
+          "is_file": false,
+          "default": false
+        },
+        {
+          "name": "capri_peptide",
+          "type": "boolean",
+          "required": false,
+          "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
+          "is_file": false,
+          "default": false
+        },
+        {
+          "name": "no_align",
+          "type": "boolean",
+          "required": false,
+          "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
+          "is_file": false,
+          "default": false
+        },
+        {
+          "name": "allowed_mismatches",
+          "type": "integer",
+          "required": false,
+          "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
+          "is_file": false,
+          "default": 0
+        },
+        {
+          "name": "optDockQF1",
+          "type": "boolean",
+          "required": false,
+          "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
+          "is_file": false,
+          "default": false
+        },
+        {
+          "name": "n_cpu",
+          "type": "integer",
+          "required": false,
+          "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+          "is_file": false,
+          "default": null
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/score_batch",
+      "summary": "Score N candidate models against 1 native as a single atomic task.",
+      "description": "Score N candidate models against 1 native as a single atomic task.\n\nModels come as repeated `models` uploads OR a single `models_zip_uri`\nzip (used by the gateway, which can't multipart-upload the list).",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_score_batch_task_api_tasks_score_batch_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "native",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null
+        },
+        {
+          "name": "native_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null
+        },
+        {
+          "name": "models",
+          "type": "array[file]",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null
+        },
+        {
+          "name": "models_zip_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
+          "is_file": false,
+          "default": "run"
+        },
+        {
+          "name": "mapping",
+          "type": "string",
+          "required": false,
+          "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
+          "is_file": false,
+          "default": null
+        },
+        {
+          "name": "small_molecule",
+          "type": "boolean",
+          "required": false,
+          "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
+          "is_file": false,
+          "default": false
+        },
+        {
+          "name": "capri_peptide",
+          "type": "boolean",
+          "required": false,
+          "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
+          "is_file": false,
+          "default": false
+        },
+        {
+          "name": "no_align",
+          "type": "boolean",
+          "required": false,
+          "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
+          "is_file": false,
+          "default": false
+        },
+        {
+          "name": "allowed_mismatches",
+          "type": "integer",
+          "required": false,
+          "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
+          "is_file": false,
+          "default": 0
+        },
+        {
+          "name": "optDockQF1",
+          "type": "boolean",
+          "required": false,
+          "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
+          "is_file": false,
+          "default": false
+        },
+        {
+          "name": "n_cpu",
+          "type": "integer",
+          "required": false,
+          "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+          "is_file": false,
+          "default": null
+        },
+        {
+          "name": "sort_by",
+          "type": "string",
+          "required": false,
+          "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
+          "is_file": false,
+          "default": "DockQ"
+        }
+      ],
+      "examples": []
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/dockq_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "tool_outputs": {
+      "score": "output/<name>.json — DockQ's native JSON output for the single (model, native) pair.",
+      "score_batch": "output/scores.csv (sorted summary, one row per model) + output/per_model/<basename>.json (raw DockQ JSON per model). output/failed.csv lists models that errored (if any).",
+      "note": "Use GET /api/jobs/{id}/files to enumerate; download a single file via /api/jobs/{id}/file/{relpath} or zip the whole dir via /download."
+    },
+    "input_uri_schemes": {
+      "upload": "multipart/form-data (single endpoint: fields `model` + `native`; batch: `native` + repeated `models`).",
+      "model_uri / native_uri": "URI alternatives to the single-endpoint `model` / `native` uploads.",
+      "models_zip_uri": "Batch only: URI to a zip of candidate model structures (.pdb/.cif/.gz), extracted flat as the `models` set. Use when `models` can't be uploaded (e.g. via the gateway, which dispatches form fields only).",
+      "job://<id>/<file>": "Re-use a file from a prior dockq job (or any other bioagent service that wrote to NAS).",
+      "file:///abs/path": "Direct NAS path; works across services on the shared mount.",
+      "oss://<bucket>/<key>": "Alibaba Cloud OSS object (needs OSS_ACCESS_KEY_ID / _SECRET env vars).",
+      "http(s)://...": "Generic URL, including OSS signed URLs."
+    },
+    "scoring_legend": {
+      "DockQ": "0–1, overall docking quality. <0.23 incorrect / 0.23–0.49 acceptable / 0.49–0.80 medium / ≥0.80 high quality.",
+      "iRMSD": "Interface residue RMSD (Å); lower is better.",
+      "LRMSD": "Ligand RMSD over the smaller chain (Å); lower is better.",
+      "fnat": "Fraction of native contacts recovered; higher is better.",
+      "fnonnat": "Fraction of predicted contacts that are non-native; lower is better.",
+      "clashes": "Number of clashing interface residues (<2 Å) in the model."
+    },
+    "config_tips": {
+      "mapping": "Format MODELCHAINS:NATIVECHAINS. For antibody-antigen scoring with model chains H,L,A and native B,C,X, use `--mapping HLA:BCX`. Use `:HL` to restrict native interfaces to H–L only.",
+      "small_molecule": "Required when scoring PDB/CIF inputs that contain HEM / cofactor / small-molecule chains. Without this flag DockQ ignores those interfaces.",
+      "no_align": "Skip sequence alignment and trust residue numbering directly. Faster, but ONLY safe when model + native share identical residue indexing (e.g. both come from the same crystal structure or pipeline).",
+      "n_cpu": "Forwarded to DockQ's --n_cpu (parallelism for chain-mapping enumeration within a single call, not across batch models). Default 4 fits a 4 vCPU FC instance.",
+      "sort_by": "scores.csv summary column. Defaults to DockQ (descending). For RMSD-style metrics the sort is still descending in the CSV — agents should re-sort client-side if ascending order is preferred."
+    },
+    "endpoints_summary": {
+      "/api/score": "Single (model, native) DockQ scoring; output/<name>.json.",
+      "/api/score_batch": "1 reference native vs N candidate models; output/scores.csv + per_model/*.json."
+    },
+    "batch_limits": {
+      "max_batch_size": 200,
+      "expected_runtime": "DockQ runs ~1–10 s per protein-protein pair on 4 vCPUs; batch of 100 ~3–15 min."
+    }
+  },
+  "openapi_url": "/openapi.json"
+}
