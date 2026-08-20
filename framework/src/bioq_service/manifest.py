@@ -55,7 +55,7 @@ class FieldInfo(BaseModel):
         ...,
         description=(
             "Human-friendly type name: 'string', 'integer', 'file' (multipart upload), "
-            "'array[string]', or the name of a referenced pydantic model "
+            "'array[string]', 'array[file]', or the name of a referenced pydantic model "
             "(in which case look it up in /openapi.json#/components/schemas)."
         ),
     )
@@ -65,7 +65,10 @@ class FieldInfo(BaseModel):
     )
     is_file: bool = Field(
         default=False,
-        description="True iff this is a multipart file upload (rather than a form/json scalar).",
+        description=(
+            "True iff this is a multipart file upload — a scalar 'file' or an 'array[file]' "
+            "(rather than a form/json scalar)."
+        ),
     )
     default: Any = Field(
         default=None,
