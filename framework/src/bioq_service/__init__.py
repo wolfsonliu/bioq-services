@@ -48,6 +48,7 @@ from bioq_service.adapter import JobAdapter
 from bioq_service.app import attach_mcp, create_app
 from bioq_service.cli import CLIEndpoint, create_cli
 from bioq_service.errors import FailureKind, extract_error_summary, finalize_job
+from bioq_service.fields import default_semantics
 from bioq_service.forms import model_form_depends
 from bioq_service.manifest import EndpointExample, ServiceManifest
 from bioq_service.models import JobInfo, JobStatus, UploadInfo
@@ -93,6 +94,7 @@ __all__ = [
     "attach_mcp",
     "create_app",
     "create_cli",
+    "default_semantics",
     "execute_task",
     "extract_error_summary",
     "finalize_job",
