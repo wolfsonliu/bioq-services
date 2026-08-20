@@ -72,6 +72,15 @@ class GatewaySettings(ServiceSettings):
     # downstream HTTP dispatch
     dispatch_timeout_sec: float = Field(default=60.0, ge=5)
 
+    # describe/self-description discovery (see
+    # docs/specs/2026-08-20-describe-cold-start-static-manifest-design.md).
+    # read timeout is the cold-start binding item: a scaled-to-zero FC holds the
+    # request until the instance boots, so read must be short to fail fast.
+    discovery_ttl_sec: float = Field(default=300.0, ge=0)
+    discovery_negative_ttl_sec: float = Field(default=15.0, ge=0)
+    discovery_read_timeout_sec: float = Field(default=8.0, ge=1)
+    discovery_connect_timeout_sec: float = Field(default=5.0, ge=1)
+
     # execution backend: "fc" (Alibaba FC async task mode), "http" (plain
     # submit/poll against each service's own in-process runner — local
     # Compose/K8s), or "openfaas" (async via the OpenFaaS gateway). Env:
