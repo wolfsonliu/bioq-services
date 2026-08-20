@@ -102,17 +102,19 @@
   由 CI 门禁校验一致性。
 - 文件存在 = 该服务有静态契约；缺失 = 回退 live（阶段一路径）。同一份
   `services.yaml` 不加任何字段，向后兼容。
-- 物化入口（framework 新增）：
-  `dump_manifest(app, adapter, settings, *, out_dir) -> None`，写两个 JSON；
-  每个服务的 `__main__.py` 暴露 `python -m server dump-manifest` 调用它
-  （复用 `create_app`/`create_cli` 已构建好的 app/adapter/settings）。
+- 物化入口（repo 脚本 `scripts/gen_manifests.py`，复用 framework 既有
+  `build_manifest()`，**零 framework 改动、零 per-service 文件改动**）：
+  orchestrator 读 `services.yaml`，对每个服务 `uv run --project
+  services/<svc>-server` 进入其 venv，把服务目录注册为 `server` 包后 import
+  `server.app`，调 `build_manifest()` + `app.openapi()` 写两个 JSON。
+  详见实施计划 `docs/plans/2026-08-20-describe-cold-start-static-manifest.md`。
 - 在服务自己的完整 venv 里跑（release 主机已装齐依赖），即便个别服务在
   模块顶层 import torch 也能工作——这是一次性的离线步骤，不是按需冷启动。
 
 Makefile 新增：
 
 ```
-make gen-manifests      # 遍历 SERVICES，uv run python -m server dump-manifest → manifests/
+make gen-manifests      # 遍历 services.yaml，uv run → manifests/<svc>.(manifest|openapi).json
 make check-manifests    # 重新生成到临时目录后 diff，任一差异或缺失即 fail（CI 门禁）
 ```
 
