@@ -244,3 +244,21 @@ def test_save_inputs_failure_cleans_up_and_allows_retry(tmp_path: Path) -> None:
     assert r2.status_code == 200
     assert r2.json()["status"] == JobStatus.COMPLETED.value
     assert r2.json()["input_params"]["message"] == "second"
+
+
+def test_register_task_endpoint_summary_surfaces_in_manifest(tmp_path: Path) -> None:
+    settings = _EchoSettings(jobs_base_dir=tmp_path / "jobs", keepalive_interval_s=0)
+    adapter = _EchoAdapter(settings=settings)
+    app = create_app(adapter, settings, title="Echo Summary")
+    register_task_endpoint(
+        app,
+        path="/api/tasks/echo-summary",
+        label="echo",
+        request_model=_EchoRequest,
+        build_argv=_echo_argv,
+        summary="Echo a message (single atomic task).",
+    )
+    client = TestClient(app)
+    body = client.get("/api/manifest").json()
+    ep = next(e for e in body["endpoints"] if e["path"] == "/api/tasks/echo-summary")
+    assert ep["summary"] == "Echo a message (single atomic task)."

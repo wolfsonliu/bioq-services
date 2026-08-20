@@ -221,6 +221,8 @@ def register_task_endpoint(
     request_model: type[BaseModel],
     build_argv: BuildArgvForTask,
     save_inputs: Optional[Callable[[BaseModel, Path], None]] = None,
+    summary: Optional[str] = None,
+    description: Optional[str] = None,
 ) -> None:
     """Register a POST `path` that runs one full pipeline synchronously.
 
@@ -277,5 +279,7 @@ def register_task_endpoint(
         _task_handler,
         methods=["POST"],
         response_model=JobInfo,
+        summary=summary,
+        description=description,
     )
     logger.info("registered task endpoint %s (label=%s)", path, label)
