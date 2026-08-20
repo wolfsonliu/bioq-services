@@ -1,5 +1,6 @@
 tmp*
 services/*-server/upstream/*
+.worktrees/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
