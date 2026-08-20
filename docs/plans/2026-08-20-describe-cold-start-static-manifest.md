@@ -507,6 +507,15 @@ git commit -m "feat(gateway): wire discovery timeouts from settings"
 **Files:**
 - Create: `scripts/gen_manifests.py`
 
+> **修订（执行期）**：服务 `app.py` 在 import 期即运行 `create_app()`，其中会
+> `settings.jobs_base_dir.mkdir(...)`（`framework/src/bioq_service/app.py:151`）。
+> 在只读 / 不可变构建宿主上 `/data` 不可创建，导致导入失败。为此 `dump_one` 先
+> 把 `<ENV_PREFIX>JOBS_BASE_DIR` 指向仓库根下的一次性临时目录（仅用于让该 mkdir
+> 平凡通过），`build_manifest` 后把产物 `nas_layout.jobs_base_dir` 恢复为 schema
+> 声明的默认值，保证提交物 host 无关（对应设计 §风险「CI 里用确定性默认值生成」）。
+> 无 framework 改动。新增 `_service_settings_cls()` 与 `_writable_jobs_base_dir()`
+> 两个辅助函数，`dump_one` 相应改为 use-norm 流程（见下）。
+
 - [ ] **Step 1: 写脚本**（完整内容，两模式：orchestrator + dump-one leaf）
 
 Create `scripts/gen_manifests.py`:
