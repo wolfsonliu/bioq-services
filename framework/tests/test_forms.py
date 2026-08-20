@@ -199,3 +199,24 @@ def test_works_alongside_file_upload():
     body = r.json()
     assert body["pdb"] == "input.pdb"
     assert body["params"]["name"] == "abc"
+
+
+def test_json_schema_extra_forwarded_to_openapi():
+    """A model Field(json_schema_extra=...) must land in the endpoint's OpenAPI body."""
+    from bioq_service import default_semantics
+
+    class WithMarker(BaseModel):
+        name: str = "run"
+        device: Optional[str] = Field(
+            default=None,
+            json_schema_extra=default_semantics("auto", "auto-select CUDA if available"),
+        )
+
+    client = _make_app(WithMarker)
+    spec = client.app.openapi()
+    body = next(iter(spec["paths"]["/x"]["post"]["requestBody"]["content"].values()))
+    body_schema = spec["components"]["schemas"][body["schema"]["$ref"].rsplit("/", 1)[-1]]
+    assert body_schema["properties"]["device"]["bioq_default"] == {
+        "kind": "auto",
+        "note": "auto-select CUDA if available",
+    }

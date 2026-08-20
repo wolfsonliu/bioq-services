@@ -90,18 +90,22 @@ def model_form_depends(model_cls: Type[M]) -> Callable[..., M]:
             complex_field_names.add(field_name)
             param_annotation: Any = str if is_required else Optional[str]
             if is_required:
-                form_default = Form(..., description=field.description)
+                form_default = Form(..., description=field.description,
+                                    json_schema_extra=field.json_schema_extra)
             else:
-                form_default = Form(None, description=field.description)
+                form_default = Form(None, description=field.description,
+                                    json_schema_extra=field.json_schema_extra)
         else:
             param_annotation = annotation
             if is_required:
-                form_default = Form(..., description=field.description)
+                form_default = Form(..., description=field.description,
+                                    json_schema_extra=field.json_schema_extra)
             else:
                 default_value = (
                     field.default if field.default is not PydanticUndefined else None
                 )
-                form_default = Form(default_value, description=field.description)
+                form_default = Form(default_value, description=field.description,
+                                    json_schema_extra=field.json_schema_extra)
 
         parameters.append(
             inspect.Parameter(
