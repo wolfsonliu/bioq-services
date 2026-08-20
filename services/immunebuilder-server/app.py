@@ -197,6 +197,7 @@ register_task_endpoint(
     label="predict_antibody",
     request_model=AntibodyRequest,
     build_argv=_antibody_build,
+    summary="Predict antibody structure from heavy + light chain sequences (single atomic task).",
 )
 register_task_endpoint(
     app,
@@ -204,6 +205,7 @@ register_task_endpoint(
     label="predict_nanobody",
     request_model=NanobodyRequest,
     build_argv=_nanobody_build,
+    summary="Predict nanobody structure from heavy chain sequence (single atomic task).",
 )
 register_task_endpoint(
     app,
@@ -211,6 +213,7 @@ register_task_endpoint(
     label="predict_tcr",
     request_model=TCRRequest,
     build_argv=_tcr_build,
+    summary="Predict TCR structure from alpha + beta chain sequences (single atomic task).",
 )
 
 attach_mcp(app)

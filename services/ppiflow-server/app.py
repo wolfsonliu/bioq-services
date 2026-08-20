@@ -331,6 +331,7 @@ register_task_endpoint(
     label="monomer",
     request_model=MonomerRequest,
     build_argv=_monomer_build,
+    summary="Unconditional monomer generation at the requested lengths (single atomic task).",
 )
 
 

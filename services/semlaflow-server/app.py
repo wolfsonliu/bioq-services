@@ -156,6 +156,7 @@ register_task_endpoint(
     label="generate",
     request_model=GenerateRequest,
     build_argv=_task_build,
+    summary="Unconditional generation (single atomic task).",
 )
 
 

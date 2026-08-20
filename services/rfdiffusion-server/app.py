@@ -313,6 +313,7 @@ register_task_endpoint(
     label="unconditional",
     request_model=UnconditionalRequest,
     build_argv=_unconditional_build,
+    summary="Unconditional monomer, or macrocycle with cyclic=true (single atomic task).",
 )
 register_task_endpoint(
     app,
@@ -320,6 +321,7 @@ register_task_endpoint(
     label="symmetry",
     request_model=SymmetryRequest,
     build_argv=_symmetry_build,
+    summary="Symmetric oligomer: cyclic / dihedral / tetrahedral (single atomic task).",
 )
 
 
