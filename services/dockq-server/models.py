@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Optional
 
 from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401 (re-exports)
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field
 
 __all__ = [
@@ -41,6 +42,7 @@ class _DockQCommon(BaseModel):
             "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. "
             "Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L."
         ),
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     small_molecule: bool = Field(
         default=False,
@@ -65,6 +67,7 @@ class _DockQCommon(BaseModel):
     n_cpu: Optional[int] = Field(
         default=None, ge=1, le=64,
         description="Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+        json_schema_extra=default_semantics("auto", "use all available cores"),
     )
 
 
