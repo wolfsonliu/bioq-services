@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401 (re-exports)
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field, model_validator
 
 __all__ = [
@@ -78,17 +79,19 @@ class DesignRequest(_ProteinMPNNCommon):
     chains_to_design: Optional[str] = Field(
         default=None,
         description="Space-separated chain IDs, e.g. 'A C'. Omit to design all chains.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     fixed_positions: Optional[str] = Field(
         default=None,
         description="Per-chain residue indices to fix, e.g. '1 2 3, 10 11' (segments aligned to chains_to_design).",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
-    tied_positions: Optional[str] = Field(default=None)
+    tied_positions: Optional[str] = Field(default=None, json_schema_extra=default_semantics("unset", "only used when explicitly provided"))
     homooligomer: bool = Field(default=False)
-    bias_AA: Optional[dict[str, float]] = Field(default=None)
-    bias_by_res: Optional[dict] = Field(default=None)
+    bias_AA: Optional[dict[str, float]] = Field(default=None, json_schema_extra=default_semantics("unset", "only used when explicitly provided"))
+    bias_by_res: Optional[dict] = Field(default=None, json_schema_extra=default_semantics("unset", "only used when explicitly provided"))
     omit_AAs: str = Field(default="X")
-    omit_AA_per_chain: Optional[dict] = Field(default=None)
+    omit_AA_per_chain: Optional[dict] = Field(default=None, json_schema_extra=default_semantics("unset", "only used when explicitly provided"))
 
     @model_validator(mode="after")
     def _validate_design_fields(self) -> "DesignRequest":
@@ -124,7 +127,7 @@ class ScoreRequest(_ProteinMPNNCommon):
 
     num_seq_per_target: int = Field(default=10, ge=1, le=10000)
     sampling_temp: str = Field(default="0.1")
-    chains_to_design: Optional[str] = Field(default=None)
+    chains_to_design: Optional[str] = Field(default=None, json_schema_extra=default_semantics("unset", "only used when explicitly provided"))
     save_score: bool = Field(default=True)
 
 
@@ -133,4 +136,4 @@ class ProbsRequest(_ProteinMPNNCommon):
 
     kind: Literal["conditional", "conditional_backbone", "unconditional"] = "conditional"
     save_probs: bool = Field(default=True)
-    chains_to_design: Optional[str] = Field(default=None)
+    chains_to_design: Optional[str] = Field(default=None, json_schema_extra=default_semantics("unset", "only used when explicitly provided"))
