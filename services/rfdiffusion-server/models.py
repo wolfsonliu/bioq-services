@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import Optional
 
 from bioq_service import FailureKind, JobInfo, JobStatus  # re-exports
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field
 
 __all__ = [
@@ -84,7 +85,7 @@ class _GenerationCommon(BaseModel):
             "Lower (e.g. 0.5 or 0.0) → higher quality, less diversity. Binder mode defaults to 0.0."
         ),
     )
-    model: Optional[str] = Field(default=None, description=_MODEL_DESC)
+    model: Optional[str] = Field(default=None, description=_MODEL_DESC, json_schema_extra=default_semantics("auto", "auto-select by the tool from the request inputs"))
 
 
 class UnconditionalRequest(_GenerationCommon):
@@ -116,11 +117,13 @@ class MotifRequest(_GenerationCommon):
     length: Optional[str] = Field(
         default=None,
         description="Total length constraint, e.g. `55-55`. Useful when contigs span a wide range.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     inpaint_seq: Optional[str] = Field(
         default=None,
         description="Residues whose sequence should be masked (auto-switches model to InpaintSeq).",
         examples=["A1/A30-40"],
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
 
 
@@ -141,6 +144,7 @@ class BinderRequest(_GenerationCommon):
             "Format `<chain><resnum>`, e.g. `A59,A83,A91`. 3-6 recommended."
         ),
         examples=["A59,A83,A91"],
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     # Binder mode normally runs with zero noise (per the upstream README).
     noise_scale: float = Field(default=0.0, ge=0.0, le=2.0)
@@ -164,12 +168,17 @@ class SymmetryRequest(_GenerationCommon):
             "Raw Hydra list-string for `potentials.guiding_potentials`, "
             'e.g. `["type:olig_contacts,weight_intra:1,weight_inter:0.1"]`.'
         ),
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     guide_scale: Optional[float] = Field(
-        default=None, description="Strength of the guiding potential (default 10)."
+        default=None,
+        description="Strength of the guiding potential (default 10).",
+        json_schema_extra=default_semantics("auto", "use the tool's default when omitted"),
     )
     guide_decay: Optional[str] = Field(
-        default=None, description="`constant` / `linear` / `quadratic` / `cubic`."
+        default=None,
+        description="`constant` / `linear` / `quadratic` / `cubic`.",
+        json_schema_extra=default_semantics("auto", "use the tool's default when omitted"),
     )
     olig_inter_all: bool = Field(default=False, description="`potentials.olig_inter_all=True` if set.")
     olig_intra_all: bool = Field(default=False, description="`potentials.olig_intra_all=True` if set.")
@@ -193,4 +202,5 @@ class CustomRequest(_GenerationCommon):
             '`{"diffuser.partial_T": 10, "ppi.hotspot_res": "[A59,A83,A91]"}`. '
             "Each key/value is appended to argv as `key=value`."
         ),
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
