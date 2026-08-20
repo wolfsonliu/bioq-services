@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
@@ -54,11 +55,13 @@ class GenerateRequest(BaseModel):
         default_factory=lambda: [0.0, 0.0, 0.0, 0.0],
         description="Prior↔posterior interpolation per latent resolution.  "
         "List of length 4 or scalar (broadcast to length 4).",
+        json_schema_extra=default_semantics("auto", "use the tool's default when omitted"),
     )
     temps: list[float] = Field(
         default_factory=lambda: [0.5, 0.5, 0.5, 0.5],
         description="Sampling temperature per latent resolution.  "
         "List of length 4 or scalar (broadcast to length 4).",
+        json_schema_extra=default_semantics("auto", "use the tool's default when omitted"),
     )
 
     random_rotate: bool = Field(default=True)
@@ -69,7 +72,7 @@ class GenerateRequest(BaseModel):
         description="RDKit FF post-processing on generated molecules.",
     )
 
-    mol_filter: MolFilterParams = Field(default_factory=MolFilterParams)
+    mol_filter: MolFilterParams = Field(default_factory=MolFilterParams, json_schema_extra=default_semantics("auto", "use the tool's default when omitted"))
 
     _broadcast_zbetas = field_validator("zbetas", mode="before")(_broadcast_to_4)
     _broadcast_temps = field_validator("temps", mode="before")(_broadcast_to_4)
@@ -94,11 +97,12 @@ class GenerateSpatialRequest(GenerateRequest):
         description="SMILES / SMARTS for the substructure to preserve.  "
         "Provide EITHER this field OR upload `substruct_modify` file "
         "(and matching `substruct_modify_uri`), never both.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
 
     # spatial defaults lean toward posterior (upstream generate_spatial.yml).
-    zbetas: list[float] = Field(default_factory=lambda: [0.3, 0.3, 0.3, 0.3])
-    temps: list[float] = Field(default_factory=lambda: [1.0, 1.0, 1.0, 1.0])
+    zbetas: list[float] = Field(default_factory=lambda: [0.3, 0.3, 0.3, 0.3], json_schema_extra=default_semantics("auto", "use the tool's default when omitted"))
+    temps: list[float] = Field(default_factory=lambda: [1.0, 1.0, 1.0, 1.0], json_schema_extra=default_semantics("auto", "use the tool's default when omitted"))
 
 
 OptKey = Literal["affinity_qvina", "qed", "alogp", "sa"]
@@ -147,16 +151,18 @@ class OptimizeRequest(BaseModel):
         default_factory=lambda: [0.3],
         description="Per-cycle zbetas — list of length n_cycles, or scalar "
         "(broadcast to length n_cycles).",
+        json_schema_extra=default_semantics("auto", "use the tool's default when omitted"),
     )
     temps: list[float] = Field(
         default_factory=lambda: [1.0],
         description="Per-cycle temperature — list of length n_cycles, or "
         "scalar (broadcast to length n_cycles).",
+        json_schema_extra=default_semantics("auto", "use the tool's default when omitted"),
     )
 
     protonate: bool = Field(default=True, description="obabel protonation before QVina.")
 
-    mol_filter: MolFilterParams = Field(default_factory=MolFilterParams)
+    mol_filter: MolFilterParams = Field(default_factory=MolFilterParams, json_schema_extra=default_semantics("auto", "use the tool's default when omitted"))
 
     @field_validator("zbetas", "temps", mode="before")
     @classmethod
