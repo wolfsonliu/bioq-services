@@ -349,3 +349,53 @@ def test_file_backend_download_redirects_to_gateway_file_url(client, tmp_path):
     r2 = client.get("/v1/jobs/dljob/download", headers=hdr, follow_redirects=False)
     assert r2.status_code == 302
     assert r2.headers["location"] == "/v1/files/users/alice/dljob/results.zip"
+
+
+def test_describe_serves_static_manifest(client, tmp_path):
+    import server.app as appmod
+    from bioq_service.service_registry import ServiceRecord
+    appmod.app.state.registry._services = {
+        "openbpmd-server": ServiceRecord(url="https://svc.local")
+    }
+    mdir = tmp_path / "manifests"
+    mdir.mkdir()
+    (mdir / "openbpmd-server.manifest.json").write_text(
+        '{"service": "openbpmd", "endpoints": [{"path": "/api/score"}]}',
+        encoding="utf-8",
+    )
+    (mdir / "openbpmd-server.openapi.json").write_text(
+        '{"paths": {"/api/score": {}}}', encoding="utf-8",
+    )
+
+    r = client.get("/v1/services/openbpmd-server", headers={"x-test-account": "alice"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["source"] == "registry"
+    assert body["status"] == "ok"
+    assert body["manifest"]["service"] == "openbpmd"
+    assert body["openapi"] == {"paths": {"/api/score": {}}}
+
+
+def test_describe_falls_back_to_live_when_no_static(client):
+    import server.app as appmod
+    from bioq_service.service_registry import ServiceRecord
+    appmod.app.state.registry._services = {
+        "openbpmd-server": ServiceRecord(url="https://svc.local")
+    }
+
+    class _Disp:
+        def describe_base_url(self, rec):
+            return rec.url
+
+    class _Disc:
+        def describe(self, svc, base):
+            return {"service": svc, "manifest": {}, "openapi": {},
+                    "status": "warming", "source": "live"}
+
+    appmod.app.state.dispatch = _Disp()
+    appmod.app.state.discover = _Disc()
+
+    r = client.get("/v1/services/openbpmd-server", headers={"x-test-account": "alice"})
+    assert r.status_code == 200
+    assert r.json()["source"] == "live"
+    assert r.json()["status"] == "warming"

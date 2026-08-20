@@ -96,9 +96,17 @@ def describe_service(svc: str, request: Request,
         rec = reg.record(svc)
     except KeyError:
         raise HTTPException(404, f"unknown service {svc!r}")
-    # Route discovery through the dispatcher: in openfaas mode the worker has no
-    # static URL (rec.url is a placeholder), so it must be reached via the
-    # OpenFaaS gateway. fc/http backends return rec.url unchanged.
+    # Static contract first: zero downstream calls, cold-start immune. Fall back
+    # to live discovery only for services without committed manifests yet.
+    manifest = reg.manifest(svc)
+    if manifest is not None:
+        return {
+            "service": svc,
+            "manifest": manifest,
+            "openapi": reg.openapi(svc) or {},
+            "status": "ok",
+            "source": "registry",
+        }
     base = request.app.state.dispatch.describe_base_url(rec)
     return request.app.state.discover.describe(svc, base)
 
