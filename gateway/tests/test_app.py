@@ -354,6 +354,17 @@ def test_file_backend_download_redirects_to_gateway_file_url(client, tmp_path):
 def test_describe_serves_static_manifest(client, tmp_path):
     import server.app as appmod
     from bioq_service.service_registry import ServiceRecord
+
+    class _NoDispatch:
+        def describe_base_url(self, rec):
+            raise AssertionError("static describe must not touch the dispatcher")
+
+    class _NoDiscover:
+        def describe(self, svc, base):
+            raise AssertionError("static describe must not hit downstream")
+
+    appmod.app.state.dispatch = _NoDispatch()
+    appmod.app.state.discover = _NoDiscover()
     appmod.app.state.registry._services = {
         "openbpmd-server": ServiceRecord(url="https://svc.local")
     }
@@ -370,6 +381,7 @@ def test_describe_serves_static_manifest(client, tmp_path):
     r = client.get("/v1/services/openbpmd-server", headers={"x-test-account": "alice"})
     assert r.status_code == 200, r.text
     body = r.json()
+    assert body["service"] == "openbpmd-server"
     assert body["source"] == "registry"
     assert body["status"] == "ok"
     assert body["manifest"]["service"] == "openbpmd"
@@ -388,14 +400,20 @@ def test_describe_falls_back_to_live_when_no_static(client):
             return rec.url
 
     class _Disc:
+        def __init__(self):
+            self.last_base = None
+
         def describe(self, svc, base):
+            self.last_base = base
             return {"service": svc, "manifest": {}, "openapi": {},
                     "status": "warming", "source": "live"}
 
+    disc = _Disc()
     appmod.app.state.dispatch = _Disp()
-    appmod.app.state.discover = _Disc()
+    appmod.app.state.discover = disc
 
     r = client.get("/v1/services/openbpmd-server", headers={"x-test-account": "alice"})
     assert r.status_code == 200
     assert r.json()["source"] == "live"
     assert r.json()["status"] == "warming"
+    assert disc.last_base == "https://svc.local"

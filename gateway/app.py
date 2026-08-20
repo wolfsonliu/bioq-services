@@ -107,6 +107,9 @@ def describe_service(svc: str, request: Request,
             "status": "ok",
             "source": "registry",
         }
+    # Live fallback: route discovery through the dispatcher — in openfaas mode the
+    # worker has no static URL (rec.url is a placeholder), so it must be reached via
+    # the OpenFaaS gateway; fc/http backends return rec.url unchanged.
     base = request.app.state.dispatch.describe_base_url(rec)
     return request.app.state.discover.describe(svc, base)
 
