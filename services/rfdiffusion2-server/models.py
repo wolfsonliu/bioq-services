@@ -22,6 +22,7 @@ from __future__ import annotations
 from typing import Optional
 
 from bioq_service import FailureKind, JobInfo, JobStatus  # re-exports
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field
 
 __all__ = [
@@ -80,7 +81,7 @@ class _GenerationCommon(BaseModel):
     deterministic: bool = Field(
         default=False, description="Seed every RNG so reruns reproduce exactly."
     )
-    model: Optional[str] = Field(default=None, description=_MODEL_DESC)
+    model: Optional[str] = Field(default=None, description=_MODEL_DESC, json_schema_extra=default_semantics("auto", "auto-select by the tool from the request inputs"))
 
 
 class ActiveSiteRequest(_GenerationCommon):
@@ -140,6 +141,7 @@ class ActiveSiteRequest(_GenerationCommon):
             "separated list, e.g. `A106` or `A106,A193`."
         ),
         examples=["A106"],
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     partially_fixed_ligand: Optional[dict[str, list[str]]] = Field(
         default=None,
@@ -154,6 +156,7 @@ class ActiveSiteRequest(_GenerationCommon):
                 "OXM": ["O3", "C2", "C1", "O2", "N1"],
             }
         ],
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     inpaint_seq: Optional[str] = Field(
         default=None,
@@ -162,6 +165,7 @@ class ActiveSiteRequest(_GenerationCommon):
             "where supported). Format: `<chain><resnum>` / `<chain><resnum>-<resnum>`."
         ),
         examples=["A1/A30-40"],
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
 
 
@@ -187,6 +191,7 @@ class SmallMoleculeBinderRequest(_GenerationCommon):
             "Hard length constraint, e.g. `150-150`. Useful when `contigs` is a range."
         ),
         examples=["150-150"],
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     ligand: str = Field(
         description="Ligand residue name(s) present in `input_pdb`, e.g. `PH2`.",
@@ -235,6 +240,7 @@ class CustomRequest(_GenerationCommon):
     ligand: Optional[str] = Field(
         default=None,
         description="`inference.ligand=...` if set (comma-separated ligand resnames).",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     extra_overrides: Optional[str] = Field(
         default=None,
@@ -243,4 +249,5 @@ class CustomRequest(_GenerationCommon):
             "`{\"diffuser.T\": 50, \"inference.conditions.relative_sasa_v2.active\": true}`. "
             "Each entry is appended to argv as `key=value`."
         ),
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
