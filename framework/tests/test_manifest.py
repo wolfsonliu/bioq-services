@@ -342,7 +342,10 @@ def test_extract_fields_semantic_default_tokens() -> None:
     assert fields["device"].default_note == "auto-select CUDA if available"
     assert fields["extra"].default == "unset"
     assert fields["extra"].default_kind == "unset"
+    assert fields["extra"].default_note == "only used when explicitly provided"
     assert fields["plain"].default is None
     assert fields["plain"].default_kind is None
+    assert fields["plain"].default_note is None
     assert fields["speed"].default == 3
     assert fields["speed"].default_kind == "literal"
+    assert fields["speed"].default_note is None
