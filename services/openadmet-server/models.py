@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401 (re-exported)
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -29,14 +30,17 @@ class PredictRequest(BaseModel):
             "Inline SMILES: comma- or newline-separated. Up to 200 molecules "
             "for quick probing. For larger batches use `input_csv` upload or URI."
         ),
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     input_csv_uri: Optional[str] = Field(
         default=None,
         description="URI (oss://, file://, http(s)://, job://) pointing to an input CSV.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     input_sdf_uri: Optional[str] = Field(
         default=None,
         description="URI pointing to an input SDF.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
 
     input_col: Optional[str] = Field(
@@ -47,6 +51,7 @@ class PredictRequest(BaseModel):
             "the server derives it from the first `model_names` entry's "
             "recipe_components/data.yaml::input_col (auto-derive)."
         ),
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
 
     # ---- Model selection ----
@@ -65,10 +70,10 @@ class PredictRequest(BaseModel):
     accelerator: AcceleratorChoice = Field(default="gpu")
 
     # ---- Active-learning acquisition (optional) ----
-    aq_fxns: list[AcquisitionChoice] = Field(default_factory=list)
-    beta: list[float] = Field(default_factory=list)
-    best_y: list[float] = Field(default_factory=list)
-    xi: list[float] = Field(default_factory=list)
+    aq_fxns: list[AcquisitionChoice] = Field(default_factory=list, json_schema_extra=default_semantics("unset", "empty when omitted"))
+    beta: list[float] = Field(default_factory=list, json_schema_extra=default_semantics("unset", "empty when omitted"))
+    best_y: list[float] = Field(default_factory=list, json_schema_extra=default_semantics("unset", "empty when omitted"))
+    xi: list[float] = Field(default_factory=list, json_schema_extra=default_semantics("unset", "empty when omitted"))
 
     debug: bool = Field(default=False)
 
@@ -115,17 +120,19 @@ class CompareRequest(BaseModel):
         default_factory=list,
         max_length=20,
         description="Pre-registered model names on NAS (Mode A).",
+        json_schema_extra=default_semantics("unset", "empty when omitted"),
     )
-    label_types: list[LabelTypeChoice] = Field(default_factory=list)
+    label_types: list[LabelTypeChoice] = Field(default_factory=list, json_schema_extra=default_semantics("unset", "empty when omitted"))
 
     # ---- Mode B ----
-    labels: list[str] = Field(default_factory=list)
-    task_names: list[str] = Field(default_factory=list)
+    labels: list[str] = Field(default_factory=list, json_schema_extra=default_semantics("unset", "empty when omitted"))
+    task_names: list[str] = Field(default_factory=list, json_schema_extra=default_semantics("unset", "empty when omitted"))
 
     # ---- Common ----
     mt_id: Optional[str] = Field(
         default=None,
         description="Multitask identifier — required when comparing multitask models.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     report: bool = Field(
         default=False,
