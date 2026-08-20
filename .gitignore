@@ -167,3 +167,5 @@ cython_debug/
 
 # per-service test-env lockfiles (framework+pytest only; not worth tracking)
 uv.lock
+.bioq-jobs-*/
+

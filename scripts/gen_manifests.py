@@ -17,7 +17,14 @@ Import side effect: each service's `app.py` runs `create_app()` at import time,
 which does `settings.jobs_base_dir.mkdir(...)`. On read-only/immutable build
 hosts that mkdir fails, so `dump_one` redirects `<PREFIX>JOBS_BASE_DIR` to a
 throwaway dir for the import, then restores the declared default in the emitted
-`nas_layout.jobs_base_dir` so the committed contract stays deterministic.
+`nas_layout.jobs_base_dir` so the committed contract stays deterministic. The
+leaf also scrubs ambient `<PREFIX>_*` env vars before import so the caller's
+environment can't drift the contract.
+
+NOTE: a full `generate`/`check` sweep re-enters EVERY service venv (`uv run
+--project` lazily resolves/installs each service's deps, including multi-GB GPU
+stacks). This is a release/CI action; for one-off edits use `--dump-one`
+directly against a single service venv.
 """
 from __future__ import annotations
 
@@ -32,6 +39,8 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from pydantic_core import PydanticUndefined
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = Path(__file__).resolve()
@@ -65,10 +74,29 @@ def _service_settings_cls():
 
 
 @contextlib.contextmanager
-def _writable_jobs_base_dir():
-    settings_cls = _service_settings_cls()
+def _scrubbed_env(prefix: str):
+    """Temporarily drop ambient `<PREFIX>_*` vars so the contract can't drift."""
+    if not prefix:
+        yield
+        return
+    removed = {k: v for k, v in os.environ.items() if k.startswith(prefix)}
+    for k in removed:
+        os.environ.pop(k, None)
+    try:
+        yield
+    finally:
+        os.environ.update(removed)
+
+
+@contextlib.contextmanager
+def _writable_jobs_base_dir(settings_cls):
     env_var = f"{settings_cls.model_config.get('env_prefix', '')}JOBS_BASE_DIR"
     default = settings_cls.model_fields["jobs_base_dir"].default
+    if default is PydanticUndefined:
+        raise RuntimeError(
+            f"{settings_cls.__name__}.jobs_base_dir has no default; "
+            "cannot materialize a deterministic manifest"
+        )
     with tempfile.TemporaryDirectory(prefix=".bioq-jobs-", dir=REPO_ROOT) as tmp:
         previous = os.environ.get(env_var)
         os.environ[env_var] = tmp
@@ -83,7 +111,13 @@ def _writable_jobs_base_dir():
 
 def dump_one(svc: str, service_dir: Path, out_dir: Path) -> None:
     register_server_package(service_dir)
-    with _writable_jobs_base_dir() as default_jobs_base_dir:
+    settings_cls = _service_settings_cls()
+    prefix = settings_cls.model_config.get("env_prefix", "")
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(_scrubbed_env(prefix))
+        default_jobs_base_dir = stack.enter_context(
+            _writable_jobs_base_dir(settings_cls)
+        )
         from bioq_service.manifest import build_manifest
         from server.app import adapter, app, settings
 
@@ -116,7 +150,7 @@ def service_dir(svc: str) -> Path:
 def render_one(svc: str, out_dir: Path) -> None:
     d = service_dir(svc)
     if not (d / "Dockerfile").is_file():
-        raise SystemExit(f"missing service dir {d}")
+        raise SystemExit(f"missing Dockerfile in {d}")
     subprocess.run(
         ["uv", "run", "--project", str(d), "python", str(SCRIPT),
          "--dump-one", "--svc", svc, "--service-dir", str(d), "--out-dir", str(out_dir)],
@@ -162,6 +196,8 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.dump_one:
+        if not (args.svc and args.service_dir and args.out_dir):
+            parser.error("--dump-one requires --svc, --service-dir and --out-dir")
         dump_one(args.svc, Path(args.service_dir).resolve(), Path(args.out_dir))
         return 0
     if args.check:
