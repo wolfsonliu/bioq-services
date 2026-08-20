@@ -499,7 +499,8 @@ def post_confidence(
 # ===========================================================================
 if settings.task_endpoints_enabled:
 
-    @app.post("/api/tasks/dock", response_model=JobInfo)
+    @app.post("/api/tasks/dock", response_model=JobInfo,
+              summary="Molecular docking, small-molecule or peptide (single atomic task).")
     def post_dock_task(
         request: Request,
         params: DockRequest = Depends(model_form_depends(DockRequest)),
@@ -530,7 +531,8 @@ if settings.task_endpoints_enabled:
             build_argv=_build, save_inputs=_save,
         )
 
-    @app.post("/api/tasks/sbdd", response_model=JobInfo)
+    @app.post("/api/tasks/sbdd", response_model=JobInfo,
+              summary="De novo structure-based drug design (single atomic task).")
     def post_sbdd_task(
         request: Request,
         params: SbddRequest = Depends(model_form_depends(SbddRequest)),
@@ -554,7 +556,8 @@ if settings.task_endpoints_enabled:
             build_argv=_build, save_inputs=_save,
         )
 
-    @app.post("/api/tasks/linking", response_model=JobInfo)
+    @app.post("/api/tasks/linking", response_model=JobInfo,
+              summary="Fragment linking / growing / PROTAC linker design (single atomic task).")
     def post_linking_task(
         request: Request,
         params: LinkingRequest = Depends(model_form_depends(LinkingRequest)),
@@ -582,7 +585,8 @@ if settings.task_endpoints_enabled:
             build_argv=_build, save_inputs=_save,
         )
 
-    @app.post("/api/tasks/optimize", response_model=JobInfo)
+    @app.post("/api/tasks/optimize", response_model=JobInfo,
+              summary="Molecular optimization: local refinement of an input ligand (single atomic task).")
     def post_optimize_task(
         request: Request,
         params: OptimizeRequest = Depends(model_form_depends(OptimizeRequest)),
@@ -610,7 +614,8 @@ if settings.task_endpoints_enabled:
             build_argv=_build, save_inputs=_save,
         )
 
-    @app.post("/api/tasks/pepdesign", response_model=JobInfo)
+    @app.post("/api/tasks/pepdesign", response_model=JobInfo,
+              summary="Peptide design: linear/cyclic de novo, inverse folding, sc-packing (single atomic task).")
     def post_pepdesign_task(
         request: Request,
         params: PepDesignRequest = Depends(model_form_depends(PepDesignRequest)),
@@ -641,7 +646,8 @@ if settings.task_endpoints_enabled:
             build_argv=_build, save_inputs=_save,
         )
 
-    @app.post("/api/tasks/confidence", response_model=JobInfo)
+    @app.post("/api/tasks/confidence", response_model=JobInfo,
+              summary="Tuned-ranker confidence scoring on a previously completed job (single atomic task).")
     def post_confidence_task(
         request: Request,
         params: ConfidenceRequest = Depends(model_form_depends(ConfidenceRequest)),
