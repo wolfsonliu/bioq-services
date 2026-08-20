@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401  (re-exported)
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field
 
 
@@ -58,6 +59,7 @@ class GenerateRequest(BaseModel):
         description="If set, every molecule has exactly this many atoms. "
         "Default (null) samples atom counts from the training distribution "
         "per molecule — recommended.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
 
     model_variant: ModelVariant = Field(
@@ -74,6 +76,7 @@ class GenerateRequest(BaseModel):
         default=None,
         description="pytorch-lightning `seed_everything`; null → framework "
         "fills a random seed and records it in JobInfo.input_params.",
+        json_schema_extra=default_semantics("auto", "random seed selected by the tool at runtime"),
     )
 
     stochasticity: Optional[float] = Field(
@@ -81,12 +84,14 @@ class GenerateRequest(BaseModel):
         description="CTMC sampling stochasticity η_t. Applies to `fm3_*` "
         "CTMC-parameterised variants (all of them). Null → upstream config "
         "default.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
 
     hc_thresh: Optional[float] = Field(
         default=None, ge=0.0, le=1.0,
         description="High-confidence threshold for CTMC purity sampling. "
         "Null → upstream config default.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
 
     max_batch_size: int = Field(
