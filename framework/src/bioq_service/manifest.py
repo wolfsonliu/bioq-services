@@ -237,7 +237,9 @@ def _peel_optional(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 def _is_file_schema(schema: dict[str, Any]) -> bool:
-    """Multipart file uploads show up as either format=binary or contentMediaType=...octet-stream."""
+    """Multipart file uploads: format=binary / octet-stream, scalar or array of them."""
+    if schema.get("type") == "array":
+        return _is_file_schema(schema.get("items") or {})
     if schema.get("type") != "string":
         return False
     return (
@@ -250,11 +252,11 @@ def _format_type(schema: dict[str, Any]) -> str:
     """Render a schema as a short human-readable type string for agents."""
     if "$ref" in schema:
         return schema["$ref"].rsplit("/", 1)[-1]
-    if _is_file_schema(schema):
-        return "file"
     t = schema.get("type", "any")
     if t == "array":
         return f"array[{_format_type(schema.get('items', {}))}]"
+    if _is_file_schema(schema):
+        return "file"
     return t
 
 

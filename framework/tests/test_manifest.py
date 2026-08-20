@@ -291,3 +291,22 @@ def test_endpoint_examples_from_adapter_hook(tmp_path: Path) -> None:
     assert "curl" in ex["curl"]
     assert ex["body"] == {"msg": "hi"}
     assert "simplest" in ex["notes"]
+
+
+def test_extract_fields_marks_file_arrays_as_files() -> None:
+    """list[UploadFile] (array of binary) must come out is_file=True / type='array[file]'."""
+    from bioq_service.manifest import _extract_fields
+
+    body_schema = {
+        "type": "object",
+        "properties": {
+            "model_stats_files": {
+                "type": "array",
+                "items": {"type": "string", "format": "binary"},
+                "title": "Model Stats Files",
+            },
+        },
+    }
+    fields = {f.name: f for f in _extract_fields(body_schema)}
+    assert fields["model_stats_files"].is_file is True
+    assert fields["model_stats_files"].type == "array[file]"
