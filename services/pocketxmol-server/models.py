@@ -13,6 +13,7 @@ from typing import Optional
 # Re-export framework JobInfo / JobStatus for backwards compatibility with
 # callers that used to import them from server.models.
 from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
@@ -78,18 +79,21 @@ class DockRequest(BaseModel):
         default=None,
         description="Explicit pocket center [x, y, z]. "
         "Mutually exclusive with providing `ref_ligand` as pocket source.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     smiles: Optional[str] = Field(
         default=None,
         description="SMILES string of the small-molecule ligand "
         "(alternative to uploading `ligand` file).",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     pep_sequence: Optional[str] = Field(
         default=None, min_length=3, max_length=30,
         description="Peptide sequence for docking from sequence (only when "
         "is_pep=true); equivalent to upstream `pepseq_<seq>` shortcut.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
-    seed: Optional[int] = Field(default=None, ge=0)
+    seed: Optional[int] = Field(default=None, ge=0, json_schema_extra=default_semantics("auto", "random seed selected by the tool at runtime"))
 
     @field_validator("pocket_coord")
     @classmethod
@@ -116,7 +120,7 @@ class SbddRequest(BaseModel):
     pocket_radius: float = Field(default=15.0, ge=5.0, le=25.0)
     mol_size_mean: int = Field(default=28, ge=10, le=60)
     mol_size_std: int = Field(default=2, ge=1, le=10)
-    seed: Optional[int] = Field(default=None, ge=0)
+    seed: Optional[int] = Field(default=None, ge=0, json_schema_extra=default_semantics("auto", "random seed selected by the tool at runtime"))
 
     @field_validator("pocket_coord")
     @classmethod
@@ -148,7 +152,7 @@ class LinkingRequest(BaseModel):
                                    description="Use input ligand centroid as "
                                    "denoising space center; False → pocket centroid.")
     pocket_radius: float = Field(default=10.0, ge=5.0, le=25.0)
-    seed: Optional[int] = Field(default=None, ge=0)
+    seed: Optional[int] = Field(default=None, ge=0, json_schema_extra=default_semantics("auto", "random seed selected by the tool at runtime"))
 
     @field_validator("fragments")
     @classmethod
@@ -183,7 +187,7 @@ class OptimizeRequest(BaseModel):
     mol_size_mean: int = Field(default=38, ge=10, le=100)
     mol_size_std: int = Field(default=3, ge=1, le=10)
     pocket_radius: float = Field(default=10.0, ge=5.0, le=25.0)
-    seed: Optional[int] = Field(default=None, ge=0)
+    seed: Optional[int] = Field(default=None, ge=0, json_schema_extra=default_semantics("auto", "random seed selected by the tool at runtime"))
 
 
 # ---------------------------------------------------------------------------
@@ -195,18 +199,19 @@ class PepDesignRequest(BaseModel):
         default=None, ge=5, le=30,
         description="Peptide residue count (required for de novo modes; "
         "ignored for inverse_fold / sc_pack — length taken from input PDB).",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     num_samples: int = Field(default=10, ge=1, le=50)
     batch_size: int = Field(default=50, ge=1, le=200)
-    pocket_coord: Optional[list[float]] = Field(default=None)
+    pocket_coord: Optional[list[float]] = Field(default=None, json_schema_extra=default_semantics("unset", "only used when explicitly provided"))
     pocket_radius: float = Field(default=20.0, ge=10.0, le=30.0,
                                  description="Peptide pockets are larger than "
                                  "small-molecule pockets; default = 20 Å.")
-    fix_pos_res_bb: list[int] = Field(default_factory=list)
-    fix_pos_res_sc: list[int] = Field(default_factory=list)
-    fix_type_res_bb: list[int] = Field(default_factory=list)
-    fix_type_res_sc: list[int] = Field(default_factory=list)
-    seed: Optional[int] = Field(default=None, ge=0)
+    fix_pos_res_bb: list[int] = Field(default_factory=list, json_schema_extra=default_semantics("unset", "empty when omitted"))
+    fix_pos_res_sc: list[int] = Field(default_factory=list, json_schema_extra=default_semantics("unset", "empty when omitted"))
+    fix_type_res_bb: list[int] = Field(default_factory=list, json_schema_extra=default_semantics("unset", "empty when omitted"))
+    fix_type_res_sc: list[int] = Field(default_factory=list, json_schema_extra=default_semantics("unset", "empty when omitted"))
+    seed: Optional[int] = Field(default=None, ge=0, json_schema_extra=default_semantics("auto", "random seed selected by the tool at runtime"))
 
     @model_validator(mode="after")
     def _check_length_for_denovo(self) -> "PepDesignRequest":
