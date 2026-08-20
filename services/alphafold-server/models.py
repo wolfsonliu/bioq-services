@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field
 
 
@@ -28,7 +29,10 @@ class FoldRequest(BaseModel):
 
     use_precomputed_msas: bool = Field(default=False)
 
-    random_seed: Optional[int] = Field(default=None)
+    random_seed: Optional[int] = Field(
+        default=None,
+        json_schema_extra=default_semantics("auto", "random seed selected by the tool at runtime"),
+    )
 
     use_gpu_relax: bool = Field(default=True)
 
