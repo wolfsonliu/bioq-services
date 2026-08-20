@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401  (re-exported)
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field
 
 # SemlaFlow ships two headline pretrained models.  `model_name` selects the
@@ -73,6 +74,7 @@ class GenerateRequest(BaseModel):
         default=None,
         description="Random seed (lightning seed_everything). null → upstream "
         "default 12345; recorded in JobInfo.input_params.",
+        json_schema_extra=default_semantics("auto", "random seed selected by the tool at runtime"),
     )
 
 
