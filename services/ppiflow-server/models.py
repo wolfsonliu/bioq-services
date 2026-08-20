@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Optional
 
 from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401 (re-exports)
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field
 
 __all__ = [
@@ -66,6 +67,7 @@ class BinderRequest(_CommonRequest):
             "Optional: if absent PPIFlow samples hotspots via "
             "`sample_hotspot_rate_{min,max}`."
         ),
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     sample_hotspot_rate_min: float = Field(default=0.05, ge=0.0, le=1.0)
     sample_hotspot_rate_max: float = Field(default=0.20, ge=0.0, le=1.0)
@@ -81,6 +83,7 @@ class _AntibodyLike(_CommonRequest):
     specified_hotspots: Optional[str] = Field(
         default=None,
         description="Hotspot residues on the antigen, e.g. 'C56,C58'.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     cdr_length: str = Field(
         default="CDRH1,5-12,CDRH2,4-17,CDRH3,5-26",
@@ -120,6 +123,7 @@ class MonomerRequest(_CommonRequest):
     length_subset: list[int] = Field(
         default_factory=lambda: [80, 100, 120],
         description="List of target lengths. PPIFlow samples `samples_per_target` per length.",
+        json_schema_extra=default_semantics("auto", "use the tool's default when omitted"),
     )
 
 
