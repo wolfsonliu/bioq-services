@@ -10,6 +10,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from bioq_service import default_semantics
+
 Generator = Literal["reinvent", "libinvent", "linkinvent", "mol2mol", "pepinvent"]
 SampleStrategy = Literal["multinomial", "beamsearch"]
 
@@ -26,15 +28,18 @@ class SamplingRequest(BaseModel):
         default=None,
         description="Prior: registry dot-key (.reinvent/.libinvent/...) or path "
                     "relative to prior_base. None → default for generator.",
+        json_schema_extra=default_semantics("auto", "use the tool's default model when omitted"),
     )
     num_smiles: int = Field(default=100, ge=1)
     unique_molecules: bool = True
     randomize_smiles: bool = True
     temperature: float = 1.0
     sample_strategy: SampleStrategy = "multinomial"
-    device: Optional[str] = None
+    device: Optional[str] = Field(default=None, json_schema_extra=default_semantics("auto", "auto-select CUDA if available"))
     smiles_file_uri: Optional[str] = Field(
-        default=None, description=_URI_DESC.format(what="input SMILES file"),
+        default=None,
+        description=_URI_DESC.format(what="input SMILES file"),
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
 
 
@@ -43,9 +48,11 @@ class ScoringRequest(BaseModel):
     standardize_smiles: bool = True
     parallel: int = Field(default=1, ge=1)
     scoring: dict = Field(..., description="[scoring] section (JSON): type + component list.")
-    device: Optional[str] = None
+    device: Optional[str] = Field(default=None, json_schema_extra=default_semantics("auto", "auto-select CUDA if available"))
     smiles_file_uri: Optional[str] = Field(
-        default=None, description=_URI_DESC.format(what="SMILES file to score"),
+        default=None,
+        description=_URI_DESC.format(what="SMILES file to score"),
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
 
 
@@ -54,18 +61,22 @@ class EnumerationRequest(BaseModel):
     amino_acid_name_column: str = "Name"
     smiles_column: str = "Smiles"
     scoring: dict = Field(..., description="[scoring] section (JSON).")
-    device: Optional[str] = None
+    device: Optional[str] = Field(default=None, json_schema_extra=default_semantics("auto", "auto-select CUDA if available"))
     peptide_smiles_uri: Optional[str] = Field(
-        default=None, description=_URI_DESC.format(what="peptide SMILES file"),
+        default=None,
+        description=_URI_DESC.format(what="peptide SMILES file"),
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     amino_acid_library_uri: Optional[str] = Field(
-        default=None, description=_URI_DESC.format(what="amino-acid library file"),
+        default=None,
+        description=_URI_DESC.format(what="amino-acid library file"),
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
 
 
 class TransferLearningRequest(BaseModel):
     generator: Generator = "reinvent"
-    input_model_file: Optional[str] = None
+    input_model_file: Optional[str] = Field(default=None, json_schema_extra=default_semantics("auto", "use the tool's default model when omitted"))
     output_model_name: str = "TL_model.model"
     num_epochs: int = Field(default=3, ge=1)
     save_every_n_epochs: int = Field(default=1, ge=1)
@@ -76,17 +87,25 @@ class TransferLearningRequest(BaseModel):
     # as "completed", leaving an empty-output job).
     sample_batch_size: int = Field(default=100, ge=100)
     pairs: Optional[dict] = Field(
-        default=None, description="Mol2Mol similarity pairing (JSON), → pairs.* in [parameters].",
+        default=None,
+        description="Mol2Mol similarity pairing (JSON), → pairs.* in [parameters].",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
-    device: Optional[str] = None
+    device: Optional[str] = Field(default=None, json_schema_extra=default_semantics("auto", "auto-select CUDA if available"))
     smiles_file_uri: Optional[str] = Field(
-        default=None, description=_URI_DESC.format(what="training SMILES file"),
+        default=None,
+        description=_URI_DESC.format(what="training SMILES file"),
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     validation_smiles_file_uri: Optional[str] = Field(
-        default=None, description=_URI_DESC.format(what="validation SMILES file"),
+        default=None,
+        description=_URI_DESC.format(what="validation SMILES file"),
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     input_model_uri: Optional[str] = Field(
-        default=None, description=_URI_DESC.format(what="input model (.model) file"),
+        default=None,
+        description=_URI_DESC.format(what="input model (.model) file"),
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
 
 
@@ -105,24 +124,30 @@ def _default_learning_strategy() -> dict:
 
 class StagedLearningRequest(BaseModel):
     generator: Generator = "reinvent"
-    prior_file: Optional[str] = None
-    agent_file: Optional[str] = None
+    prior_file: Optional[str] = Field(default=None, json_schema_extra=default_semantics("auto", "use the tool's default model when omitted"))
+    agent_file: Optional[str] = Field(default=None, json_schema_extra=default_semantics("auto", "use the tool's default model when omitted"))
     batch_size: int = Field(default=64, ge=1)
     summary_csv_prefix: str = "staged_learning"
     use_checkpoint: bool = False
     purge_memories: bool = False
     randomize_smiles: bool = True
-    learning_strategy: dict = Field(default_factory=_default_learning_strategy)
-    diversity_filter: Optional[dict] = None
-    inception: Optional[dict] = None
+    learning_strategy: dict = Field(default_factory=_default_learning_strategy, json_schema_extra=default_semantics("auto", "use the tool's default when omitted"))
+    diversity_filter: Optional[dict] = Field(default=None, json_schema_extra=default_semantics("unset", "only used when explicitly provided"))
+    inception: Optional[dict] = Field(default=None, json_schema_extra=default_semantics("unset", "only used when explicitly provided"))
     stages: list[StageSpec] = Field(..., min_length=1)
-    device: Optional[str] = None
+    device: Optional[str] = Field(default=None, json_schema_extra=default_semantics("auto", "auto-select CUDA if available"))
     smiles_file_uri: Optional[str] = Field(
-        default=None, description=_URI_DESC.format(what="input SMILES file"),
+        default=None,
+        description=_URI_DESC.format(what="input SMILES file"),
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     prior_file_uri: Optional[str] = Field(
-        default=None, description=_URI_DESC.format(what="prior (.model) file"),
+        default=None,
+        description=_URI_DESC.format(what="prior (.model) file"),
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     agent_file_uri: Optional[str] = Field(
-        default=None, description=_URI_DESC.format(what="agent (.model) file"),
+        default=None,
+        description=_URI_DESC.format(what="agent (.model) file"),
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
