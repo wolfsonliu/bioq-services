@@ -37,6 +37,9 @@ RUN chmod +x /opt/gateway/entrypoint.sh
 # downstream registry (svc -> ServiceRecord)
 COPY services.yaml /opt/gateway/services.yaml
 
+# static describe contracts (see docs/specs/2026-08-20-describe-cold-start-static-manifest-design.md)
+COPY manifests/ /opt/gateway/manifests/
+
 ENV GATEWAY_SESSION_HEADER_NAME=bioagent-session-id
 ENV GATEWAY_REGISTRY_PATH=/opt/gateway/services.yaml
 ENV GATEWAY_DB_URL=sqlite:////data/gateway/gateway.db

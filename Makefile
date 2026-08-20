@@ -54,7 +54,8 @@ KUBECTL := KUBECONFIG=$(BIOQ_WORKDIR)/kubeconfig PATH="$(BIOQ_WORKDIR)/bin:$$PAT
 .PHONY: help build push clean list version login-harbor bump sif \
 	local-up local-down local-purge local-status local-logs local-test \
 	local-info local-forward local-user local-users local-svc local-svcs \
-	gen-config check-config
+	gen-config check-config \
+	gen-manifests check-manifests
 
 # Keep intermediate pattern targets around (no auto-rm after the recipe runs).
 .PRECIOUS: build-% tag-%
@@ -121,6 +122,15 @@ gen-config:
 
 check-config:
 	cd gateway && uv run python -m server generate --target all --check
+
+# Static describe contracts — materialize each service's manifest+openapi into
+# manifests/ (committed) or verify committed copies are current (CI gate).
+# Orchestration runs under the gateway venv (needs pyyaml + framework).
+gen-manifests:
+	cd gateway && uv run python ../scripts/gen_manifests.py
+
+check-manifests:
+	cd gateway && uv run python ../scripts/gen_manifests.py --check
 
 version:
 	@$(foreach svc,$(SERVICES),echo "$(svc): $(call service_version,$(svc))";)
