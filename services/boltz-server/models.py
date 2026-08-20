@@ -21,6 +21,7 @@ from __future__ import annotations
 from typing import Annotated, Literal, Optional, Union
 
 from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 # ---- Constants / enums ----
@@ -169,18 +170,20 @@ class _BoltzCommon(BaseModel):
     )
 
     # Structured input. Mutually exclusive with raw_yaml.
-    sequences: list[SequenceEntry] = Field(default_factory=list)
-    constraints: list[ConstraintEntry] = Field(default_factory=list)
-    templates: list[TemplateEntry] = Field(default_factory=list)
+    sequences: list[SequenceEntry] = Field(default_factory=list, json_schema_extra=default_semantics("unset", "empty when omitted"))
+    constraints: list[ConstraintEntry] = Field(default_factory=list, json_schema_extra=default_semantics("unset", "empty when omitted"))
+    templates: list[TemplateEntry] = Field(default_factory=list, json_schema_extra=default_semantics("unset", "empty when omitted"))
 
     # Escape hatch: caller-supplied raw YAML. Mutually exclusive with `sequences`.
     raw_yaml: Optional[str] = Field(
         default=None,
         description="Full upstream Boltz YAML document. When set, structured fields must be empty.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     raw_yaml_uri: Optional[str] = Field(
         default=None,
         description="URI pointing to a YAML file (job://, file://, oss://, http(s)://).",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
 
     # MSA strategy.
@@ -189,11 +192,11 @@ class _BoltzCommon(BaseModel):
     msa_pairing_strategy: MsaPairingStrategy = "greedy"
 
     # Inference knobs (boltz predict flags).
-    seed: Optional[int] = None
+    seed: Optional[int] = Field(default=None, json_schema_extra=default_semantics("auto", "random seed selected by the tool at runtime"))
     recycling_steps: int = Field(default=3, ge=1, le=20)
     sampling_steps: int = Field(default=200, ge=10, le=1000)
     diffusion_samples: int = Field(default=1, ge=1, le=100)
-    step_scale: Optional[float] = Field(default=None, ge=0.5, le=5.0)
+    step_scale: Optional[float] = Field(default=None, ge=0.5, le=5.0, json_schema_extra=default_semantics("unset", "only used when explicitly provided"))
     output_format: OutputFormat = "mmcif"
     use_potentials: bool = False
     write_full_pae: bool = False
