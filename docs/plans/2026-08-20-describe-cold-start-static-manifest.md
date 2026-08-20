@@ -344,7 +344,7 @@ class Discovery:
     ) -> None:
         if client is None:
             client = httpx.Client(
-                timeout=httpx.Timeout(connect_timeout_sec, read=read_timeout_sec)
+                timeout=httpx.Timeout(connect=connect_timeout_sec, read=read_timeout_sec)
             )
         self._client = client
         self._ttl = ttl_sec
