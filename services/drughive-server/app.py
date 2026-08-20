@@ -348,7 +348,8 @@ def post_optimize(
 # ===========================================================================
 if settings.task_endpoints_enabled:
 
-    @app.post("/api/tasks/generate", response_model=JobInfo)
+    @app.post("/api/tasks/generate", response_model=JobInfo,
+              summary="De novo ligand generation (single atomic task).")
     def post_generate_task(
         request: Request,
         params: GenerateRequest = Depends(model_form_depends(GenerateRequest)),
@@ -389,7 +390,8 @@ if settings.task_endpoints_enabled:
             build_argv=_build, save_inputs=_save,
         )
 
-    @app.post("/api/tasks/generate_spatial", response_model=JobInfo)
+    @app.post("/api/tasks/generate_spatial", response_model=JobInfo,
+              summary="Substructure modification / scaffold hopping (single atomic task).")
     def post_generate_spatial_task(
         request: Request,
         params: GenerateSpatialRequest = Depends(
@@ -442,7 +444,8 @@ if settings.task_endpoints_enabled:
             build_argv=_build, save_inputs=_save,
         )
 
-    @app.post("/api/tasks/optimize", response_model=JobInfo)
+    @app.post("/api/tasks/optimize", response_model=JobInfo,
+              summary="Multi-cycle QVina2 property optimization (single atomic task; long-running).")
     def post_optimize_task(
         request: Request,
         params: OptimizeRequest = Depends(model_form_depends(OptimizeRequest)),
