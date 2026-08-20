@@ -56,7 +56,12 @@ app = create_app(
 _db = GatewayDB(settings.db_url)
 app.state.db = _db
 app.state.registry = ServiceRegistry(settings.registry_path)
-app.state.discover = Discovery(ttl_sec=300)
+app.state.discover = Discovery(
+    ttl_sec=settings.discovery_ttl_sec,
+    negative_ttl_sec=settings.discovery_negative_ttl_sec,
+    connect_timeout_sec=settings.discovery_connect_timeout_sec,
+    read_timeout_sec=settings.discovery_read_timeout_sec,
+)
 app.state.dispatch = make_dispatcher(settings)
 
 # --- admin console (server-side rendered, terminal-style) ---
