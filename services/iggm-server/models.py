@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import List, Literal, Optional
 
 from bioq_service import JobInfo  # noqa: F401  (re-exported)
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field
 
 # design.py --run_task choices.  affinity_maturation is exposed via its own
@@ -25,6 +26,7 @@ class _CommonDesignParams(BaseModel):
         description="Antigen interface residue numbers (1-based). If omitted, "
         "IgGM's cal_ppi infers the epitope from the complex structure when "
         "possible. Get one from POST /api/epitope.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     steps: int = Field(
         default=10, ge=1, le=200,
@@ -51,6 +53,7 @@ class _CommonDesignParams(BaseModel):
     seed: Optional[int] = Field(
         default=None,
         description="Random seed. If omitted, the upstream default (42) is used.",
+        json_schema_extra=default_semantics("auto", "random seed selected by the tool at runtime"),
     )
 
 
