@@ -188,7 +188,8 @@ def _files_staged(job_dir, params, smiles_file, prior_upload, agent_upload):
 
 # ---- sync endpoints ----
 
-@app.post("/api/sampling", response_model=JobInfo)
+@app.post("/api/sampling", response_model=JobInfo,
+          summary="De novo sampling from a Reinvent generator.")
 def sampling(
     params: SamplingRequest = Depends(model_form_depends(SamplingRequest)),
     smiles_file: Optional[UploadFile] = File(None),
@@ -199,7 +200,8 @@ def sampling(
                                    input_params=params.model_dump(mode="json"))
 
 
-@app.post("/api/scoring", response_model=JobInfo)
+@app.post("/api/scoring", response_model=JobInfo,
+          summary="Score SMILES with a scoring function.")
 def scoring(
     params: ScoringRequest = Depends(model_form_depends(ScoringRequest)),
     smiles_file: Optional[UploadFile] = File(None),
@@ -210,7 +212,8 @@ def scoring(
                                    input_params=params.model_dump(mode="json"))
 
 
-@app.post("/api/enumeration", response_model=JobInfo)
+@app.post("/api/enumeration", response_model=JobInfo,
+          summary="Peptide enumeration with pepinvent.")
 def enumeration(
     params: EnumerationRequest = Depends(model_form_depends(EnumerationRequest)),
     peptide_smiles: Optional[UploadFile] = File(None),
@@ -224,7 +227,8 @@ def enumeration(
                                    input_params=params.model_dump(mode="json"))
 
 
-@app.post("/api/transfer-learning", response_model=JobInfo)
+@app.post("/api/transfer-learning", response_model=JobInfo,
+          summary="Fine-tune a generative prior on target molecules (long-running).")
 def transfer_learning(
     params: TransferLearningRequest = Depends(model_form_depends(TransferLearningRequest)),
     smiles_file: Optional[UploadFile] = File(None),
@@ -240,7 +244,8 @@ def transfer_learning(
                                    input_params=params.model_dump(mode="json"))
 
 
-@app.post("/api/staged-learning", response_model=JobInfo)
+@app.post("/api/staged-learning", response_model=JobInfo,
+          summary="Staged learning: RL / curriculum over multiple stages (long-running).")
 def staged_learning(
     params: StagedLearningRequest = Depends(model_form_depends(StagedLearningRequest)),
     smiles_file: Optional[UploadFile] = File(None),
@@ -259,7 +264,8 @@ def staged_learning(
 
 if settings.task_endpoints_enabled:
 
-    @app.post("/api/tasks/sampling", response_model=JobInfo)
+    @app.post("/api/tasks/sampling", response_model=JobInfo,
+              summary="De novo sampling from a Reinvent generator (single atomic task).")
     def task_sampling(
         request: Request,
         params: SamplingRequest = Depends(model_form_depends(SamplingRequest)),
@@ -274,7 +280,8 @@ if settings.task_endpoints_enabled:
         return execute_task(request, job_id=job_id, label="sampling",
                             params=params, build_argv=_build)
 
-    @app.post("/api/tasks/scoring", response_model=JobInfo)
+    @app.post("/api/tasks/scoring", response_model=JobInfo,
+              summary="Score SMILES with a scoring function (single atomic task).")
     def task_scoring(
         request: Request,
         params: ScoringRequest = Depends(model_form_depends(ScoringRequest)),
@@ -289,7 +296,8 @@ if settings.task_endpoints_enabled:
         return execute_task(request, job_id=job_id, label="scoring",
                             params=params, build_argv=_build)
 
-    @app.post("/api/tasks/enumeration", response_model=JobInfo)
+    @app.post("/api/tasks/enumeration", response_model=JobInfo,
+              summary="Peptide enumeration with pepinvent (single atomic task).")
     def task_enumeration(
         request: Request,
         params: EnumerationRequest = Depends(model_form_depends(EnumerationRequest)),
@@ -307,7 +315,8 @@ if settings.task_endpoints_enabled:
         return execute_task(request, job_id=job_id, label="enumeration",
                             params=params, build_argv=_build)
 
-    @app.post("/api/tasks/transfer-learning", response_model=JobInfo)
+    @app.post("/api/tasks/transfer-learning", response_model=JobInfo,
+              summary="Fine-tune a generative prior on target molecules (single atomic task; long-running).")
     def task_transfer_learning(
         request: Request,
         params: TransferLearningRequest = Depends(model_form_depends(TransferLearningRequest)),
@@ -327,7 +336,8 @@ if settings.task_endpoints_enabled:
         return execute_task(request, job_id=job_id, label="transfer_learning",
                             params=params, build_argv=_build)
 
-    @app.post("/api/tasks/staged-learning", response_model=JobInfo)
+    @app.post("/api/tasks/staged-learning", response_model=JobInfo,
+              summary="Staged learning: RL / curriculum over multiple stages (single atomic task; long-running).")
     def task_staged_learning(
         request: Request,
         params: StagedLearningRequest = Depends(model_form_depends(StagedLearningRequest)),
