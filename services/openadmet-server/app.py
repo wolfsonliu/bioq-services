@@ -394,7 +394,8 @@ def compare(
 
 if settings.task_endpoints_enabled:
 
-    @app.post("/api/tasks/compare", response_model=JobInfo)
+    @app.post("/api/tasks/compare", response_model=JobInfo,
+              summary="Post-hoc comparison of pre-trained models (Mode A) or their stats JSON (Mode B; single atomic task).")
     def compare_task(
         request: Request,
         params: CompareRequest = Depends(model_form_depends(CompareRequest)),
