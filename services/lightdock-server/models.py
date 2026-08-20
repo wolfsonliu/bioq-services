@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Optional
 
 from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401 (re-exports)
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field
 
 __all__ = ["FailureKind", "JobInfo", "JobStatus", "DockRequest"]
@@ -64,6 +65,7 @@ class DockRequest(BaseModel):
         ge=1,
         le=64,
         description="Multiprocessing cores for the GSO run. None → service default.",
+        json_schema_extra=default_semantics("auto", "use all available cores"),
     )
     top: int = Field(
         default=10,
