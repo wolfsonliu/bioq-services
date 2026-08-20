@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401 (re-exports)
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field
 
 __all__ = [
@@ -59,14 +60,17 @@ class _BoltzGenCommon(BaseModel):
         default=None,
         ge=1,
         description="Diffusion samples per trunk run. None=auto (1 if num_designs<100, else 10).",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     step_scale: Optional[str] = Field(
         default=None,
         description="Fixed step scale (e.g. '1.8'). Default uses a schedule.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     noise_scale: Optional[str] = Field(
         default=None,
         description="Fixed noise scale (e.g. '0.98'). Default uses a schedule.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     use_kernels: Literal["auto", "true", "false"] = Field(
         default="auto",
@@ -86,12 +90,14 @@ class _BoltzGenCommon(BaseModel):
         default=None,
         description="Disallowed residues as one-letter AA codes (e.g. 'C' to avoid Cys). "
         "Default: 'C' for peptide/nanobody/antibody protocols, none for others.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     alpha: Optional[float] = Field(
         default=None,
         ge=0.0,
         le=1.0,
         description="Diversity/quality trade-off for filtering (0=quality-only, 1=diversity-only).",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     filter_biased: Literal["true", "false"] = Field(
         default="true",
@@ -114,6 +120,7 @@ class _BoltzGenCommon(BaseModel):
         le=64,
         description="Parallel workers for the analysis step (upstream default 32; "
         "use 8-16 on nodes with ≤64 GB RAM to avoid OOM). None=upstream default.",
+        json_schema_extra=default_semantics("auto", "auto-detect available devices/processes"),
     )
 
 
