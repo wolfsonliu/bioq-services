@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401  (re-exported)
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field
 
 
@@ -47,6 +48,7 @@ class DockRequest(BaseModel):
         description="Random seed for reverse diffusion. Leave None for a "
         "fresh sample each call; set explicitly for reproducibility. "
         "Framework echoes the resolved seed in JobInfo.input_params.",
+        json_schema_extra=default_semantics("auto", "random seed selected by the tool at runtime"),
     )
 
     mirror_ligand: bool = Field(
