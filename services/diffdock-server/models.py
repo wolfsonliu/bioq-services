@@ -6,6 +6,7 @@ import re
 from typing import Optional
 
 from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -31,6 +32,7 @@ class DockRequest(BaseModel):
         default=None,
         description="URI reference to a PDB file (scheme in {job, oss, file, "
         "http(s)}).  Mutex with ``protein`` upload and ``protein_sequence``.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     protein_sequence: Optional[str] = Field(
         default=None,
@@ -40,12 +42,14 @@ class DockRequest(BaseModel):
         "chain separated by ``:``).  When present, upstream folds it with "
         "ESMFold v1 before docking (adds ~5 GB weight + ~30 s cold GPU "
         "warmup).  Mutex with ``protein`` upload and ``protein_uri``.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
 
     ligand_uri: Optional[str] = Field(
         default=None,
         description="URI reference to a ligand file (.sdf/.mol2).  Mutex "
         "with ``ligand`` upload and ``ligand_description``.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     ligand_description: Optional[str] = Field(
         default=None,
@@ -53,6 +57,7 @@ class DockRequest(BaseModel):
         max_length=2000,
         description="SMILES / SMARTS string parseable by RDKit.  Mutex "
         "with ``ligand`` upload and ``ligand_uri``.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
 
     complex_name: str = Field(
@@ -95,6 +100,7 @@ class DockRequest(BaseModel):
     seed: Optional[int] = Field(
         default=None,
         description="Random seed; framework fills a stable value when None.",
+        json_schema_extra=default_semantics("auto", "random seed selected by the tool at runtime"),
     )
 
     @model_validator(mode="after")
