@@ -15,8 +15,10 @@ TARGETS = ("ecs", "compose", "openfaas")
 # Ordered (title, [field keys]) — the visible layout of the generated file.
 SECTIONS: list[tuple[str, list[str]]] = [
     ("Execution / dispatch", [
-        "dispatch_backend", "dispatch_timeout_sec", "openfaas_gateway_url",
-        "thread_pool_size",
+        "dispatch_backend", "dispatch_timeout_sec",
+        "discovery_ttl_sec", "discovery_negative_ttl_sec",
+        "discovery_read_timeout_sec", "discovery_connect_timeout_sec",
+        "openfaas_gateway_url", "thread_pool_size",
     ]),
     ("Storage", [
         "storage_backend", "file_base_dir", "oss_bucket", "oss_region",
@@ -136,6 +138,12 @@ DOCS: dict[str, str] = {
     "dispatch_backend":
         "Execution backend: fc (Alibaba FC async) | http (in-process runner) | openfaas.",
     "dispatch_timeout_sec": "HTTP dispatch timeout to downstream (seconds).",
+    "discovery_negative_ttl_sec":
+        "Cache TTL for a 'warming/error' describe sentinel (seconds) — bounds cold-start retry storms.",
+    "discovery_read_timeout_sec":
+        "Downstream read timeout for describe (seconds) — the cold-start binding item; keep short.",
+    "discovery_connect_timeout_sec": "Downstream connect timeout for describe (seconds).",
+    "discovery_ttl_sec": "Cache TTL for a successful describe result (seconds).",
     "openfaas_gateway_url":
         "OpenFaaS gateway base URL (required when dispatch_backend=openfaas).",
     "thread_pool_size":
