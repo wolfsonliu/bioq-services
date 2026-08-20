@@ -8,6 +8,7 @@ docs/specs/2026-08-20-describe-cold-start-static-manifest-design.md.
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from typing import Any, Literal
@@ -15,6 +16,8 @@ from typing import Any, Literal
 import httpx
 
 FetchOutcome = Literal["ok", "warming", "no_manifest", "error"]
+
+logger = logging.getLogger(__name__)
 
 
 class Discovery:
@@ -116,16 +119,19 @@ class Discovery:
             return "warming", {}
         except httpx.NetworkError:
             return "warming", {}
-        except httpx.HTTPStatusError:
+        except httpx.HTTPStatusError as exc:
+            logger.warning("discovery http error: url=%s status=%s", url, exc.response.status_code)
             return "error", {}
-        except ValueError:  # 200-but-not-JSON
+        except ValueError as exc:  # 200-but-not-JSON
+            logger.warning("discovery JSON parse error: url=%s error=%r", url, exc)
             return "error", {}
-        except Exception:  # noqa: BLE001 — describe degrades gracefully
+        except Exception as exc:  # noqa: BLE001 — describe degrades gracefully
+            logger.warning("discovery fetch failed: url=%s error=%r", url, exc)
             return "error", {}
 
 
 _DETAIL = {
-    "warming": "downstream cold-start timed out; retry in ~15s",
+    "warming": "downstream cold start (warming); retry shortly",
     "no_manifest": "service has no /api/manifest (framework self-description not adopted)",
     "partial": "manifest ok; openapi unavailable (CLI/human path unaffected)",
     "error": "downstream returned an unexpected error",

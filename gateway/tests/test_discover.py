@@ -177,3 +177,40 @@ def test_single_flight_coalesces_concurrent():
     assert state["manifest"] == 1
     assert state["openapi"] == 1
     assert all(r["status"] == "ok" for r in results)
+
+
+def test_502_is_warming():
+    disc = Discovery(client=_client(lambda req: httpx.Response(502)), ttl_sec=60)
+    info = disc.describe("s", "https://svc.local")
+    assert info["status"] == "warming"
+    assert "detail" in info
+
+
+def test_no_manifest_not_cached():
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        return httpx.Response(404)
+
+    disc = Discovery(client=_client(handler), ttl_sec=300)
+    disc.describe("s", "https://svc.local")
+    disc.describe("s", "https://svc.local")
+    assert calls["n"] == 2  # no_manifest is never cached
+
+
+def test_200_non_json_is_error():
+    disc = Discovery(client=_client(lambda req: httpx.Response(200, text="not json")), ttl_sec=60)
+    info = disc.describe("s", "https://svc.local")
+    assert info["status"] == "error"
+    assert info["manifest"] == {} and info["openapi"] == {}
+
+
+def test_connect_error_is_warming():
+    def handler(request):
+        raise httpx.ConnectError("refused")
+
+    disc = Discovery(client=_client(handler), ttl_sec=60)
+    info = disc.describe("s", "https://svc.local")
+    assert info["status"] == "warming"
+    assert "detail" in info
