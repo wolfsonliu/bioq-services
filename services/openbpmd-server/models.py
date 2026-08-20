@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
+from bioq_service import default_semantics
 
 
 class ScoreRequest(BaseModel):
@@ -42,6 +43,7 @@ class ScoreRequest(BaseModel):
         default=None,
         description="Force input format. None = auto-detect by extension "
         "(.gro -> gromacs, else amber).",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
 
     # ---- Advanced / testing knobs (default None -> upstream standard) ----
@@ -55,6 +57,7 @@ class ScoreRequest(BaseModel):
         description="ADVANCED/TESTING: production metadynamics length in ns. "
         "None -> upstream standard 10 ns. Non-standard values break score "
         "comparability.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
 
     equil_steps: Optional[int] = Field(
@@ -63,4 +66,5 @@ class ScoreRequest(BaseModel):
         le=5_000_000,
         description="ADVANCED/TESTING: NVT equilibration steps (2 fs each). "
         "None -> upstream standard 250000 (500 ps).",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
