@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import List, Optional
 
 from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401 (re-exports)
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 __all__ = [
@@ -48,14 +49,17 @@ class ProfileRequest(BaseModel):
     peptide_chains: List[str] = Field(
         default_factory=list,
         description="mode=peptide: chain IDs treated as peptide ligands (--peptides A B).",
+        json_schema_extra=default_semantics("unset", "empty when omitted"),
     )
     intra_chain: Optional[str] = Field(
         default=None,
         description="mode=intra: single chain to analyze for intra-chain contacts (--intra A).",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     report_formats: List[str] = Field(
         default_factory=lambda: ["xml", "txt"],
         description="Report formats to emit: any non-empty subset of {xml, txt}.",
+        json_schema_extra=default_semantics("auto", "use the tool's default when omitted"),
     )
     pymol_session: bool = Field(
         default=False,
@@ -96,6 +100,7 @@ class ProfileRequest(BaseModel):
     maxthreads: Optional[int] = Field(
         default=None, ge=1, le=128,
         description="Override PLIP_THREADS for this call (--maxthreads).",
+        json_schema_extra=default_semantics("auto", "use all available cores"),
     )
 
     @field_validator("mode")
