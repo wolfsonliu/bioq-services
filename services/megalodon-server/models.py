@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Literal, Optional
 
 from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401  (re-exported)
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field
 
 # Megalodon ships 6 headline checkpoints: {qm9, drugs} x {diffusion, fm, quick}.
@@ -91,6 +92,7 @@ class GenerateRequest(BaseModel):
         "Default (null) samples atom counts from the training size "
         "distribution (train_n_h.pickle) — recommended. Model tested up to "
         "125 atoms.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
 
     timesteps: int = Field(
@@ -109,6 +111,7 @@ class GenerateRequest(BaseModel):
         default=None,
         description="Random seed (torch.manual_seed). null → unseeded; "
         "recorded in JobInfo.input_params.",
+        json_schema_extra=default_semantics("auto", "random seed selected by the tool at runtime"),
     )
 
 
