@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401 (re-exported)
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field
 
 
@@ -44,6 +45,7 @@ class ScaffoldHopRequest(BaseModel):
         description="A core substructure SMILES that must be preserved in the "
         "final candidate; if not actually contained in `input_smiles`, "
         "ChemBounce raises an error.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     frag_max_n: int = Field(
         default=100, ge=1, le=10000,
@@ -52,10 +54,12 @@ class ScaffoldHopRequest(BaseModel):
     overall_max_n: Optional[int] = Field(
         default=None, ge=1,
         description="Hard cap on total candidates across all fragments.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     scaffold_top_n: Optional[int] = Field(
         default=None, ge=1,
         description="Number of scaffolds to test per fragment.",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     cand_max_n__rplc: int = Field(
         default=10, ge=1, le=1000,
@@ -68,18 +72,18 @@ class ScaffoldHopRequest(BaseModel):
     )
 
     # ---- Property thresholds ----
-    qed_min: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    qed_max: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    sa_min: Optional[float] = Field(default=None, ge=0.0, le=10.0)
-    sa_max: Optional[float] = Field(default=None, ge=0.0, le=10.0)
-    logp_min: Optional[float] = None
-    logp_max: Optional[float] = None
-    mw_min: Optional[float] = Field(default=None, ge=0.0)
-    mw_max: Optional[float] = Field(default=None, ge=0.0)
-    h_donor_min: Optional[int] = Field(default=None, ge=0)
-    h_donor_max: Optional[int] = Field(default=None, ge=0)
-    h_acceptor_min: Optional[int] = Field(default=None, ge=0)
-    h_acceptor_max: Optional[int] = Field(default=None, ge=0)
+    qed_min: Optional[float] = Field(default=None, ge=0.0, le=1.0, json_schema_extra=default_semantics("unset", "only used when explicitly provided"))
+    qed_max: Optional[float] = Field(default=None, ge=0.0, le=1.0, json_schema_extra=default_semantics("unset", "only used when explicitly provided"))
+    sa_min: Optional[float] = Field(default=None, ge=0.0, le=10.0, json_schema_extra=default_semantics("unset", "only used when explicitly provided"))
+    sa_max: Optional[float] = Field(default=None, ge=0.0, le=10.0, json_schema_extra=default_semantics("unset", "only used when explicitly provided"))
+    logp_min: Optional[float] = Field(default=None, json_schema_extra=default_semantics("unset", "only used when explicitly provided"))
+    logp_max: Optional[float] = Field(default=None, json_schema_extra=default_semantics("unset", "only used when explicitly provided"))
+    mw_min: Optional[float] = Field(default=None, ge=0.0, json_schema_extra=default_semantics("unset", "only used when explicitly provided"))
+    mw_max: Optional[float] = Field(default=None, ge=0.0, json_schema_extra=default_semantics("unset", "only used when explicitly provided"))
+    h_donor_min: Optional[int] = Field(default=None, ge=0, json_schema_extra=default_semantics("unset", "only used when explicitly provided"))
+    h_donor_max: Optional[int] = Field(default=None, ge=0, json_schema_extra=default_semantics("unset", "only used when explicitly provided"))
+    h_acceptor_min: Optional[int] = Field(default=None, ge=0, json_schema_extra=default_semantics("unset", "only used when explicitly provided"))
+    h_acceptor_max: Optional[int] = Field(default=None, ge=0, json_schema_extra=default_semantics("unset", "only used when explicitly provided"))
 
     wo_lipinski: bool = Field(
         default=False,
