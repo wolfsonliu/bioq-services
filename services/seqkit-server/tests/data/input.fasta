@@ -1,0 +1,8 @@
+>seq1 synthetic upstream fragment, 24 bp
+ATGCGTAACTGACCGTTAGCCTGA
+>seq2 VH-CDR-like coding fragment, 30 bp
+CAGGTGCAGCTGGTGCAGTCTGGGGCTGAG
+>seq3 palindromic control, 8 bp (revcomp of itself)
+AACCGGTT
+>seq4 promoter-like fragment, 40 bp
+TATAAAGCGGCCGCGAATTCGATATCAAGCTTATCGATAC

@@ -1,0 +1,32 @@
+[project]
+name = "seqkit-server"
+version = "0.0.1"
+requires-python = ">=3.10"
+dependencies = [
+    "bioq-service-framework[mcp]",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+# N999: the `<svc>-server` directory naming convention is not a valid python
+# module name — inherent to every service in this repo (imported as `server`).
+ignore = ["N999"]
+
+[tool.ruff.lint.per-file-ignores]
+# FastAPI idiom: File()/Form()/Header() as argument defaults.
+"app.py" = ["B008"]
+
+# Test/dev env only — the `server` package is set up by tests/conftest.py (importlib),
+# so uv should not build/install this service. The runtime dep (seqkit binary) is
+# vendored in the Dockerfile, not pip.
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+bioq-service-framework = { path = "../../framework", editable = true }
