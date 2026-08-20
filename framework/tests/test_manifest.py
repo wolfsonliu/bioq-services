@@ -310,3 +310,39 @@ def test_extract_fields_marks_file_arrays_as_files() -> None:
     fields = {f.name: f for f in _extract_fields(body_schema)}
     assert fields["model_stats_files"].is_file is True
     assert fields["model_stats_files"].type == "array[file]"
+
+
+def test_extract_fields_semantic_default_tokens() -> None:
+    """A field annotated with bioq_default surfaces default=token + kind + note."""
+    from bioq_service.manifest import _extract_fields
+
+    body_schema = {
+        "type": "object",
+        "properties": {
+            "device": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "title": "Device",
+                "bioq_default": {"kind": "auto", "note": "auto-select CUDA if available"},
+            },
+            "extra": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "title": "Extra",
+                "bioq_default": {"kind": "unset", "note": "only used when explicitly provided"},
+            },
+            "plain": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "title": "Plain",
+            },
+            "speed": {"type": "integer", "title": "Speed", "default": 3},
+        },
+    }
+    fields = {f.name: f for f in _extract_fields(body_schema)}
+    assert fields["device"].default == "auto"
+    assert fields["device"].default_kind == "auto"
+    assert fields["device"].default_note == "auto-select CUDA if available"
+    assert fields["extra"].default == "unset"
+    assert fields["extra"].default_kind == "unset"
+    assert fields["plain"].default is None
+    assert fields["plain"].default_kind is None
+    assert fields["speed"].default == 3
+    assert fields["speed"].default_kind == "literal"

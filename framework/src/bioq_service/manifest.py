@@ -72,7 +72,21 @@ class FieldInfo(BaseModel):
     )
     default: Any = Field(
         default=None,
-        description="Default value if any (only meaningful for non-required scalar fields).",
+        description=(
+            "Effective default when omitted: a literal (default_kind='literal') "
+            "or a semantics token 'auto'/'unset'."
+        ),
+    )
+    default_kind: str | None = Field(
+        default=None,
+        description=(
+            "'literal' | 'auto' | 'unset'. 'auto'/'unset' are semantics tokens "
+            "(not sendable literals); 'literal' means `default` is a real value."
+        ),
+    )
+    default_note: str | None = Field(
+        default=None,
+        description="One-line prose for the 'auto'/'unset' omission semantics.",
     )
 
 
@@ -270,6 +284,16 @@ def _extract_fields(body_schema: dict[str, Any]) -> list[FieldInfo]:
     out: list[FieldInfo] = []
     for fname, fschema in properties.items():
         actual = _peel_optional(fschema)
+        marker = fschema.get("bioq_default") or {}
+        kind = marker.get("kind")
+        note = marker.get("note")
+        literal = fschema.get("default")
+        if literal is not None:
+            default, default_kind = literal, "literal"
+        elif kind in ("auto", "unset"):
+            default, default_kind = kind, kind
+        else:
+            default, default_kind = None, None
         out.append(
             FieldInfo(
                 name=fname,
@@ -277,7 +301,9 @@ def _extract_fields(body_schema: dict[str, Any]) -> list[FieldInfo]:
                 required=fname in required_set,
                 description=fschema.get("description") or actual.get("description"),
                 is_file=_is_file_schema(actual),
-                default=fschema.get("default"),
+                default=default,
+                default_kind=default_kind,
+                default_note=note,
             )
         )
     return out
