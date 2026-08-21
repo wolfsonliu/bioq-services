@@ -682,8 +682,10 @@ rfdiffusion `models.py` 加 import `from bioq_service import default_semantics`�
 rfdiffusion2 `models.py` 同样加 import，字段：`model`(auto)、`only_guidepost_positions`、
 `partially_fixed_ligand`、`inpaint_seq`、`length`、`ligand`、`extra_overrides` 全为 unset。
 
-> 注：rfdiffusion/rfdiffusion2 的 `input_uri` 是 `app.py` 里的裸 `Form(None)`（不在 models.py），
-> 属于跨服务 URI 命名 spec 的改造对象，本计划**不处理**（见 Out of Scope）。
+> 注：rfdiffusion/rfdiffusion2 的上传 URI 字段实际名是 `input_pdb_uri`，它是 `input_pdb`
+> 文件字段的伴生（`<file>_uri`），被 E12 的 `uri_companions` 规则排除、无需默认值，故本计划
+> 不为其加标注。跨服务 URI 命名 spec（重命名）另见 Out of Scope；内联 `Form(None)` 的
+> **非伴生** URI 字段（如 `*_zip_uri` / `db_uri`）才是需要补标注的缺口，见 Phase 3b。
 
 - [ ] **Step 1: rfdiffusion 编辑 + 测试**
 - [ ] **Step 2: rfdiffusion2 编辑 + 测试**
@@ -727,12 +729,12 @@ git add services/pocketxmol-server/models.py && git commit -m "docs(pocketxmol):
 |---|---|
 | boltz | constraints、sequences、templates（三个 `default_factory=list`，kind=`unset`、note=`"empty when omitted"`）、msa_files（`unset`）、raw_yaml（`unset`）、raw_yaml_uri（`unset`）、seed*（auto）、step_scale（`unset`）、template_files（`unset`） |
 | chembounce | core_smiles、h_acceptor_max、h_acceptor_min、h_donor_max、h_donor_min、input_smiles_uri、logp_max、logp_min、mw_max、mw_min、overall_max_n、qed_max、qed_min、sa_max、sa_min、scaffold_top_n |
-| boltzgen | alpha、analysis_num_processes*、diffusion_batch_size、inverse_fold_avoid、noise_scale、ref_files_zip_uri、step_scale |
+| boltzgen | alpha、analysis_num_processes*、diffusion_batch_size、inverse_fold_avoid、noise_scale、step_scale（models.py）；`ref_files_zip_uri` 在 app.py 内联 `Form(None)`，见 Phase 3b |
 | openadmet | aq_fxns、best_y、beta、input_col、input_smiles、label_types、labels、model_names、mt_id、task_names、xi |
 | drughive | mol_filter、substruct_modify_pattern、temps、zbetas |
 | proteinmpnn | bias_AA、bias_by_res、chains_to_design、fixed_positions、omit_AA_per_chain、tied_positions |
-| dockq | mapping、models、models_zip_uri、n_cpu* |
-| genie3 | num_devices*、selections |
+| dockq | mapping、models、n_cpu*（models.py）；`models_zip_uri` 在 app.py 内联 `Form(None)`，见 Phase 3b |
+| genie3 | num_devices*、selections（models.py）；app.py 两个 submit 端点的内联 `num_devices = Form(None)` 见 Phase 3b |
 | flowmol | hc_thresh、n_atoms_per_mol、seed*、stochasticity |
 | iggm | epitope、seed* |
 | plip | intra_chain、maxthreads*、peptide_chains、report_formats |
@@ -793,11 +795,46 @@ git add services/<svc>-server/models.py && git commit -m "docs(<svc>): annotate 
 
 ---
 
+## Phase 3b — app.py 内联 `Form(None)` 非伴生 URIs（部署验证后补缺）
+
+部署 boltz/boltzgen 后，用 `bioq describe --output json` + E12 `audit.py` 的同一套
+`check_endpoint` 逻辑实测，发现 Phase 3 只扫了 `models.py`，漏掉了一批在 `app.py` 里
+内联声明为 `Form(None)` 的可选字段。E12 `defaults` 判定对这些字段的取舍如下（
+`audit.py` `check_endpoint`）：
+
+- **排除**（不检查默认值）：文件字段（`is_file=True`）与「名字恰好等于 `<file字段>_uri`」
+  的伴生 URI。
+- **计入**（要求 `default != null`）：名字**不**满足 `<file>_uri` 的内联 `Form(None)`
+  字段——常见于带中缀的变体（`ref_files_zip_uri`、`models_zip_uri`、`msa_zip_uri`）、
+  与文件不对应的 URI（`db_uri`）、以及被内联进 submit 端点签名的整型参数（`num_devices`）。
+
+修复方式与 Phase 3 相同：在 `Form(...)` 上追加
+`json_schema_extra=default_semantics(<kind>, <note>)`，并在 `app.py` 的
+`from bioq_service import (...)` 里加 `default_semantics`。
+
+| 服务 | 字段（出现次数） | kind | note | E12 范围（是否在 28 服务 fleet 内） |
+|---|---|---|---|---|
+| boltzgen | `ref_files_zip_uri`（design/inverse_fold + 各自 tasks，共 4 处） | unset | `only used when explicitly provided` | 是 |
+| dockq | `models_zip_uri`（score_batch + tasks，共 2 处） | unset | 同上 | 是 |
+| genie3 | `num_devices`（submit 内联，共 2 处） | auto | `auto-detect available devices/processes` | 是 |
+| diamond | `db_uri`（app.py 内联，6 处）＋ models.py `sensitivity`/`threads`/`approx_id`/`member_cover` | unset | `only used when explicitly provided` | 否（未部署） |
+| esmfold2 | `msa_zip_uri`（app.py 内联，1 处）＋ models.py `seed`(auto)/`noise_scale`/`step_scale`(unset) | 见列 | `seed`→`random seed selected by the tool at runtime`；其余→`only used when explicitly provided` | 否（未部署） |
+
+> - `design_yaml_uri`、`query_uri`、`native_uri` 等**恰为 `<file>_uri` 伴生**的内联
+>   `Form(None)` 无需标注（E12 自动排除）。
+> - genie3 的 `num_devices` 在 `models.py` 里已有 `auto` 标注（Phase 3 表），本任务只补齐
+>   `app.py` 内联的那份；两者 note 保持一致。
+
+- [ ] **Step 1: 五个服务逐一编辑 + 加 import + 跑该服务离线测试**
+- [ ] **Step 2: Commit**（`git add services/*-server/app.py && git commit -m "fix(<svc>): annotate inline Form(None) params"`，每服务可合并或独立提交）
+
+---
+
 ## 明确不做（Out of Scope）
 
 - bioq-paper 的 E12 `audit.py`/`score.py` 口径不变；本计划只改 bioq-services。
 - bioq CLI 的 array（同名多文件）`--file` 上传侧支持（bioq 仓库跟进）。
-- 跨服务 URI 字段命名 spec（rfdiffusion/rfdiffusion2 的 `input_uri → input_pdb_uri`）——独立调整。
+- 跨服务 URI 字段**重命名** spec（例如把某 URI 字段统一改成标准 `<upload_field>_uri` 名）——独立调整；本计划只给**现有**内联 URI 字段补 `unset` 标注（Phase 3b），不改字段名。
 - B1 字面默认值推算（如 `guide_scale: float = 10.0`）：需要逐个核对上游默认 + 行为等价，是独立后续项，本计划用 `auto`/`unset` token 已满足 E12 `defaults` 检查，不改行为。
 - 版本号 bump / 镜像构建部署 / E12 重采集（发布与验证期动作）。
 - `esmfold2`/`promera` 可达性、`operation_id` 填充（不计分项）。
@@ -808,5 +845,5 @@ git add services/<svc>-server/models.py && git commit -m "docs(<svc>): annotate 
 2. 受影响服务离线测试全绿。
 3. `bioq describe openadmet` 的 `compare` 把 `model_stats_files` 列进 `files:` 区且 `is_file=True`。
 4. `bioq describe reinvent` 每 endpoint 有 summary。
-5. 24 个服务的 task endpoint 无任何可选非文件参数的 `default` 为 null（全部为字面量或 `auto`/`unset` token）。
+5. 24 个服务（fleet 内）的每个 endpoint——无论字段来自 `models.py` 还是 `app.py` 内联 `Form`——无任何**可选非文件且非 `<file>_uri` 伴生**参数的 `default` 为 null（全部为字面量或 `auto`/`unset` token；Phase 3b 补齐内联 `Form(None)` 缺口）。
 6. （跨仓库，验证期）重跑 E12 后 `docs_text`/`file_fields`/`defaults` task 通过率均 100%，服务 ≥0.9 达 28/28。
