@@ -158,11 +158,23 @@ def render_one(svc: str, out_dir: Path) -> None:
     )
 
 
-def generate() -> None:
+def generate() -> int:
+    """Materialize every service; report (but don't abort on) per-service errors.
+
+    Mirrors ``check()``'s sweep-and-continue behavior so a single non-framework
+    service (e.g. ensemble-server, which has no module-level ``adapter``) can't
+    block manifest generation for the rest of the fleet.
+    """
+    rc = 0
     out_dir = REPO_ROOT / "manifests"
     for svc in service_names():
         print(f"gen-manifests: {svc}")
-        render_one(svc, out_dir)
+        try:
+            render_one(svc, out_dir)
+        except Exception as exc:  # noqa: BLE001 — report + keep sweeping
+            print(f"gen-manifests: ERROR rendering {svc}: {exc}", file=sys.stderr)
+            rc = 1
+    return rc
 
 
 def check() -> int:
@@ -211,8 +223,7 @@ def main() -> int:
         return 0
     if args.check:
         return check()
-    generate()
-    return 0
+    return generate()
 
 
 if __name__ == "__main__":
