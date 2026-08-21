@@ -81,6 +81,11 @@
   零下游）；未命中回退阶段一的 live 路径（source=live）。
 - **CI 门禁**：`make check-manifests` 强约束「每个已部署条目都有 manifest」且
   「重新生成 diff 为空」，同时抓出 esmfold2 式空契约与「静态契约过期」两件事。
+- **例外清单**：`scripts/gen_manifests.py` 的 `STATIC_MANIFEST_EXCLUSIONS` 声明
+  不走 `build_manifest()` 契约的非框架服务（现仅 ensemble-server：无模块级
+  `adapter`、暴露 `/v1/manifest` 而非 `/api/manifest`、shape 为
+  `{task_kinds, methods}`）；`gen-manifests`/`check-manifests` 对其 skip 且不计
+  MISSING，其 describe 契约由该服务自身路由承接、另行处理。
 
 ## 详细设计
 

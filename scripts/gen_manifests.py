@@ -45,6 +45,18 @@ from pydantic_core import PydanticUndefined
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = Path(__file__).resolve()
 
+# Services deliberately excluded from static-contract materialization: their
+# describe contract is not the framework's build_manifest() shape (no module-level
+# `adapter`, custom /v1/manifest instead of /api/manifest), so gen-manifests cannot
+# dump them and check-manifests must not flag them MISSING. Their describe path is
+# handled elsewhere (live / their own route) —
+# see docs/specs/2026-08-20-describe-cold-start-static-manifest-design.md.
+STATIC_MANIFEST_EXCLUSIONS: dict[str, str] = {
+    # Multi-method aggregator: orchestrates downstream folding adapters and exposes
+    # /v1/manifest (not /api/manifest) with a {task_kinds, methods} shape.
+    "ensemble-server": "non-framework aggregator (no /api/manifest; /v1/manifest only)",
+}
+
 
 def register_server_package(service_dir: Path) -> None:
     if "server" in sys.modules:
@@ -159,15 +171,13 @@ def render_one(svc: str, out_dir: Path) -> None:
 
 
 def generate() -> int:
-    """Materialize every service; report (but don't abort on) per-service errors.
-
-    Mirrors ``check()``'s sweep-and-continue behavior so a single non-framework
-    service (e.g. ensemble-server, which has no module-level ``adapter``) can't
-    block manifest generation for the rest of the fleet.
-    """
+    """Materialize every in-scope service; report (but don't abort on) per-service errors."""
     rc = 0
     out_dir = REPO_ROOT / "manifests"
     for svc in service_names():
+        if svc in STATIC_MANIFEST_EXCLUSIONS:
+            print(f"gen-manifests: skip {svc} (excluded: {STATIC_MANIFEST_EXCLUSIONS[svc]})")
+            continue
         print(f"gen-manifests: {svc}")
         try:
             render_one(svc, out_dir)
@@ -182,6 +192,9 @@ def check() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         tmp_dir = Path(tmp)
         for svc in service_names():
+            if svc in STATIC_MANIFEST_EXCLUSIONS:
+                print(f"check-manifests: skip {svc} (excluded: {STATIC_MANIFEST_EXCLUSIONS[svc]})")
+                continue
             committed_m = REPO_ROOT / "manifests" / f"{svc}.manifest.json"
             committed_o = REPO_ROOT / "manifests" / f"{svc}.openapi.json"
             if not committed_m.is_file() or not committed_o.is_file():
