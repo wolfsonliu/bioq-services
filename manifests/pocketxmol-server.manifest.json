@@ -1,0 +1,1724 @@
+{
+  "service": "pocketxmol",
+  "title": "PocketXMol Server",
+  "version": "0.0.4",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/confidence",
+      "summary": "Tuned-ranker confidence scoring on a previously completed job.",
+      "description": "Tuned-ranker confidence scoring on a previously completed job.",
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body_post_confidence_api_confidence_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "source_job_id",
+          "type": "string",
+          "required": true,
+          "description": "job_id of a previously completed generation job.  Its output/<exp_name>_<timestamp>_SDF/ dir is what the tuned ranker consumes.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "variant",
+          "type": "ConfidenceVariant",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "tuned_cfd",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "score a completed generation job (tuned ranker)",
+          "curl": "curl -X POST $URL/api/confidence -F source_job_id=<uuid-from-earlier-generate-call> -F variant=tuned_cfd",
+          "python": null,
+          "body": null,
+          "notes": "Reads output/<exp>_<ts>/<exp>_<ts>_SDF/ from the source job and writes ranking/*.csv there.  Use variant=flex_cfd for flexible-docking-noise scoring."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/dock",
+      "summary": "Molecular docking (small-molecule or peptide).",
+      "description": "Molecular docking (small-molecule or peptide).",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_dock_api_dock_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "protein",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "protein_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ligand",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ligand_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ref_ligand",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ref_ligand_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_samples",
+          "type": "integer",
+          "required": false,
+          "description": "Number of docked poses to generate.",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": "GPU batch size; reduce on OOM.",
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "is_pep",
+          "type": "boolean",
+          "required": false,
+          "description": "True for peptide docking (peptide PDB input or `pep_sequence`).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "noise_mode",
+          "type": "NoiseMode",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "gaussian",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "pocket_radius",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 10.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "pocket_criterion",
+          "type": "PocketCriterion",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "center_of_mass",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "pocket_coord",
+          "type": "string",
+          "required": false,
+          "description": "Explicit pocket center [x, y, z]. Mutually exclusive with providing `ref_ligand` as pocket source.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "smiles",
+          "type": "string",
+          "required": false,
+          "description": "SMILES string of the small-molecule ligand (alternative to uploading `ligand` file).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "pep_sequence",
+          "type": "string",
+          "required": false,
+          "description": "Peptide sequence for docking from sequence (only when is_pep=true); equivalent to upstream `pepseq_<seq>` shortcut.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        }
+      ],
+      "examples": [
+        {
+          "title": "dock a small molecule (SDF)",
+          "curl": "curl -X POST $URL/api/dock -F protein=@8C7Y_TXV_protein.pdb -F ligand=@8C7Y_TXV_ligand.sdf -F num_samples=10 -F pocket_coord=-8.257 -F pocket_coord=85.181 -F pocket_coord=19.050 -F pocket_radius=15",
+          "python": null,
+          "body": null,
+          "notes": "For SMILES input pass -F smiles=... instead of ligand file."
+        },
+        {
+          "title": "dock a peptide (from sequence)",
+          "curl": "curl -X POST $URL/api/dock -F protein=@3bik_A.pdb -F is_pep=true -F pep_sequence=DTVFALFW -F pocket_radius=20 -F num_samples=5",
+          "python": null,
+          "body": null,
+          "notes": "For peptide from PDB, pass -F ligand=@peptide.pdb instead of pep_sequence."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/linking",
+      "summary": "Fragment linking / growing / PROTAC linker design.",
+      "description": "Fragment linking / growing / PROTAC linker design.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_linking_api_linking_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "protein",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "protein_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_ligand",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_ligand_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_samples",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "fragments",
+          "type": "string",
+          "required": true,
+          "description": "Fragment atom index groups (0-based) from `input_ligand`. 1 group = growing, 2+ groups = linking / PROTAC.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "part1_pert",
+          "type": "Part1Pert",
+          "required": false,
+          "description": "Fragment perturbation: `fixed`=lock poses; `free`=allow movement; `small`=slight perturbation (opt_partial).",
+          "is_file": false,
+          "default": "fixed",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mol_size_mean",
+          "type": "integer",
+          "required": false,
+          "description": "Target atom count of the linked mol.",
+          "is_file": false,
+          "default": 40,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mol_size_std",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 3,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "use_input_center",
+          "type": "boolean",
+          "required": false,
+          "description": "Use input ligand centroid as denoising space center; False → pocket centroid.",
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "pocket_radius",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 10.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        }
+      ],
+      "examples": [
+        {
+          "title": "fragment growing (1 group)",
+          "curl": "curl -X POST $URL/api/linking -F protein=@2ar9_A.pdb -F input_ligand=@fragment.sdf -F fragments='[[0,1,2,3,4,5,6]]' -F mol_size_mean=28 -F num_samples=10",
+          "python": null,
+          "body": null,
+          "notes": "Single fragment group = growing.  Fragments field is a JSON list-of-lists of 0-based atom indices."
+        },
+        {
+          "title": "fragment linking (2 groups) — good for PROTAC linker design",
+          "curl": "curl -X POST $URL/api/linking -F protein=@target.pdb -F input_ligand=@warhead_e3.sdf -F fragments='[[0,1,2,3,4,5,6],[23,24,25,26,27,28,29,30,31,32,33,34,35,36,37]]' -F mol_size_mean=60 -F part1_pert=fixed",
+          "python": null,
+          "body": null,
+          "notes": "For PROTAC: warhead atoms in group 1, E3-ligand atoms in group 2; linker is generated between them."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/optimize",
+      "summary": "Molecular optimization (local refinement of an input ligand).",
+      "description": "Molecular optimization (local refinement of an input ligand).",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_optimize_api_optimize_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "protein",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "protein_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_ligand",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_ligand_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_samples",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "init_step",
+          "type": "number",
+          "required": false,
+          "description": "Initial noise fraction; smaller = closer to input, larger = more exploration.",
+          "is_file": false,
+          "default": 0.5,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_steps",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mol_size_mean",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 38,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mol_size_std",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 3,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "pocket_radius",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 10.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        }
+      ],
+      "examples": [
+        {
+          "title": "local optimization of an existing mol",
+          "curl": "curl -X POST $URL/api/optimize -F protein=@target.pdb -F input_ligand=@parent.sdf -F init_step=0.3 -F num_samples=20",
+          "python": null,
+          "body": null,
+          "notes": "Smaller init_step → closer to input; larger → more exploration.  Use 0.3–0.6 for lead-opt."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/pepdesign",
+      "summary": "Peptide design (linear/cyclic de novo, inverse folding, sc-packing).",
+      "description": "Peptide design (linear/cyclic de novo, inverse folding, sc-packing).",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_pepdesign_api_pepdesign_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "protein",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "protein_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_peptide",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_peptide_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ref_ligand",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ref_ligand_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "mode",
+          "type": "PepDesignMode",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "denovo_linear",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "pep_length",
+          "type": "integer",
+          "required": false,
+          "description": "Peptide residue count (required for de novo modes; ignored for inverse_fold / sc_pack — length taken from input PDB).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "num_samples",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "pocket_coord",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "pocket_radius",
+          "type": "number",
+          "required": false,
+          "description": "Peptide pockets are larger than small-molecule pockets; default = 20 Å.",
+          "is_file": false,
+          "default": 20.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "fix_pos_res_bb",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "fix_pos_res_sc",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "fix_type_res_bb",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "fix_type_res_sc",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        }
+      ],
+      "examples": [
+        {
+          "title": "de novo linear peptide (10 residues)",
+          "curl": "curl -X POST $URL/api/pepdesign -F protein=@3bik_A.pdb -F mode=denovo_linear -F pep_length=10 -F ref_ligand=@3bik_A_pocket_coord.sdf -F pocket_radius=20 -F num_samples=10",
+          "python": null,
+          "body": null,
+          "notes": "For cyclic pass mode=denovo_cyclic (same shape)."
+        },
+        {
+          "title": "inverse folding (design sequence for known backbone)",
+          "curl": "curl -X POST $URL/api/pepdesign -F protein=@target.pdb -F input_peptide=@backbone.pdb -F mode=inverse_fold -F num_samples=10",
+          "python": null,
+          "body": null,
+          "notes": "Peptide length is taken from the input PDB."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/sbdd",
+      "summary": "De novo structure-based drug design.",
+      "description": "De novo structure-based drug design.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_sbdd_api_sbdd_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "protein",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "protein_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_samples",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mode",
+          "type": "SbddMode",
+          "required": false,
+          "description": "`ar` = auto-regressive refinement (better quality); `simple` = one-shot (fast).",
+          "is_file": false,
+          "default": "ar",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "pocket_coord",
+          "type": "string",
+          "required": true,
+          "description": "Explicit pocket center [x, y, z].  Required — de novo SBDD has no reference ligand to derive it from.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "pocket_radius",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 15.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mol_size_mean",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 28,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mol_size_std",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 2,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        }
+      ],
+      "examples": [
+        {
+          "title": "de novo SBDD with AR refinement",
+          "curl": "curl -X POST $URL/api/sbdd -F protein=@2ar9_A.pdb -F pocket_coord=-8.16 -F pocket_coord=36.70 -F pocket_coord=38.77 -F pocket_radius=15 -F num_samples=50 -F mode=ar",
+          "python": null,
+          "body": null,
+          "notes": "pocket_coord is required — de novo has no reference ligand to derive it from."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/confidence",
+      "summary": "Tuned-ranker confidence scoring on a previously completed job (single atomic task).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body_post_confidence_task_api_tasks_confidence_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "source_job_id",
+          "type": "string",
+          "required": true,
+          "description": "job_id of a previously completed generation job.  Its output/<exp_name>_<timestamp>_SDF/ dir is what the tuned ranker consumes.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "variant",
+          "type": "ConfidenceVariant",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "tuned_cfd",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/dock",
+      "summary": "Molecular docking, small-molecule or peptide (single atomic task).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_dock_task_api_tasks_dock_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "protein",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "protein_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ligand",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ligand_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ref_ligand",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ref_ligand_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_samples",
+          "type": "integer",
+          "required": false,
+          "description": "Number of docked poses to generate.",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": "GPU batch size; reduce on OOM.",
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "is_pep",
+          "type": "boolean",
+          "required": false,
+          "description": "True for peptide docking (peptide PDB input or `pep_sequence`).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "noise_mode",
+          "type": "NoiseMode",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "gaussian",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "pocket_radius",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 10.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "pocket_criterion",
+          "type": "PocketCriterion",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "center_of_mass",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "pocket_coord",
+          "type": "string",
+          "required": false,
+          "description": "Explicit pocket center [x, y, z]. Mutually exclusive with providing `ref_ligand` as pocket source.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "smiles",
+          "type": "string",
+          "required": false,
+          "description": "SMILES string of the small-molecule ligand (alternative to uploading `ligand` file).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "pep_sequence",
+          "type": "string",
+          "required": false,
+          "description": "Peptide sequence for docking from sequence (only when is_pep=true); equivalent to upstream `pepseq_<seq>` shortcut.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/linking",
+      "summary": "Fragment linking / growing / PROTAC linker design (single atomic task).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_linking_task_api_tasks_linking_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "protein",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "protein_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_ligand",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_ligand_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_samples",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "fragments",
+          "type": "string",
+          "required": true,
+          "description": "Fragment atom index groups (0-based) from `input_ligand`. 1 group = growing, 2+ groups = linking / PROTAC.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "part1_pert",
+          "type": "Part1Pert",
+          "required": false,
+          "description": "Fragment perturbation: `fixed`=lock poses; `free`=allow movement; `small`=slight perturbation (opt_partial).",
+          "is_file": false,
+          "default": "fixed",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mol_size_mean",
+          "type": "integer",
+          "required": false,
+          "description": "Target atom count of the linked mol.",
+          "is_file": false,
+          "default": 40,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mol_size_std",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 3,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "use_input_center",
+          "type": "boolean",
+          "required": false,
+          "description": "Use input ligand centroid as denoising space center; False → pocket centroid.",
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "pocket_radius",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 10.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/optimize",
+      "summary": "Molecular optimization: local refinement of an input ligand (single atomic task).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_optimize_task_api_tasks_optimize_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "protein",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "protein_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_ligand",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_ligand_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_samples",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "init_step",
+          "type": "number",
+          "required": false,
+          "description": "Initial noise fraction; smaller = closer to input, larger = more exploration.",
+          "is_file": false,
+          "default": 0.5,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_steps",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mol_size_mean",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 38,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mol_size_std",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 3,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "pocket_radius",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 10.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/pepdesign",
+      "summary": "Peptide design: linear/cyclic de novo, inverse folding, sc-packing (single atomic task).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_pepdesign_task_api_tasks_pepdesign_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "protein",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "protein_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_peptide",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_peptide_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ref_ligand",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ref_ligand_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "mode",
+          "type": "PepDesignMode",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "denovo_linear",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "pep_length",
+          "type": "integer",
+          "required": false,
+          "description": "Peptide residue count (required for de novo modes; ignored for inverse_fold / sc_pack — length taken from input PDB).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "num_samples",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "pocket_coord",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "pocket_radius",
+          "type": "number",
+          "required": false,
+          "description": "Peptide pockets are larger than small-molecule pockets; default = 20 Å.",
+          "is_file": false,
+          "default": 20.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "fix_pos_res_bb",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "fix_pos_res_sc",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "fix_type_res_bb",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "fix_type_res_sc",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/sbdd",
+      "summary": "De novo structure-based drug design (single atomic task).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_sbdd_task_api_tasks_sbdd_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "protein",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "protein_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_samples",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mode",
+          "type": "SbddMode",
+          "required": false,
+          "description": "`ar` = auto-regressive refinement (better quality); `simple` = one-shot (fast).",
+          "is_file": false,
+          "default": "ar",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "pocket_coord",
+          "type": "string",
+          "required": true,
+          "description": "Explicit pocket center [x, y, z].  Required — de novo SBDD has no reference ligand to derive it from.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "pocket_radius",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 15.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mol_size_mean",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 28,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mol_size_std",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 2,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        }
+      ],
+      "examples": []
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/pocketxmol_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "model": {
+      "name": "PocketXMol",
+      "paper": "Peng et al., Cell 2026 (10.1016/j.cell.2026.01.003)",
+      "license": "MIT",
+      "checkpoint": "pocketxmol.ckpt",
+      "capabilities": [
+        "small-molecule docking",
+        "peptide docking",
+        "structure-based drug design (de novo)",
+        "fragment linking / growing / PROTAC",
+        "molecular optimization",
+        "peptide design (linear / cyclic / inverse-fold / sc-pack)",
+        "tuned-ranker confidence scoring"
+      ]
+    },
+    "tool_outputs": {
+      "dock": "output/<exp>_<ts>/<exp>_<ts>_SDF/*.sdf (small-mol) or *.pdb (peptide) + gen_info.csv",
+      "sbdd": "output/<exp>_<ts>/<exp>_<ts>_SDF/*.sdf + gen_info.csv (cfd_traj self-confidence)",
+      "linking": "output/<exp>_<ts>/<exp>_<ts>_SDF/*.sdf + gen_info.csv",
+      "optimize": "output/<exp>_<ts>/<exp>_<ts>_SDF/*.sdf + gen_info.csv",
+      "pepdesign": "output/<exp>_<ts>/<exp>_<ts>_SDF/*.sdf (mol) + *.pdb (peptide) + gen_info.csv",
+      "confidence": "output/<exp>_<ts>/ranking/*.csv (tuned-ranker scores per molecule)"
+    },
+    "input_uri_schemes": {
+      "protein": "multipart / oss:// / file:// / job:// / http(s)://",
+      "ligand": "multipart / oss:// / file:// / job:// / http(s)://",
+      "ref_ligand": "multipart / oss:// / file:// / job:// / http(s)://",
+      "input_ligand": "multipart / oss:// / file:// / job:// / http(s)://",
+      "input_peptide": "multipart / oss:// / file:// / job:// / http(s)://"
+    },
+    "task_selection_hint": {
+      "known_ligand_docking": "use /api/dock",
+      "de_novo_sbdd": "use /api/sbdd (mode=ar for quality, mode=simple for speed)",
+      "fragment_linker_or_grow_or_protac": "use /api/linking with fragments as list-of-lists",
+      "refine_existing_mol": "use /api/optimize with init_step=0.5",
+      "peptide_design_linear_or_cyclic": "use /api/pepdesign mode=denovo_linear|denovo_cyclic",
+      "peptide_inverse_fold": "use /api/pepdesign mode=inverse_fold with peptide PDB",
+      "score_generated_ligands": "chain /api/confidence with source_job_id"
+    }
+  },
+  "openapi_url": "/openapi.json"
+}

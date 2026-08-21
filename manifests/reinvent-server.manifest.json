@@ -1,0 +1,1473 @@
+{
+  "service": "reinvent",
+  "title": "Reinvent Server",
+  "version": "0.0.6",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/enumeration",
+      "summary": "Peptide enumeration with pepinvent.",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_enumeration_api_enumeration_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "peptide_smiles",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "amino_acid_library",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "amino_acid_name_column",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "Name",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "smiles_column",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "Smiles",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "scoring",
+          "type": "string",
+          "required": true,
+          "description": "[scoring] section (JSON).",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "device",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select CUDA if available"
+        },
+        {
+          "name": "peptide_smiles_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to the peptide SMILES file (scheme in {job, oss, file, http, https}); alternative to the multipart upload. With oss_mount the gateway rewrites oss:// to a /mnt/oss path read straight off the mounted bucket.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "amino_acid_library_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to the amino-acid library file (scheme in {job, oss, file, http, https}); alternative to the multipart upload. With oss_mount the gateway rewrites oss:// to a /mnt/oss path read straight off the mounted bucket.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": [
+        {
+          "title": "Peptide enumeration",
+          "curl": "curl -X POST $URL/api/enumeration -F 'scoring={\"type\":\"geometric_mean\",\"component\":[]}' -F peptide_smiles=@peptide.smi -F amino_acid_library=@library.csv",
+          "python": null,
+          "body": null,
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/sampling",
+      "summary": "De novo sampling from a Reinvent generator.",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_sampling_api_sampling_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "smiles_file",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "generator",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "reinvent",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model_file",
+          "type": "string",
+          "required": false,
+          "description": "Prior: registry dot-key (.reinvent/.libinvent/...) or path relative to prior_base. None → default for generator.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default model when omitted"
+        },
+        {
+          "name": "num_smiles",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "unique_molecules",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "randomize_smiles",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "temperature",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "sample_strategy",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "multinomial",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "device",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select CUDA if available"
+        },
+        {
+          "name": "smiles_file_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to the input SMILES file (scheme in {job, oss, file, http, https}); alternative to the multipart upload. With oss_mount the gateway rewrites oss:// to a /mnt/oss path read straight off the mounted bucket.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": [
+        {
+          "title": "De novo sampling from the Reinvent prior",
+          "curl": "curl -X POST $URL/api/sampling -F generator=reinvent -F num_smiles=100",
+          "python": null,
+          "body": null,
+          "notes": "No seed SMILES for Reinvent generator; produces sampling.csv."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/scoring",
+      "summary": "Score SMILES with a scoring function.",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_scoring_api_scoring_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "smiles_file",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "smiles_column",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "SMILES",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "standardize_smiles",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "parallel",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "scoring",
+          "type": "string",
+          "required": true,
+          "description": "[scoring] section (JSON): type + component list.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "device",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select CUDA if available"
+        },
+        {
+          "name": "smiles_file_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to the SMILES file to score (scheme in {job, oss, file, http, https}); alternative to the multipart upload. With oss_mount the gateway rewrites oss:// to a /mnt/oss path read straight off the mounted bucket.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": [
+        {
+          "title": "Score SMILES with a scoring function",
+          "curl": "curl -X POST $URL/api/scoring -F 'scoring={\"type\":\"geometric_mean\",\"component\":[]}' -F smiles_file=@compounds.smi",
+          "python": null,
+          "body": null,
+          "notes": "scoring is a JSON-encoded form field; see configs/SCORING.md."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/staged-learning",
+      "summary": "Staged learning: RL / curriculum over multiple stages (long-running).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_staged_learning_api_staged_learning_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "smiles_file",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "prior_upload",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "agent_upload",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "generator",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "reinvent",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "prior_file",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default model when omitted"
+        },
+        {
+          "name": "agent_file",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default model when omitted"
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 64,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "summary_csv_prefix",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "staged_learning",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "use_checkpoint",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "purge_memories",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "randomize_smiles",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "learning_strategy",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        },
+        {
+          "name": "diversity_filter",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "inception",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "stages",
+          "type": "string",
+          "required": true,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "device",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select CUDA if available"
+        },
+        {
+          "name": "smiles_file_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to the input SMILES file (scheme in {job, oss, file, http, https}); alternative to the multipart upload. With oss_mount the gateway rewrites oss:// to a /mnt/oss path read straight off the mounted bucket.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "prior_file_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to the prior (.model) file (scheme in {job, oss, file, http, https}); alternative to the multipart upload. With oss_mount the gateway rewrites oss:// to a /mnt/oss path read straight off the mounted bucket.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "agent_file_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to the agent (.model) file (scheme in {job, oss, file, http, https}); alternative to the multipart upload. With oss_mount the gateway rewrites oss:// to a /mnt/oss path read straight off the mounted bucket.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": [
+        {
+          "title": "Reinforcement learning (curriculum stages)",
+          "curl": "curl -X POST $URL/api/staged-learning -F generator=reinvent -F 'stages=[{\"chkpt_name\":\"s1.chkpt\",\"scoring\":{\"type\":\"geometric_mean\",\"component\":[]}}]'",
+          "python": null,
+          "body": null,
+          "notes": "stages + diversity_filter + inception are JSON-encoded fields. Long RL should run via HPC sbatch with checkpoint chaining."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/enumeration",
+      "summary": "Peptide enumeration with pepinvent (single atomic task).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_task_enumeration_api_tasks_enumeration_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "peptide_smiles",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "amino_acid_library",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "amino_acid_name_column",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "Name",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "smiles_column",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "Smiles",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "scoring",
+          "type": "string",
+          "required": true,
+          "description": "[scoring] section (JSON).",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "device",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select CUDA if available"
+        },
+        {
+          "name": "peptide_smiles_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to the peptide SMILES file (scheme in {job, oss, file, http, https}); alternative to the multipart upload. With oss_mount the gateway rewrites oss:// to a /mnt/oss path read straight off the mounted bucket.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "amino_acid_library_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to the amino-acid library file (scheme in {job, oss, file, http, https}); alternative to the multipart upload. With oss_mount the gateway rewrites oss:// to a /mnt/oss path read straight off the mounted bucket.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/sampling",
+      "summary": "De novo sampling from a Reinvent generator (single atomic task).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_task_sampling_api_tasks_sampling_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "smiles_file",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "generator",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "reinvent",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model_file",
+          "type": "string",
+          "required": false,
+          "description": "Prior: registry dot-key (.reinvent/.libinvent/...) or path relative to prior_base. None → default for generator.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default model when omitted"
+        },
+        {
+          "name": "num_smiles",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "unique_molecules",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "randomize_smiles",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "temperature",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "sample_strategy",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "multinomial",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "device",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select CUDA if available"
+        },
+        {
+          "name": "smiles_file_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to the input SMILES file (scheme in {job, oss, file, http, https}); alternative to the multipart upload. With oss_mount the gateway rewrites oss:// to a /mnt/oss path read straight off the mounted bucket.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/scoring",
+      "summary": "Score SMILES with a scoring function (single atomic task).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_task_scoring_api_tasks_scoring_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "smiles_file",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "smiles_column",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "SMILES",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "standardize_smiles",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "parallel",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "scoring",
+          "type": "string",
+          "required": true,
+          "description": "[scoring] section (JSON): type + component list.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "device",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select CUDA if available"
+        },
+        {
+          "name": "smiles_file_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to the SMILES file to score (scheme in {job, oss, file, http, https}); alternative to the multipart upload. With oss_mount the gateway rewrites oss:// to a /mnt/oss path read straight off the mounted bucket.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/staged-learning",
+      "summary": "Staged learning: RL / curriculum over multiple stages (single atomic task; long-running).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_task_staged_learning_api_tasks_staged_learning_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "smiles_file",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "prior_upload",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "agent_upload",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "generator",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "reinvent",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "prior_file",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default model when omitted"
+        },
+        {
+          "name": "agent_file",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default model when omitted"
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 64,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "summary_csv_prefix",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "staged_learning",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "use_checkpoint",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "purge_memories",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "randomize_smiles",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "learning_strategy",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        },
+        {
+          "name": "diversity_filter",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "inception",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "stages",
+          "type": "string",
+          "required": true,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "device",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select CUDA if available"
+        },
+        {
+          "name": "smiles_file_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to the input SMILES file (scheme in {job, oss, file, http, https}); alternative to the multipart upload. With oss_mount the gateway rewrites oss:// to a /mnt/oss path read straight off the mounted bucket.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "prior_file_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to the prior (.model) file (scheme in {job, oss, file, http, https}); alternative to the multipart upload. With oss_mount the gateway rewrites oss:// to a /mnt/oss path read straight off the mounted bucket.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "agent_file_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to the agent (.model) file (scheme in {job, oss, file, http, https}); alternative to the multipart upload. With oss_mount the gateway rewrites oss:// to a /mnt/oss path read straight off the mounted bucket.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/transfer-learning",
+      "summary": "Fine-tune a generative prior on target molecules (single atomic task; long-running).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_task_transfer_learning_api_tasks_transfer_learning_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "smiles_file",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "validation_smiles_file",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_model_upload",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "generator",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "reinvent",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "input_model_file",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default model when omitted"
+        },
+        {
+          "name": "output_model_name",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "TL_model.model",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_epochs",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 3,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "save_every_n_epochs",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_refs",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "sample_batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "pairs",
+          "type": "string",
+          "required": false,
+          "description": "Mol2Mol similarity pairing (JSON), → pairs.* in [parameters].",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "device",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select CUDA if available"
+        },
+        {
+          "name": "smiles_file_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to the training SMILES file (scheme in {job, oss, file, http, https}); alternative to the multipart upload. With oss_mount the gateway rewrites oss:// to a /mnt/oss path read straight off the mounted bucket.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "validation_smiles_file_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to the validation SMILES file (scheme in {job, oss, file, http, https}); alternative to the multipart upload. With oss_mount the gateway rewrites oss:// to a /mnt/oss path read straight off the mounted bucket.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "input_model_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to the input model (.model) file (scheme in {job, oss, file, http, https}); alternative to the multipart upload. With oss_mount the gateway rewrites oss:// to a /mnt/oss path read straight off the mounted bucket.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/transfer-learning",
+      "summary": "Fine-tune a generative prior on target molecules (long-running).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_transfer_learning_api_transfer_learning_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "smiles_file",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "validation_smiles_file",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_model_upload",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "generator",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "reinvent",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "input_model_file",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default model when omitted"
+        },
+        {
+          "name": "output_model_name",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "TL_model.model",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_epochs",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 3,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "save_every_n_epochs",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_refs",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "sample_batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "pairs",
+          "type": "string",
+          "required": false,
+          "description": "Mol2Mol similarity pairing (JSON), → pairs.* in [parameters].",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "device",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select CUDA if available"
+        },
+        {
+          "name": "smiles_file_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to the training SMILES file (scheme in {job, oss, file, http, https}); alternative to the multipart upload. With oss_mount the gateway rewrites oss:// to a /mnt/oss path read straight off the mounted bucket.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "validation_smiles_file_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to the validation SMILES file (scheme in {job, oss, file, http, https}); alternative to the multipart upload. With oss_mount the gateway rewrites oss:// to a /mnt/oss path read straight off the mounted bucket.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "input_model_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to the input model (.model) file (scheme in {job, oss, file, http, https}); alternative to the multipart upload. With oss_mount the gateway rewrites oss:// to a /mnt/oss path read straight off the mounted bucket.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": [
+        {
+          "title": "Fine-tune a prior on target SMILES",
+          "curl": "curl -X POST $URL/api/transfer-learning -F generator=reinvent -F num_epochs=5 -F smiles_file=@target.smi",
+          "python": null,
+          "body": null,
+          "notes": "Long-running; prefer CLI/sbatch for large datasets."
+        }
+      ]
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/reinvent_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "run_modes": [
+      "sampling",
+      "scoring",
+      "enumeration",
+      "transfer_learning",
+      "staged_learning"
+    ],
+    "generators": [
+      "reinvent",
+      "libinvent",
+      "linkinvent",
+      "mol2mol",
+      "pepinvent"
+    ],
+    "prior_registry": {
+      ".reinvent": "reinvent_pubchem.prior",
+      ".libinvent": "libinvent.prior",
+      ".libinvent_transformer": "libinvent_transformer_pubchem.prior",
+      ".linkinvent": "linkinvent.prior",
+      ".linkinvent_transformer": "linkinvent_transformer_pubchem.prior",
+      ".mol2mol": "pubchem_ecfp4_with_count_with_rank_reinvent4_dict_voc.prior",
+      ".pepinvent": "pepinvent.prior"
+    },
+    "prior_base": "/data/models/reinvent",
+    "scoring_backends": [
+      "rdkit",
+      "pumas",
+      "chemprop2",
+      "mmpdb",
+      "apted",
+      "isim"
+    ],
+    "tool_outputs": {
+      "sampling": "output/sampling.csv",
+      "scoring": "output/score_results.csv",
+      "enumeration": "output/peptide_enumeration.csv",
+      "transfer_learning": "output/*.model",
+      "staged_learning": "output/*_1.csv"
+    },
+    "input_uri_schemes": {
+      "upload": "multipart/form-data"
+    },
+    "task_endpoints": "enabled (FC async for sampling/scoring/enumeration; long RL/TL should use HPC sbatch)"
+  },
+  "openapi_url": "/openapi.json"
+}

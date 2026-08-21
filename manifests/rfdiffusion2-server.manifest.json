@@ -1,0 +1,988 @@
+{
+  "service": "rfdiffusion2",
+  "title": "RFdiffusion2 Server",
+  "version": "0.0.21",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/generate",
+      "summary": "Raw contig + freeform Hydra overrides — any config under config/inference/.",
+      "description": "Raw contig + freeform Hydra overrides — any config under config/inference/.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_generate_custom_api_generate_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_pdb",
+          "type": "file",
+          "required": false,
+          "description": "Optional input PDB. Required iff `input_pdb_required=true`.",
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_pdb_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI to fetch the input PDB.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_designs",
+          "type": "integer",
+          "required": false,
+          "description": "Number of designs to sample.",
+          "is_file": false,
+          "default": 4,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffuser_t",
+          "type": "integer",
+          "required": false,
+          "description": "Reverse-diffusion timesteps. aa.yaml default is 100; lower values speed up sampling at the cost of quality.",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "final_step",
+          "type": "integer",
+          "required": false,
+          "description": "Stop the trajectory at step N (default 1 = run to completion).",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "write_trajectory",
+          "type": "boolean",
+          "required": false,
+          "description": "Write the full reverse-flow trajectory to disk. Default off — saves disk.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "deterministic",
+          "type": "boolean",
+          "required": false,
+          "description": "Seed every RNG so reruns reproduce exactly.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "required": false,
+          "description": "Override the diffusion checkpoint via `inference.ckpt_path`. Leave unset to use the value baked into the chosen config (typically RFD_140.pt). Choices: rfd_140, rfd_173",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select by the tool from the request inputs"
+        },
+        {
+          "name": "contigs",
+          "type": "string",
+          "required": true,
+          "description": "Raw contig string, passed as `contigmap.contigs=[<value>]`.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "config_name",
+          "type": "string",
+          "required": false,
+          "description": "Hydra `--config-name`. Defaults to `aa.yaml` (the standard inference config). Use any other config under `rf_diffusion/config/inference/` for specialised flows (e.g. `aa_ppi.yaml`, `unconditional.yaml`).",
+          "is_file": false,
+          "default": "aa",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "input_pdb_required",
+          "type": "boolean",
+          "required": false,
+          "description": "Set True for endpoints/configs that need an input PDB (motif, partial diffusion). Defaults to False so unconditional configs work without one.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "ligand",
+          "type": "string",
+          "required": false,
+          "description": "`inference.ligand=...` if set (comma-separated ligand resnames).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "extra_overrides",
+          "type": "string",
+          "required": false,
+          "description": "JSON object mapping dotted Hydra paths → values, e.g. `{\"diffuser.T\": 50, \"inference.conditions.relative_sasa_v2.active\": true}`. Each entry is appended to argv as `key=value`.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": [
+        {
+          "title": "custom: `aa_ppi.yaml` config + raw Hydra overrides",
+          "curl": "curl -X POST $URL/api/generate -F input_pdb=@target.pdb -F config_name=aa_ppi -F input_pdb_required=true -F 'contigs=A1-150/0 70-100' -F num_designs=10 -F 'extra_overrides={\"ppi.hotspot_res\":\"[A59,A83,A91]\"}'",
+          "python": null,
+          "body": null,
+          "notes": "Escape hatch for any inference config or override not exposed by the structured endpoints. See `rf_diffusion/config/inference/` in the vendored upstream source for the catalogue of configs."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/generate/active_site",
+      "summary": "Active-site scaffolding around an atomic motif + ligand.",
+      "description": "Active-site scaffolding around an atomic motif + ligand.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_generate_active_site_api_generate_active_site_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_pdb",
+          "type": "file",
+          "required": false,
+          "description": "Input PDB carrying the motif + ligand. Mutually exclusive with `input_pdb_uri`.",
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_pdb_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI to fetch the input PDB instead of uploading. Schemes: job://<id>/<file>, file:///path, oss://<bucket>/<key>, http(s)://...",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_designs",
+          "type": "integer",
+          "required": false,
+          "description": "Number of designs to sample.",
+          "is_file": false,
+          "default": 4,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffuser_t",
+          "type": "integer",
+          "required": false,
+          "description": "Reverse-diffusion timesteps. aa.yaml default is 100; lower values speed up sampling at the cost of quality.",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "final_step",
+          "type": "integer",
+          "required": false,
+          "description": "Stop the trajectory at step N (default 1 = run to completion).",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "write_trajectory",
+          "type": "boolean",
+          "required": false,
+          "description": "Write the full reverse-flow trajectory to disk. Default off — saves disk.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "deterministic",
+          "type": "boolean",
+          "required": false,
+          "description": "Seed every RNG so reruns reproduce exactly.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "required": false,
+          "description": "Override the diffusion checkpoint via `inference.ckpt_path`. Leave unset to use the value baked into the chosen config (typically RFD_140.pt). Choices: rfd_140, rfd_173",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select by the tool from the request inputs"
+        },
+        {
+          "name": "contigs",
+          "type": "string",
+          "required": true,
+          "description": "Hydra contig string referencing residues in `input_pdb` plus stretches of length-only design, e.g. `46,A106-106,59,A166-166,2,A169-169,23,A193-193,46`. Bare integers are residues to be designed; `<chain><resnum>-<resnum>` are motif anchors.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "contig_atoms",
+          "type": "string",
+          "required": true,
+          "description": "Per-motif-residue list of anchored atom names, keyed by `<chain><resnum>`. Each value is a comma-separated atom-name string. Example: `{\"A106\": \"NE,CD,CZ\", \"A166\": \"OD1,CG\"}`.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ligand",
+          "type": "string",
+          "required": true,
+          "description": "Comma-separated ligand residue names present in `input_pdb`, e.g. `NAD,OXM`. These atoms are kept in the scene as small molecules.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "contig_as_guidepost",
+          "type": "boolean",
+          "required": false,
+          "description": "True = unindexed atomic mode (network picks motif residue indices). False = indexed mode (motif residue indices are fixed). Upstream demos default to True for the harder unindexed variant.",
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "only_guidepost_positions",
+          "type": "string",
+          "required": false,
+          "description": "When `contig_as_guidepost=True`, restrict the guidepost set to these residues (others remain indexed). Format: `<chain><resnum>` or comma-separated list, e.g. `A106` or `A106,A193`.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "partially_fixed_ligand",
+          "type": "string",
+          "required": false,
+          "description": "Per-ligand list of atom names to KEEP FIXED; the unlisted atoms are diffused. Format: `{\"<resname>\": [\"<atom>\", ...]}`. Example: `{\"NAD\": [\"O7N\",\"C7N\"], \"OXM\": [\"O3\",\"C2\"]}`.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "inpaint_seq",
+          "type": "string",
+          "required": false,
+          "description": "Mask the sequence at these positions (auto-switches model to InpaintSeq where supported). Format: `<chain><resnum>` / `<chain><resnum>-<resnum>`.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": [
+        {
+          "title": "lactate dehydrogenase NAD+OXM active site (unindexed)",
+          "curl": "curl -X POST $URL/api/generate/active_site -F input_pdb=@M0584_1ldm.pdb -F 'contigs=46,A106-106,59,A166-166,2,A169-169,23,A193-193,46' -F 'ligand=NAD,OXM' -F 'contig_atoms={\"A106\":\"NE,CD,CZ\",\"A166\":\"OD1,CG\",\"A169\":\"NH2,CZ\",\"A193\":\"NE2,CD2,CE1\"}' -F contig_as_guidepost=true -F num_designs=10",
+          "python": null,
+          "body": null,
+          "notes": "Reproduces the `active_site_unindexed_atomic` demo. Set `contig_as_guidepost=false` for the harder indexed variant; supply `partially_fixed_ligand=<JSON>` and/or `only_guidepost_positions=A106` for the other three demo flavours."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/generate/small_molecule_binder",
+      "summary": "Small-molecule binder design, optionally RASA-conditioned.",
+      "description": "Small-molecule binder design, optionally RASA-conditioned.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_generate_small_molecule_binder_api_generate_small_molecule_binder_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_pdb",
+          "type": "file",
+          "required": false,
+          "description": "Input PDB carrying the small molecule. Mutually exclusive with `input_pdb_uri`.",
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_pdb_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI to fetch the input PDB (see /active_site).",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_designs",
+          "type": "integer",
+          "required": false,
+          "description": "Number of designs to sample.",
+          "is_file": false,
+          "default": 4,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffuser_t",
+          "type": "integer",
+          "required": false,
+          "description": "Reverse-diffusion timesteps. aa.yaml default is 100; lower values speed up sampling at the cost of quality.",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "final_step",
+          "type": "integer",
+          "required": false,
+          "description": "Stop the trajectory at step N (default 1 = run to completion).",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "write_trajectory",
+          "type": "boolean",
+          "required": false,
+          "description": "Write the full reverse-flow trajectory to disk. Default off — saves disk.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "deterministic",
+          "type": "boolean",
+          "required": false,
+          "description": "Seed every RNG so reruns reproduce exactly.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "required": false,
+          "description": "Override the diffusion checkpoint via `inference.ckpt_path`. Leave unset to use the value baked into the chosen config (typically RFD_140.pt). Choices: rfd_140, rfd_173",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select by the tool from the request inputs"
+        },
+        {
+          "name": "contigs",
+          "type": "string",
+          "required": true,
+          "description": "Single bare-length contig string describing the binder, e.g. `150`. Multi-segment binders (`50/0 30`) work too.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "length",
+          "type": "string",
+          "required": false,
+          "description": "Hard length constraint, e.g. `150-150`. Useful when `contigs` is a range.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "ligand",
+          "type": "string",
+          "required": true,
+          "description": "Ligand residue name(s) present in `input_pdb`, e.g. `PH2`.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "rasa_active",
+          "type": "boolean",
+          "required": false,
+          "description": "Enable RASA-v2 conditioning (`inference.conditions.relative_sasa_v2.active`). When True, `rasa_target` shapes the desired solvent-exposed fraction.",
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "rasa_target",
+          "type": "number",
+          "required": false,
+          "description": "Target relative-SASA value in [0, 1]. 0 = ligand fully buried, 1 = ligand fully exposed.",
+          "is_file": false,
+          "default": 0.0,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "150aa buried binder around PH2 with RASA conditioning",
+          "curl": "curl -X POST $URL/api/generate/small_molecule_binder -F input_pdb=@trimmed_ec2_M0151_NO_ORI_zero_com0.pdb -F contigs=150 -F length=150-150 -F ligand=PH2 -F rasa_active=true -F rasa_target=0 -F num_designs=10",
+          "python": null,
+          "body": null,
+          "notes": "Reproduces `small_molecule_binder_rasa_buried`. Lower rasa_target (0.0) → ligand fully buried in the binder. Set rasa_active=false to skip RASA conditioning entirely."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/generate",
+      "summary": "Custom Hydra-override generation as a single atomic task.",
+      "description": "Custom Hydra-override generation as a single atomic task.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_generate_custom_task_api_tasks_generate_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_pdb",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_pdb_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_designs",
+          "type": "integer",
+          "required": false,
+          "description": "Number of designs to sample.",
+          "is_file": false,
+          "default": 4,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffuser_t",
+          "type": "integer",
+          "required": false,
+          "description": "Reverse-diffusion timesteps. aa.yaml default is 100; lower values speed up sampling at the cost of quality.",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "final_step",
+          "type": "integer",
+          "required": false,
+          "description": "Stop the trajectory at step N (default 1 = run to completion).",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "write_trajectory",
+          "type": "boolean",
+          "required": false,
+          "description": "Write the full reverse-flow trajectory to disk. Default off — saves disk.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "deterministic",
+          "type": "boolean",
+          "required": false,
+          "description": "Seed every RNG so reruns reproduce exactly.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "required": false,
+          "description": "Override the diffusion checkpoint via `inference.ckpt_path`. Leave unset to use the value baked into the chosen config (typically RFD_140.pt). Choices: rfd_140, rfd_173",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select by the tool from the request inputs"
+        },
+        {
+          "name": "contigs",
+          "type": "string",
+          "required": true,
+          "description": "Raw contig string, passed as `contigmap.contigs=[<value>]`.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "config_name",
+          "type": "string",
+          "required": false,
+          "description": "Hydra `--config-name`. Defaults to `aa.yaml` (the standard inference config). Use any other config under `rf_diffusion/config/inference/` for specialised flows (e.g. `aa_ppi.yaml`, `unconditional.yaml`).",
+          "is_file": false,
+          "default": "aa",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "input_pdb_required",
+          "type": "boolean",
+          "required": false,
+          "description": "Set True for endpoints/configs that need an input PDB (motif, partial diffusion). Defaults to False so unconditional configs work without one.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "ligand",
+          "type": "string",
+          "required": false,
+          "description": "`inference.ligand=...` if set (comma-separated ligand resnames).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "extra_overrides",
+          "type": "string",
+          "required": false,
+          "description": "JSON object mapping dotted Hydra paths → values, e.g. `{\"diffuser.T\": 50, \"inference.conditions.relative_sasa_v2.active\": true}`. Each entry is appended to argv as `key=value`.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/generate/active_site",
+      "summary": "Active-site scaffolding as a single atomic task.",
+      "description": "Active-site scaffolding as a single atomic task.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_generate_active_site_task_api_tasks_generate_active_site_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_pdb",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_pdb_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_designs",
+          "type": "integer",
+          "required": false,
+          "description": "Number of designs to sample.",
+          "is_file": false,
+          "default": 4,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffuser_t",
+          "type": "integer",
+          "required": false,
+          "description": "Reverse-diffusion timesteps. aa.yaml default is 100; lower values speed up sampling at the cost of quality.",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "final_step",
+          "type": "integer",
+          "required": false,
+          "description": "Stop the trajectory at step N (default 1 = run to completion).",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "write_trajectory",
+          "type": "boolean",
+          "required": false,
+          "description": "Write the full reverse-flow trajectory to disk. Default off — saves disk.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "deterministic",
+          "type": "boolean",
+          "required": false,
+          "description": "Seed every RNG so reruns reproduce exactly.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "required": false,
+          "description": "Override the diffusion checkpoint via `inference.ckpt_path`. Leave unset to use the value baked into the chosen config (typically RFD_140.pt). Choices: rfd_140, rfd_173",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select by the tool from the request inputs"
+        },
+        {
+          "name": "contigs",
+          "type": "string",
+          "required": true,
+          "description": "Hydra contig string referencing residues in `input_pdb` plus stretches of length-only design, e.g. `46,A106-106,59,A166-166,2,A169-169,23,A193-193,46`. Bare integers are residues to be designed; `<chain><resnum>-<resnum>` are motif anchors.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "contig_atoms",
+          "type": "string",
+          "required": true,
+          "description": "Per-motif-residue list of anchored atom names, keyed by `<chain><resnum>`. Each value is a comma-separated atom-name string. Example: `{\"A106\": \"NE,CD,CZ\", \"A166\": \"OD1,CG\"}`.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ligand",
+          "type": "string",
+          "required": true,
+          "description": "Comma-separated ligand residue names present in `input_pdb`, e.g. `NAD,OXM`. These atoms are kept in the scene as small molecules.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "contig_as_guidepost",
+          "type": "boolean",
+          "required": false,
+          "description": "True = unindexed atomic mode (network picks motif residue indices). False = indexed mode (motif residue indices are fixed). Upstream demos default to True for the harder unindexed variant.",
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "only_guidepost_positions",
+          "type": "string",
+          "required": false,
+          "description": "When `contig_as_guidepost=True`, restrict the guidepost set to these residues (others remain indexed). Format: `<chain><resnum>` or comma-separated list, e.g. `A106` or `A106,A193`.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "partially_fixed_ligand",
+          "type": "string",
+          "required": false,
+          "description": "Per-ligand list of atom names to KEEP FIXED; the unlisted atoms are diffused. Format: `{\"<resname>\": [\"<atom>\", ...]}`. Example: `{\"NAD\": [\"O7N\",\"C7N\"], \"OXM\": [\"O3\",\"C2\"]}`.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "inpaint_seq",
+          "type": "string",
+          "required": false,
+          "description": "Mask the sequence at these positions (auto-switches model to InpaintSeq where supported). Format: `<chain><resnum>` / `<chain><resnum>-<resnum>`.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/generate/small_molecule_binder",
+      "summary": "Small-molecule binder design as a single atomic task.",
+      "description": "Small-molecule binder design as a single atomic task.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_generate_small_molecule_binder_task_api_tasks_generate_small_molecule_binder_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_pdb",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_pdb_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_designs",
+          "type": "integer",
+          "required": false,
+          "description": "Number of designs to sample.",
+          "is_file": false,
+          "default": 4,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffuser_t",
+          "type": "integer",
+          "required": false,
+          "description": "Reverse-diffusion timesteps. aa.yaml default is 100; lower values speed up sampling at the cost of quality.",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "final_step",
+          "type": "integer",
+          "required": false,
+          "description": "Stop the trajectory at step N (default 1 = run to completion).",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "write_trajectory",
+          "type": "boolean",
+          "required": false,
+          "description": "Write the full reverse-flow trajectory to disk. Default off — saves disk.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "deterministic",
+          "type": "boolean",
+          "required": false,
+          "description": "Seed every RNG so reruns reproduce exactly.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "required": false,
+          "description": "Override the diffusion checkpoint via `inference.ckpt_path`. Leave unset to use the value baked into the chosen config (typically RFD_140.pt). Choices: rfd_140, rfd_173",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select by the tool from the request inputs"
+        },
+        {
+          "name": "contigs",
+          "type": "string",
+          "required": true,
+          "description": "Single bare-length contig string describing the binder, e.g. `150`. Multi-segment binders (`50/0 30`) work too.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "length",
+          "type": "string",
+          "required": false,
+          "description": "Hard length constraint, e.g. `150-150`. Useful when `contigs` is a range.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "ligand",
+          "type": "string",
+          "required": true,
+          "description": "Ligand residue name(s) present in `input_pdb`, e.g. `PH2`.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "rasa_active",
+          "type": "boolean",
+          "required": false,
+          "description": "Enable RASA-v2 conditioning (`inference.conditions.relative_sasa_v2.active`). When True, `rasa_target` shapes the desired solvent-exposed fraction.",
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "rasa_target",
+          "type": "number",
+          "required": false,
+          "description": "Target relative-SASA value in [0, 1]. 0 = ligand fully buried, 1 = ligand fully exposed.",
+          "is_file": false,
+          "default": 0.0,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": []
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/rfdiffusion2_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "tool_outputs": {
+      "all_modes": "output/design_*.pdb (+ matching .trb metadata)",
+      "trajectory": "output/traj/*.pdb (only when write_trajectory=true)",
+      "note": "Each backbone lands at output/design_<N>.pdb. The matching .trb file pickles the contig, the resolved config, and the input→output residue mapping. For the active_site endpoint the motif residues' sidechain rotamers are preserved; diffused residues are backbone-only (run LigandMPNN downstream for sequence design — see ProteinMPNN-server for an inline option)."
+    },
+    "input_uri_schemes": {
+      "upload": "multipart/form-data UploadFile (`input_pdb`).",
+      "job://<job_id>/<filename>": "Pull a PDB from a previous job on this NAS.",
+      "file:///abs/path": "Direct NAS path (shared across services on the same mount).",
+      "oss://<bucket>/<key>": "Alibaba Cloud OSS object.",
+      "http(s)://...": "Generic HTTP(S) URL — incl. signed OSS URLs."
+    },
+    "endpoints_summary": {
+      "/api/generate/active_site": "Active-site scaffolding with atomic motif + ligand. Reproduces open_source_demo.json `active_site_*` cases.",
+      "/api/generate/small_molecule_binder": "Small-molecule binder design with optional RASA conditioning.",
+      "/api/generate": "Raw contig + freeform Hydra overrides (any config under rf_diffusion/config/inference/)."
+    },
+    "models": {
+      "directory": "/opt/rfdiffusion2-server/upstream/rf_diffusion/model_weights",
+      "checkpoints": {
+        "rfd_140": "RFD_140.pt",
+        "rfd_173": "RFD_173.pt"
+      },
+      "default": "RFD_140.pt (set by aa.yaml). Pass `model=rfd_173` to override."
+    },
+    "paper_reference": "Ahern et al. 2025 — \"Atom level enzyme active site scaffolding using RFdiffusion2\" (bioRxiv). Compared with RFdiffusion v1 (rfdiffusion-server), v2 handles ATOMIC motifs (sidechain anchoring) + small molecules; v1 handles RESIDUE motifs + protein-only PPI binders. Use v1 for ProteinMPNN-only sequence design pipelines, v2 for enzyme/ligand-aware design."
+  },
+  "openapi_url": "/openapi.json"
+}

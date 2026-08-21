@@ -1,0 +1,685 @@
+{
+  "service": "promera",
+  "title": "Promera Server",
+  "version": "0.0.6",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/cofold",
+      "summary": "Structure prediction (cofolding) endpoint.",
+      "description": "Structure prediction (cofolding) endpoint.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_cofold_api_cofold_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_schema",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_schema_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_seeds",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffusion_samples",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 5,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffusion_steps",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 200,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "recycling_steps",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 4,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "save_trajectory",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "save_full_confidence",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "save_distogram",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "single protein structure prediction",
+          "curl": "curl -X POST $URL/api/cofold -F input_schema=@ubiquitin.json -F num_seeds=1 -F diffusion_samples=5",
+          "python": null,
+          "body": null,
+          "notes": "Input is a tinyprot JSON schema file. No MSA required (uses dummy MSA by default). See /api/manifest for full params."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/design",
+      "summary": "De novo binder design endpoint.",
+      "description": "De novo binder design endpoint.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_design_api_design_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "target_schema",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "target_schema_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "target_template",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "design_type",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "minibinder",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_backbones",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffusion_steps",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 200,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "recycling_steps",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 4,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "binder_chain",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "B",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "binder_length_min",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 40,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "binder_length_max",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 120,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "epitope_chain",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "A",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "epitope_residues",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "target_chains",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "inverse_folder_type",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "solublempnn",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "inverse_folder_num_seqs",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "save_full_confidence",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "target_template_chain",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "A",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "target_template_subsample_frac",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1.0,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "minibinder design against IL7Ra",
+          "curl": "curl -X POST $URL/api/design -F target_schema=@IL7Ra.json -F design_type=minibinder -F num_backbones=10 -F binder_length_min=60 -F binder_length_max=80 -F inverse_folder_type=solublempnn",
+          "python": null,
+          "body": null,
+          "notes": "Generates 10 backbone samples with SolubleMPNN inverse folding."
+        },
+        {
+          "title": "VHH nanobody design",
+          "curl": "curl -X POST $URL/api/design -F target_schema=@PDL1.json -F design_type=vhh -F num_backbones=5",
+          "python": null,
+          "body": null,
+          "notes": "VHH mode uses caplacizumab framework with variable CDR loops. CDR lengths are sampled from preset ranges (H1: 5-7, H2: 7-12, H3: 9-15)."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/cofold",
+      "summary": "Cofold as a single atomic task.",
+      "description": "Cofold as a single atomic task.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_cofold_task_api_tasks_cofold_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_schema",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_schema_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_seeds",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffusion_samples",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 5,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffusion_steps",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 200,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "recycling_steps",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 4,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "save_trajectory",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "save_full_confidence",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "save_distogram",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/design",
+      "summary": "De novo design as a single atomic task.",
+      "description": "De novo design as a single atomic task.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_design_task_api_tasks_design_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "target_schema",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "target_schema_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "target_template",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "design_type",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "minibinder",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_backbones",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffusion_steps",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 200,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "recycling_steps",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 4,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "binder_chain",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "B",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "binder_length_min",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 40,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "binder_length_max",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 120,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "epitope_chain",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "A",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "epitope_residues",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "target_chains",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "inverse_folder_type",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "solublempnn",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "inverse_folder_num_seqs",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "save_full_confidence",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "target_template_chain",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "A",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "target_template_subsample_frac",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1.0,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": []
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/promera_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "tool_outputs": {
+      "cofold": "output/<name>/<name>_seed<i>_samp<j>.cif — predicted structures (mmCIF). <name>_seed<i>_samp<j>_conf.json — confidence scores (plddt, ptm, iptm, chain scores). Optional: *_conf.npz (full matrices), *_distogram.npy, *_traj.cif (trajectory).",
+      "design": "output/<name>/sample<b>/backbone.cif — diffusion backbone. sample<b>_design<j>.fasta — redesigned binder sequence. refolds/sample<b>_design<j>_refold<r>.cif — refolded structures. refolds/*_confidence.json — iptm, scRMSD, scDockQ per refold."
+    },
+    "model": {
+      "name": "promera",
+      "architecture": "pairformer (48 blocks) + EDM diffusion + confidence/contact modules",
+      "built_on": "tinyprot",
+      "supports_cofolding": true,
+      "supports_binder_design": true,
+      "supports_vhh_design": true
+    },
+    "input_format": {
+      "schema": "tinyprot JSON schema. Each key is a chain ID, value has 'type' (protein/ligand) and 'sequence'. Example: {\"A1\": {\"type\": \"protein\", \"sequence\": \"MQIFVKTLT...\"}}"
+    },
+    "input_uri_schemes": {
+      "upload": "multipart/form-data — JSON schema / CIF template upload.",
+      "job://<id>/<file>": "Re-use a file from a prior job.",
+      "file:///abs/path": "Direct NAS path.",
+      "oss://<bucket>/<key>": "Alibaba Cloud OSS object.",
+      "http(s)://...": "Generic URL."
+    },
+    "design_types": {
+      "minibinder": "Free-length protein binder (40-120 residues by default).",
+      "vhh": "VHH nanobody with caplacizumab framework + variable CDR loops."
+    },
+    "endpoints_summary": {
+      "/api/cofold": "Structure prediction of protein complexes, protein-ligand, etc.",
+      "/api/design": "De novo binder design (minibinder or VHH nanobody)."
+    }
+  },
+  "openapi_url": "/openapi.json"
+}

@@ -1,0 +1,232 @@
+{
+  "service": "diffusion-hopping",
+  "title": "DiffHopp Server",
+  "version": "0.0.4",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/generate",
+      "summary": "Run scaffold-hopping generation. Returns a JobInfo; poll until completed.",
+      "description": "Run scaffold-hopping generation. Returns a JobInfo; poll until completed.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_generate_api_generate_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "protein",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "protein_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "reference_ligand",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "reference_ligand_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_samples",
+          "type": "integer",
+          "required": false,
+          "description": "Number of scaffold candidates to generate (1–100). Sampling is a single batched forward pass — runtime scales sub-linearly.",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model_variant",
+          "type": "string",
+          "required": false,
+          "description": "Which trained model to use:\n- gvp_conditional   : DiffHopp (recommended); ligand-conditioned\n- gvp_unconditional : DiffHopp inpainting (no functional-group conditioning)\n- egnn_conditional  : DiffHopp-EGNN (EGNN backbone, conditional)\n- egnn_unconditional: DiffHopp-EGNN inpainting",
+          "is_file": false,
+          "default": "gvp_conditional",
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "basic scaffold hopping (10 candidates, GVP-conditional)",
+          "curl": "curl -X POST $URL/api/generate -F protein=@1abc_pocket.pdb -F reference_ligand=@ref.sdf -F num_samples=10 -F model_variant=gvp_conditional",
+          "python": null,
+          "body": null,
+          "notes": "Smallest useful call. Returns a JobInfo; poll /api/jobs/<id> until completed, then GET /api/jobs/<id>/files."
+        },
+        {
+          "title": "EGNN variant with inpainting (no functional-group conditioning)",
+          "curl": "curl -X POST $URL/api/generate -F protein=@pocket.pdb -F reference_ligand=@ref.mol2 -F num_samples=20 -F model_variant=egnn_unconditional",
+          "python": null,
+          "body": null,
+          "notes": "Use *_unconditional variants when you want the model to ignore the reference ligand's functional groups."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/generate",
+      "summary": "FC async task mode — blocks until done, HTTP request returns 202.",
+      "description": "FC async task mode — blocks until done, HTTP request returns 202.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_generate_task_api_tasks_generate_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "protein",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "protein_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "reference_ligand",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "reference_ligand_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_samples",
+          "type": "integer",
+          "required": false,
+          "description": "Number of scaffold candidates to generate (1–100). Sampling is a single batched forward pass — runtime scales sub-linearly.",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model_variant",
+          "type": "string",
+          "required": false,
+          "description": "Which trained model to use:\n- gvp_conditional   : DiffHopp (recommended); ligand-conditioned\n- gvp_unconditional : DiffHopp inpainting (no functional-group conditioning)\n- egnn_conditional  : DiffHopp-EGNN (EGNN backbone, conditional)\n- egnn_unconditional: DiffHopp-EGNN inpainting",
+          "is_file": false,
+          "default": "gvp_conditional",
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "FC async task mode (single 202 + blocking compute)",
+          "curl": "curl -X POST $URL/api/tasks/generate -H 'X-Fc-Invocation-Type: Async' -H 'X-Bioagent-Job-Id: my-job-001' -F protein=@pocket.pdb -F reference_ligand=@ref.sdf -F num_samples=10",
+          "python": null,
+          "body": null,
+          "notes": "Returns 202 immediately; FC keeps the instance alive until the diffusion completes. Use this for production calls behind the FC async-task console toggle."
+        }
+      ]
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/diffusion_hopping_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "model": {
+      "name": "DiffHopp",
+      "paper": "arXiv:2308.07416",
+      "task": "scaffold hopping (de novo molecule design via graph diffusion)",
+      "variants": [
+        "gvp_conditional",
+        "gvp_unconditional",
+        "egnn_conditional",
+        "egnn_unconditional"
+      ],
+      "output_format": "SDF (one molecule per file: output_<i>.sdf)"
+    },
+    "tool_outputs": {
+      "generate": "output/output_<i>.sdf — one SDF per generated scaffold (i in [0, num_samples)). Files where the generated graph couldn't be assembled into a valid Mol are omitted."
+    },
+    "config_tips": {
+      "num_samples": "10 is a reasonable default; sampling is batched, so 50 takes ~4× a single sample, not 50×.",
+      "model_variant": "Start with gvp_conditional (DiffHopp main, paper's primary result). Switch to *_unconditional for inpainting scenarios where the reference ligand's functional group should NOT bias generation."
+    },
+    "input_uri_schemes": {
+      "upload": "multipart/form-data — protein (.pdb) and reference ligand (.sdf/.mol2/.pdb)",
+      "oss://<bucket>/<key>": "fetched at submit-time via configured OSS region"
+    }
+  },
+  "openapi_url": "/openapi.json"
+}

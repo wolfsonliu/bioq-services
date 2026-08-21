@@ -1,0 +1,307 @@
+{
+  "service": "semlaflow",
+  "title": "SemlaFlow Server",
+  "version": "0.0.4",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/generate",
+      "summary": "Run unconditional generation. Returns a JobInfo; poll until completed.",
+      "description": "Run unconditional generation. Returns a JobInfo; poll until completed.",
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body_post_generate_api_generate_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "model_name",
+          "type": "string",
+          "required": false,
+          "description": "Which pre-staged model to use. `qm9` (small molecules, fast) or `geom-drugs` (drug-like, larger; novelty metric is slow — builds ~300k RDKit reference mols). Only models present on NAS are usable — check /api/models or /healthz/detail.",
+          "is_file": false,
+          "default": "qm9",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_molecules",
+          "type": "integer",
+          "required": false,
+          "description": "Number of molecules to generate. Atom counts are sampled (with replacement) from the reference dataset split.",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "integration_steps",
+          "type": "integer",
+          "required": false,
+          "description": "Number of ODE integration steps. 100 is the upstream default; fewer = faster, slightly lower quality.",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "dataset_split",
+          "type": "string",
+          "required": false,
+          "description": "Reference split to sample molecule sizes from. Default `test` (smallest file). NOTE novelty always additionally loads train.smol regardless.",
+          "is_file": false,
+          "default": "test",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "ode_sampling_strategy",
+          "type": "string",
+          "required": false,
+          "description": "ODE step schedule. `log` is the upstream default.",
+          "is_file": false,
+          "default": "log",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "cat_sampling_noise_level",
+          "type": "integer",
+          "required": false,
+          "description": "Categorical sampling noise level for discrete features (atom types / bonds).",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_cost",
+          "type": "integer",
+          "required": false,
+          "description": "Bucket batching cost cap (advanced). Higher = larger batches / more GPU memory.",
+          "is_file": false,
+          "default": 8192,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "bucket_cost_scale",
+          "type": "string",
+          "required": false,
+          "description": "Cost scaling across size buckets (advanced).",
+          "is_file": false,
+          "default": "linear",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": "Random seed (lightning seed_everything). null → upstream default 12345; recorded in JobInfo.input_params.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        }
+      ],
+      "examples": [
+        {
+          "title": "basic generation (100 mols, qm9)",
+          "curl": "curl -X POST $URL/api/generate -F model_name=qm9 -F n_molecules=100",
+          "python": null,
+          "body": null,
+          "notes": "Returns a JobInfo; poll /api/jobs/<id> until completed, then GET /api/jobs/<id>/file/predictions.smol.sdf."
+        },
+        {
+          "title": "fast smoke (10 mols, 50 steps)",
+          "curl": "curl -X POST $URL/api/generate -F model_name=qm9 -F n_molecules=10 -F integration_steps=50",
+          "python": null,
+          "body": null,
+          "notes": "Fastest useful call for CI / warm-up."
+        },
+        {
+          "title": "drug-like generation (geom-drugs)",
+          "curl": "curl -X POST $URL/api/generate -F model_name=geom-drugs -F n_molecules=100 -F seed=42",
+          "python": null,
+          "body": null,
+          "notes": "Slower — geom-drugs novelty builds a large RDKit reference set. Prefer the async task endpoint."
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/models",
+      "summary": "List pre-staged models (checkpoint + reference dataset bundles).",
+      "description": "List pre-staged models (checkpoint + reference dataset bundles).",
+      "operation_id": null,
+      "request_content_type": null,
+      "request_schema_ref": null,
+      "response_schema_ref": null,
+      "request_fields": [],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/generate",
+      "summary": "Unconditional generation (single atomic task).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body__task_handler_api_tasks_generate_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "model_name",
+          "type": "string",
+          "required": false,
+          "description": "Which pre-staged model to use. `qm9` (small molecules, fast) or `geom-drugs` (drug-like, larger; novelty metric is slow — builds ~300k RDKit reference mols). Only models present on NAS are usable — check /api/models or /healthz/detail.",
+          "is_file": false,
+          "default": "qm9",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_molecules",
+          "type": "integer",
+          "required": false,
+          "description": "Number of molecules to generate. Atom counts are sampled (with replacement) from the reference dataset split.",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "integration_steps",
+          "type": "integer",
+          "required": false,
+          "description": "Number of ODE integration steps. 100 is the upstream default; fewer = faster, slightly lower quality.",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "dataset_split",
+          "type": "string",
+          "required": false,
+          "description": "Reference split to sample molecule sizes from. Default `test` (smallest file). NOTE novelty always additionally loads train.smol regardless.",
+          "is_file": false,
+          "default": "test",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "ode_sampling_strategy",
+          "type": "string",
+          "required": false,
+          "description": "ODE step schedule. `log` is the upstream default.",
+          "is_file": false,
+          "default": "log",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "cat_sampling_noise_level",
+          "type": "integer",
+          "required": false,
+          "description": "Categorical sampling noise level for discrete features (atom types / bonds).",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_cost",
+          "type": "integer",
+          "required": false,
+          "description": "Bucket batching cost cap (advanced). Higher = larger batches / more GPU memory.",
+          "is_file": false,
+          "default": 8192,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "bucket_cost_scale",
+          "type": "string",
+          "required": false,
+          "description": "Cost scaling across size buckets (advanced).",
+          "is_file": false,
+          "default": "linear",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": "Random seed (lightning seed_everything). null → upstream default 12345; recorded in JobInfo.input_params.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        }
+      ],
+      "examples": [
+        {
+          "title": "FC async task mode (single 202 + blocking compute)",
+          "curl": "curl -X POST $URL/api/tasks/generate -H 'X-Fc-Invocation-Type: Async' -H 'X-Bioagent-Job-Id: my-job-001' -F model_name=qm9 -F n_molecules=100",
+          "python": null,
+          "body": null,
+          "notes": "Returns 202 immediately; FC keeps the instance alive until sampling completes. Preferred production entry."
+        }
+      ]
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/semlaflow_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "model": {
+      "name": "SemlaFlow",
+      "paper": "Irwin et al. 2024 (Semla + equivariant OT flow matching)",
+      "task": "unconditional 3D de novo small-molecule generation",
+      "models": [],
+      "output_format": "predictions.smol.sdf (RDKit SDF, N molecules) + metrics.json (validity/uniqueness/novelty/energy/...)",
+      "training_data": "QM9 / GEOM-Drugs"
+    },
+    "tool_outputs": {
+      "generate": "output/predictions.smol.sdf — up to n_molecules valid 3D molecules (SDF). Actual count ≤ n_molecules (unbuildable graphs skipped). output/metrics.json reports generative metrics; output/generation_stats.json reports n_valid vs n_requested."
+    },
+    "config_tips": {
+      "model_name": "qm9 is fast; geom-drugs is drug-like but its novelty metric is slow (builds ~300k RDKit reference mols).",
+      "n_molecules": "100 is a good default.",
+      "integration_steps": "100 is the upstream default; drop to 50 for quick smoke checks."
+    },
+    "input_uri_schemes": {
+      "none": "unconditional — no receptor/ligand/SMILES inputs"
+    }
+  },
+  "openapi_url": "/openapi.json"
+}

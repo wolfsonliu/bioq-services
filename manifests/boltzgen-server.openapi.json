@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "DockQ Server",
-    "version": "0.0.13"
+    "title": "BoltzGen Server",
+    "version": "0.0.14"
   },
   "paths": {
     "/healthz": {
@@ -20,26 +20,6 @@
                   },
                   "type": "object",
                   "title": "Response Health Healthz Get"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/healthz/detail": {
-      "get": {
-        "summary": "Health Detail",
-        "operationId": "health_detail_healthz_detail_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Health Detail Healthz Detail Get"
                 }
               }
             }
@@ -372,16 +352,37 @@
         }
       }
     },
-    "/api/score": {
+    "/healthz/detail": {
+      "get": {
+        "summary": "Healthz Detail",
+        "description": "Extended health: surface whether NAS-mounted weights are reachable.\n\nWeights live on NAS at `BOLTZGEN_WEIGHTS_DIR` + `BOLTZGEN_MOLDIR`\n(default `/data/models/boltzgen/{weights,moldir}/`).  Reports missing\npaths via `weights_missing` so the agent can detect a misconfigured FC\nmount / unbound SIF without crashing the service.",
+        "operationId": "healthz_detail_healthz_detail_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Healthz Detail Healthz Detail Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/design": {
       "post": {
-        "summary": "Post Score",
-        "description": "Score a single (model, native) pair via DockQ; returns DockQ's JSON output.",
-        "operationId": "post_score_api_score_post",
+        "summary": "Post Design",
+        "description": "Run the full BoltzGen binder design pipeline.\n\nRequires a design specification YAML describing the target structure and\ndesigned region. Reference CIF/PDB files referenced in the YAML should be\nuploaded via `ref_files`, or bundled into a zip referenced by\n`ref_files_zip_uri` (oss://, file://, job://, http(s)://) — the gateway\nuses the zip form since it can't multipart-upload the `ref_files` list.\n\nPipeline: design -> inverse_folding -> folding -> [design_folding] ->\n[affinity] -> analysis -> filtering.",
+        "operationId": "post_design_api_design_post",
         "requestBody": {
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_api_score_post"
+                "$ref": "#/components/schemas/Body_post_design_api_design_post"
               }
             }
           }
@@ -410,16 +411,16 @@
         }
       }
     },
-    "/api/score_batch": {
+    "/api/inverse_fold": {
       "post": {
-        "summary": "Post Score Batch",
-        "description": "Score N candidate models against 1 reference native.\n\nModels come either as repeated `models` uploads OR as a single zip\nreferenced by `models_zip_uri` (oss://, file://, job://, http(s)://) — the\ngateway uses the zip form since it can't multipart-upload the `models` list.\n\nPer-model JSONs land in `output/per_model/<basename>.json`; the sorted\nsummary is `output/scores.csv`. Models that errored show up in\n`output/failed.csv` (job still completes successfully if at least one\nmodel produced a valid score).",
-        "operationId": "post_score_batch_api_score_batch_post",
+        "summary": "Post Inverse Fold",
+        "description": "Run BoltzGen in inverse-fold-only mode.\n\nSkips the design diffusion step; runs inverse_folding -> folding ->\nanalysis -> filtering on a provided backbone structure. The backbone CIF/PDB\nreferenced by the YAML comes via `ref_files` (upload) or `ref_files_zip_uri`\n(zip URI — used by the gateway).",
+        "operationId": "post_inverse_fold_api_inverse_fold_post",
         "requestBody": {
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_batch_api_score_batch_post"
+                "$ref": "#/components/schemas/Body_post_inverse_fold_api_inverse_fold_post"
               }
             }
           }
@@ -448,11 +449,11 @@
         }
       }
     },
-    "/api/tasks/score": {
+    "/api/tasks/design": {
       "post": {
-        "summary": "Post Score Task",
-        "description": "Score a single (model, native) pair as a single atomic task.\n\nBlocks until DockQ completes.  For the submit/poll interface, use POST /api/score.",
-        "operationId": "post_score_task_api_tasks_score_post",
+        "summary": "Post Design Task",
+        "description": "Run the full BoltzGen design pipeline as a single atomic task.\n\nBlocks until pipeline completion.  Designed to be invoked via FC Async\nTask Mode (X-Fc-Invocation-Type: Async): FC enqueues and dispatches,\nthe HTTP request stays active for the full subprocess lifetime so FC\nwon't recycle the instance mid-run.\n\nFor the legacy submit/poll interface, use POST /api/design instead.",
+        "operationId": "post_design_task_api_tasks_design_post",
         "parameters": [
           {
             "name": "X-Bioagent-Job-Id",
@@ -491,7 +492,7 @@
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_task_api_tasks_score_post"
+                "$ref": "#/components/schemas/Body_post_design_task_api_tasks_design_post"
               }
             }
           }
@@ -520,11 +521,11 @@
         }
       }
     },
-    "/api/tasks/score_batch": {
+    "/api/tasks/inverse_fold": {
       "post": {
-        "summary": "Post Score Batch Task",
-        "description": "Score N candidate models against 1 native as a single atomic task.\n\nModels come as repeated `models` uploads OR a single `models_zip_uri`\nzip (used by the gateway, which can't multipart-upload the list).",
-        "operationId": "post_score_batch_task_api_tasks_score_batch_post",
+        "summary": "Post Inverse Fold Task",
+        "description": "Run BoltzGen inverse-fold-only mode as a single atomic task.\n\nSame lifecycle as /api/tasks/design but skips the design diffusion\nstep; runs inverse_folding -> folding -> analysis -> filtering.",
+        "operationId": "post_inverse_fold_task_api_tasks_inverse_fold_post",
         "parameters": [
           {
             "name": "X-Bioagent-Job-Id",
@@ -563,7 +564,7 @@
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_batch_task_api_tasks_score_batch_post"
+                "$ref": "#/components/schemas/Body_post_inverse_fold_task_api_tasks_inverse_fold_post"
               }
             }
           }
@@ -595,9 +596,9 @@
   },
   "components": {
     "schemas": {
-      "Body_post_score_api_score_post": {
+      "Body_post_design_api_design_post": {
         "properties": {
-          "model": {
+          "design_yaml": {
             "anyOf": [
               {
                 "type": "string",
@@ -607,21 +608,9 @@
                 "type": "null"
               }
             ],
-            "title": "Model"
+            "title": "Design Yaml"
           },
-          "native": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native"
-          },
-          "model_uri": {
+          "design_yaml_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -630,9 +619,18 @@
                 "type": "null"
               }
             ],
-            "title": "Model Uri"
+            "title": "Design Yaml Uri"
           },
-          "native_uri": {
+          "ref_files": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
+            "title": "Ref Files",
+            "default": []
+          },
+          "ref_files_zip_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -641,61 +639,45 @@
                 "type": "null"
               }
             ],
-            "title": "Native Uri"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
-          },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
+            "title": "Ref Files Zip Uri",
             "bioq_default": {
               "kind": "unset",
               "note": "only used when explicitly provided"
             }
           },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Output name prefix.",
+            "default": "run"
           },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "protein-anything",
+              "peptide-anything",
+              "protein-small_molecule",
+              "nanobody-anything",
+              "antibody-anything",
+              "protein-redesign"
+            ],
+            "title": "Protocol",
+            "description": "Design protocol — determines default settings for filtering/analysis.",
+            "default": "protein-anything"
           },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
+          "num_designs": {
             "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
+            "title": "Num Designs",
+            "description": "Number of designs to generate (upstream default 10000; FC recommended 50-500).",
+            "default": 100
           },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
+          "budget": {
+            "type": "integer",
+            "title": "Budget",
+            "description": "Number of final designs after diversity-quality filtering.",
+            "default": 30
           },
-          "n_cpu": {
+          "diffusion_batch_size": {
             "anyOf": [
               {
                 "type": "integer"
@@ -704,20 +686,139 @@
                 "type": "null"
               }
             ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Diffusion Batch Size",
+            "description": "Diffusion samples per trunk run. None=auto (1 if num_designs<100, else 10).",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "step_scale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Scale",
+            "description": "Fixed step scale (e.g. '1.8'). Default uses a schedule.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "noise_scale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Noise Scale",
+            "description": "Fixed noise scale (e.g. '0.98'). Default uses a schedule.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "use_kernels": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "true",
+              "false"
+            ],
+            "title": "Use Kernels",
+            "description": "cuequivariance kernel usage. 'auto' detects GPU capability >= 8.",
+            "default": "auto"
+          },
+          "skip_inverse_folding": {
+            "type": "boolean",
+            "title": "Skip Inverse Folding",
+            "description": "Skip inverse folding step.",
+            "default": false
+          },
+          "inverse_fold_num_sequences": {
+            "type": "integer",
+            "title": "Inverse Fold Num Sequences",
+            "description": "Number of sequences per backbone in inverse fold step.",
+            "default": 1
+          },
+          "inverse_fold_avoid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inverse Fold Avoid",
+            "description": "Disallowed residues as one-letter AA codes (e.g. 'C' to avoid Cys). Default: 'C' for peptide/nanobody/antibody protocols, none for others.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "alpha": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alpha",
+            "description": "Diversity/quality trade-off for filtering (0=quality-only, 1=diversity-only).",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "filter_biased": {
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "title": "Filter Biased",
+            "description": "Remove amino-acid composition outliers.",
+            "default": "true"
+          },
+          "reuse": {
+            "type": "boolean",
+            "title": "Reuse",
+            "description": "Reuse existing results (resume interrupted pipeline).",
+            "default": false
+          },
+          "analysis_num_processes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Num Processes",
+            "description": "Parallel workers for the analysis step (upstream default 32; use 8-16 on nodes with ≤64 GB RAM to avoid OOM). None=upstream default.",
             "bioq_default": {
               "kind": "auto",
-              "note": "use all available cores"
+              "note": "auto-detect available devices/processes"
             }
           }
         },
         "type": "object",
-        "title": "Body_post_score_api_score_post"
+        "title": "Body_post_design_api_design_post"
       },
-      "Body_post_score_batch_api_score_batch_post": {
+      "Body_post_design_task_api_tasks_design_post": {
         "properties": {
-          "native": {
+          "design_yaml": {
             "anyOf": [
               {
                 "type": "string",
@@ -727,9 +828,9 @@
                 "type": "null"
               }
             ],
-            "title": "Native"
+            "title": "Design Yaml"
           },
-          "native_uri": {
+          "design_yaml_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -738,24 +839,18 @@
                 "type": "null"
               }
             ],
-            "title": "Native Uri"
+            "title": "Design Yaml Uri"
           },
-          "models": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "contentMediaType": "application/octet-stream"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models"
+          "ref_files": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
+            "title": "Ref Files",
+            "default": []
           },
-          "models_zip_uri": {
+          "ref_files_zip_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -764,7 +859,7 @@
                 "type": "null"
               }
             ],
-            "title": "Models Zip Uri",
+            "title": "Ref Files Zip Uri",
             "bioq_default": {
               "kind": "unset",
               "note": "only used when explicitly provided"
@@ -773,56 +868,36 @@
           "name": {
             "type": "string",
             "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
+            "description": "Output name prefix.",
             "default": "run"
           },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "protein-anything",
+              "peptide-anything",
+              "protein-small_molecule",
+              "nanobody-anything",
+              "antibody-anything",
+              "protein-redesign"
             ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
+            "title": "Protocol",
+            "description": "Design protocol — determines default settings for filtering/analysis.",
+            "default": "protein-anything"
           },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
+          "num_designs": {
             "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
+            "title": "Num Designs",
+            "description": "Number of designs to generate (upstream default 10000; FC recommended 50-500).",
+            "default": 100
           },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
+          "budget": {
+            "type": "integer",
+            "title": "Budget",
+            "description": "Number of final designs after diversity-quality filtering.",
+            "default": 30
           },
-          "n_cpu": {
+          "diffusion_batch_size": {
             "anyOf": [
               {
                 "type": "integer"
@@ -831,26 +906,139 @@
                 "type": "null"
               }
             ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Diffusion Batch Size",
+            "description": "Diffusion samples per trunk run. None=auto (1 if num_designs<100, else 10).",
             "bioq_default": {
-              "kind": "auto",
-              "note": "use all available cores"
+              "kind": "unset",
+              "note": "only used when explicitly provided"
             }
           },
-          "sort_by": {
+          "step_scale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Scale",
+            "description": "Fixed step scale (e.g. '1.8'). Default uses a schedule.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "noise_scale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Noise Scale",
+            "description": "Fixed noise scale (e.g. '0.98'). Default uses a schedule.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "use_kernels": {
             "type": "string",
-            "title": "Sort By",
-            "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
-            "default": "DockQ"
+            "enum": [
+              "auto",
+              "true",
+              "false"
+            ],
+            "title": "Use Kernels",
+            "description": "cuequivariance kernel usage. 'auto' detects GPU capability >= 8.",
+            "default": "auto"
+          },
+          "skip_inverse_folding": {
+            "type": "boolean",
+            "title": "Skip Inverse Folding",
+            "description": "Skip inverse folding step.",
+            "default": false
+          },
+          "inverse_fold_num_sequences": {
+            "type": "integer",
+            "title": "Inverse Fold Num Sequences",
+            "description": "Number of sequences per backbone in inverse fold step.",
+            "default": 1
+          },
+          "inverse_fold_avoid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inverse Fold Avoid",
+            "description": "Disallowed residues as one-letter AA codes (e.g. 'C' to avoid Cys). Default: 'C' for peptide/nanobody/antibody protocols, none for others.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "alpha": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alpha",
+            "description": "Diversity/quality trade-off for filtering (0=quality-only, 1=diversity-only).",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "filter_biased": {
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "title": "Filter Biased",
+            "description": "Remove amino-acid composition outliers.",
+            "default": "true"
+          },
+          "reuse": {
+            "type": "boolean",
+            "title": "Reuse",
+            "description": "Reuse existing results (resume interrupted pipeline).",
+            "default": false
+          },
+          "analysis_num_processes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Num Processes",
+            "description": "Parallel workers for the analysis step (upstream default 32; use 8-16 on nodes with ≤64 GB RAM to avoid OOM). None=upstream default.",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "auto-detect available devices/processes"
+            }
           }
         },
         "type": "object",
-        "title": "Body_post_score_batch_api_score_batch_post"
+        "title": "Body_post_design_task_api_tasks_design_post"
       },
-      "Body_post_score_batch_task_api_tasks_score_batch_post": {
+      "Body_post_inverse_fold_api_inverse_fold_post": {
         "properties": {
-          "native": {
+          "design_yaml": {
             "anyOf": [
               {
                 "type": "string",
@@ -860,9 +1048,9 @@
                 "type": "null"
               }
             ],
-            "title": "Native"
+            "title": "Design Yaml"
           },
-          "native_uri": {
+          "design_yaml_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -871,24 +1059,18 @@
                 "type": "null"
               }
             ],
-            "title": "Native Uri"
+            "title": "Design Yaml Uri"
           },
-          "models": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "contentMediaType": "application/octet-stream"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models"
+          "ref_files": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
+            "title": "Ref Files",
+            "default": []
           },
-          "models_zip_uri": {
+          "ref_files_zip_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -897,7 +1079,7 @@
                 "type": "null"
               }
             ],
-            "title": "Models Zip Uri",
+            "title": "Ref Files Zip Uri",
             "bioq_default": {
               "kind": "unset",
               "note": "only used when explicitly provided"
@@ -906,56 +1088,36 @@
           "name": {
             "type": "string",
             "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
+            "description": "Output name prefix.",
             "default": "run"
           },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "protein-anything",
+              "peptide-anything",
+              "protein-small_molecule",
+              "nanobody-anything",
+              "antibody-anything",
+              "protein-redesign"
             ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
+            "title": "Protocol",
+            "description": "Design protocol — determines default settings for filtering/analysis.",
+            "default": "protein-anything"
           },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
+          "num_designs": {
             "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
+            "title": "Num Designs",
+            "description": "Number of designs to generate (upstream default 10000; FC recommended 50-500).",
+            "default": 100
           },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
+          "budget": {
+            "type": "integer",
+            "title": "Budget",
+            "description": "Number of final designs after diversity-quality filtering.",
+            "default": 30
           },
-          "n_cpu": {
+          "diffusion_batch_size": {
             "anyOf": [
               {
                 "type": "integer"
@@ -964,26 +1126,139 @@
                 "type": "null"
               }
             ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Diffusion Batch Size",
+            "description": "Diffusion samples per trunk run. None=auto (1 if num_designs<100, else 10).",
             "bioq_default": {
-              "kind": "auto",
-              "note": "use all available cores"
+              "kind": "unset",
+              "note": "only used when explicitly provided"
             }
           },
-          "sort_by": {
+          "step_scale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Scale",
+            "description": "Fixed step scale (e.g. '1.8'). Default uses a schedule.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "noise_scale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Noise Scale",
+            "description": "Fixed noise scale (e.g. '0.98'). Default uses a schedule.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "use_kernels": {
             "type": "string",
-            "title": "Sort By",
-            "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
-            "default": "DockQ"
+            "enum": [
+              "auto",
+              "true",
+              "false"
+            ],
+            "title": "Use Kernels",
+            "description": "cuequivariance kernel usage. 'auto' detects GPU capability >= 8.",
+            "default": "auto"
+          },
+          "skip_inverse_folding": {
+            "type": "boolean",
+            "title": "Skip Inverse Folding",
+            "description": "Skip inverse folding step.",
+            "default": false
+          },
+          "inverse_fold_num_sequences": {
+            "type": "integer",
+            "title": "Inverse Fold Num Sequences",
+            "description": "Number of sequences per backbone in inverse fold step.",
+            "default": 1
+          },
+          "inverse_fold_avoid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inverse Fold Avoid",
+            "description": "Disallowed residues as one-letter AA codes (e.g. 'C' to avoid Cys). Default: 'C' for peptide/nanobody/antibody protocols, none for others.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "alpha": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alpha",
+            "description": "Diversity/quality trade-off for filtering (0=quality-only, 1=diversity-only).",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "filter_biased": {
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "title": "Filter Biased",
+            "description": "Remove amino-acid composition outliers.",
+            "default": "true"
+          },
+          "reuse": {
+            "type": "boolean",
+            "title": "Reuse",
+            "description": "Reuse existing results (resume interrupted pipeline).",
+            "default": false
+          },
+          "analysis_num_processes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Num Processes",
+            "description": "Parallel workers for the analysis step (upstream default 32; use 8-16 on nodes with ≤64 GB RAM to avoid OOM). None=upstream default.",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "auto-detect available devices/processes"
+            }
           }
         },
         "type": "object",
-        "title": "Body_post_score_batch_task_api_tasks_score_batch_post"
+        "title": "Body_post_inverse_fold_api_inverse_fold_post"
       },
-      "Body_post_score_task_api_tasks_score_post": {
+      "Body_post_inverse_fold_task_api_tasks_inverse_fold_post": {
         "properties": {
-          "model": {
+          "design_yaml": {
             "anyOf": [
               {
                 "type": "string",
@@ -993,21 +1268,9 @@
                 "type": "null"
               }
             ],
-            "title": "Model"
+            "title": "Design Yaml"
           },
-          "native": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native"
-          },
-          "model_uri": {
+          "design_yaml_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -1016,9 +1279,18 @@
                 "type": "null"
               }
             ],
-            "title": "Model Uri"
+            "title": "Design Yaml Uri"
           },
-          "native_uri": {
+          "ref_files": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
+            "title": "Ref Files",
+            "default": []
+          },
+          "ref_files_zip_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -1027,61 +1299,45 @@
                 "type": "null"
               }
             ],
-            "title": "Native Uri"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
-          },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
+            "title": "Ref Files Zip Uri",
             "bioq_default": {
               "kind": "unset",
               "note": "only used when explicitly provided"
             }
           },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Output name prefix.",
+            "default": "run"
           },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "protein-anything",
+              "peptide-anything",
+              "protein-small_molecule",
+              "nanobody-anything",
+              "antibody-anything",
+              "protein-redesign"
+            ],
+            "title": "Protocol",
+            "description": "Design protocol — determines default settings for filtering/analysis.",
+            "default": "protein-anything"
           },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
+          "num_designs": {
             "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
+            "title": "Num Designs",
+            "description": "Number of designs to generate (upstream default 10000; FC recommended 50-500).",
+            "default": 100
           },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
+          "budget": {
+            "type": "integer",
+            "title": "Budget",
+            "description": "Number of final designs after diversity-quality filtering.",
+            "default": 30
           },
-          "n_cpu": {
+          "diffusion_batch_size": {
             "anyOf": [
               {
                 "type": "integer"
@@ -1090,16 +1346,135 @@
                 "type": "null"
               }
             ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Diffusion Batch Size",
+            "description": "Diffusion samples per trunk run. None=auto (1 if num_designs<100, else 10).",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "step_scale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Scale",
+            "description": "Fixed step scale (e.g. '1.8'). Default uses a schedule.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "noise_scale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Noise Scale",
+            "description": "Fixed noise scale (e.g. '0.98'). Default uses a schedule.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "use_kernels": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "true",
+              "false"
+            ],
+            "title": "Use Kernels",
+            "description": "cuequivariance kernel usage. 'auto' detects GPU capability >= 8.",
+            "default": "auto"
+          },
+          "skip_inverse_folding": {
+            "type": "boolean",
+            "title": "Skip Inverse Folding",
+            "description": "Skip inverse folding step.",
+            "default": false
+          },
+          "inverse_fold_num_sequences": {
+            "type": "integer",
+            "title": "Inverse Fold Num Sequences",
+            "description": "Number of sequences per backbone in inverse fold step.",
+            "default": 1
+          },
+          "inverse_fold_avoid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inverse Fold Avoid",
+            "description": "Disallowed residues as one-letter AA codes (e.g. 'C' to avoid Cys). Default: 'C' for peptide/nanobody/antibody protocols, none for others.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "alpha": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alpha",
+            "description": "Diversity/quality trade-off for filtering (0=quality-only, 1=diversity-only).",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "filter_biased": {
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "title": "Filter Biased",
+            "description": "Remove amino-acid composition outliers.",
+            "default": "true"
+          },
+          "reuse": {
+            "type": "boolean",
+            "title": "Reuse",
+            "description": "Reuse existing results (resume interrupted pipeline).",
+            "default": false
+          },
+          "analysis_num_processes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Num Processes",
+            "description": "Parallel workers for the analysis step (upstream default 32; use 8-16 on nodes with ≤64 GB RAM to avoid OOM). None=upstream default.",
             "bioq_default": {
               "kind": "auto",
-              "note": "use all available cores"
+              "note": "auto-detect available devices/processes"
             }
           }
         },
         "type": "object",
-        "title": "Body_post_score_task_api_tasks_score_post"
+        "title": "Body_post_inverse_fold_task_api_tasks_inverse_fold_post"
       },
       "Body_upload_file_api_uploads_post": {
         "properties": {

@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "DockQ Server",
-    "version": "0.0.13"
+    "title": "Genie3 Server",
+    "version": "0.0.21"
   },
   "paths": {
     "/healthz": {
@@ -20,26 +20,6 @@
                   },
                   "type": "object",
                   "title": "Response Health Healthz Get"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/healthz/detail": {
-      "get": {
-        "summary": "Health Detail",
-        "operationId": "health_detail_healthz_detail_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Health Detail Healthz Detail Get"
                 }
               }
             }
@@ -372,16 +352,37 @@
         }
       }
     },
-    "/api/score": {
+    "/healthz/detail": {
+      "get": {
+        "summary": "Healthz Detail",
+        "description": "Extended health: report whether NAS-mounted weights are reachable.\n\nPretrained checkpoints live on NAS at `GENIE3_PRETRAINED_DIR` (default\n`/data/models/genie3/pretrained/v1/`).  The image contains a symlink at\n/opt/genie3/pretrained → /data/models/genie3/pretrained so the genie3\nCLI's relative lookup succeeds; if NAS is unmounted the symlink target\nis missing.  `weights_loaded=false` lets the agent detect that early.",
+        "operationId": "healthz_detail_healthz_detail_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Healthz Detail Healthz Detail Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/generate/unconditional": {
       "post": {
-        "summary": "Post Score",
-        "description": "Score a single (model, native) pair via DockQ; returns DockQ's JSON output.",
-        "operationId": "post_score_api_score_post",
+        "summary": "Generate Unconditional",
+        "description": "Unconditional protein backbone generation (no input structure).",
+        "operationId": "generate_unconditional_api_generate_unconditional_post",
         "requestBody": {
           "content": {
-            "multipart/form-data": {
+            "application/x-www-form-urlencoded": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_api_score_post"
+                "$ref": "#/components/schemas/Body_generate_unconditional_api_generate_unconditional_post"
               }
             }
           }
@@ -410,16 +411,167 @@
         }
       }
     },
-    "/api/score_batch": {
+    "/api/generate/motif": {
       "post": {
-        "summary": "Post Score Batch",
-        "description": "Score N candidate models against 1 reference native.\n\nModels come either as repeated `models` uploads OR as a single zip\nreferenced by `models_zip_uri` (oss://, file://, job://, http(s)://) — the\ngateway uses the zip form since it can't multipart-upload the `models` list.\n\nPer-model JSONs land in `output/per_model/<basename>.json`; the sorted\nsummary is `output/scores.csv`. Models that errored show up in\n`output/failed.csv` (job still completes successfully if at least one\nmodel produced a valid score).",
-        "operationId": "post_score_batch_api_score_batch_post",
+        "summary": "Generate Motif",
+        "description": "Motif scaffolding generation. Dataset zip must contain `problems/` + `motifs/`.",
+        "operationId": "generate_motif_api_generate_motif_post",
         "requestBody": {
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_batch_api_score_batch_post"
+                "$ref": "#/components/schemas/Body_generate_motif_api_generate_motif_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/generate/binder": {
+      "post": {
+        "summary": "Generate Binder",
+        "description": "Binder design generation. Dataset zip must contain `problems/` + `targets/`.",
+        "operationId": "generate_binder_api_generate_binder_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_generate_binder_api_generate_binder_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/generate": {
+      "post": {
+        "summary": "Generate Custom",
+        "description": "Run `genie3 generate` with a fully custom YAML config.\n\n`paths.rootdir` and (if a dataset zip is provided) `paths.dataset` are\nrewritten so the YAML you supply doesn't need to know its job_dir.",
+        "operationId": "generate_custom_api_generate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_generate_custom_api_generate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/generate/unconditional": {
+      "post": {
+        "summary": "Generate Unconditional Task",
+        "description": "Unconditional protein backbone generation as a single atomic task.",
+        "operationId": "generate_unconditional_task_api_tasks_generate_unconditional_post",
+        "parameters": [
+          {
+            "name": "X-Bioagent-Job-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Bioagent-Job-Id"
+            }
+          },
+          {
+            "name": "X-Fc-Async-Task-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fc-Async-Task-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_generate_unconditional_task_api_tasks_generate_unconditional_post"
               }
             }
           }
@@ -448,11 +600,11 @@
         }
       }
     },
-    "/api/tasks/score": {
+    "/api/tasks/generate/motif": {
       "post": {
-        "summary": "Post Score Task",
-        "description": "Score a single (model, native) pair as a single atomic task.\n\nBlocks until DockQ completes.  For the submit/poll interface, use POST /api/score.",
-        "operationId": "post_score_task_api_tasks_score_post",
+        "summary": "Generate Motif Task",
+        "description": "Motif scaffolding generation as a single atomic task.",
+        "operationId": "generate_motif_task_api_tasks_generate_motif_post",
         "parameters": [
           {
             "name": "X-Bioagent-Job-Id",
@@ -491,7 +643,7 @@
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_task_api_tasks_score_post"
+                "$ref": "#/components/schemas/Body_generate_motif_task_api_tasks_generate_motif_post"
               }
             }
           }
@@ -520,11 +672,11 @@
         }
       }
     },
-    "/api/tasks/score_batch": {
+    "/api/tasks/generate/binder": {
       "post": {
-        "summary": "Post Score Batch Task",
-        "description": "Score N candidate models against 1 native as a single atomic task.\n\nModels come as repeated `models` uploads OR a single `models_zip_uri`\nzip (used by the gateway, which can't multipart-upload the list).",
-        "operationId": "post_score_batch_task_api_tasks_score_batch_post",
+        "summary": "Generate Binder Task",
+        "description": "Binder design generation as a single atomic task.",
+        "operationId": "generate_binder_task_api_tasks_generate_binder_post",
         "parameters": [
           {
             "name": "X-Bioagent-Job-Id",
@@ -563,7 +715,80 @@
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_batch_task_api_tasks_score_batch_post"
+                "$ref": "#/components/schemas/Body_generate_binder_task_api_tasks_generate_binder_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/generate": {
+      "post": {
+        "summary": "Generate Custom Task",
+        "description": "Custom YAML generation as a single atomic task.",
+        "operationId": "generate_custom_task_api_tasks_generate_post",
+        "parameters": [
+          {
+            "name": "X-Bioagent-Job-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Bioagent-Job-Id"
+            }
+          },
+          {
+            "name": "X-Fc-Async-Task-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fc-Async-Task-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_generate_custom_task_api_tasks_generate_post"
               }
             }
           }
@@ -595,107 +820,25 @@
   },
   "components": {
     "schemas": {
-      "Body_post_score_api_score_post": {
+      "Body_generate_binder_api_generate_binder_post": {
         "properties": {
-          "model": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model"
-          },
-          "native": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native"
-          },
-          "model_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model Uri"
-          },
-          "native_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native Uri"
-          },
-          "name": {
+          "dataset": {
             "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
+            "contentMediaType": "application/octet-stream",
+            "title": "Dataset",
+            "description": "Zip with problems/ + targets/."
           },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
+          "n_sample": {
             "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
+            "title": "N Sample",
+            "default": 4
           },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "default": 1
           },
-          "n_cpu": {
+          "num_devices": {
             "anyOf": [
               {
                 "type": "integer"
@@ -704,20 +847,44 @@
                 "type": "null"
               }
             ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Num Devices",
+            "description": "Override genie3's GPU auto-detect. Leave unset to use all visible devices.",
             "bioq_default": {
               "kind": "auto",
-              "note": "use all available cores"
+              "note": "auto-detect available devices/processes"
             }
+          },
+          "selections": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selections",
+            "description": "Comma-separated problem names from the dataset. Default: all problems.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "direction_scale": {
+            "type": "number",
+            "title": "Direction Scale",
+            "default": 0.0
           }
         },
         "type": "object",
-        "title": "Body_post_score_api_score_post"
+        "required": [
+          "dataset"
+        ],
+        "title": "Body_generate_binder_api_generate_binder_post"
       },
-      "Body_post_score_batch_api_score_batch_post": {
+      "Body_generate_binder_task_api_tasks_generate_binder_post": {
         "properties": {
-          "native": {
+          "dataset": {
             "anyOf": [
               {
                 "type": "string",
@@ -727,9 +894,10 @@
                 "type": "null"
               }
             ],
-            "title": "Native"
+            "title": "Dataset",
+            "description": "Zip with problems/ + targets/."
           },
-          "native_uri": {
+          "dataset_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -738,91 +906,20 @@
                 "type": "null"
               }
             ],
-            "title": "Native Uri"
+            "title": "Dataset Uri",
+            "description": "URI to the dataset zip (oss://, file://, job://, http(s)://) as an alternative to a multipart upload — used by the gateway."
           },
-          "models": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "contentMediaType": "application/octet-stream"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models"
-          },
-          "models_zip_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models Zip Uri",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
-          },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
+          "n_sample": {
             "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
+            "title": "N Sample",
+            "default": 4
           },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "default": 1
           },
-          "n_cpu": {
+          "num_devices": {
             "anyOf": [
               {
                 "type": "integer"
@@ -831,26 +928,46 @@
                 "type": "null"
               }
             ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Num Devices",
+            "description": "Override genie3's GPU auto-detect. Leave unset to use all visible devices.",
             "bioq_default": {
               "kind": "auto",
-              "note": "use all available cores"
+              "note": "auto-detect available devices/processes"
             }
           },
-          "sort_by": {
-            "type": "string",
-            "title": "Sort By",
-            "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
-            "default": "DockQ"
+          "selections": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selections",
+            "description": "Comma-separated problem names from the dataset. Default: all problems.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "direction_scale": {
+            "type": "number",
+            "title": "Direction Scale",
+            "default": 0.0
           }
         },
         "type": "object",
-        "title": "Body_post_score_batch_api_score_batch_post"
+        "title": "Body_generate_binder_task_api_tasks_generate_binder_post"
       },
-      "Body_post_score_batch_task_api_tasks_score_batch_post": {
+      "Body_generate_custom_api_generate_post": {
         "properties": {
-          "native": {
+          "config_yaml": {
+            "type": "string",
+            "title": "Config Yaml",
+            "description": "Full experiment YAML as a string."
+          },
+          "dataset": {
             "anyOf": [
               {
                 "type": "string",
@@ -860,102 +977,10 @@
                 "type": "null"
               }
             ],
-            "title": "Native"
+            "title": "Dataset",
+            "description": "Optional dataset zip; extracted to <job>/input/dataset/."
           },
-          "native_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native Uri"
-          },
-          "models": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "contentMediaType": "application/octet-stream"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models"
-          },
-          "models_zip_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models Zip Uri",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
-          },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
-            "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
-          },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
+          "num_devices": {
             "anyOf": [
               {
                 "type": "integer"
@@ -964,78 +989,40 @@
                 "type": "null"
               }
             ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Num Devices",
+            "description": "Override GPU auto-detect.",
             "bioq_default": {
               "kind": "auto",
-              "note": "use all available cores"
+              "note": "auto-detect available devices/processes"
             }
-          },
-          "sort_by": {
-            "type": "string",
-            "title": "Sort By",
-            "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
-            "default": "DockQ"
           }
         },
         "type": "object",
-        "title": "Body_post_score_batch_task_api_tasks_score_batch_post"
+        "required": [
+          "config_yaml"
+        ],
+        "title": "Body_generate_custom_api_generate_post"
       },
-      "Body_post_score_task_api_tasks_score_post": {
+      "Body_generate_custom_task_api_tasks_generate_post": {
         "properties": {
-          "model": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model"
-          },
-          "native": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native"
-          },
-          "model_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model Uri"
-          },
-          "native_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native Uri"
-          },
-          "name": {
+          "config_yaml": {
             "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
+            "title": "Config Yaml",
+            "description": "Full experiment YAML as a string."
           },
-          "mapping": {
+          "dataset": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset"
+          },
+          "dataset_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -1044,44 +1031,10 @@
                 "type": "null"
               }
             ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
+            "title": "Dataset Uri",
+            "description": "URI to an optional dataset zip (oss://, file://, job://, http(s)://) as an alternative to a multipart upload."
           },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
-            "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
-          },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
+          "num_devices": {
             "anyOf": [
               {
                 "type": "integer"
@@ -1090,16 +1043,264 @@
                 "type": "null"
               }
             ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Num Devices",
             "bioq_default": {
               "kind": "auto",
-              "note": "use all available cores"
+              "note": "auto-detect available devices/processes"
             }
           }
         },
         "type": "object",
-        "title": "Body_post_score_task_api_tasks_score_post"
+        "required": [
+          "config_yaml"
+        ],
+        "title": "Body_generate_custom_task_api_tasks_generate_post"
+      },
+      "Body_generate_motif_api_generate_motif_post": {
+        "properties": {
+          "dataset": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "Dataset",
+            "description": "Zip with problems/ + motifs/."
+          },
+          "n_sample": {
+            "type": "integer",
+            "title": "N Sample",
+            "default": 4
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "default": 1
+          },
+          "num_devices": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Devices",
+            "description": "Override genie3's GPU auto-detect. Leave unset to use all visible devices.",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "auto-detect available devices/processes"
+            }
+          },
+          "selections": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selections",
+            "description": "Comma-separated problem names from the dataset. Default: all problems.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "direction_scale": {
+            "type": "number",
+            "title": "Direction Scale",
+            "default": 0.1
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset"
+        ],
+        "title": "Body_generate_motif_api_generate_motif_post"
+      },
+      "Body_generate_motif_task_api_tasks_generate_motif_post": {
+        "properties": {
+          "dataset": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset",
+            "description": "Zip with problems/ + motifs/."
+          },
+          "dataset_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Uri",
+            "description": "URI to the dataset zip (oss://, file://, job://, http(s)://) as an alternative to a multipart upload — used by the gateway."
+          },
+          "n_sample": {
+            "type": "integer",
+            "title": "N Sample",
+            "default": 4
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "default": 1
+          },
+          "num_devices": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Devices",
+            "description": "Override genie3's GPU auto-detect. Leave unset to use all visible devices.",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "auto-detect available devices/processes"
+            }
+          },
+          "selections": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selections",
+            "description": "Comma-separated problem names from the dataset. Default: all problems.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "direction_scale": {
+            "type": "number",
+            "title": "Direction Scale",
+            "default": 0.1
+          }
+        },
+        "type": "object",
+        "title": "Body_generate_motif_task_api_tasks_generate_motif_post"
+      },
+      "Body_generate_unconditional_api_generate_unconditional_post": {
+        "properties": {
+          "n_sample": {
+            "type": "integer",
+            "title": "N Sample",
+            "default": 4
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "default": 1
+          },
+          "num_devices": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Devices",
+            "description": "Override genie3's GPU auto-detect. Leave unset to use all visible devices.",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "auto-detect available devices/processes"
+            }
+          },
+          "min_length": {
+            "type": "integer",
+            "title": "Min Length",
+            "default": 100
+          },
+          "max_length": {
+            "type": "integer",
+            "title": "Max Length",
+            "default": 100
+          },
+          "length_step": {
+            "type": "integer",
+            "title": "Length Step",
+            "default": 50
+          },
+          "direction_scale": {
+            "type": "number",
+            "title": "Direction Scale",
+            "description": "Quality–diversity trade-off. Recommended 0.8 for length ≤ 300, 0.0 for longer.",
+            "default": 0.8
+          }
+        },
+        "type": "object",
+        "title": "Body_generate_unconditional_api_generate_unconditional_post"
+      },
+      "Body_generate_unconditional_task_api_tasks_generate_unconditional_post": {
+        "properties": {
+          "n_sample": {
+            "type": "integer",
+            "title": "N Sample",
+            "default": 4
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "default": 1
+          },
+          "num_devices": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Devices",
+            "description": "Override genie3's GPU auto-detect. Leave unset to use all visible devices.",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "auto-detect available devices/processes"
+            }
+          },
+          "min_length": {
+            "type": "integer",
+            "title": "Min Length",
+            "default": 100
+          },
+          "max_length": {
+            "type": "integer",
+            "title": "Max Length",
+            "default": 100
+          },
+          "length_step": {
+            "type": "integer",
+            "title": "Length Step",
+            "default": 50
+          },
+          "direction_scale": {
+            "type": "number",
+            "title": "Direction Scale",
+            "description": "Quality–diversity trade-off. Recommended 0.8 for length ≤ 300, 0.0 for longer.",
+            "default": 0.8
+          }
+        },
+        "type": "object",
+        "title": "Body_generate_unconditional_task_api_tasks_generate_unconditional_post"
       },
       "Body_upload_file_api_uploads_post": {
         "properties": {

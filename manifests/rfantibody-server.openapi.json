@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "DockQ Server",
-    "version": "0.0.13"
+    "title": "RFantibody Server",
+    "version": "0.0.22"
   },
   "paths": {
     "/healthz": {
@@ -20,26 +20,6 @@
                   },
                   "type": "object",
                   "title": "Response Health Healthz Get"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/healthz/detail": {
-      "get": {
-        "summary": "Health Detail",
-        "operationId": "health_detail_healthz_detail_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Health Detail Healthz Detail Get"
                 }
               }
             }
@@ -372,16 +352,37 @@
         }
       }
     },
-    "/api/score": {
+    "/healthz/detail": {
+      "get": {
+        "summary": "Healthz Detail",
+        "description": "Extended health: report whether NAS-mounted weights are reachable.\n\nRFantibody weights live on NAS at `RFANTIBODY_WEIGHTS_DIR` (default\n`/data/models/rfantibody/weights/`).  We report presence of the dir and\nfile count; `weights_loaded=false` lets the agent detect a misconfigured\nFC mount / unbound SIF without crashing the service.",
+        "operationId": "healthz_detail_healthz_detail_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Healthz Detail Healthz Detail Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rfdiffusion": {
       "post": {
-        "summary": "Post Score",
-        "description": "Score a single (model, native) pair via DockQ; returns DockQ's JSON output.",
-        "operationId": "post_score_api_score_post",
+        "summary": "Run Rfdiffusion",
+        "description": "RFdiffusion antibody-framework backbone design.\n\nEach input can be supplied EITHER as a multipart upload OR as a URI.\nURIs are required when invoking via FC async task mode (``X-Fc-Invocation-Type:\nAsync``) for any PDB larger than ~120 KiB — FC's async event payload is\ncapped at 128 KiB.",
+        "operationId": "run_rfdiffusion_api_rfdiffusion_post",
         "requestBody": {
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_api_score_post"
+                "$ref": "#/components/schemas/Body_run_rfdiffusion_api_rfdiffusion_post"
               }
             }
           }
@@ -410,16 +411,16 @@
         }
       }
     },
-    "/api/score_batch": {
+    "/api/proteinmpnn": {
       "post": {
-        "summary": "Post Score Batch",
-        "description": "Score N candidate models against 1 reference native.\n\nModels come either as repeated `models` uploads OR as a single zip\nreferenced by `models_zip_uri` (oss://, file://, job://, http(s)://) — the\ngateway uses the zip form since it can't multipart-upload the `models` list.\n\nPer-model JSONs land in `output/per_model/<basename>.json`; the sorted\nsummary is `output/scores.csv`. Models that errored show up in\n`output/failed.csv` (job still completes successfully if at least one\nmodel produced a valid score).",
-        "operationId": "post_score_batch_api_score_batch_post",
+        "summary": "Run Proteinmpnn",
+        "description": "ProteinMPNN CDR sequence design over an RFdiffusion-generated backbone set.",
+        "operationId": "run_proteinmpnn_api_proteinmpnn_post",
         "requestBody": {
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_batch_api_score_batch_post"
+                "$ref": "#/components/schemas/Body_run_proteinmpnn_api_proteinmpnn_post"
               }
             }
           }
@@ -448,11 +449,49 @@
         }
       }
     },
-    "/api/tasks/score": {
+    "/api/rf2": {
       "post": {
-        "summary": "Post Score Task",
-        "description": "Score a single (model, native) pair as a single atomic task.\n\nBlocks until DockQ completes.  For the submit/poll interface, use POST /api/score.",
-        "operationId": "post_score_task_api_tasks_score_post",
+        "summary": "Run Rf2",
+        "description": "RF2 structure prediction + filtering over MPNN-designed sequences.",
+        "operationId": "run_rf2_api_rf2_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_run_rf2_api_rf2_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/rfdiffusion": {
+      "post": {
+        "summary": "Run Rfdiffusion Task",
+        "description": "RFdiffusion antibody-framework backbone design as a single atomic task.\n\nSame upload-or-URI duality as the sync endpoint.  Required when payloads\nexceed FC's 128 KiB async invocation cap.",
+        "operationId": "run_rfdiffusion_task_api_tasks_rfdiffusion_post",
         "parameters": [
           {
             "name": "X-Bioagent-Job-Id",
@@ -491,7 +530,7 @@
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_task_api_tasks_score_post"
+                "$ref": "#/components/schemas/Body_run_rfdiffusion_task_api_tasks_rfdiffusion_post"
               }
             }
           }
@@ -520,11 +559,11 @@
         }
       }
     },
-    "/api/tasks/score_batch": {
+    "/api/tasks/proteinmpnn": {
       "post": {
-        "summary": "Post Score Batch Task",
-        "description": "Score N candidate models against 1 native as a single atomic task.\n\nModels come as repeated `models` uploads OR a single `models_zip_uri`\nzip (used by the gateway, which can't multipart-upload the list).",
-        "operationId": "post_score_batch_task_api_tasks_score_batch_post",
+        "summary": "Run Proteinmpnn Task",
+        "description": "ProteinMPNN CDR sequence design as a single atomic task.",
+        "operationId": "run_proteinmpnn_task_api_tasks_proteinmpnn_post",
         "parameters": [
           {
             "name": "X-Bioagent-Job-Id",
@@ -563,7 +602,79 @@
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_batch_task_api_tasks_score_batch_post"
+                "$ref": "#/components/schemas/Body_run_proteinmpnn_task_api_tasks_proteinmpnn_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/rf2": {
+      "post": {
+        "summary": "Run Rf2 Task",
+        "description": "RF2 structure prediction as a single atomic task.",
+        "operationId": "run_rf2_task_api_tasks_rf2_post",
+        "parameters": [
+          {
+            "name": "X-Bioagent-Job-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Bioagent-Job-Id"
+            }
+          },
+          {
+            "name": "X-Fc-Async-Task-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fc-Async-Task-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_run_rf2_task_api_tasks_rf2_post"
               }
             }
           }
@@ -595,9 +706,9 @@
   },
   "components": {
     "schemas": {
-      "Body_post_score_api_score_post": {
+      "Body_run_proteinmpnn_api_proteinmpnn_post": {
         "properties": {
-          "model": {
+          "input_quiver": {
             "anyOf": [
               {
                 "type": "string",
@@ -607,21 +718,10 @@
                 "type": "null"
               }
             ],
-            "title": "Model"
+            "title": "Input Quiver",
+            "description": "Input Quiver (from RFdiffusion). Mutually exclusive with `input_quiver_uri`."
           },
-          "native": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native"
-          },
-          "model_uri": {
+          "input_quiver_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -630,94 +730,41 @@
                 "type": "null"
               }
             ],
-            "title": "Model Uri"
+            "title": "Input Quiver Uri",
+            "description": "URI to fetch the input Quiver instead of uploading. Schemes: job://<id>/<file>, file:///path, oss://<bucket>/<key>, http(s)://..."
           },
-          "native_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native Uri"
-          },
-          "name": {
+          "loops": {
             "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
+            "title": "Loops",
+            "default": "H1,H2,H3"
           },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
+          "seqs_per_struct": {
             "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
+            "title": "Seqs Per Struct",
+            "default": 4
           },
-          "optDockQF1": {
+          "temperature": {
+            "type": "number",
+            "title": "Temperature",
+            "default": 0.2
+          },
+          "omit_aas": {
+            "type": "string",
+            "title": "Omit Aas",
+            "default": "CX"
+          },
+          "deterministic": {
             "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
+            "title": "Deterministic",
             "default": false
-          },
-          "n_cpu": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
-            "bioq_default": {
-              "kind": "auto",
-              "note": "use all available cores"
-            }
           }
         },
         "type": "object",
-        "title": "Body_post_score_api_score_post"
+        "title": "Body_run_proteinmpnn_api_proteinmpnn_post"
       },
-      "Body_post_score_batch_api_score_batch_post": {
+      "Body_run_proteinmpnn_task_api_tasks_proteinmpnn_post": {
         "properties": {
-          "native": {
+          "input_quiver": {
             "anyOf": [
               {
                 "type": "string",
@@ -727,9 +774,9 @@
                 "type": "null"
               }
             ],
-            "title": "Native"
+            "title": "Input Quiver"
           },
-          "native_uri": {
+          "input_quiver_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -738,119 +785,40 @@
                 "type": "null"
               }
             ],
-            "title": "Native Uri"
+            "title": "Input Quiver Uri"
           },
-          "models": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "contentMediaType": "application/octet-stream"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models"
-          },
-          "models_zip_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models Zip Uri",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "name": {
+          "loops": {
             "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
+            "title": "Loops",
+            "default": "H1,H2,H3"
           },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
+          "seqs_per_struct": {
             "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
+            "title": "Seqs Per Struct",
+            "default": 4
           },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
+          "temperature": {
+            "type": "number",
+            "title": "Temperature",
+            "default": 0.2
           },
-          "n_cpu": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
-            "bioq_default": {
-              "kind": "auto",
-              "note": "use all available cores"
-            }
-          },
-          "sort_by": {
+          "omit_aas": {
             "type": "string",
-            "title": "Sort By",
-            "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
-            "default": "DockQ"
+            "title": "Omit Aas",
+            "default": "CX"
+          },
+          "deterministic": {
+            "type": "boolean",
+            "title": "Deterministic",
+            "default": false
           }
         },
         "type": "object",
-        "title": "Body_post_score_batch_api_score_batch_post"
+        "title": "Body_run_proteinmpnn_task_api_tasks_proteinmpnn_post"
       },
-      "Body_post_score_batch_task_api_tasks_score_batch_post": {
+      "Body_run_rf2_api_rf2_post": {
         "properties": {
-          "native": {
+          "input_quiver": {
             "anyOf": [
               {
                 "type": "string",
@@ -860,9 +828,10 @@
                 "type": "null"
               }
             ],
-            "title": "Native"
+            "title": "Input Quiver",
+            "description": "Input Quiver (from ProteinMPNN). Mutually exclusive with `input_quiver_uri`."
           },
-          "native_uri": {
+          "input_quiver_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -871,91 +840,20 @@
                 "type": "null"
               }
             ],
-            "title": "Native Uri"
+            "title": "Input Quiver Uri",
+            "description": "URI to fetch input Quiver from (see /proteinmpnn)."
           },
-          "models": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "contentMediaType": "application/octet-stream"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models"
-          },
-          "models_zip_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models Zip Uri",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
-          },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
+          "num_recycles": {
             "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
+            "title": "Num Recycles",
+            "default": 10
           },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
+          "hotspot_show_prop": {
+            "type": "number",
+            "title": "Hotspot Show Prop",
+            "default": 0.1
           },
-          "n_cpu": {
+          "seed": {
             "anyOf": [
               {
                 "type": "integer"
@@ -964,26 +862,19 @@
                 "type": "null"
               }
             ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Seed",
             "bioq_default": {
               "kind": "auto",
-              "note": "use all available cores"
+              "note": "random seed selected by the tool at runtime"
             }
-          },
-          "sort_by": {
-            "type": "string",
-            "title": "Sort By",
-            "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
-            "default": "DockQ"
           }
         },
         "type": "object",
-        "title": "Body_post_score_batch_task_api_tasks_score_batch_post"
+        "title": "Body_run_rf2_api_rf2_post"
       },
-      "Body_post_score_task_api_tasks_score_post": {
+      "Body_run_rf2_task_api_tasks_rf2_post": {
         "properties": {
-          "model": {
+          "input_quiver": {
             "anyOf": [
               {
                 "type": "string",
@@ -993,21 +884,9 @@
                 "type": "null"
               }
             ],
-            "title": "Model"
+            "title": "Input Quiver"
           },
-          "native": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native"
-          },
-          "model_uri": {
+          "input_quiver_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -1016,72 +895,19 @@
                 "type": "null"
               }
             ],
-            "title": "Model Uri"
+            "title": "Input Quiver Uri"
           },
-          "native_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native Uri"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
-          },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
+          "num_recycles": {
             "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
+            "title": "Num Recycles",
+            "default": 10
           },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
+          "hotspot_show_prop": {
+            "type": "number",
+            "title": "Hotspot Show Prop",
+            "default": 0.1
           },
-          "n_cpu": {
+          "seed": {
             "anyOf": [
               {
                 "type": "integer"
@@ -1090,16 +916,213 @@
                 "type": "null"
               }
             ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Seed",
             "bioq_default": {
               "kind": "auto",
-              "note": "use all available cores"
+              "note": "random seed selected by the tool at runtime"
             }
           }
         },
         "type": "object",
-        "title": "Body_post_score_task_api_tasks_score_post"
+        "title": "Body_run_rf2_task_api_tasks_rf2_post"
+      },
+      "Body_run_rfdiffusion_api_rfdiffusion_post": {
+        "properties": {
+          "target": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target",
+            "description": "Target antigen PDB. Mutually exclusive with `target_uri`."
+          },
+          "target_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Uri",
+            "description": "URI to fetch the target instead of uploading. Schemes: job://<id>/<file>, file:///path, oss://<bucket>/<key>, http(s)://..."
+          },
+          "framework": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Framework",
+            "description": "Antibody framework PDB. Mutually exclusive with `framework_uri`."
+          },
+          "framework_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Framework Uri",
+            "description": "URI to fetch the framework instead of uploading."
+          },
+          "num_designs": {
+            "type": "integer",
+            "title": "Num Designs",
+            "default": 10
+          },
+          "design_loops": {
+            "type": "string",
+            "title": "Design Loops",
+            "default": "H1:,H2:,H3:"
+          },
+          "hotspots": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hotspots",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "diffuser_t": {
+            "type": "integer",
+            "title": "Diffuser T",
+            "default": 50
+          },
+          "final_step": {
+            "type": "integer",
+            "title": "Final Step",
+            "default": 1
+          },
+          "deterministic": {
+            "type": "boolean",
+            "title": "Deterministic",
+            "default": false
+          },
+          "no_trajectory": {
+            "type": "boolean",
+            "title": "No Trajectory",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "Body_run_rfdiffusion_api_rfdiffusion_post"
+      },
+      "Body_run_rfdiffusion_task_api_tasks_rfdiffusion_post": {
+        "properties": {
+          "target": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "target_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Uri"
+          },
+          "framework": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Framework"
+          },
+          "framework_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Framework Uri"
+          },
+          "num_designs": {
+            "type": "integer",
+            "title": "Num Designs",
+            "default": 10
+          },
+          "design_loops": {
+            "type": "string",
+            "title": "Design Loops",
+            "default": "H1:,H2:,H3:"
+          },
+          "hotspots": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hotspots",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "diffuser_t": {
+            "type": "integer",
+            "title": "Diffuser T",
+            "default": 50
+          },
+          "final_step": {
+            "type": "integer",
+            "title": "Final Step",
+            "default": 1
+          },
+          "deterministic": {
+            "type": "boolean",
+            "title": "Deterministic",
+            "default": false
+          },
+          "no_trajectory": {
+            "type": "boolean",
+            "title": "No Trajectory",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "Body_run_rfdiffusion_task_api_tasks_rfdiffusion_post"
       },
       "Body_upload_file_api_uploads_post": {
         "properties": {

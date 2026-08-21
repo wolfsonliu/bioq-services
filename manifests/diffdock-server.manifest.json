@@ -1,0 +1,402 @@
+{
+  "service": "diffdock",
+  "title": "DiffDock Server",
+  "version": "0.0.5",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/dock",
+      "summary": "Submit a single protein-ligand docking job.  Poll /api/jobs/<id>.",
+      "description": "Submit a single protein-ligand docking job.  Poll /api/jobs/<id>.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_dock_api_dock_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "protein",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ligand",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "protein_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to a PDB file (scheme in {job, oss, file, http(s)}).  Mutex with ``protein`` upload and ``protein_sequence``.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "protein_sequence",
+          "type": "string",
+          "required": false,
+          "description": "Protein amino-acid sequence (single chain, or multi-chain separated by ``:``).  When present, upstream folds it with ESMFold v1 before docking (adds ~5 GB weight + ~30 s cold GPU warmup).  Mutex with ``protein`` upload and ``protein_uri``.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "ligand_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to a ligand file (.sdf/.mol2).  Mutex with ``ligand`` upload and ``ligand_description``.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "ligand_description",
+          "type": "string",
+          "required": false,
+          "description": "SMILES / SMARTS string parseable by RDKit.  Mutex with ``ligand`` upload and ``ligand_uri``.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "complex_name",
+          "type": "string",
+          "required": false,
+          "description": "Output subdirectory name under output/.  Must match ``[A-Za-z0-9_-]+`` (no slashes / spaces / dots).",
+          "is_file": false,
+          "default": "complex_0",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "samples_per_complex",
+          "type": "integer",
+          "required": false,
+          "description": "Number of reverse diffusion samples (paper peak = 40; 10 is a speed/precision trade).",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "inference_steps",
+          "type": "integer",
+          "required": false,
+          "description": "Total denoise steps.",
+          "is_file": false,
+          "default": 20,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "actual_steps",
+          "type": "integer",
+          "required": false,
+          "description": "Actual denoise steps to run (early-stop; must be <= inference_steps).",
+          "is_file": false,
+          "default": 19,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": "GPU batch size.  Reduce to 4 on OOM.",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "no_final_step_noise",
+          "type": "boolean",
+          "required": false,
+          "description": "Skip the final noise step.  NOTE: upstream is store_true default True — request value False is IGNORED in v0.0.1.  See design doc §Risks §4.",
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "save_visualisation",
+          "type": "boolean",
+          "required": false,
+          "description": "Dump reverse-diffusion trajectory as PDB per rank (large output volume; debug only).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": "Random seed; framework fills a stable value when None.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        }
+      ],
+      "examples": [
+        {
+          "title": "PDB + SDF file upload (default preset)",
+          "curl": "curl -X POST $URL/api/dock -F protein=@target.pdb -F ligand=@ligand.sdf -F complex_name=1a0q -F samples_per_complex=10 -F inference_steps=20",
+          "python": null,
+          "body": null,
+          "notes": "Fastest path when both structures are on hand.  Output: output/1a0q/rank1.sdf + confidence_scores.json."
+        },
+        {
+          "title": "PDB + SMILES ligand",
+          "curl": "curl -X POST $URL/api/dock -F protein=@target.pdb -F ligand_description=\"COc1ccc(C#N)cc1\" -F complex_name=abl1_inhibitor",
+          "python": null,
+          "body": null,
+          "notes": "RDKit ETKDG generates seed conformer from SMILES.  For invalid SMILES the job fails with `no_outputs` (RDKit embedding failure)."
+        },
+        {
+          "title": "protein_sequence + SMILES (ESMFold pipeline)",
+          "curl": "curl -X POST $URL/api/dock -F protein_sequence=\"MKWVTFISLLFLFSSAYSRGVFRRDTHKS...\" -F ligand_description=\"CCOc(cc1)ccc1NC(=O)C\" -F complex_name=novel_target",
+          "python": null,
+          "body": null,
+          "notes": "ESMFold folds the sequence server-side (adds ~30 s on A10 for a 300 aa protein).  Requires esmfold_3B_v1.pt in the NAS ESM cache — check /healthz/detail."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/dock",
+      "summary": "Protein-ligand docking (single atomic task).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_dock_task_api_tasks_dock_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "protein",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ligand",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "protein_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to a PDB file (scheme in {job, oss, file, http(s)}).  Mutex with ``protein`` upload and ``protein_sequence``.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "protein_sequence",
+          "type": "string",
+          "required": false,
+          "description": "Protein amino-acid sequence (single chain, or multi-chain separated by ``:``).  When present, upstream folds it with ESMFold v1 before docking (adds ~5 GB weight + ~30 s cold GPU warmup).  Mutex with ``protein`` upload and ``protein_uri``.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "ligand_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI reference to a ligand file (.sdf/.mol2).  Mutex with ``ligand`` upload and ``ligand_description``.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "ligand_description",
+          "type": "string",
+          "required": false,
+          "description": "SMILES / SMARTS string parseable by RDKit.  Mutex with ``ligand`` upload and ``ligand_uri``.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "complex_name",
+          "type": "string",
+          "required": false,
+          "description": "Output subdirectory name under output/.  Must match ``[A-Za-z0-9_-]+`` (no slashes / spaces / dots).",
+          "is_file": false,
+          "default": "complex_0",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "samples_per_complex",
+          "type": "integer",
+          "required": false,
+          "description": "Number of reverse diffusion samples (paper peak = 40; 10 is a speed/precision trade).",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "inference_steps",
+          "type": "integer",
+          "required": false,
+          "description": "Total denoise steps.",
+          "is_file": false,
+          "default": 20,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "actual_steps",
+          "type": "integer",
+          "required": false,
+          "description": "Actual denoise steps to run (early-stop; must be <= inference_steps).",
+          "is_file": false,
+          "default": 19,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": "GPU batch size.  Reduce to 4 on OOM.",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "no_final_step_noise",
+          "type": "boolean",
+          "required": false,
+          "description": "Skip the final noise step.  NOTE: upstream is store_true default True — request value False is IGNORED in v0.0.1.  See design doc §Risks §4.",
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "save_visualisation",
+          "type": "boolean",
+          "required": false,
+          "description": "Dump reverse-diffusion trajectory as PDB per rank (large output volume; debug only).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": "Random seed; framework fills a stable value when None.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        }
+      ],
+      "examples": [
+        {
+          "title": "async task mode (recommended for GPU-heavy jobs)",
+          "curl": "curl -X POST $URL/api/tasks/dock -H \"X-Fc-Invocation-Type: Async\" -F protein=@target.pdb -F ligand=@ligand.sdf -F samples_per_complex=40 -F inference_steps=40",
+          "python": null,
+          "body": null,
+          "notes": "Client polls /api/jobs/<id> for final JobInfo.  Preferred over sync submit/poll on FC for jobs longer than ~2 min."
+        }
+      ]
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/diffdock_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "model": {
+      "name": "DiffDock-L (v1.1)",
+      "paper": "Corso, Deng, Polizzi, Barzilay, Jaakkola. arXiv:2402.18396 (ICLR 2024).  Original: arXiv:2210.01776 (ICLR 2023).",
+      "task": "small-molecule blind docking (score + confidence diffusion on T(3) × SO(3) × SO(2)^m)",
+      "training_data": "PDBBind + BindingMOAD + DockGen + vdM augmentation",
+      "note": "Rigid protein (no torsion / side-chain flexibility). Ligand torsion is modeled.  ESM-2 embedding is required; ESMFold folding kicks in only when protein_sequence is provided instead of a PDB.",
+      "license": "MIT"
+    },
+    "tool_outputs": {
+      "dock": "output/<complex_name>/rank<r>_confidence<c>.sdf for r in [1, samples_per_complex]; output/<complex_name>/rank1.sdf (top-1, unlabeled duplicate); output/<complex_name>/confidence_scores.json (parsed ranking); output/<complex_name>/<complex_name>_esmfold.pdb (only if protein_sequence input)"
+    },
+    "config_tips": {
+      "samples_per_complex": "10 = default (fast); 40 = paper accuracy peak; >40 = marginal returns.",
+      "inference_steps": "20 = default; 40 = paper max.  Higher = more denoise steps ~= slower + slightly better.",
+      "actual_steps": "Typically inference_steps - 1; the last step tends to overfit noise (upstream default 19 vs 20).",
+      "batch_size": "10 fits T4 for typical protein 300 aa.  OOM => reduce to 4.",
+      "no_final_step_noise": "Requested value 'false' is IGNORED in v0.0.1 (upstream is store_true default True; no CLI to disable). See design doc §Risks §4.",
+      "protein_sequence": "Long sequences (>800 aa) may OOM on T4 during ESMFold.  Recommend A10 24GB or split into chains via ':'.",
+      "ligand": "SMILES needs a valid parseable structure; RDKit ETKDG generates seed conformer.  If RDKit fails to embed, upstream logs 'Failed on ...' and skips → detect_outputs returns false.",
+      "async_payload_limit": "FC async task mode (/api/tasks/dock) caps the request payload at 128 KiB.  A full protein PDB is almost always larger, so for /api/tasks/dock pass the protein via protein_uri (file:// on NAS, oss://, or job://) — NOT a multipart upload.  Sync /api/dock has no such cap and accepts multipart uploads directly."
+    },
+    "input_uri_schemes": {
+      "protein": "multipart .pdb / job:// / oss:// / file:// / http(s):// / OR protein_sequence text field (str, → ESMFold)",
+      "ligand": "multipart .sdf/.mol2 / job:// / oss:// / file:// / http(s):// OR ligand_description text field (SMILES / SMARTS)"
+    },
+    "chaining_tip": "Common upstream pipelines: (a) RFantibody / genie3 designed PDB → diffdock-server /api/dock via `protein_uri=job://<prev>/target.pdb`; (b) ESMFold-driven end-to-end: pass protein_sequence directly, DiffDock folds internally."
+  },
+  "openapi_url": "/openapi.json"
+}

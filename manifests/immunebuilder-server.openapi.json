@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "DockQ Server",
-    "version": "0.0.13"
+    "title": "ImmuneBuilder Server",
+    "version": "0.0.9"
   },
   "paths": {
     "/healthz": {
@@ -20,26 +20,6 @@
                   },
                   "type": "object",
                   "title": "Response Health Healthz Get"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/healthz/detail": {
-      "get": {
-        "summary": "Health Detail",
-        "operationId": "health_detail_healthz_detail_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Health Detail Healthz Detail Get"
                 }
               }
             }
@@ -372,19 +352,41 @@
         }
       }
     },
-    "/api/score": {
-      "post": {
-        "summary": "Post Score",
-        "description": "Score a single (model, native) pair via DockQ; returns DockQ's JSON output.",
-        "operationId": "post_score_api_score_post",
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_post_score_api_score_post"
+    "/healthz/detail": {
+      "get": {
+        "summary": "Healthz Detail",
+        "description": "Extended health: report whether NAS-mounted weights are reachable.\n\nTrained model weights live on NAS at `IMMUNEBUILDER_WEIGHTS_DIR`\n(default `/data/models/immunebuilder/trained_model/`).  The image\ncontains a symlink at the upstream package's expected path pointing\nhere; if NAS is unmounted, the symlink target is missing and the upstream\ncode crashes at first inference.  `weights_loaded=false` lets the agent\ndetect the misconfiguration before that.",
+        "operationId": "healthz_detail_healthz_detail_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Healthz Detail Healthz Detail Get"
+                }
               }
             }
           }
+        }
+      }
+    },
+    "/api/predict_antibody": {
+      "post": {
+        "summary": "Post Predict Antibody",
+        "description": "Predict antibody structure from heavy + light chain sequences.",
+        "operationId": "post_predict_antibody_api_predict_antibody_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_predict_antibody_api_predict_antibody_post"
+              }
+            }
+          },
+          "required": true
         },
         "responses": {
           "200": {
@@ -410,19 +412,20 @@
         }
       }
     },
-    "/api/score_batch": {
+    "/api/predict_nanobody": {
       "post": {
-        "summary": "Post Score Batch",
-        "description": "Score N candidate models against 1 reference native.\n\nModels come either as repeated `models` uploads OR as a single zip\nreferenced by `models_zip_uri` (oss://, file://, job://, http(s)://) — the\ngateway uses the zip form since it can't multipart-upload the `models` list.\n\nPer-model JSONs land in `output/per_model/<basename>.json`; the sorted\nsummary is `output/scores.csv`. Models that errored show up in\n`output/failed.csv` (job still completes successfully if at least one\nmodel produced a valid score).",
-        "operationId": "post_score_batch_api_score_batch_post",
+        "summary": "Post Predict Nanobody",
+        "description": "Predict nanobody structure from heavy chain sequence.",
+        "operationId": "post_predict_nanobody_api_predict_nanobody_post",
         "requestBody": {
           "content": {
-            "multipart/form-data": {
+            "application/x-www-form-urlencoded": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_batch_api_score_batch_post"
+                "$ref": "#/components/schemas/Body_post_predict_nanobody_api_predict_nanobody_post"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "200": {
@@ -448,11 +451,49 @@
         }
       }
     },
-    "/api/tasks/score": {
+    "/api/predict_tcr": {
       "post": {
-        "summary": "Post Score Task",
-        "description": "Score a single (model, native) pair as a single atomic task.\n\nBlocks until DockQ completes.  For the submit/poll interface, use POST /api/score.",
-        "operationId": "post_score_task_api_tasks_score_post",
+        "summary": "Post Predict Tcr",
+        "description": "Predict TCR structure from alpha + beta chain sequences.",
+        "operationId": "post_predict_tcr_api_predict_tcr_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_predict_tcr_api_predict_tcr_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/predict_antibody": {
+      "post": {
+        "summary": "Predict antibody structure from heavy + light chain sequences (single atomic task).",
+        "operationId": "_task_handler_api_tasks_predict_antibody_post",
         "parameters": [
           {
             "name": "X-Bioagent-Job-Id",
@@ -485,13 +526,30 @@
               ],
               "title": "X-Fc-Async-Task-Id"
             }
+          },
+          {
+            "name": "X-Bioagent-Oss-Prefix",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Bioagent-Oss-Prefix"
+            }
           }
         ],
         "requestBody": {
+          "required": true,
           "content": {
-            "multipart/form-data": {
+            "application/x-www-form-urlencoded": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_task_api_tasks_score_post"
+                "$ref": "#/components/schemas/Body__task_handler_api_tasks_predict_antibody_post"
               }
             }
           }
@@ -520,11 +578,10 @@
         }
       }
     },
-    "/api/tasks/score_batch": {
+    "/api/tasks/predict_nanobody": {
       "post": {
-        "summary": "Post Score Batch Task",
-        "description": "Score N candidate models against 1 native as a single atomic task.\n\nModels come as repeated `models` uploads OR a single `models_zip_uri`\nzip (used by the gateway, which can't multipart-upload the list).",
-        "operationId": "post_score_batch_task_api_tasks_score_batch_post",
+        "summary": "Predict nanobody structure from heavy chain sequence (single atomic task).",
+        "operationId": "_task_handler_api_tasks_predict_nanobody_post",
         "parameters": [
           {
             "name": "X-Bioagent-Job-Id",
@@ -557,13 +614,118 @@
               ],
               "title": "X-Fc-Async-Task-Id"
             }
+          },
+          {
+            "name": "X-Bioagent-Oss-Prefix",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Bioagent-Oss-Prefix"
+            }
           }
         ],
         "requestBody": {
+          "required": true,
           "content": {
-            "multipart/form-data": {
+            "application/x-www-form-urlencoded": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_batch_task_api_tasks_score_batch_post"
+                "$ref": "#/components/schemas/Body__task_handler_api_tasks_predict_nanobody_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/predict_tcr": {
+      "post": {
+        "summary": "Predict TCR structure from alpha + beta chain sequences (single atomic task).",
+        "operationId": "_task_handler_api_tasks_predict_tcr_post",
+        "parameters": [
+          {
+            "name": "X-Bioagent-Job-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Bioagent-Job-Id"
+            }
+          },
+          {
+            "name": "X-Fc-Async-Task-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fc-Async-Task-Id"
+            }
+          },
+          {
+            "name": "X-Bioagent-Oss-Prefix",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Bioagent-Oss-Prefix"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body__task_handler_api_tasks_predict_tcr_post"
               }
             }
           }
@@ -595,511 +757,325 @@
   },
   "components": {
     "schemas": {
-      "Body_post_score_api_score_post": {
+      "Body__task_handler_api_tasks_predict_antibody_post": {
         "properties": {
-          "model": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model"
-          },
-          "native": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native"
-          },
-          "model_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model Uri"
-          },
-          "native_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native Uri"
-          },
           "name": {
             "type": "string",
             "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
+            "default": "prediction"
           },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+          "numbering_scheme": {
+            "type": "string",
+            "enum": [
+              "imgt",
+              "chothia",
+              "kabat",
+              "aho",
+              "wolfguy",
+              "martin",
+              "raw"
             ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
+            "title": "Numbering Scheme",
+            "default": "imgt"
           },
-          "small_molecule": {
+          "save_all_models": {
             "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
+            "title": "Save All Models",
+            "description": "Save all 4 ensemble models + error estimates (--to_directory)",
+            "default": true
+          },
+          "no_sidechain_bond_check": {
+            "type": "boolean",
+            "title": "No Sidechain Bond Check",
+            "description": "Skip strained-bond check during refinement (-u flag)",
             "default": false
           },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
+          "n_threads": {
             "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
+            "title": "N Threads",
+            "description": "OpenMM refinement threads; >0 forces CPU refinement; -1 uses GPU",
+            "default": -1
           },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
+          "heavy_sequence": {
+            "type": "string",
+            "title": "Heavy Sequence"
           },
-          "n_cpu": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
-            "bioq_default": {
-              "kind": "auto",
-              "note": "use all available cores"
-            }
+          "light_sequence": {
+            "type": "string",
+            "title": "Light Sequence"
           }
         },
         "type": "object",
-        "title": "Body_post_score_api_score_post"
+        "required": [
+          "heavy_sequence",
+          "light_sequence"
+        ],
+        "title": "Body__task_handler_api_tasks_predict_antibody_post"
       },
-      "Body_post_score_batch_api_score_batch_post": {
+      "Body__task_handler_api_tasks_predict_nanobody_post": {
         "properties": {
-          "native": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native"
-          },
-          "native_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native Uri"
-          },
-          "models": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "contentMediaType": "application/octet-stream"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models"
-          },
-          "models_zip_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models Zip Uri",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
           "name": {
             "type": "string",
             "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
+            "default": "prediction"
           },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
-            "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
-          },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
-            "bioq_default": {
-              "kind": "auto",
-              "note": "use all available cores"
-            }
-          },
-          "sort_by": {
+          "numbering_scheme": {
             "type": "string",
-            "title": "Sort By",
-            "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
-            "default": "DockQ"
+            "enum": [
+              "imgt",
+              "chothia",
+              "kabat",
+              "aho",
+              "wolfguy",
+              "martin",
+              "raw"
+            ],
+            "title": "Numbering Scheme",
+            "default": "imgt"
+          },
+          "save_all_models": {
+            "type": "boolean",
+            "title": "Save All Models",
+            "description": "Save all 4 ensemble models + error estimates (--to_directory)",
+            "default": true
+          },
+          "no_sidechain_bond_check": {
+            "type": "boolean",
+            "title": "No Sidechain Bond Check",
+            "description": "Skip strained-bond check during refinement (-u flag)",
+            "default": false
+          },
+          "n_threads": {
+            "type": "integer",
+            "title": "N Threads",
+            "description": "OpenMM refinement threads; >0 forces CPU refinement; -1 uses GPU",
+            "default": -1
+          },
+          "heavy_sequence": {
+            "type": "string",
+            "title": "Heavy Sequence"
           }
         },
         "type": "object",
-        "title": "Body_post_score_batch_api_score_batch_post"
+        "required": [
+          "heavy_sequence"
+        ],
+        "title": "Body__task_handler_api_tasks_predict_nanobody_post"
       },
-      "Body_post_score_batch_task_api_tasks_score_batch_post": {
+      "Body__task_handler_api_tasks_predict_tcr_post": {
         "properties": {
-          "native": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native"
-          },
-          "native_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native Uri"
-          },
-          "models": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "contentMediaType": "application/octet-stream"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models"
-          },
-          "models_zip_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models Zip Uri",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
           "name": {
             "type": "string",
             "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
+            "default": "prediction"
           },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
-            "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
-          },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
-            "bioq_default": {
-              "kind": "auto",
-              "note": "use all available cores"
-            }
-          },
-          "sort_by": {
+          "numbering_scheme": {
             "type": "string",
-            "title": "Sort By",
-            "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
-            "default": "DockQ"
+            "enum": [
+              "imgt",
+              "chothia",
+              "kabat",
+              "aho",
+              "wolfguy",
+              "martin",
+              "raw"
+            ],
+            "title": "Numbering Scheme",
+            "default": "imgt"
+          },
+          "save_all_models": {
+            "type": "boolean",
+            "title": "Save All Models",
+            "description": "Save all 4 ensemble models + error estimates (--to_directory)",
+            "default": true
+          },
+          "no_sidechain_bond_check": {
+            "type": "boolean",
+            "title": "No Sidechain Bond Check",
+            "description": "Skip strained-bond check during refinement (-u flag)",
+            "default": false
+          },
+          "n_threads": {
+            "type": "integer",
+            "title": "N Threads",
+            "description": "OpenMM refinement threads; >0 forces CPU refinement; -1 uses GPU",
+            "default": -1
+          },
+          "alpha_sequence": {
+            "type": "string",
+            "title": "Alpha Sequence"
+          },
+          "beta_sequence": {
+            "type": "string",
+            "title": "Beta Sequence"
           }
         },
         "type": "object",
-        "title": "Body_post_score_batch_task_api_tasks_score_batch_post"
+        "required": [
+          "alpha_sequence",
+          "beta_sequence"
+        ],
+        "title": "Body__task_handler_api_tasks_predict_tcr_post"
       },
-      "Body_post_score_task_api_tasks_score_post": {
+      "Body_post_predict_antibody_api_predict_antibody_post": {
         "properties": {
-          "model": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model"
-          },
-          "native": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native"
-          },
-          "model_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model Uri"
-          },
-          "native_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native Uri"
-          },
           "name": {
             "type": "string",
             "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
+            "default": "prediction"
           },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+          "numbering_scheme": {
+            "type": "string",
+            "enum": [
+              "imgt",
+              "chothia",
+              "kabat",
+              "aho",
+              "wolfguy",
+              "martin",
+              "raw"
             ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
+            "title": "Numbering Scheme",
+            "default": "imgt"
           },
-          "small_molecule": {
+          "save_all_models": {
             "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
+            "title": "Save All Models",
+            "description": "Save all 4 ensemble models + error estimates (--to_directory)",
+            "default": true
+          },
+          "no_sidechain_bond_check": {
+            "type": "boolean",
+            "title": "No Sidechain Bond Check",
+            "description": "Skip strained-bond check during refinement (-u flag)",
             "default": false
           },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
+          "n_threads": {
             "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
+            "title": "N Threads",
+            "description": "OpenMM refinement threads; >0 forces CPU refinement; -1 uses GPU",
+            "default": -1
           },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
+          "heavy_sequence": {
+            "type": "string",
+            "title": "Heavy Sequence"
           },
-          "n_cpu": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
-            "bioq_default": {
-              "kind": "auto",
-              "note": "use all available cores"
-            }
+          "light_sequence": {
+            "type": "string",
+            "title": "Light Sequence"
           }
         },
         "type": "object",
-        "title": "Body_post_score_task_api_tasks_score_post"
+        "required": [
+          "heavy_sequence",
+          "light_sequence"
+        ],
+        "title": "Body_post_predict_antibody_api_predict_antibody_post"
+      },
+      "Body_post_predict_nanobody_api_predict_nanobody_post": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": "prediction"
+          },
+          "numbering_scheme": {
+            "type": "string",
+            "enum": [
+              "imgt",
+              "chothia",
+              "kabat",
+              "aho",
+              "wolfguy",
+              "martin",
+              "raw"
+            ],
+            "title": "Numbering Scheme",
+            "default": "imgt"
+          },
+          "save_all_models": {
+            "type": "boolean",
+            "title": "Save All Models",
+            "description": "Save all 4 ensemble models + error estimates (--to_directory)",
+            "default": true
+          },
+          "no_sidechain_bond_check": {
+            "type": "boolean",
+            "title": "No Sidechain Bond Check",
+            "description": "Skip strained-bond check during refinement (-u flag)",
+            "default": false
+          },
+          "n_threads": {
+            "type": "integer",
+            "title": "N Threads",
+            "description": "OpenMM refinement threads; >0 forces CPU refinement; -1 uses GPU",
+            "default": -1
+          },
+          "heavy_sequence": {
+            "type": "string",
+            "title": "Heavy Sequence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "heavy_sequence"
+        ],
+        "title": "Body_post_predict_nanobody_api_predict_nanobody_post"
+      },
+      "Body_post_predict_tcr_api_predict_tcr_post": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": "prediction"
+          },
+          "numbering_scheme": {
+            "type": "string",
+            "enum": [
+              "imgt",
+              "chothia",
+              "kabat",
+              "aho",
+              "wolfguy",
+              "martin",
+              "raw"
+            ],
+            "title": "Numbering Scheme",
+            "default": "imgt"
+          },
+          "save_all_models": {
+            "type": "boolean",
+            "title": "Save All Models",
+            "description": "Save all 4 ensemble models + error estimates (--to_directory)",
+            "default": true
+          },
+          "no_sidechain_bond_check": {
+            "type": "boolean",
+            "title": "No Sidechain Bond Check",
+            "description": "Skip strained-bond check during refinement (-u flag)",
+            "default": false
+          },
+          "n_threads": {
+            "type": "integer",
+            "title": "N Threads",
+            "description": "OpenMM refinement threads; >0 forces CPU refinement; -1 uses GPU",
+            "default": -1
+          },
+          "alpha_sequence": {
+            "type": "string",
+            "title": "Alpha Sequence"
+          },
+          "beta_sequence": {
+            "type": "string",
+            "title": "Beta Sequence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "alpha_sequence",
+          "beta_sequence"
+        ],
+        "title": "Body_post_predict_tcr_api_predict_tcr_post"
       },
       "Body_upload_file_api_uploads_post": {
         "properties": {

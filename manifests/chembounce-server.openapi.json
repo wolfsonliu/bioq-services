@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "DockQ Server",
-    "version": "0.0.13"
+    "title": "ChemBounce Server",
+    "version": "0.0.5"
   },
   "paths": {
     "/healthz": {
@@ -20,26 +20,6 @@
                   },
                   "type": "object",
                   "title": "Response Health Healthz Get"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/healthz/detail": {
-      "get": {
-        "summary": "Health Detail",
-        "operationId": "health_detail_healthz_detail_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Health Detail Healthz Detail Get"
                 }
               }
             }
@@ -372,19 +352,41 @@
         }
       }
     },
-    "/api/score": {
-      "post": {
-        "summary": "Post Score",
-        "description": "Score a single (model, native) pair via DockQ; returns DockQ's JSON output.",
-        "operationId": "post_score_api_score_post",
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_post_score_api_score_post"
+    "/healthz/detail": {
+      "get": {
+        "summary": "Healthz Detail",
+        "description": "Probe whether the scaffold + fingerprint DB files are reachable on NAS.\n\nReports both 250mw and full as separate flags; service can run with just\none of them (250mw is required by default), full is bonus.",
+        "operationId": "healthz_detail_healthz_detail_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Healthz Detail Healthz Detail Get"
+                }
               }
             }
           }
+        }
+      }
+    },
+    "/api/scaffold_hop": {
+      "post": {
+        "summary": "Post Scaffold Hop",
+        "description": "Run ChemBounce scaffold hopping.  Returns JobInfo; poll until completed.",
+        "operationId": "post_scaffold_hop_api_scaffold_hop_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_scaffold_hop_api_scaffold_hop_post"
+              }
+            }
+          },
+          "required": true
         },
         "responses": {
           "200": {
@@ -410,49 +412,11 @@
         }
       }
     },
-    "/api/score_batch": {
+    "/api/tasks/scaffold_hop": {
       "post": {
-        "summary": "Post Score Batch",
-        "description": "Score N candidate models against 1 reference native.\n\nModels come either as repeated `models` uploads OR as a single zip\nreferenced by `models_zip_uri` (oss://, file://, job://, http(s)://) — the\ngateway uses the zip form since it can't multipart-upload the `models` list.\n\nPer-model JSONs land in `output/per_model/<basename>.json`; the sorted\nsummary is `output/scores.csv`. Models that errored show up in\n`output/failed.csv` (job still completes successfully if at least one\nmodel produced a valid score).",
-        "operationId": "post_score_batch_api_score_batch_post",
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_post_score_batch_api_score_batch_post"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JobInfo"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/tasks/score": {
-      "post": {
-        "summary": "Post Score Task",
-        "description": "Score a single (model, native) pair as a single atomic task.\n\nBlocks until DockQ completes.  For the submit/poll interface, use POST /api/score.",
-        "operationId": "post_score_task_api_tasks_score_post",
+        "summary": "Post Scaffold Hop Task",
+        "description": "FC async task mode — blocks until done; HTTP 202 on submit.",
+        "operationId": "post_scaffold_hop_task_api_tasks_scaffold_hop_post",
         "parameters": [
           {
             "name": "X-Bioagent-Job-Id",
@@ -488,82 +452,11 @@
           }
         ],
         "requestBody": {
+          "required": true,
           "content": {
-            "multipart/form-data": {
+            "application/x-www-form-urlencoded": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_task_api_tasks_score_post"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JobInfo"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/tasks/score_batch": {
-      "post": {
-        "summary": "Post Score Batch Task",
-        "description": "Score N candidate models against 1 native as a single atomic task.\n\nModels come as repeated `models` uploads OR a single `models_zip_uri`\nzip (used by the gateway, which can't multipart-upload the list).",
-        "operationId": "post_score_batch_task_api_tasks_score_batch_post",
-        "parameters": [
-          {
-            "name": "X-Bioagent-Job-Id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Bioagent-Job-Id"
-            }
-          },
-          {
-            "name": "X-Fc-Async-Task-Id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Fc-Async-Task-Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_post_score_batch_task_api_tasks_score_batch_post"
+                "$ref": "#/components/schemas/Body_post_scaffold_hop_task_api_tasks_scaffold_hop_post"
               }
             }
           }
@@ -595,33 +488,9 @@
   },
   "components": {
     "schemas": {
-      "Body_post_score_api_score_post": {
+      "Body_post_scaffold_hop_api_scaffold_hop_post": {
         "properties": {
-          "model": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model"
-          },
-          "native": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native"
-          },
-          "model_uri": {
+          "input_smiles_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -630,26 +499,24 @@
                 "type": "null"
               }
             ],
-            "title": "Model Uri"
+            "title": "Input Smiles Uri"
           },
-          "native_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native Uri"
-          },
-          "name": {
+          "input_smiles": {
             "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
+            "title": "Input Smiles",
+            "description": "Input SMILES string of the target molecule to scaffold-hop."
           },
-          "mapping": {
+          "database": {
+            "type": "string",
+            "enum": [
+              "250mw",
+              "full"
+            ],
+            "title": "Database",
+            "description": "Which scaffold fingerprint DB to search:\n- '250mw': scaffolds with MW ≤ 250 (~tens of MB, fast, low recall)\n- 'full' : ~4M scaffolds (~GB, paper-grade, needs ≥64 GB RAM)",
+            "default": "250mw"
+          },
+          "core_smiles": {
             "anyOf": [
               {
                 "type": "string"
@@ -658,44 +525,20 @@
                 "type": "null"
               }
             ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
+            "title": "Core Smiles",
+            "description": "A core substructure SMILES that must be preserved in the final candidate; if not actually contained in `input_smiles`, ChemBounce raises an error.",
             "bioq_default": {
               "kind": "unset",
               "note": "only used when explicitly provided"
             }
           },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
+          "frag_max_n": {
             "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
+            "title": "Frag Max N",
+            "description": "Maximum candidates per fragment.",
+            "default": 100
           },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
+          "overall_max_n": {
             "anyOf": [
               {
                 "type": "integer"
@@ -704,32 +547,243 @@
                 "type": "null"
               }
             ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Overall Max N",
+            "description": "Hard cap on total candidates across all fragments.",
             "bioq_default": {
-              "kind": "auto",
-              "note": "use all available cores"
+              "kind": "unset",
+              "note": "only used when explicitly provided"
             }
+          },
+          "scaffold_top_n": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scaffold Top N",
+            "description": "Number of scaffolds to test per fragment.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "cand_max_n__rplc": {
+            "type": "integer",
+            "title": "Cand Max N  Rplc",
+            "description": "Maximum candidates per replaced scaffold.",
+            "default": 10
+          },
+          "tanimoto_threshold": {
+            "type": "number",
+            "title": "Tanimoto Threshold",
+            "description": "Tanimoto similarity threshold between original and generated SMILES.",
+            "default": 0.5
+          },
+          "qed_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qed Min",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "qed_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qed Max",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "sa_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sa Min",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "sa_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sa Max",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "logp_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logp Min",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "logp_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logp Max",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "mw_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mw Min",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "mw_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mw Max",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "h_donor_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "H Donor Min",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "h_donor_max": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "H Donor Max",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "h_acceptor_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "H Acceptor Min",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "h_acceptor_max": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "H Acceptor Max",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "wo_lipinski": {
+            "type": "boolean",
+            "title": "Wo Lipinski",
+            "description": "Turn off Lipinski's rule of five.  Enable for macrocycles / peptides that naturally violate it.",
+            "default": false
+          },
+          "low_mem": {
+            "type": "boolean",
+            "title": "Low Mem",
+            "description": "Upstream's `-l` flag.",
+            "default": false
           }
         },
         "type": "object",
-        "title": "Body_post_score_api_score_post"
+        "required": [
+          "input_smiles"
+        ],
+        "title": "Body_post_scaffold_hop_api_scaffold_hop_post"
       },
-      "Body_post_score_batch_api_score_batch_post": {
+      "Body_post_scaffold_hop_task_api_tasks_scaffold_hop_post": {
         "properties": {
-          "native": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native"
-          },
-          "native_uri": {
+          "input_smiles_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -738,45 +792,24 @@
                 "type": "null"
               }
             ],
-            "title": "Native Uri"
+            "title": "Input Smiles Uri"
           },
-          "models": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "contentMediaType": "application/octet-stream"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models"
-          },
-          "models_zip_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models Zip Uri",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "name": {
+          "input_smiles": {
             "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
+            "title": "Input Smiles",
+            "description": "Input SMILES string of the target molecule to scaffold-hop."
           },
-          "mapping": {
+          "database": {
+            "type": "string",
+            "enum": [
+              "250mw",
+              "full"
+            ],
+            "title": "Database",
+            "description": "Which scaffold fingerprint DB to search:\n- '250mw': scaffolds with MW ≤ 250 (~tens of MB, fast, low recall)\n- 'full' : ~4M scaffolds (~GB, paper-grade, needs ≥64 GB RAM)",
+            "default": "250mw"
+          },
+          "core_smiles": {
             "anyOf": [
               {
                 "type": "string"
@@ -785,44 +818,20 @@
                 "type": "null"
               }
             ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
+            "title": "Core Smiles",
+            "description": "A core substructure SMILES that must be preserved in the final candidate; if not actually contained in `input_smiles`, ChemBounce raises an error.",
             "bioq_default": {
               "kind": "unset",
               "note": "only used when explicitly provided"
             }
           },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
+          "frag_max_n": {
             "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
+            "title": "Frag Max N",
+            "description": "Maximum candidates per fragment.",
+            "default": 100
           },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
+          "overall_max_n": {
             "anyOf": [
               {
                 "type": "integer"
@@ -831,131 +840,14 @@
                 "type": "null"
               }
             ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
-            "bioq_default": {
-              "kind": "auto",
-              "note": "use all available cores"
-            }
-          },
-          "sort_by": {
-            "type": "string",
-            "title": "Sort By",
-            "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
-            "default": "DockQ"
-          }
-        },
-        "type": "object",
-        "title": "Body_post_score_batch_api_score_batch_post"
-      },
-      "Body_post_score_batch_task_api_tasks_score_batch_post": {
-        "properties": {
-          "native": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native"
-          },
-          "native_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native Uri"
-          },
-          "models": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "contentMediaType": "application/octet-stream"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models"
-          },
-          "models_zip_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models Zip Uri",
+            "title": "Overall Max N",
+            "description": "Hard cap on total candidates across all fragments.",
             "bioq_default": {
               "kind": "unset",
               "note": "only used when explicitly provided"
             }
           },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
-          },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
-            "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
-          },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
+          "scaffold_top_n": {
             "anyOf": [
               {
                 "type": "integer"
@@ -964,124 +856,146 @@
                 "type": "null"
               }
             ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
-            "bioq_default": {
-              "kind": "auto",
-              "note": "use all available cores"
-            }
-          },
-          "sort_by": {
-            "type": "string",
-            "title": "Sort By",
-            "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
-            "default": "DockQ"
-          }
-        },
-        "type": "object",
-        "title": "Body_post_score_batch_task_api_tasks_score_batch_post"
-      },
-      "Body_post_score_task_api_tasks_score_post": {
-        "properties": {
-          "model": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model"
-          },
-          "native": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native"
-          },
-          "model_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model Uri"
-          },
-          "native_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native Uri"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
-          },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
+            "title": "Scaffold Top N",
+            "description": "Number of scaffolds to test per fragment.",
             "bioq_default": {
               "kind": "unset",
               "note": "only used when explicitly provided"
             }
           },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
+          "cand_max_n__rplc": {
             "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
+            "title": "Cand Max N  Rplc",
+            "description": "Maximum candidates per replaced scaffold.",
+            "default": 10
           },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
+          "tanimoto_threshold": {
+            "type": "number",
+            "title": "Tanimoto Threshold",
+            "description": "Tanimoto similarity threshold between original and generated SMILES.",
+            "default": 0.5
           },
-          "n_cpu": {
+          "qed_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qed Min",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "qed_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qed Max",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "sa_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sa Min",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "sa_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sa Max",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "logp_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logp Min",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "logp_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logp Max",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "mw_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mw Min",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "mw_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mw Max",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "h_donor_min": {
             "anyOf": [
               {
                 "type": "integer"
@@ -1090,16 +1004,75 @@
                 "type": "null"
               }
             ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "H Donor Min",
             "bioq_default": {
-              "kind": "auto",
-              "note": "use all available cores"
+              "kind": "unset",
+              "note": "only used when explicitly provided"
             }
+          },
+          "h_donor_max": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "H Donor Max",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "h_acceptor_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "H Acceptor Min",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "h_acceptor_max": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "H Acceptor Max",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "wo_lipinski": {
+            "type": "boolean",
+            "title": "Wo Lipinski",
+            "description": "Turn off Lipinski's rule of five.  Enable for macrocycles / peptides that naturally violate it.",
+            "default": false
+          },
+          "low_mem": {
+            "type": "boolean",
+            "title": "Low Mem",
+            "description": "Upstream's `-l` flag.",
+            "default": false
           }
         },
         "type": "object",
-        "title": "Body_post_score_task_api_tasks_score_post"
+        "required": [
+          "input_smiles"
+        ],
+        "title": "Body_post_scaffold_hop_task_api_tasks_scaffold_hop_post"
       },
       "Body_upload_file_api_uploads_post": {
         "properties": {

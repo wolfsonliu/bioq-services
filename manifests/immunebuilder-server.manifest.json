@@ -1,0 +1,562 @@
+{
+  "service": "immunebuilder",
+  "title": "ImmuneBuilder Server",
+  "version": "0.0.9",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/predict_antibody",
+      "summary": "Predict antibody structure from heavy + light chain sequences.",
+      "description": "Predict antibody structure from heavy + light chain sequences.",
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body_post_predict_antibody_api_predict_antibody_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "prediction",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "numbering_scheme",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "imgt",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "save_all_models",
+          "type": "boolean",
+          "required": false,
+          "description": "Save all 4 ensemble models + error estimates (--to_directory)",
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "no_sidechain_bond_check",
+          "type": "boolean",
+          "required": false,
+          "description": "Skip strained-bond check during refinement (-u flag)",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_threads",
+          "type": "integer",
+          "required": false,
+          "description": "OpenMM refinement threads; >0 forces CPU refinement; -1 uses GPU",
+          "is_file": false,
+          "default": -1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "heavy_sequence",
+          "type": "string",
+          "required": true,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "light_sequence",
+          "type": "string",
+          "required": true,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "predict antibody structure",
+          "curl": "curl -X POST $URL/api/predict_antibody -F heavy_sequence=EVQLVESGGGLVQPGGSLRLSCAASGFNIKDTYIHWVRQAPGKGLEWVARIYPTNGYTRYADSVKGRFTISADTSKNTAYLQMNSLRAEDTAVYYCSRWGGDGFYAMDYWGQGTLVTVSS -F light_sequence=DIQMTQSPSSLSASVGDRVTITCRASQDVNTAVAWYQQKPGKAPKLLIYSASFLYSGVPSRFSGSRSGTDFTLTISSLQPEDFATYYCQQHYTTPPTFGQGTKVEIK -F name=ab1",
+          "python": null,
+          "body": null,
+          "notes": "Output: final_model.pdb + optional rank*_unrefined.pdb + error_estimates.npy"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/predict_nanobody",
+      "summary": "Predict nanobody structure from heavy chain sequence.",
+      "description": "Predict nanobody structure from heavy chain sequence.",
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body_post_predict_nanobody_api_predict_nanobody_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "prediction",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "numbering_scheme",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "imgt",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "save_all_models",
+          "type": "boolean",
+          "required": false,
+          "description": "Save all 4 ensemble models + error estimates (--to_directory)",
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "no_sidechain_bond_check",
+          "type": "boolean",
+          "required": false,
+          "description": "Skip strained-bond check during refinement (-u flag)",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_threads",
+          "type": "integer",
+          "required": false,
+          "description": "OpenMM refinement threads; >0 forces CPU refinement; -1 uses GPU",
+          "is_file": false,
+          "default": -1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "heavy_sequence",
+          "type": "string",
+          "required": true,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "predict nanobody structure",
+          "curl": "curl -X POST $URL/api/predict_nanobody -F heavy_sequence=QVQLVESGGGLVQAGGSLRLSCAASGFTFSSYAMSWVRQAPGKGLEWVSAINSGGGSTYYPDSVKGRFTISRDNAKNTVYLQMNSLKPEDTAVYYCAKDGYGGSFDYWGQGTQVTVSS -F name=nb1",
+          "python": null,
+          "body": null,
+          "notes": null
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/predict_tcr",
+      "summary": "Predict TCR structure from alpha + beta chain sequences.",
+      "description": "Predict TCR structure from alpha + beta chain sequences.",
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body_post_predict_tcr_api_predict_tcr_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "prediction",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "numbering_scheme",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "imgt",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "save_all_models",
+          "type": "boolean",
+          "required": false,
+          "description": "Save all 4 ensemble models + error estimates (--to_directory)",
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "no_sidechain_bond_check",
+          "type": "boolean",
+          "required": false,
+          "description": "Skip strained-bond check during refinement (-u flag)",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_threads",
+          "type": "integer",
+          "required": false,
+          "description": "OpenMM refinement threads; >0 forces CPU refinement; -1 uses GPU",
+          "is_file": false,
+          "default": -1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "alpha_sequence",
+          "type": "string",
+          "required": true,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "beta_sequence",
+          "type": "string",
+          "required": true,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "predict TCR structure",
+          "curl": "curl -X POST $URL/api/predict_tcr -F alpha_sequence=METLLGVSLVILWLQLARVNSQQGEEDPQALSIQEGENATMNCSYKTSINNLQWYRQNSGRGLVHLILIRSNEREKHSGRLRVTLDTSKKSSSLLITASRAADTASYFCAVNFGGGKLIFGQGTELSVKP -F beta_sequence=NAGVTQTPKFQVLKTGQSMTLQCAQDMNHEYMSWYRQDPGMGLRLIHYSVGAGITDQGEVPNGYNVSRSTTEDFPLRLLSAAPSQTSVYFCASSFSTCSANYGYTFGSGTRLTVVEDL -F name=tcr1",
+          "python": null,
+          "body": null,
+          "notes": null
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/predict_antibody",
+      "summary": "Predict antibody structure from heavy + light chain sequences (single atomic task).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body__task_handler_api_tasks_predict_antibody_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "prediction",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "numbering_scheme",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "imgt",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "save_all_models",
+          "type": "boolean",
+          "required": false,
+          "description": "Save all 4 ensemble models + error estimates (--to_directory)",
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "no_sidechain_bond_check",
+          "type": "boolean",
+          "required": false,
+          "description": "Skip strained-bond check during refinement (-u flag)",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_threads",
+          "type": "integer",
+          "required": false,
+          "description": "OpenMM refinement threads; >0 forces CPU refinement; -1 uses GPU",
+          "is_file": false,
+          "default": -1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "heavy_sequence",
+          "type": "string",
+          "required": true,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "light_sequence",
+          "type": "string",
+          "required": true,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/predict_nanobody",
+      "summary": "Predict nanobody structure from heavy chain sequence (single atomic task).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body__task_handler_api_tasks_predict_nanobody_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "prediction",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "numbering_scheme",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "imgt",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "save_all_models",
+          "type": "boolean",
+          "required": false,
+          "description": "Save all 4 ensemble models + error estimates (--to_directory)",
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "no_sidechain_bond_check",
+          "type": "boolean",
+          "required": false,
+          "description": "Skip strained-bond check during refinement (-u flag)",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_threads",
+          "type": "integer",
+          "required": false,
+          "description": "OpenMM refinement threads; >0 forces CPU refinement; -1 uses GPU",
+          "is_file": false,
+          "default": -1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "heavy_sequence",
+          "type": "string",
+          "required": true,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/predict_tcr",
+      "summary": "Predict TCR structure from alpha + beta chain sequences (single atomic task).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body__task_handler_api_tasks_predict_tcr_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "prediction",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "numbering_scheme",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "imgt",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "save_all_models",
+          "type": "boolean",
+          "required": false,
+          "description": "Save all 4 ensemble models + error estimates (--to_directory)",
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "no_sidechain_bond_check",
+          "type": "boolean",
+          "required": false,
+          "description": "Skip strained-bond check during refinement (-u flag)",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_threads",
+          "type": "integer",
+          "required": false,
+          "description": "OpenMM refinement threads; >0 forces CPU refinement; -1 uses GPU",
+          "is_file": false,
+          "default": -1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "alpha_sequence",
+          "type": "string",
+          "required": true,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "beta_sequence",
+          "type": "string",
+          "required": true,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        }
+      ],
+      "examples": []
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/immunebuilder_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "tool_outputs": {
+      "final_model": "output/final_model.pdb",
+      "unrefined_models": "output/rank{0-3}_unrefined.pdb (save_all_models=True)",
+      "error_estimates": "output/error_estimates.npy (save_all_models=True)"
+    },
+    "predictors": {
+      "antibody": "ABodyBuilder2 — H + L chains",
+      "nanobody": "NanoBodyBuilder2 — H chain only",
+      "tcr": "TCRBuilder2 — A + B chains"
+    },
+    "numbering_schemes": [
+      "imgt",
+      "chothia",
+      "kabat",
+      "aho",
+      "wolfguy",
+      "martin",
+      "raw"
+    ],
+    "paper_reference": "DOI:10.1038/s42003-023-04927-7"
+  },
+  "openapi_url": "/openapi.json"
+}

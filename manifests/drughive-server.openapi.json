@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "DockQ Server",
-    "version": "0.0.13"
+    "title": "DrugHIVE Server",
+    "version": "0.0.7"
   },
   "paths": {
     "/healthz": {
@@ -20,26 +20,6 @@
                   },
                   "type": "object",
                   "title": "Response Health Healthz Get"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/healthz/detail": {
-      "get": {
-        "summary": "Health Detail",
-        "operationId": "health_detail_healthz_detail_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Health Detail Healthz Detail Get"
                 }
               }
             }
@@ -372,16 +352,37 @@
         }
       }
     },
-    "/api/score": {
+    "/healthz/detail": {
+      "get": {
+        "summary": "Healthz Detail",
+        "description": "Weights + QVina2 probe.  Does not raise on missing pieces so the\nservice can boot before NAS is mounted; agents see the status.",
+        "operationId": "healthz_detail_healthz_detail_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Healthz Detail Healthz Detail Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/generate": {
       "post": {
-        "summary": "Post Score",
-        "description": "Score a single (model, native) pair via DockQ; returns DockQ's JSON output.",
-        "operationId": "post_score_api_score_post",
+        "summary": "Post Generate",
+        "description": "De novo ligand generation.  Returns a JobInfo; poll until completed.",
+        "operationId": "post_generate_api_generate_post",
         "requestBody": {
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_api_score_post"
+                "$ref": "#/components/schemas/Body_post_generate_api_generate_post"
               }
             }
           }
@@ -410,16 +411,16 @@
         }
       }
     },
-    "/api/score_batch": {
+    "/api/generate_spatial": {
       "post": {
-        "summary": "Post Score Batch",
-        "description": "Score N candidate models against 1 reference native.\n\nModels come either as repeated `models` uploads OR as a single zip\nreferenced by `models_zip_uri` (oss://, file://, job://, http(s)://) — the\ngateway uses the zip form since it can't multipart-upload the `models` list.\n\nPer-model JSONs land in `output/per_model/<basename>.json`; the sorted\nsummary is `output/scores.csv`. Models that errored show up in\n`output/failed.csv` (job still completes successfully if at least one\nmodel produced a valid score).",
-        "operationId": "post_score_batch_api_score_batch_post",
+        "summary": "Post Generate Spatial",
+        "description": "Substructure modification / scaffold hopping.  Provide EITHER an\n``substruct_modify`` SDF (upload/URI) OR a ``substruct_modify_pattern``\nSMILES/SMARTS string in params.",
+        "operationId": "post_generate_spatial_api_generate_spatial_post",
         "requestBody": {
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_batch_api_score_batch_post"
+                "$ref": "#/components/schemas/Body_post_generate_spatial_api_generate_spatial_post"
               }
             }
           }
@@ -448,11 +449,48 @@
         }
       }
     },
-    "/api/tasks/score": {
+    "/api/optimize": {
       "post": {
-        "summary": "Post Score Task",
-        "description": "Score a single (model, native) pair as a single atomic task.\n\nBlocks until DockQ completes.  For the submit/poll interface, use POST /api/score.",
-        "operationId": "post_score_task_api_tasks_score_post",
+        "summary": "Post Optimize",
+        "description": "Multi-cycle QVina2 property optimization.  Long-running: default\nparams take 4-8 h — prefer /api/tasks/optimize (async task mode).",
+        "operationId": "post_optimize_api_optimize_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_optimize_api_optimize_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/generate": {
+      "post": {
+        "summary": "De novo ligand generation (single atomic task).",
+        "operationId": "post_generate_task_api_tasks_generate_post",
         "parameters": [
           {
             "name": "X-Bioagent-Job-Id",
@@ -491,7 +529,7 @@
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_task_api_tasks_score_post"
+                "$ref": "#/components/schemas/Body_post_generate_task_api_tasks_generate_post"
               }
             }
           }
@@ -520,11 +558,10 @@
         }
       }
     },
-    "/api/tasks/score_batch": {
+    "/api/tasks/generate_spatial": {
       "post": {
-        "summary": "Post Score Batch Task",
-        "description": "Score N candidate models against 1 native as a single atomic task.\n\nModels come as repeated `models` uploads OR a single `models_zip_uri`\nzip (used by the gateway, which can't multipart-upload the list).",
-        "operationId": "post_score_batch_task_api_tasks_score_batch_post",
+        "summary": "Substructure modification / scaffold hopping (single atomic task).",
+        "operationId": "post_generate_spatial_task_api_tasks_generate_spatial_post",
         "parameters": [
           {
             "name": "X-Bioagent-Job-Id",
@@ -563,7 +600,78 @@
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_batch_task_api_tasks_score_batch_post"
+                "$ref": "#/components/schemas/Body_post_generate_spatial_task_api_tasks_generate_spatial_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/optimize": {
+      "post": {
+        "summary": "Multi-cycle QVina2 property optimization (single atomic task; long-running).",
+        "operationId": "post_optimize_task_api_tasks_optimize_post",
+        "parameters": [
+          {
+            "name": "X-Bioagent-Job-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Bioagent-Job-Id"
+            }
+          },
+          {
+            "name": "X-Fc-Async-Task-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fc-Async-Task-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_optimize_task_api_tasks_optimize_post"
               }
             }
           }
@@ -595,9 +703,9 @@
   },
   "components": {
     "schemas": {
-      "Body_post_score_api_score_post": {
+      "Body_post_generate_api_generate_post": {
         "properties": {
-          "model": {
+          "target": {
             "anyOf": [
               {
                 "type": "string",
@@ -607,9 +715,20 @@
                 "type": "null"
               }
             ],
-            "title": "Model"
+            "title": "Target"
           },
-          "native": {
+          "target_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Uri"
+          },
+          "ligand": {
             "anyOf": [
               {
                 "type": "string",
@@ -619,9 +738,9 @@
                 "type": "null"
               }
             ],
-            "title": "Native"
+            "title": "Ligand"
           },
-          "model_uri": {
+          "ligand_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -630,26 +749,19 @@
                 "type": "null"
               }
             ],
-            "title": "Model Uri"
+            "title": "Ligand Uri"
           },
-          "native_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native Uri"
-          },
-          "name": {
+          "pdb_id": {
             "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
+            "title": "Pdb Id",
+            "default": "target"
           },
-          "mapping": {
+          "n_samples": {
+            "type": "integer",
+            "title": "N Samples",
+            "default": 10
+          },
+          "zbetas": {
             "anyOf": [
               {
                 "type": "string"
@@ -658,66 +770,67 @@
                 "type": "null"
               }
             ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
-            "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
-          },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Zbetas",
+            "description": "Prior↔posterior interpolation per latent resolution.  List of length 4 or scalar (broadcast to length 4).",
             "bioq_default": {
               "kind": "auto",
-              "note": "use all available cores"
+              "note": "use the tool's default when omitted"
+            }
+          },
+          "temps": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temps",
+            "description": "Sampling temperature per latent resolution.  List of length 4 or scalar (broadcast to length 4).",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "use the tool's default when omitted"
+            }
+          },
+          "random_rotate": {
+            "type": "boolean",
+            "title": "Random Rotate",
+            "default": true
+          },
+          "random_translate": {
+            "type": "boolean",
+            "title": "Random Translate",
+            "default": false
+          },
+          "ffopt_mols": {
+            "type": "boolean",
+            "title": "Ffopt Mols",
+            "description": "RDKit FF post-processing on generated molecules.",
+            "default": true
+          },
+          "mol_filter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mol Filter",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "use the tool's default when omitted"
             }
           }
         },
         "type": "object",
-        "title": "Body_post_score_api_score_post"
+        "title": "Body_post_generate_api_generate_post"
       },
-      "Body_post_score_batch_api_score_batch_post": {
+      "Body_post_generate_spatial_api_generate_spatial_post": {
         "properties": {
-          "native": {
+          "target": {
             "anyOf": [
               {
                 "type": "string",
@@ -727,9 +840,9 @@
                 "type": "null"
               }
             ],
-            "title": "Native"
+            "title": "Target"
           },
-          "native_uri": {
+          "target_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -738,24 +851,21 @@
                 "type": "null"
               }
             ],
-            "title": "Native Uri"
+            "title": "Target Uri"
           },
-          "models": {
+          "ligand": {
             "anyOf": [
               {
-                "items": {
-                  "type": "string",
-                  "contentMediaType": "application/octet-stream"
-                },
-                "type": "array"
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Models"
+            "title": "Ligand"
           },
-          "models_zip_uri": {
+          "ligand_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -764,19 +874,42 @@
                 "type": "null"
               }
             ],
-            "title": "Models Zip Uri",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
+            "title": "Ligand Uri"
           },
-          "name": {
+          "substruct_modify": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Substruct Modify"
+          },
+          "substruct_modify_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Substruct Modify Uri"
+          },
+          "pdb_id": {
             "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
+            "title": "Pdb Id",
+            "default": "target"
           },
-          "mapping": {
+          "n_samples": {
+            "type": "integer",
+            "title": "N Samples",
+            "default": 10
+          },
+          "zbetas": {
             "anyOf": [
               {
                 "type": "string"
@@ -785,72 +918,81 @@
                 "type": "null"
               }
             ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
-            "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
-          },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Zbetas",
             "bioq_default": {
               "kind": "auto",
-              "note": "use all available cores"
+              "note": "use the tool's default when omitted"
             }
           },
-          "sort_by": {
-            "type": "string",
-            "title": "Sort By",
-            "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
-            "default": "DockQ"
+          "temps": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temps",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "use the tool's default when omitted"
+            }
+          },
+          "random_rotate": {
+            "type": "boolean",
+            "title": "Random Rotate",
+            "default": true
+          },
+          "random_translate": {
+            "type": "boolean",
+            "title": "Random Translate",
+            "default": false
+          },
+          "ffopt_mols": {
+            "type": "boolean",
+            "title": "Ffopt Mols",
+            "description": "RDKit FF post-processing on generated molecules.",
+            "default": true
+          },
+          "mol_filter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mol Filter",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "use the tool's default when omitted"
+            }
+          },
+          "substruct_modify_pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Substruct Modify Pattern",
+            "description": "SMILES / SMARTS for the substructure to preserve.  Provide EITHER this field OR upload `substruct_modify` file (and matching `substruct_modify_uri`), never both.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
           }
         },
         "type": "object",
-        "title": "Body_post_score_batch_api_score_batch_post"
+        "title": "Body_post_generate_spatial_api_generate_spatial_post"
       },
-      "Body_post_score_batch_task_api_tasks_score_batch_post": {
+      "Body_post_generate_spatial_task_api_tasks_generate_spatial_post": {
         "properties": {
-          "native": {
+          "target": {
             "anyOf": [
               {
                 "type": "string",
@@ -860,9 +1002,9 @@
                 "type": "null"
               }
             ],
-            "title": "Native"
+            "title": "Target"
           },
-          "native_uri": {
+          "target_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -871,24 +1013,21 @@
                 "type": "null"
               }
             ],
-            "title": "Native Uri"
+            "title": "Target Uri"
           },
-          "models": {
+          "ligand": {
             "anyOf": [
               {
-                "items": {
-                  "type": "string",
-                  "contentMediaType": "application/octet-stream"
-                },
-                "type": "array"
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Models"
+            "title": "Ligand"
           },
-          "models_zip_uri": {
+          "ligand_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -897,19 +1036,42 @@
                 "type": "null"
               }
             ],
-            "title": "Models Zip Uri",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
+            "title": "Ligand Uri"
           },
-          "name": {
+          "substruct_modify": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Substruct Modify"
+          },
+          "substruct_modify_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Substruct Modify Uri"
+          },
+          "pdb_id": {
             "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
+            "title": "Pdb Id",
+            "default": "target"
           },
-          "mapping": {
+          "n_samples": {
+            "type": "integer",
+            "title": "N Samples",
+            "default": 10
+          },
+          "zbetas": {
             "anyOf": [
               {
                 "type": "string"
@@ -918,72 +1080,81 @@
                 "type": "null"
               }
             ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
-            "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
-          },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Zbetas",
             "bioq_default": {
               "kind": "auto",
-              "note": "use all available cores"
+              "note": "use the tool's default when omitted"
             }
           },
-          "sort_by": {
-            "type": "string",
-            "title": "Sort By",
-            "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
-            "default": "DockQ"
+          "temps": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temps",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "use the tool's default when omitted"
+            }
+          },
+          "random_rotate": {
+            "type": "boolean",
+            "title": "Random Rotate",
+            "default": true
+          },
+          "random_translate": {
+            "type": "boolean",
+            "title": "Random Translate",
+            "default": false
+          },
+          "ffopt_mols": {
+            "type": "boolean",
+            "title": "Ffopt Mols",
+            "description": "RDKit FF post-processing on generated molecules.",
+            "default": true
+          },
+          "mol_filter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mol Filter",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "use the tool's default when omitted"
+            }
+          },
+          "substruct_modify_pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Substruct Modify Pattern",
+            "description": "SMILES / SMARTS for the substructure to preserve.  Provide EITHER this field OR upload `substruct_modify` file (and matching `substruct_modify_uri`), never both.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
           }
         },
         "type": "object",
-        "title": "Body_post_score_batch_task_api_tasks_score_batch_post"
+        "title": "Body_post_generate_spatial_task_api_tasks_generate_spatial_post"
       },
-      "Body_post_score_task_api_tasks_score_post": {
+      "Body_post_generate_task_api_tasks_generate_post": {
         "properties": {
-          "model": {
+          "target": {
             "anyOf": [
               {
                 "type": "string",
@@ -993,9 +1164,20 @@
                 "type": "null"
               }
             ],
-            "title": "Model"
+            "title": "Target"
           },
-          "native": {
+          "target_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Uri"
+          },
+          "ligand": {
             "anyOf": [
               {
                 "type": "string",
@@ -1005,9 +1187,9 @@
                 "type": "null"
               }
             ],
-            "title": "Native"
+            "title": "Ligand"
           },
-          "model_uri": {
+          "ligand_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -1016,26 +1198,19 @@
                 "type": "null"
               }
             ],
-            "title": "Model Uri"
+            "title": "Ligand Uri"
           },
-          "native_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native Uri"
-          },
-          "name": {
+          "pdb_id": {
             "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
+            "title": "Pdb Id",
+            "default": "target"
           },
-          "mapping": {
+          "n_samples": {
+            "type": "integer",
+            "title": "N Samples",
+            "default": 10
+          },
+          "zbetas": {
             "anyOf": [
               {
                 "type": "string"
@@ -1044,62 +1219,477 @@
                 "type": "null"
               }
             ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
-            "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
-          },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Zbetas",
+            "description": "Prior↔posterior interpolation per latent resolution.  List of length 4 or scalar (broadcast to length 4).",
             "bioq_default": {
               "kind": "auto",
-              "note": "use all available cores"
+              "note": "use the tool's default when omitted"
+            }
+          },
+          "temps": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temps",
+            "description": "Sampling temperature per latent resolution.  List of length 4 or scalar (broadcast to length 4).",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "use the tool's default when omitted"
+            }
+          },
+          "random_rotate": {
+            "type": "boolean",
+            "title": "Random Rotate",
+            "default": true
+          },
+          "random_translate": {
+            "type": "boolean",
+            "title": "Random Translate",
+            "default": false
+          },
+          "ffopt_mols": {
+            "type": "boolean",
+            "title": "Ffopt Mols",
+            "description": "RDKit FF post-processing on generated molecules.",
+            "default": true
+          },
+          "mol_filter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mol Filter",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "use the tool's default when omitted"
             }
           }
         },
         "type": "object",
-        "title": "Body_post_score_task_api_tasks_score_post"
+        "title": "Body_post_generate_task_api_tasks_generate_post"
+      },
+      "Body_post_optimize_api_optimize_post": {
+        "properties": {
+          "target": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "target_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Uri"
+          },
+          "ligand": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ligand"
+          },
+          "ligand_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ligand Uri"
+          },
+          "target_pdbqt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Pdbqt"
+          },
+          "target_pdbqt_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Pdbqt Uri"
+          },
+          "pdb_id": {
+            "type": "string",
+            "title": "Pdb Id",
+            "default": "target"
+          },
+          "key_opt": {
+            "type": "string",
+            "enum": [
+              "affinity_qvina",
+              "qed",
+              "alogp",
+              "sa"
+            ],
+            "title": "Key Opt",
+            "description": "Optimization target: affinity_qvina | qed | alogp | sa",
+            "default": "affinity_qvina"
+          },
+          "opt_increase": {
+            "type": "boolean",
+            "title": "Opt Increase",
+            "description": "True = maximize; False = minimize (default matches affinity_qvina where lower kcal/mol is better).",
+            "default": false
+          },
+          "save_name": {
+            "type": "string",
+            "title": "Save Name",
+            "default": "optimization_run"
+          },
+          "n_cycles": {
+            "type": "integer",
+            "title": "N Cycles",
+            "default": 8
+          },
+          "n_samples_initial": {
+            "type": "integer",
+            "title": "N Samples Initial",
+            "default": 1000
+          },
+          "n_samples": {
+            "type": "integer",
+            "title": "N Samples",
+            "description": "Children per parent per cycle.",
+            "default": 20
+          },
+          "n_best_parents": {
+            "type": "integer",
+            "title": "N Best Parents",
+            "default": 20
+          },
+          "affinity_quantile_thresh": {
+            "type": "number",
+            "title": "Affinity Quantile Thresh",
+            "default": 0.5
+          },
+          "cluster_parents": {
+            "type": "boolean",
+            "title": "Cluster Parents",
+            "default": true
+          },
+          "random_rotate": {
+            "type": "boolean",
+            "title": "Random Rotate",
+            "default": true
+          },
+          "random_translate": {
+            "type": "boolean",
+            "title": "Random Translate",
+            "default": false
+          },
+          "zbetas_initial": {
+            "type": "number",
+            "title": "Zbetas Initial",
+            "default": 0.3
+          },
+          "temps_initial": {
+            "type": "number",
+            "title": "Temps Initial",
+            "default": 1.0
+          },
+          "zbetas": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zbetas",
+            "description": "Per-cycle zbetas — list of length n_cycles, or scalar (broadcast to length n_cycles).",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "use the tool's default when omitted"
+            }
+          },
+          "temps": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temps",
+            "description": "Per-cycle temperature — list of length n_cycles, or scalar (broadcast to length n_cycles).",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "use the tool's default when omitted"
+            }
+          },
+          "protonate": {
+            "type": "boolean",
+            "title": "Protonate",
+            "description": "obabel protonation before QVina.",
+            "default": true
+          },
+          "mol_filter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mol Filter",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "use the tool's default when omitted"
+            }
+          }
+        },
+        "type": "object",
+        "title": "Body_post_optimize_api_optimize_post"
+      },
+      "Body_post_optimize_task_api_tasks_optimize_post": {
+        "properties": {
+          "target": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "target_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Uri"
+          },
+          "ligand": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ligand"
+          },
+          "ligand_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ligand Uri"
+          },
+          "target_pdbqt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Pdbqt"
+          },
+          "target_pdbqt_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Pdbqt Uri"
+          },
+          "pdb_id": {
+            "type": "string",
+            "title": "Pdb Id",
+            "default": "target"
+          },
+          "key_opt": {
+            "type": "string",
+            "enum": [
+              "affinity_qvina",
+              "qed",
+              "alogp",
+              "sa"
+            ],
+            "title": "Key Opt",
+            "description": "Optimization target: affinity_qvina | qed | alogp | sa",
+            "default": "affinity_qvina"
+          },
+          "opt_increase": {
+            "type": "boolean",
+            "title": "Opt Increase",
+            "description": "True = maximize; False = minimize (default matches affinity_qvina where lower kcal/mol is better).",
+            "default": false
+          },
+          "save_name": {
+            "type": "string",
+            "title": "Save Name",
+            "default": "optimization_run"
+          },
+          "n_cycles": {
+            "type": "integer",
+            "title": "N Cycles",
+            "default": 8
+          },
+          "n_samples_initial": {
+            "type": "integer",
+            "title": "N Samples Initial",
+            "default": 1000
+          },
+          "n_samples": {
+            "type": "integer",
+            "title": "N Samples",
+            "description": "Children per parent per cycle.",
+            "default": 20
+          },
+          "n_best_parents": {
+            "type": "integer",
+            "title": "N Best Parents",
+            "default": 20
+          },
+          "affinity_quantile_thresh": {
+            "type": "number",
+            "title": "Affinity Quantile Thresh",
+            "default": 0.5
+          },
+          "cluster_parents": {
+            "type": "boolean",
+            "title": "Cluster Parents",
+            "default": true
+          },
+          "random_rotate": {
+            "type": "boolean",
+            "title": "Random Rotate",
+            "default": true
+          },
+          "random_translate": {
+            "type": "boolean",
+            "title": "Random Translate",
+            "default": false
+          },
+          "zbetas_initial": {
+            "type": "number",
+            "title": "Zbetas Initial",
+            "default": 0.3
+          },
+          "temps_initial": {
+            "type": "number",
+            "title": "Temps Initial",
+            "default": 1.0
+          },
+          "zbetas": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zbetas",
+            "description": "Per-cycle zbetas — list of length n_cycles, or scalar (broadcast to length n_cycles).",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "use the tool's default when omitted"
+            }
+          },
+          "temps": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temps",
+            "description": "Per-cycle temperature — list of length n_cycles, or scalar (broadcast to length n_cycles).",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "use the tool's default when omitted"
+            }
+          },
+          "protonate": {
+            "type": "boolean",
+            "title": "Protonate",
+            "description": "obabel protonation before QVina.",
+            "default": true
+          },
+          "mol_filter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mol Filter",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "use the tool's default when omitted"
+            }
+          }
+        },
+        "type": "object",
+        "title": "Body_post_optimize_task_api_tasks_optimize_post"
       },
       "Body_upload_file_api_uploads_post": {
         "properties": {

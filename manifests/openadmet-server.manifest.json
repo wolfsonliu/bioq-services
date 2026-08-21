@@ -1,0 +1,567 @@
+{
+  "service": "openadmet",
+  "title": "OpenADMET Server",
+  "version": "0.0.8",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/compare",
+      "summary": "Post-hoc comparison of pre-trained models (Mode A) or their stats JSON (Mode B).",
+      "description": "Post-hoc comparison of pre-trained models (Mode A) or their stats JSON (Mode B).",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_compare_api_compare_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "model_stats_files",
+          "type": "array[file]",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": [],
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model_names",
+          "type": "string",
+          "required": false,
+          "description": "Pre-registered model names on NAS (Mode A).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "label_types",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "labels",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "task_names",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "mt_id",
+          "type": "string",
+          "required": false,
+          "description": "Multitask identifier — required when comparing multitask models.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "report",
+          "type": "boolean",
+          "required": false,
+          "description": "Generate a PDF report in addition to the JSON stats.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "Compare 2 pre-registered CYP models by biotarget label",
+          "curl": "curl -X POST $URL/api/compare \\\n    -F 'model_names=cyp1a2-cyp2d6-cyp3a4-cyp2c9-chemeleon-v1' \\\n    -F 'model_names=cyp1a2-cyp2d6-cyp3a4-cyp3c9-chemeleon-baseline' \\\n    -F 'label_types=biotarget' -F 'label_types=biotarget' \\\n    -F 'mt_id=CYP3A4'",
+          "python": null,
+          "body": null,
+          "notes": "Mode A — model_dir-based comparison with biotarget labels."
+        },
+        {
+          "title": "Compare via pre-computed stats JSON",
+          "curl": "curl -X POST $URL/api/compare \\\n    -F 'model_stats_files=@stats_a.json' \\\n    -F 'model_stats_files=@stats_b.json' \\\n    -F 'labels=modelA' -F 'labels=modelB' \\\n    -F 'task_names=pchembl_value_mean' \\\n    -F 'task_names=pchembl_value_mean' \\\n    -F 'report=true'",
+          "python": null,
+          "body": null,
+          "notes": "Mode B — JSON stats + PDF report."
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/models",
+      "summary": "List NAS-registered anvil model_dirs with their metadata.",
+      "description": "List NAS-registered anvil model_dirs with their metadata.",
+      "operation_id": null,
+      "request_content_type": null,
+      "request_schema_ref": null,
+      "response_schema_ref": null,
+      "request_fields": [],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/predict",
+      "summary": "Run one or more ADMET predictions against pre-registered models.",
+      "description": "Run one or more ADMET predictions against pre-registered models.\n\nMultiple `model_names` may share the same input_col (single subprocess)\nor differ (split into per-input-col groups; results merged into\noutput/predictions.csv).",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_predict_api_predict_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_csv",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_sdf",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_smiles",
+          "type": "string",
+          "required": false,
+          "description": "Inline SMILES: comma- or newline-separated. Up to 200 molecules for quick probing. For larger batches use `input_csv` upload or URI.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "input_csv_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI (oss://, file://, http(s)://, job://) pointing to an input CSV.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "input_sdf_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI pointing to an input SDF.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "input_col",
+          "type": "string",
+          "required": false,
+          "description": "Column name in the input CSV containing SMILES. If omitted, the server derives it from the first `model_names` entry's recipe_components/data.yaml::input_col (auto-derive).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "model_names",
+          "type": "string",
+          "required": true,
+          "description": "Pre-registered model names on NAS. GET /api/models to enumerate. All requested models will be applied to the same input; the output CSV has OADMET_PRED_* columns per (model, task).",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "accelerator",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "gpu",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "aq_fxns",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "beta",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "best_y",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "xi",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "debug",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "Inline SMILES against a single model",
+          "curl": "curl -X POST $URL/api/predict \\\n    -F 'input_smiles=CCCCC1=NC(=C(N1CC2=CC=C(C=C2)C3=CC=CC=C3C4=NNN=N4)CO)Cl,CC(=O)OC1=CC=CC=C1C(=O)O' \\\n    -F 'model_names=herg-chemeleon-baseline'",
+          "python": null,
+          "body": null,
+          "notes": "Predict hERG pIC50 for 2 SMILES using the pre-staged model."
+        },
+        {
+          "title": "CSV upload against multiple CYP + hERG models",
+          "curl": "curl -X POST $URL/api/predict \\\n    -F 'input_csv=@my_compounds.csv' \\\n    -F 'model_names=herg-chemeleon-baseline' \\\n    -F 'model_names=cyp1a2-cyp2d6-cyp3a4-cyp2c9-chemeleon-v1'",
+          "python": null,
+          "body": null,
+          "notes": "Multiple `-F 'model_names=X'` accumulate into a list. Server auto-derives input_col from the first model's data.yaml."
+        },
+        {
+          "title": "Large batch via OSS URI + acquisition scoring",
+          "curl": "curl -X POST $URL/api/predict \\\n    -F 'input_csv_uri=oss://my-bucket/screening/lib.csv' \\\n    -F 'model_names=cyp1a2-cyp2d6-cyp3a4-cyp2c9-chemeleon-v1' \\\n    -F 'aq_fxns=ucb' -F 'beta=1.5' \\\n    -F 'aq_fxns=ei'  -F 'xi=0.01' -F 'best_y=6.0'",
+          "python": null,
+          "body": null,
+          "notes": "URI fallback for GB-scale CSVs. UCB β=1.5 + EI ξ=0.01 (best_y=6.0)."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/compare",
+      "summary": "Post-hoc comparison of pre-trained models (Mode A) or their stats JSON (Mode B; single atomic task).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_compare_task_api_tasks_compare_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "model_stats_files",
+          "type": "array[file]",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": [],
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model_names",
+          "type": "string",
+          "required": false,
+          "description": "Pre-registered model names on NAS (Mode A).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "label_types",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "labels",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "task_names",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "mt_id",
+          "type": "string",
+          "required": false,
+          "description": "Multitask identifier — required when comparing multitask models.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "report",
+          "type": "boolean",
+          "required": false,
+          "description": "Generate a PDF report in addition to the JSON stats.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/predict",
+      "summary": "Predict as a single atomic task (blocks until pipeline completion).",
+      "description": "Predict as a single atomic task (blocks until pipeline completion).",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_predict_task_api_tasks_predict_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_csv",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_sdf",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_smiles",
+          "type": "string",
+          "required": false,
+          "description": "Inline SMILES: comma- or newline-separated. Up to 200 molecules for quick probing. For larger batches use `input_csv` upload or URI.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "input_csv_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI (oss://, file://, http(s)://, job://) pointing to an input CSV.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "input_sdf_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI pointing to an input SDF.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "input_col",
+          "type": "string",
+          "required": false,
+          "description": "Column name in the input CSV containing SMILES. If omitted, the server derives it from the first `model_names` entry's recipe_components/data.yaml::input_col (auto-derive).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "model_names",
+          "type": "string",
+          "required": true,
+          "description": "Pre-registered model names on NAS. GET /api/models to enumerate. All requested models will be applied to the same input; the output CSV has OADMET_PRED_* columns per (model, task).",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "accelerator",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "gpu",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "aq_fxns",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "beta",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "best_y",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "xi",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "debug",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": []
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/openadmet_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "model": {
+      "name": "OpenADMET Models",
+      "method": "General-purpose ADMET (Absorption / Distribution / Metabolism / Excretion / Toxicity) property prediction toolbox. Multi-model registry — each `model_name` is a separately-trained anvil model_dir.",
+      "task": "ADMET property prediction (multi-model, multi-task)",
+      "license_note": "MIT (upstream OpenADMET / OMSF).",
+      "output_format": "predict: CSV with OADMET_PRED_<tag>_<taskname>, OADMET_STD_<tag>_<taskname> per (model, task); compare: comparison_stats.json + PNG plots + optional PDF."
+    },
+    "tool_outputs": {
+      "predict": "output/predictions.csv",
+      "compare": "output/comparison_stats.json (+ output/plots/*.png, output/report.pdf if requested)"
+    },
+    "input_uri_schemes": {
+      "input_csv_uri": "oss:// | file:// | http(s):// | job://",
+      "input_sdf_uri": "oss:// | file:// | http(s):// | job://",
+      "upload": "multipart/form-data (input_csv or input_sdf)"
+    },
+    "model_registry": {
+      "endpoint": "GET /api/models",
+      "current_count": 0,
+      "models": []
+    },
+    "config_tips": {
+      "accelerator": "'gpu' (default) is required for chemprop/TabPFN/pairwise NN models. 'cpu' works for sklearn/xgboost/lgbm/catboost/SVM/RF.",
+      "input_col": "Omit to auto-derive from the first model's data.yaml. Only set explicitly if you want to override for a custom input CSV.",
+      "aq_fxns": "Active-learning acquisition. UCB needs `beta`; EI/PI each need matching `best_y` and `xi`."
+    }
+  },
+  "openapi_url": "/openapi.json"
+}

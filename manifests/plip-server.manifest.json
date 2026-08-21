@@ -1,0 +1,442 @@
+{
+  "service": "plip",
+  "title": "PLIP Server",
+  "version": "0.0.2",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/profile",
+      "summary": "Profile non-covalent interactions in one PDB complex.",
+      "description": "Profile non-covalent interactions in one PDB complex.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_profile_api_profile_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_pdb",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_pdb_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "mode",
+          "type": "string",
+          "required": false,
+          "description": "Detection mode: default (auto ligand detection) / peptide (--peptides, inter-chain) / intra (--intra, intra-chain) / dnareceptor (treat nucleic acids as receptor).",
+          "is_file": false,
+          "default": "default",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "peptide_chains",
+          "type": "string",
+          "required": false,
+          "description": "mode=peptide: chain IDs treated as peptide ligands (--peptides A B).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "intra_chain",
+          "type": "string",
+          "required": false,
+          "description": "mode=intra: single chain to analyze for intra-chain contacts (--intra A).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "report_formats",
+          "type": "string",
+          "required": false,
+          "description": "Report formats to emit: any non-empty subset of {xml, txt}.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        },
+        {
+          "name": "pymol_session",
+          "type": "boolean",
+          "required": false,
+          "description": "Also write a PyMOL session (.pse) per binding site (-y).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "render_images",
+          "type": "boolean",
+          "required": false,
+          "description": "Also render ray-traced images (.png) per binding site (-p).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Report basename stem (output/<name>.xml / .txt).",
+          "is_file": false,
+          "default": "report",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "breakcomposite",
+          "type": "boolean",
+          "required": false,
+          "description": "Do not combine covalently-bound ligand fragments (--breakcomposite).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "altlocation",
+          "type": "boolean",
+          "required": false,
+          "description": "Keep alternate atom locations (--altlocation).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "nofix",
+          "type": "boolean",
+          "required": false,
+          "description": "Turn off automatic PDB fixing (--nofix).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "keepmod",
+          "type": "boolean",
+          "required": false,
+          "description": "Keep modified residues as ligands (--keepmod).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "nohydro",
+          "type": "boolean",
+          "required": false,
+          "description": "Do not add polar hydrogens (structure already protonated) (--nohydro).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model",
+          "type": "integer",
+          "required": false,
+          "description": "Model number for multi-model structures (--model).",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "maxthreads",
+          "type": "integer",
+          "required": false,
+          "description": "Override PLIP_THREADS for this call (--maxthreads).",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use all available cores"
+        }
+      ],
+      "examples": [
+        {
+          "title": "default ligand-interaction profile (XML + TXT)",
+          "curl": "curl -X POST $URL/api/profile -F input_pdb=@complex.pdb -F name=complex",
+          "python": null,
+          "body": null,
+          "notes": "Results in output/complex.xml and output/complex.txt."
+        },
+        {
+          "title": "protein-peptide (inter-chain) mode with PyMOL session",
+          "curl": "curl -X POST $URL/api/profile -F input_pdb=@complex.pdb -F mode=peptide -F peptide_chains=I -F pymol_session=true -F name=complex",
+          "python": null,
+          "body": null,
+          "notes": "Chain I is treated as a peptide ligand; also writes .pse per binding site."
+        },
+        {
+          "title": "re-use a docked pose from a prior job",
+          "curl": "curl -X POST $URL/api/profile -F input_pdb_uri=job://<dock_job_id>/output/pose_1.pdb -F name=pose1",
+          "python": null,
+          "body": null,
+          "notes": "`input_pdb_uri` accepts job:// / oss:// / file:// / http(s)://."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/profile",
+      "summary": "profile as a single atomic task (blocks until completion).",
+      "description": "profile as a single atomic task (blocks until completion).",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_profile_task_api_tasks_profile_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_pdb",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_pdb_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "mode",
+          "type": "string",
+          "required": false,
+          "description": "Detection mode: default (auto ligand detection) / peptide (--peptides, inter-chain) / intra (--intra, intra-chain) / dnareceptor (treat nucleic acids as receptor).",
+          "is_file": false,
+          "default": "default",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "peptide_chains",
+          "type": "string",
+          "required": false,
+          "description": "mode=peptide: chain IDs treated as peptide ligands (--peptides A B).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "empty when omitted"
+        },
+        {
+          "name": "intra_chain",
+          "type": "string",
+          "required": false,
+          "description": "mode=intra: single chain to analyze for intra-chain contacts (--intra A).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "report_formats",
+          "type": "string",
+          "required": false,
+          "description": "Report formats to emit: any non-empty subset of {xml, txt}.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        },
+        {
+          "name": "pymol_session",
+          "type": "boolean",
+          "required": false,
+          "description": "Also write a PyMOL session (.pse) per binding site (-y).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "render_images",
+          "type": "boolean",
+          "required": false,
+          "description": "Also render ray-traced images (.png) per binding site (-p).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Report basename stem (output/<name>.xml / .txt).",
+          "is_file": false,
+          "default": "report",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "breakcomposite",
+          "type": "boolean",
+          "required": false,
+          "description": "Do not combine covalently-bound ligand fragments (--breakcomposite).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "altlocation",
+          "type": "boolean",
+          "required": false,
+          "description": "Keep alternate atom locations (--altlocation).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "nofix",
+          "type": "boolean",
+          "required": false,
+          "description": "Turn off automatic PDB fixing (--nofix).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "keepmod",
+          "type": "boolean",
+          "required": false,
+          "description": "Keep modified residues as ligands (--keepmod).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "nohydro",
+          "type": "boolean",
+          "required": false,
+          "description": "Do not add polar hydrogens (structure already protonated) (--nohydro).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model",
+          "type": "integer",
+          "required": false,
+          "description": "Model number for multi-model structures (--model).",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "maxthreads",
+          "type": "integer",
+          "required": false,
+          "description": "Override PLIP_THREADS for this call (--maxthreads).",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use all available cores"
+        }
+      ],
+      "examples": []
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/plip_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "protocol": "PLIP is CPU-only and rule-based (no GPU, no model weights). It reads ONE PDB complex (protein + ligand already present) and reports the non-covalent interactions it detects. It does NOT score, predict affinity, or prepare structures.",
+    "tool_outputs": {
+      "profile": "output/<name>.xml — structured interaction report (primary machine-readable output; see report/bindingsite/interactions). output/<name>.txt — human-readable RST report. output/*.pse — PyMOL sessions per binding site (pymol_session=True). output/*.png — ray-traced images (render_images=True). output/<name>_protonated.pdb — PLIP's fixed/protonated structure.",
+      "note": "Enumerate via GET /api/jobs/{id}/files; single file via /api/jobs/{id}/file/{relpath}; whole dir via /download."
+    },
+    "modes": {
+      "default": "Automatic ligand detection (HETATM-based).",
+      "peptide": "Treat given chain(s) as peptide ligands / inter-chain contacts (peptide_chains required).",
+      "intra": "Intra-chain contacts within one chain (intra_chain required; slow on large structures).",
+      "dnareceptor": "Treat DNA/RNA as part of the receptor rather than as a ligand."
+    },
+    "interaction_types": [
+      "hydrophobic_interaction",
+      "hydrogen_bond",
+      "water_bridge",
+      "salt_bridge",
+      "pi_stack",
+      "pi_cation_interaction",
+      "halogen_bond",
+      "metal_complex"
+    ],
+    "input_uri_schemes": {
+      "upload": "multipart/form-data (input_pdb).",
+      "job://<id>/<file>": "Re-use a PDB from a prior job.",
+      "file:///abs/path": "Direct NAS path on the shared mount.",
+      "oss://<bucket>/<key>": "Alibaba Cloud OSS object.",
+      "http(s)://...": "Generic URL, including OSS signed URLs."
+    },
+    "endpoints_summary": {
+      "/api/profile": "Profile interactions in one PDB complex.",
+      "/api/tasks/profile": "FC async task-mode variant.",
+      "/healthz/detail": "Extended health (upstream + openbabel/pymol import)."
+    },
+    "not_in_scope_v0_0_1": "batch multi-structure; fetch-by-PDB-ID over the network (-i); --chains / --regions advanced receptor/ligand grouping; geometric threshold tuning (--hbond_dist_max etc.); stdout reports (-O); gzip (-z). PLIP does not score or predict affinity."
+  },
+  "openapi_url": "/openapi.json"
+}

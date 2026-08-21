@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "DockQ Server",
-    "version": "0.0.13"
+    "title": "IgGM Server",
+    "version": "0.0.4"
   },
   "paths": {
     "/healthz": {
@@ -20,26 +20,6 @@
                   },
                   "type": "object",
                   "title": "Response Health Healthz Get"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/healthz/detail": {
-      "get": {
-        "summary": "Health Detail",
-        "operationId": "health_detail_healthz_detail_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Health Detail Healthz Detail Get"
                 }
               }
             }
@@ -372,16 +352,37 @@
         }
       }
     },
-    "/api/score": {
+    "/healthz/detail": {
+      "get": {
+        "summary": "Healthz Detail",
+        "description": "Surface whether the five NAS-mounted checkpoints are reachable.\n\nWeights live on NAS at IGGM_WEIGHTS_DIR (default /data/models/iggm/),\nsymlinked to /opt/iggm/checkpoints so upstream finds them without a runtime\ntorch.hub download. Reports missing .pth so the agent can detect a\nmisconfigured mount before a job crashes.",
+        "operationId": "healthz_detail_healthz_detail_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Healthz Detail Healthz Detail Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/design": {
       "post": {
-        "summary": "Post Score",
-        "description": "Score a single (model, native) pair via DockQ; returns DockQ's JSON output.",
-        "operationId": "post_score_api_score_post",
+        "summary": "Post Design",
+        "description": "Antibody design: CDR sequence + structure co-design (design), sequence\non a fixed backbone (inverse_design), or framework-region redesign\n(fr_design), selected via run_task.",
+        "operationId": "post_design_api_design_post",
         "requestBody": {
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_api_score_post"
+                "$ref": "#/components/schemas/Body_post_design_api_design_post"
               }
             }
           }
@@ -410,16 +411,16 @@
         }
       }
     },
-    "/api/score_batch": {
+    "/api/affinity-maturation": {
       "post": {
-        "summary": "Post Score Batch",
-        "description": "Score N candidate models against 1 reference native.\n\nModels come either as repeated `models` uploads OR as a single zip\nreferenced by `models_zip_uri` (oss://, file://, job://, http(s)://) — the\ngateway uses the zip form since it can't multipart-upload the `models` list.\n\nPer-model JSONs land in `output/per_model/<basename>.json`; the sorted\nsummary is `output/scores.csv`. Models that errored show up in\n`output/failed.csv` (job still completes successfully if at least one\nmodel produced a valid score).",
-        "operationId": "post_score_batch_api_score_batch_post",
+        "summary": "Post Affinity Maturation",
+        "description": "Affinity maturation: per-position mutation scan of an existing antibody.\n\nRequires fasta_origin (the original sequence to mature from).",
+        "operationId": "post_affinity_maturation_api_affinity_maturation_post",
         "requestBody": {
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_batch_api_score_batch_post"
+                "$ref": "#/components/schemas/Body_post_affinity_maturation_api_affinity_maturation_post"
               }
             }
           }
@@ -448,11 +449,49 @@
         }
       }
     },
-    "/api/tasks/score": {
+    "/api/epitope": {
       "post": {
-        "summary": "Post Score Task",
-        "description": "Score a single (model, native) pair as a single atomic task.\n\nBlocks until DockQ completes.  For the submit/poll interface, use POST /api/score.",
-        "operationId": "post_score_task_api_tasks_score_post",
+        "summary": "Post Epitope",
+        "description": "Compute the antigen interface epitope from a complex (fasta + antigen).",
+        "operationId": "post_epitope_api_epitope_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_epitope_api_epitope_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/design": {
+      "post": {
+        "summary": "Post Design Task",
+        "description": "design/inverse_design/fr_design as a single blocking task (FC Async).",
+        "operationId": "post_design_task_api_tasks_design_post",
         "parameters": [
           {
             "name": "X-Bioagent-Job-Id",
@@ -491,7 +530,7 @@
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_task_api_tasks_score_post"
+                "$ref": "#/components/schemas/Body_post_design_task_api_tasks_design_post"
               }
             }
           }
@@ -520,11 +559,11 @@
         }
       }
     },
-    "/api/tasks/score_batch": {
+    "/api/tasks/affinity-maturation": {
       "post": {
-        "summary": "Post Score Batch Task",
-        "description": "Score N candidate models against 1 native as a single atomic task.\n\nModels come as repeated `models` uploads OR a single `models_zip_uri`\nzip (used by the gateway, which can't multipart-upload the list).",
-        "operationId": "post_score_batch_task_api_tasks_score_batch_post",
+        "summary": "Post Affinity Maturation Task",
+        "description": "Affinity maturation as a single blocking task (FC Async).",
+        "operationId": "post_affinity_maturation_task_api_tasks_affinity_maturation_post",
         "parameters": [
           {
             "name": "X-Bioagent-Job-Id",
@@ -563,7 +602,79 @@
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_batch_task_api_tasks_score_batch_post"
+                "$ref": "#/components/schemas/Body_post_affinity_maturation_task_api_tasks_affinity_maturation_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/epitope": {
+      "post": {
+        "summary": "Post Epitope Task",
+        "description": "Epitope calculation as a single blocking task (FC Async).",
+        "operationId": "post_epitope_task_api_tasks_epitope_post",
+        "parameters": [
+          {
+            "name": "X-Bioagent-Job-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Bioagent-Job-Id"
+            }
+          },
+          {
+            "name": "X-Fc-Async-Task-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fc-Async-Task-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_epitope_task_api_tasks_epitope_post"
               }
             }
           }
@@ -595,9 +706,9 @@
   },
   "components": {
     "schemas": {
-      "Body_post_score_api_score_post": {
+      "Body_post_affinity_maturation_api_affinity_maturation_post": {
         "properties": {
-          "model": {
+          "fasta": {
             "anyOf": [
               {
                 "type": "string",
@@ -607,9 +718,20 @@
                 "type": "null"
               }
             ],
-            "title": "Model"
+            "title": "Fasta"
           },
-          "native": {
+          "fasta_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fasta Uri"
+          },
+          "antigen": {
             "anyOf": [
               {
                 "type": "string",
@@ -619,9 +741,9 @@
                 "type": "null"
               }
             ],
-            "title": "Native"
+            "title": "Antigen"
           },
-          "model_uri": {
+          "antigen_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -630,9 +752,21 @@
                 "type": "null"
               }
             ],
-            "title": "Model Uri"
+            "title": "Antigen Uri"
           },
-          "native_uri": {
+          "fasta_origin": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fasta Origin"
+          },
+          "fasta_origin_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -641,15 +775,9 @@
                 "type": "null"
               }
             ],
-            "title": "Native Uri"
+            "title": "Fasta Origin Uri"
           },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
-          },
-          "mapping": {
+          "epitope": {
             "anyOf": [
               {
                 "type": "string"
@@ -658,44 +786,44 @@
                 "type": "null"
               }
             ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
+            "title": "Epitope",
+            "description": "Antigen interface residue numbers (1-based). If omitted, IgGM's cal_ppi infers the epitope from the complex structure when possible. Get one from POST /api/epitope.",
             "bioq_default": {
               "kind": "unset",
               "note": "only used when explicitly provided"
             }
           },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
+          "steps": {
             "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
+            "title": "Steps",
+            "description": "Number of sampling steps (upstream default 10; 200 is the internal full schedule).",
+            "default": 10
           },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
+          "num_samples": {
+            "type": "integer",
+            "title": "Num Samples",
+            "description": "Number of maturation rounds. Total outputs scale as num_samples x masked positions x (chains-1); keep modest on FC and use the CLI/Slurm mode for large sweeps.",
+            "default": 10
           },
-          "n_cpu": {
+          "chunk_size": {
+            "type": "integer",
+            "title": "Chunk Size",
+            "description": "Chunk size for long-chain inference (memory/speed tradeoff).",
+            "default": 64
+          },
+          "temperature": {
+            "type": "number",
+            "title": "Temperature",
+            "description": "Sampling temperature.",
+            "default": 1.0
+          },
+          "max_antigen_size": {
+            "type": "integer",
+            "title": "Max Antigen Size",
+            "description": "Truncate the antigen chain to this many residues to avoid OOM. Upstream suggests 384 for large antigens.",
+            "default": 2000
+          },
+          "seed": {
             "anyOf": [
               {
                 "type": "integer"
@@ -704,20 +832,20 @@
                 "type": "null"
               }
             ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Seed",
+            "description": "Random seed. If omitted, the upstream default (42) is used.",
             "bioq_default": {
               "kind": "auto",
-              "note": "use all available cores"
+              "note": "random seed selected by the tool at runtime"
             }
           }
         },
         "type": "object",
-        "title": "Body_post_score_api_score_post"
+        "title": "Body_post_affinity_maturation_api_affinity_maturation_post"
       },
-      "Body_post_score_batch_api_score_batch_post": {
+      "Body_post_affinity_maturation_task_api_tasks_affinity_maturation_post": {
         "properties": {
-          "native": {
+          "fasta": {
             "anyOf": [
               {
                 "type": "string",
@@ -727,9 +855,9 @@
                 "type": "null"
               }
             ],
-            "title": "Native"
+            "title": "Fasta"
           },
-          "native_uri": {
+          "fasta_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -738,24 +866,21 @@
                 "type": "null"
               }
             ],
-            "title": "Native Uri"
+            "title": "Fasta Uri"
           },
-          "models": {
+          "antigen": {
             "anyOf": [
               {
-                "items": {
-                  "type": "string",
-                  "contentMediaType": "application/octet-stream"
-                },
-                "type": "array"
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Models"
+            "title": "Antigen"
           },
-          "models_zip_uri": {
+          "antigen_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -764,65 +889,78 @@
                 "type": "null"
               }
             ],
-            "title": "Models Zip Uri",
+            "title": "Antigen Uri"
+          },
+          "fasta_origin": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fasta Origin"
+          },
+          "fasta_origin_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fasta Origin Uri"
+          },
+          "epitope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Epitope",
+            "description": "Antigen interface residue numbers (1-based). If omitted, IgGM's cal_ppi infers the epitope from the complex structure when possible. Get one from POST /api/epitope.",
             "bioq_default": {
               "kind": "unset",
               "note": "only used when explicitly provided"
             }
           },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
-          },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
+          "steps": {
             "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
+            "title": "Steps",
+            "description": "Number of sampling steps (upstream default 10; 200 is the internal full schedule).",
+            "default": 10
           },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
+          "num_samples": {
+            "type": "integer",
+            "title": "Num Samples",
+            "description": "Number of maturation rounds. Total outputs scale as num_samples x masked positions x (chains-1); keep modest on FC and use the CLI/Slurm mode for large sweeps.",
+            "default": 10
           },
-          "n_cpu": {
+          "chunk_size": {
+            "type": "integer",
+            "title": "Chunk Size",
+            "description": "Chunk size for long-chain inference (memory/speed tradeoff).",
+            "default": 64
+          },
+          "temperature": {
+            "type": "number",
+            "title": "Temperature",
+            "description": "Sampling temperature.",
+            "default": 1.0
+          },
+          "max_antigen_size": {
+            "type": "integer",
+            "title": "Max Antigen Size",
+            "description": "Truncate the antigen chain to this many residues to avoid OOM. Upstream suggests 384 for large antigens.",
+            "default": 2000
+          },
+          "seed": {
             "anyOf": [
               {
                 "type": "integer"
@@ -831,26 +969,20 @@
                 "type": "null"
               }
             ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Seed",
+            "description": "Random seed. If omitted, the upstream default (42) is used.",
             "bioq_default": {
               "kind": "auto",
-              "note": "use all available cores"
+              "note": "random seed selected by the tool at runtime"
             }
-          },
-          "sort_by": {
-            "type": "string",
-            "title": "Sort By",
-            "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
-            "default": "DockQ"
           }
         },
         "type": "object",
-        "title": "Body_post_score_batch_api_score_batch_post"
+        "title": "Body_post_affinity_maturation_task_api_tasks_affinity_maturation_post"
       },
-      "Body_post_score_batch_task_api_tasks_score_batch_post": {
+      "Body_post_design_api_design_post": {
         "properties": {
-          "native": {
+          "fasta": {
             "anyOf": [
               {
                 "type": "string",
@@ -860,9 +992,9 @@
                 "type": "null"
               }
             ],
-            "title": "Native"
+            "title": "Fasta"
           },
-          "native_uri": {
+          "fasta_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -871,24 +1003,21 @@
                 "type": "null"
               }
             ],
-            "title": "Native Uri"
+            "title": "Fasta Uri"
           },
-          "models": {
+          "antigen": {
             "anyOf": [
               {
-                "items": {
-                  "type": "string",
-                  "contentMediaType": "application/octet-stream"
-                },
-                "type": "array"
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Models"
+            "title": "Antigen"
           },
-          "models_zip_uri": {
+          "antigen_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -897,65 +1026,55 @@
                 "type": "null"
               }
             ],
-            "title": "Models Zip Uri",
+            "title": "Antigen Uri"
+          },
+          "epitope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Epitope",
+            "description": "Antigen interface residue numbers (1-based). If omitted, IgGM's cal_ppi infers the epitope from the complex structure when possible. Get one from POST /api/epitope.",
             "bioq_default": {
               "kind": "unset",
               "note": "only used when explicitly provided"
             }
           },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
-          },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
+          "steps": {
             "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
+            "title": "Steps",
+            "description": "Number of sampling steps (upstream default 10; 200 is the internal full schedule).",
+            "default": 10
           },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
+          "num_samples": {
+            "type": "integer",
+            "title": "Num Samples",
+            "description": "Number of designs to generate.",
+            "default": 1
           },
-          "n_cpu": {
+          "chunk_size": {
+            "type": "integer",
+            "title": "Chunk Size",
+            "description": "Chunk size for long-chain inference (memory/speed tradeoff).",
+            "default": 64
+          },
+          "temperature": {
+            "type": "number",
+            "title": "Temperature",
+            "description": "Sampling temperature.",
+            "default": 1.0
+          },
+          "max_antigen_size": {
+            "type": "integer",
+            "title": "Max Antigen Size",
+            "description": "Truncate the antigen chain to this many residues to avoid OOM. Upstream suggests 384 for large antigens.",
+            "default": 2000
+          },
+          "seed": {
             "anyOf": [
               {
                 "type": "integer"
@@ -964,26 +1083,31 @@
                 "type": "null"
               }
             ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Seed",
+            "description": "Random seed. If omitted, the upstream default (42) is used.",
             "bioq_default": {
               "kind": "auto",
-              "note": "use all available cores"
+              "note": "random seed selected by the tool at runtime"
             }
           },
-          "sort_by": {
+          "run_task": {
             "type": "string",
-            "title": "Sort By",
-            "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
-            "default": "DockQ"
+            "enum": [
+              "design",
+              "inverse_design",
+              "fr_design"
+            ],
+            "title": "Run Task",
+            "description": "design = CDR sequence + full complex structure co-design; inverse_design = sequence design on a fixed backbone (FASTA only); fr_design = framework-region redesign (humanization).",
+            "default": "design"
           }
         },
         "type": "object",
-        "title": "Body_post_score_batch_task_api_tasks_score_batch_post"
+        "title": "Body_post_design_api_design_post"
       },
-      "Body_post_score_task_api_tasks_score_post": {
+      "Body_post_design_task_api_tasks_design_post": {
         "properties": {
-          "model": {
+          "fasta": {
             "anyOf": [
               {
                 "type": "string",
@@ -993,9 +1117,20 @@
                 "type": "null"
               }
             ],
-            "title": "Model"
+            "title": "Fasta"
           },
-          "native": {
+          "fasta_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fasta Uri"
+          },
+          "antigen": {
             "anyOf": [
               {
                 "type": "string",
@@ -1005,9 +1140,9 @@
                 "type": "null"
               }
             ],
-            "title": "Native"
+            "title": "Antigen"
           },
-          "model_uri": {
+          "antigen_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -1016,9 +1151,9 @@
                 "type": "null"
               }
             ],
-            "title": "Model Uri"
+            "title": "Antigen Uri"
           },
-          "native_uri": {
+          "epitope": {
             "anyOf": [
               {
                 "type": "string"
@@ -1027,61 +1162,44 @@
                 "type": "null"
               }
             ],
-            "title": "Native Uri"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
-          },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
+            "title": "Epitope",
+            "description": "Antigen interface residue numbers (1-based). If omitted, IgGM's cal_ppi infers the epitope from the complex structure when possible. Get one from POST /api/epitope.",
             "bioq_default": {
               "kind": "unset",
               "note": "only used when explicitly provided"
             }
           },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
+          "steps": {
             "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
+            "title": "Steps",
+            "description": "Number of sampling steps (upstream default 10; 200 is the internal full schedule).",
+            "default": 10
           },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
+          "num_samples": {
+            "type": "integer",
+            "title": "Num Samples",
+            "description": "Number of designs to generate.",
+            "default": 1
           },
-          "n_cpu": {
+          "chunk_size": {
+            "type": "integer",
+            "title": "Chunk Size",
+            "description": "Chunk size for long-chain inference (memory/speed tradeoff).",
+            "default": 64
+          },
+          "temperature": {
+            "type": "number",
+            "title": "Temperature",
+            "description": "Sampling temperature.",
+            "default": 1.0
+          },
+          "max_antigen_size": {
+            "type": "integer",
+            "title": "Max Antigen Size",
+            "description": "Truncate the antigen chain to this many residues to avoid OOM. Upstream suggests 384 for large antigens.",
+            "default": 2000
+          },
+          "seed": {
             "anyOf": [
               {
                 "type": "integer"
@@ -1090,16 +1208,131 @@
                 "type": "null"
               }
             ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Seed",
+            "description": "Random seed. If omitted, the upstream default (42) is used.",
             "bioq_default": {
               "kind": "auto",
-              "note": "use all available cores"
+              "note": "random seed selected by the tool at runtime"
             }
+          },
+          "run_task": {
+            "type": "string",
+            "enum": [
+              "design",
+              "inverse_design",
+              "fr_design"
+            ],
+            "title": "Run Task",
+            "description": "design = CDR sequence + full complex structure co-design; inverse_design = sequence design on a fixed backbone (FASTA only); fr_design = framework-region redesign (humanization).",
+            "default": "design"
           }
         },
         "type": "object",
-        "title": "Body_post_score_task_api_tasks_score_post"
+        "title": "Body_post_design_task_api_tasks_design_post"
+      },
+      "Body_post_epitope_api_epitope_post": {
+        "properties": {
+          "fasta": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fasta"
+          },
+          "fasta_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fasta Uri"
+          },
+          "antigen": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Antigen"
+          },
+          "antigen_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Antigen Uri"
+          }
+        },
+        "type": "object",
+        "title": "Body_post_epitope_api_epitope_post"
+      },
+      "Body_post_epitope_task_api_tasks_epitope_post": {
+        "properties": {
+          "fasta": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fasta"
+          },
+          "fasta_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fasta Uri"
+          },
+          "antigen": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Antigen"
+          },
+          "antigen_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Antigen Uri"
+          }
+        },
+        "type": "object",
+        "title": "Body_post_epitope_task_api_tasks_epitope_post"
       },
       "Body_upload_file_api_uploads_post": {
         "properties": {

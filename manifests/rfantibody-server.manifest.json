@@ -1,0 +1,628 @@
+{
+  "service": "rfantibody",
+  "title": "RFantibody Server",
+  "version": "0.0.22",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/proteinmpnn",
+      "summary": "ProteinMPNN CDR sequence design over an RFdiffusion-generated backbone set.",
+      "description": "ProteinMPNN CDR sequence design over an RFdiffusion-generated backbone set.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_run_proteinmpnn_api_proteinmpnn_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_quiver",
+          "type": "file",
+          "required": false,
+          "description": "Input Quiver (from RFdiffusion). Mutually exclusive with `input_quiver_uri`.",
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_quiver_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI to fetch the input Quiver instead of uploading. Schemes: job://<id>/<file>, file:///path, oss://<bucket>/<key>, http(s)://...",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "loops",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "H1,H2,H3",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seqs_per_struct",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 4,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "temperature",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.2,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "omit_aas",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "CX",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "deterministic",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "chain from a previous rfdiffusion job",
+          "curl": "curl -X POST $URL/api/proteinmpnn -F 'input_quiver_uri=job://abc123def456/1_rfdiffusion.qv' -F seqs_per_struct=4",
+          "python": "r = httpx.post(\n    f'{base_url}/api/proteinmpnn',\n    data={\n        'input_quiver_uri': f'job://{rfdiffusion_job_id}/1_rfdiffusion.qv',\n        'seqs_per_struct': 4,\n    },\n)",
+          "body": null,
+          "notes": "Preferred path: cite the previous job's output via job:// rather than re-uploading the Quiver. The NAS is shared so this is a zero-copy operation."
+        },
+        {
+          "title": "upload a Quiver file directly",
+          "curl": "curl -X POST $URL/api/proteinmpnn -F input_quiver=@1_rfdiffusion.qv -F seqs_per_struct=4",
+          "python": null,
+          "body": null,
+          "notes": "Fallback when the upstream job isn't accessible on this NAS."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/rf2",
+      "summary": "RF2 structure prediction + filtering over MPNN-designed sequences.",
+      "description": "RF2 structure prediction + filtering over MPNN-designed sequences.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_run_rf2_api_rf2_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_quiver",
+          "type": "file",
+          "required": false,
+          "description": "Input Quiver (from ProteinMPNN). Mutually exclusive with `input_quiver_uri`.",
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_quiver_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI to fetch input Quiver from (see /proteinmpnn).",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_recycles",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "hotspot_show_prop",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        }
+      ],
+      "examples": [
+        {
+          "title": "chain from a previous proteinmpnn job",
+          "curl": "curl -X POST $URL/api/rf2 -F 'input_quiver_uri=job://xyz789ghi012/2_proteinmpnn.qv' -F num_recycles=10",
+          "python": "r = httpx.post(\n    f'{base_url}/api/rf2',\n    data={\n        'input_quiver_uri': f'job://{proteinmpnn_job_id}/2_proteinmpnn.qv',\n        'num_recycles': 10,\n    },\n)",
+          "body": null,
+          "notes": "Final step; output is 3_rf2.qv with binder + target structures + scores."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/rfdiffusion",
+      "summary": "RFdiffusion antibody-framework backbone design.",
+      "description": "RFdiffusion antibody-framework backbone design.\n\nEach input can be supplied EITHER as a multipart upload OR as a URI.\nURIs are required when invoking via FC async task mode (``X-Fc-Invocation-Type:\nAsync``) for any PDB larger than ~120 KiB — FC's async event payload is\ncapped at 128 KiB.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_run_rfdiffusion_api_rfdiffusion_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "target",
+          "type": "file",
+          "required": false,
+          "description": "Target antigen PDB. Mutually exclusive with `target_uri`.",
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "target_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI to fetch the target instead of uploading. Schemes: job://<id>/<file>, file:///path, oss://<bucket>/<key>, http(s)://...",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "framework",
+          "type": "file",
+          "required": false,
+          "description": "Antibody framework PDB. Mutually exclusive with `framework_uri`.",
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "framework_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI to fetch the framework instead of uploading.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_designs",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "design_loops",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "H1:,H2:,H3:",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "hotspots",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "diffuser_t",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "final_step",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "deterministic",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "no_trajectory",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "basic backbone design",
+          "curl": "curl -X POST $URL/api/rfdiffusion -F target=@antigen.pdb -F framework=@framework.pdb -F num_designs=100 -F 'design_loops=H1:7,H2:6,H3:5-13' -F 'hotspots=B146,B170,B177'",
+          "python": "import httpx\nwith open('antigen.pdb','rb') as t, open('framework.pdb','rb') as f:\n    r = httpx.post(\n        f'{base_url}/api/rfdiffusion',\n        files={'target': t, 'framework': f},\n        data={'num_designs': 100, 'hotspots': 'B146,B170,B177'},\n        timeout=120,\n    )\njob_id = r.json()['job_id']",
+          "body": null,
+          "notes": "Both PDB files are required uploads. Returns JobInfo immediately."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/proteinmpnn",
+      "summary": "ProteinMPNN CDR sequence design as a single atomic task.",
+      "description": "ProteinMPNN CDR sequence design as a single atomic task.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_run_proteinmpnn_task_api_tasks_proteinmpnn_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_quiver",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_quiver_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "loops",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "H1,H2,H3",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seqs_per_struct",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 4,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "temperature",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.2,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "omit_aas",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "CX",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "deterministic",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/rf2",
+      "summary": "RF2 structure prediction as a single atomic task.",
+      "description": "RF2 structure prediction as a single atomic task.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_run_rf2_task_api_tasks_rf2_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_quiver",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_quiver_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_recycles",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "hotspot_show_prop",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/rfdiffusion",
+      "summary": "RFdiffusion antibody-framework backbone design as a single atomic task.",
+      "description": "RFdiffusion antibody-framework backbone design as a single atomic task.\n\nSame upload-or-URI duality as the sync endpoint.  Required when payloads\nexceed FC's 128 KiB async invocation cap.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_run_rfdiffusion_task_api_tasks_rfdiffusion_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "target",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "target_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "framework",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "framework_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_designs",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "design_loops",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "H1:,H2:,H3:",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "hotspots",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "diffuser_t",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "final_step",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "deterministic",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "no_trajectory",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": []
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/rfantibody_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "tool_outputs": {
+      "rfdiffusion": "output/1_rfdiffusion.qv",
+      "proteinmpnn": "output/2_proteinmpnn.qv",
+      "rf2": "output/3_rf2.qv"
+    },
+    "input_uri_schemes": {
+      "upload": "multipart/form-data UploadFile (target / framework / input_quiver)",
+      "job://<job_id>/<filename>": "Pull a file from a previous job on this service's NAS",
+      "file:///abs/path": "Direct NAS path (works across services on the shared mount)",
+      "oss://<bucket>/<key>": "Alibaba Cloud OSS object",
+      "http(s)://...": "Generic HTTP(S) URL — incl. signed OSS URLs"
+    },
+    "chaining_tip": "Run /api/rfdiffusion first, then call /api/proteinmpnn with input_quiver_uri=job://<rfdiffusion_job_id>/1_rfdiffusion.qv. Same pattern for /api/rf2 with input_quiver_uri=job://<proteinmpnn_job_id>/2_proteinmpnn.qv. Avoids re-uploading multi-MB Quiver files since the NAS is shared.",
+    "weights": {
+      "rfdiffusion": "RFdiffusion_Ab.pt",
+      "proteinmpnn": "ProteinMPNN_v48_noise_0.2.pt",
+      "rf2": "RF2_ab.pt",
+      "note": "Weights are baked into the Docker image at <weights_dir>/. Missing files are tolerated (script defaults apply)."
+    }
+  },
+  "openapi_url": "/openapi.json"
+}

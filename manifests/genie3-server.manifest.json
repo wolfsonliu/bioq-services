@@ -1,0 +1,664 @@
+{
+  "service": "genie3",
+  "title": "Genie3 Server",
+  "version": "0.0.21",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/generate",
+      "summary": "Run `genie3 generate` with a fully custom YAML config.",
+      "description": "Run `genie3 generate` with a fully custom YAML config.\n\n`paths.rootdir` and (if a dataset zip is provided) `paths.dataset` are\nrewritten so the YAML you supply doesn't need to know its job_dir.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_generate_custom_api_generate_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "config_yaml",
+          "type": "string",
+          "required": true,
+          "description": "Full experiment YAML as a string.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "dataset",
+          "type": "file",
+          "required": false,
+          "description": "Optional dataset zip; extracted to <job>/input/dataset/.",
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_devices",
+          "type": "integer",
+          "required": false,
+          "description": "Override GPU auto-detect.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-detect available devices/processes"
+        }
+      ],
+      "examples": [
+        {
+          "title": "custom YAML with cond_strategy override (the common gotcha)",
+          "curl": "curl -X POST $URL/api/generate -F 'config_yaml=experiment:\n  name: trem1_vhh\ngeneration:\n  dataset:\n    source: target\n    selections: trem1_vhh\n    n_sample: 4\n    cond_strategy: hotspot' -F dataset=@trem1.zip",
+          "python": null,
+          "body": null,
+          "notes": "Default cond_strategy='extended' fails with ValueError: Interface mode 'extended' not found when the problem JSON only defines 'hotspot'. Override here to use the hotspot interface."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/generate/binder",
+      "summary": "Binder design generation. Dataset zip must contain `problems/` + `targets/`.",
+      "description": "Binder design generation. Dataset zip must contain `problems/` + `targets/`.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_generate_binder_api_generate_binder_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "dataset",
+          "type": "file",
+          "required": true,
+          "description": "Zip with problems/ + targets/.",
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "n_sample",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 4,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_devices",
+          "type": "integer",
+          "required": false,
+          "description": "Override genie3's GPU auto-detect. Leave unset to use all visible devices.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-detect available devices/processes"
+        },
+        {
+          "name": "selections",
+          "type": "string",
+          "required": false,
+          "description": "Comma-separated problem names from the dataset. Default: all problems.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "direction_scale",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.0,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "binder design against a target",
+          "curl": "curl -X POST $URL/api/generate/binder -F dataset=@binderbench.zip -F selections=01_bhrf1 -F n_sample=8 -F direction_scale=0.0",
+          "python": null,
+          "body": null,
+          "notes": "Zip layout: problems/ + targets/{pdb,fasta,msa}/."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/generate/motif",
+      "summary": "Motif scaffolding generation. Dataset zip must contain `problems/` + `motifs/`.",
+      "description": "Motif scaffolding generation. Dataset zip must contain `problems/` + `motifs/`.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_generate_motif_api_generate_motif_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "dataset",
+          "type": "file",
+          "required": true,
+          "description": "Zip with problems/ + motifs/.",
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "n_sample",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 4,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_devices",
+          "type": "integer",
+          "required": false,
+          "description": "Override genie3's GPU auto-detect. Leave unset to use all visible devices.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-detect available devices/processes"
+        },
+        {
+          "name": "selections",
+          "type": "string",
+          "required": false,
+          "description": "Comma-separated problem names from the dataset. Default: all problems.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "direction_scale",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.1,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "motif scaffolding from a benchmark zip",
+          "curl": "curl -X POST $URL/api/generate/motif -F dataset=@motifbench.zip -F selections=22_1BCF -F n_sample=8",
+          "python": null,
+          "body": null,
+          "notes": "The zip must contain problems/*.json + motifs/*.pdb. The server rewrites motif_filepaths inside problem JSONs to absolute paths."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/generate/unconditional",
+      "summary": "Unconditional protein backbone generation (no input structure).",
+      "description": "Unconditional protein backbone generation (no input structure).",
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body_generate_unconditional_api_generate_unconditional_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "n_sample",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 4,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_devices",
+          "type": "integer",
+          "required": false,
+          "description": "Override genie3's GPU auto-detect. Leave unset to use all visible devices.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-detect available devices/processes"
+        },
+        {
+          "name": "min_length",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "max_length",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "length_step",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "direction_scale",
+          "type": "number",
+          "required": false,
+          "description": "Quality–diversity trade-off. Recommended 0.8 for length ≤ 300, 0.0 for longer.",
+          "is_file": false,
+          "default": 0.8,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "short protein, default direction_scale",
+          "curl": "curl -X POST $URL/api/generate/unconditional -F min_length=100 -F max_length=100 -F n_sample=8",
+          "python": null,
+          "body": null,
+          "notes": "No dataset needed. Use direction_scale=0.0 for length > 300."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/generate",
+      "summary": "Custom YAML generation as a single atomic task.",
+      "description": "Custom YAML generation as a single atomic task.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_generate_custom_task_api_tasks_generate_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "config_yaml",
+          "type": "string",
+          "required": true,
+          "description": "Full experiment YAML as a string.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "dataset",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "dataset_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI to an optional dataset zip (oss://, file://, job://, http(s)://) as an alternative to a multipart upload.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_devices",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-detect available devices/processes"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/generate/binder",
+      "summary": "Binder design generation as a single atomic task.",
+      "description": "Binder design generation as a single atomic task.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_generate_binder_task_api_tasks_generate_binder_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "dataset",
+          "type": "file",
+          "required": false,
+          "description": "Zip with problems/ + targets/.",
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "dataset_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI to the dataset zip (oss://, file://, job://, http(s)://) as an alternative to a multipart upload — used by the gateway.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "n_sample",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 4,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_devices",
+          "type": "integer",
+          "required": false,
+          "description": "Override genie3's GPU auto-detect. Leave unset to use all visible devices.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-detect available devices/processes"
+        },
+        {
+          "name": "selections",
+          "type": "string",
+          "required": false,
+          "description": "Comma-separated problem names from the dataset. Default: all problems.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "direction_scale",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.0,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/generate/motif",
+      "summary": "Motif scaffolding generation as a single atomic task.",
+      "description": "Motif scaffolding generation as a single atomic task.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_generate_motif_task_api_tasks_generate_motif_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "dataset",
+          "type": "file",
+          "required": false,
+          "description": "Zip with problems/ + motifs/.",
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "dataset_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI to the dataset zip (oss://, file://, job://, http(s)://) as an alternative to a multipart upload — used by the gateway.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "n_sample",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 4,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_devices",
+          "type": "integer",
+          "required": false,
+          "description": "Override genie3's GPU auto-detect. Leave unset to use all visible devices.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-detect available devices/processes"
+        },
+        {
+          "name": "selections",
+          "type": "string",
+          "required": false,
+          "description": "Comma-separated problem names from the dataset. Default: all problems.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "direction_scale",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.1,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/generate/unconditional",
+      "summary": "Unconditional protein backbone generation as a single atomic task.",
+      "description": "Unconditional protein backbone generation as a single atomic task.",
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body_generate_unconditional_task_api_tasks_generate_unconditional_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "n_sample",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 4,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_devices",
+          "type": "integer",
+          "required": false,
+          "description": "Override genie3's GPU auto-detect. Leave unset to use all visible devices.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-detect available devices/processes"
+        },
+        {
+          "name": "min_length",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "max_length",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "length_step",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "direction_scale",
+          "type": "number",
+          "required": false,
+          "description": "Quality–diversity trade-off. Recommended 0.8 for length ≤ 300, 0.0 for longer.",
+          "is_file": false,
+          "default": 0.8,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": []
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/genie3_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "tool_outputs": {
+      "all_modes": "output/<experiment_name>/pdbs/*.pdb",
+      "note": "Each `genie3 generate` run nests its PDBs under the experiment name from the YAML (`experiment.name`). Use `/api/jobs/{id}/files` to list, or `/api/jobs/{id}/file/{relpath}` to fetch one."
+    },
+    "input_uri_schemes": {
+      "upload": "multipart/form-data zip with problems/ + targets/ (binder) or problems/ + motifs/ (motif). The server rewrites filepath fields in problem JSONs to absolute paths after extraction.",
+      "unconditional": "No dataset required."
+    },
+    "endpoints_summary": {
+      "/api/generate/unconditional": "No dataset; configurable min/max length + step.",
+      "/api/generate/motif": "Dataset zip with motifs/; scaffold around motif residues.",
+      "/api/generate/binder": "Dataset zip with targets/; design binder against target.",
+      "/api/generate": "Freeform YAML body via `config_yaml` Form field. The server auto-fills `paths.rootdir` and (if a dataset zip is attached) `paths.dataset`. Use this for `cond_strategy` overrides or iterative refinement configs."
+    },
+    "config_tips": {
+      "cond_strategy": "Default upstream `cond_strategy: extended` requires an `extended` interface in the problem JSON. If your problem only defines `hotspot`, override via `generation.dataset.cond_strategy: hotspot`.",
+      "direction_scale": "Quality/diversity knob. Recommended 0.8 for length ≤ 300, 0.0 for longer (unconditional) or for binder mode (default 0.0)."
+    }
+  },
+  "openapi_url": "/openapi.json"
+}

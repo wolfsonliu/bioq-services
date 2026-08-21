@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "DockQ Server",
-    "version": "0.0.13"
+    "title": "ProteinMPNN Server",
+    "version": "0.0.16"
   },
   "paths": {
     "/healthz": {
@@ -372,10 +372,48 @@
         }
       }
     },
+    "/api/design": {
+      "post": {
+        "summary": "Post Design",
+        "description": "Sequence design (FASTA output) over the input PDB.",
+        "operationId": "post_design_api_design_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_design_api_design_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/score": {
       "post": {
         "summary": "Post Score",
-        "description": "Score a single (model, native) pair via DockQ; returns DockQ's JSON output.",
+        "description": "Score a (structure, sequence) pair via --score_only 1.",
         "operationId": "post_score_api_score_post",
         "requestBody": {
           "content": {
@@ -410,16 +448,88 @@
         }
       }
     },
-    "/api/score_batch": {
+    "/api/probs": {
       "post": {
-        "summary": "Post Score Batch",
-        "description": "Score N candidate models against 1 reference native.\n\nModels come either as repeated `models` uploads OR as a single zip\nreferenced by `models_zip_uri` (oss://, file://, job://, http(s)://) — the\ngateway uses the zip form since it can't multipart-upload the `models` list.\n\nPer-model JSONs land in `output/per_model/<basename>.json`; the sorted\nsummary is `output/scores.csv`. Models that errored show up in\n`output/failed.csv` (job still completes successfully if at least one\nmodel produced a valid score).",
-        "operationId": "post_score_batch_api_score_batch_post",
+        "summary": "Post Probs",
+        "description": "Per-residue AA probability output (conditional / unconditional).",
+        "operationId": "post_probs_api_probs_post",
         "requestBody": {
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_batch_api_score_batch_post"
+                "$ref": "#/components/schemas/Body_post_probs_api_probs_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/design": {
+      "post": {
+        "summary": "Post Design Task",
+        "description": "Sequence design as a single atomic task.",
+        "operationId": "post_design_task_api_tasks_design_post",
+        "parameters": [
+          {
+            "name": "X-Bioagent-Job-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Bioagent-Job-Id"
+            }
+          },
+          {
+            "name": "X-Fc-Async-Task-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fc-Async-Task-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_design_task_api_tasks_design_post"
               }
             }
           }
@@ -451,7 +561,7 @@
     "/api/tasks/score": {
       "post": {
         "summary": "Post Score Task",
-        "description": "Score a single (model, native) pair as a single atomic task.\n\nBlocks until DockQ completes.  For the submit/poll interface, use POST /api/score.",
+        "description": "Score as a single atomic task.",
         "operationId": "post_score_task_api_tasks_score_post",
         "parameters": [
           {
@@ -520,11 +630,11 @@
         }
       }
     },
-    "/api/tasks/score_batch": {
+    "/api/tasks/probs": {
       "post": {
-        "summary": "Post Score Batch Task",
-        "description": "Score N candidate models against 1 native as a single atomic task.\n\nModels come as repeated `models` uploads OR a single `models_zip_uri`\nzip (used by the gateway, which can't multipart-upload the list).",
-        "operationId": "post_score_batch_task_api_tasks_score_batch_post",
+        "summary": "Post Probs Task",
+        "description": "Probabilities as a single atomic task.",
+        "operationId": "post_probs_task_api_tasks_probs_post",
         "parameters": [
           {
             "name": "X-Bioagent-Job-Id",
@@ -563,7 +673,7 @@
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_batch_task_api_tasks_score_batch_post"
+                "$ref": "#/components/schemas/Body_post_probs_task_api_tasks_probs_post"
               }
             }
           }
@@ -595,9 +705,9 @@
   },
   "components": {
     "schemas": {
-      "Body_post_score_api_score_post": {
+      "Body_post_design_api_design_post": {
         "properties": {
-          "model": {
+          "pdb": {
             "anyOf": [
               {
                 "type": "string",
@@ -607,21 +717,9 @@
                 "type": "null"
               }
             ],
-            "title": "Model"
+            "title": "Pdb"
           },
-          "native": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native"
-          },
-          "model_uri": {
+          "pdb_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -630,26 +728,57 @@
                 "type": "null"
               }
             ],
-            "title": "Model Uri"
-          },
-          "native_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native Uri"
+            "title": "Pdb Uri"
           },
           "name": {
             "type": "string",
             "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
+            "description": "Output basename. Restricted to [A-Za-z0-9_.-] (no slashes/spaces) because it becomes the input PDB filename and ProteinMPNN derives the output FASTA name from the PDB stem, so `name=foo` → `seqs/foo.fa`.",
             "default": "run"
           },
-          "mapping": {
+          "model_variant": {
+            "type": "string",
+            "enum": [
+              "vanilla",
+              "soluble",
+              "ca_only",
+              "abmpnn"
+            ],
+            "title": "Model Variant",
+            "default": "vanilla"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name",
+            "default": "v_48_020"
+          },
+          "seed": {
+            "type": "integer",
+            "title": "Seed",
+            "default": 0
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "default": 1
+          },
+          "backbone_noise": {
+            "type": "number",
+            "title": "Backbone Noise",
+            "default": 0.0
+          },
+          "num_seq_per_target": {
+            "type": "integer",
+            "title": "Num Seq Per Target",
+            "default": 8
+          },
+          "sampling_temp": {
+            "type": "string",
+            "title": "Sampling Temp",
+            "description": "Space-separated list of temperatures, e.g. '0.1 0.2 0.3'.",
+            "default": "0.1"
+          },
+          "chains_to_design": {
             "anyOf": [
               {
                 "type": "string"
@@ -658,332 +787,573 @@
                 "type": "null"
               }
             ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
+            "title": "Chains To Design",
+            "description": "Space-separated chain IDs, e.g. 'A C'. Omit to design all chains.",
             "bioq_default": {
               "kind": "unset",
               "note": "only used when explicitly provided"
             }
           },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
-            "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
-          },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
+          "fixed_positions": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Fixed Positions",
+            "description": "Per-chain residue indices to fix, e.g. '1 2 3, 10 11' (segments aligned to chains_to_design).",
             "bioq_default": {
-              "kind": "auto",
-              "note": "use all available cores"
+              "kind": "unset",
+              "note": "only used when explicitly provided"
             }
+          },
+          "tied_positions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tied Positions",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "homooligomer": {
+            "type": "boolean",
+            "title": "Homooligomer",
+            "default": false
+          },
+          "bias_AA": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bias Aa",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "bias_by_res": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bias By Res",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "omit_AAs": {
+            "type": "string",
+            "title": "Omit Aas",
+            "default": "X"
+          },
+          "omit_AA_per_chain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Omit Aa Per Chain",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          }
+        },
+        "type": "object",
+        "title": "Body_post_design_api_design_post"
+      },
+      "Body_post_design_task_api_tasks_design_post": {
+        "properties": {
+          "pdb": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdb"
+          },
+          "pdb_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdb Uri"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Output basename. Restricted to [A-Za-z0-9_.-] (no slashes/spaces) because it becomes the input PDB filename and ProteinMPNN derives the output FASTA name from the PDB stem, so `name=foo` → `seqs/foo.fa`.",
+            "default": "run"
+          },
+          "model_variant": {
+            "type": "string",
+            "enum": [
+              "vanilla",
+              "soluble",
+              "ca_only",
+              "abmpnn"
+            ],
+            "title": "Model Variant",
+            "default": "vanilla"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name",
+            "default": "v_48_020"
+          },
+          "seed": {
+            "type": "integer",
+            "title": "Seed",
+            "default": 0
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "default": 1
+          },
+          "backbone_noise": {
+            "type": "number",
+            "title": "Backbone Noise",
+            "default": 0.0
+          },
+          "num_seq_per_target": {
+            "type": "integer",
+            "title": "Num Seq Per Target",
+            "default": 8
+          },
+          "sampling_temp": {
+            "type": "string",
+            "title": "Sampling Temp",
+            "description": "Space-separated list of temperatures, e.g. '0.1 0.2 0.3'.",
+            "default": "0.1"
+          },
+          "chains_to_design": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chains To Design",
+            "description": "Space-separated chain IDs, e.g. 'A C'. Omit to design all chains.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "fixed_positions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fixed Positions",
+            "description": "Per-chain residue indices to fix, e.g. '1 2 3, 10 11' (segments aligned to chains_to_design).",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "tied_positions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tied Positions",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "homooligomer": {
+            "type": "boolean",
+            "title": "Homooligomer",
+            "default": false
+          },
+          "bias_AA": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bias Aa",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "bias_by_res": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bias By Res",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "omit_AAs": {
+            "type": "string",
+            "title": "Omit Aas",
+            "default": "X"
+          },
+          "omit_AA_per_chain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Omit Aa Per Chain",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          }
+        },
+        "type": "object",
+        "title": "Body_post_design_task_api_tasks_design_post"
+      },
+      "Body_post_probs_api_probs_post": {
+        "properties": {
+          "pdb": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdb"
+          },
+          "pdb_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdb Uri"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Output basename. Restricted to [A-Za-z0-9_.-] (no slashes/spaces) because it becomes the input PDB filename and ProteinMPNN derives the output FASTA name from the PDB stem, so `name=foo` → `seqs/foo.fa`.",
+            "default": "run"
+          },
+          "model_variant": {
+            "type": "string",
+            "enum": [
+              "vanilla",
+              "soluble",
+              "ca_only",
+              "abmpnn"
+            ],
+            "title": "Model Variant",
+            "default": "vanilla"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name",
+            "default": "v_48_020"
+          },
+          "seed": {
+            "type": "integer",
+            "title": "Seed",
+            "default": 0
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "default": 1
+          },
+          "backbone_noise": {
+            "type": "number",
+            "title": "Backbone Noise",
+            "default": 0.0
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "conditional",
+              "conditional_backbone",
+              "unconditional"
+            ],
+            "title": "Kind",
+            "default": "conditional"
+          },
+          "save_probs": {
+            "type": "boolean",
+            "title": "Save Probs",
+            "default": true
+          },
+          "chains_to_design": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chains To Design",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          }
+        },
+        "type": "object",
+        "title": "Body_post_probs_api_probs_post"
+      },
+      "Body_post_probs_task_api_tasks_probs_post": {
+        "properties": {
+          "pdb": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdb"
+          },
+          "pdb_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdb Uri"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Output basename. Restricted to [A-Za-z0-9_.-] (no slashes/spaces) because it becomes the input PDB filename and ProteinMPNN derives the output FASTA name from the PDB stem, so `name=foo` → `seqs/foo.fa`.",
+            "default": "run"
+          },
+          "model_variant": {
+            "type": "string",
+            "enum": [
+              "vanilla",
+              "soluble",
+              "ca_only",
+              "abmpnn"
+            ],
+            "title": "Model Variant",
+            "default": "vanilla"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name",
+            "default": "v_48_020"
+          },
+          "seed": {
+            "type": "integer",
+            "title": "Seed",
+            "default": 0
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "default": 1
+          },
+          "backbone_noise": {
+            "type": "number",
+            "title": "Backbone Noise",
+            "default": 0.0
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "conditional",
+              "conditional_backbone",
+              "unconditional"
+            ],
+            "title": "Kind",
+            "default": "conditional"
+          },
+          "save_probs": {
+            "type": "boolean",
+            "title": "Save Probs",
+            "default": true
+          },
+          "chains_to_design": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chains To Design",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          }
+        },
+        "type": "object",
+        "title": "Body_post_probs_task_api_tasks_probs_post"
+      },
+      "Body_post_score_api_score_post": {
+        "properties": {
+          "pdb": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdb"
+          },
+          "pdb_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdb Uri"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Output basename. Restricted to [A-Za-z0-9_.-] (no slashes/spaces) because it becomes the input PDB filename and ProteinMPNN derives the output FASTA name from the PDB stem, so `name=foo` → `seqs/foo.fa`.",
+            "default": "run"
+          },
+          "model_variant": {
+            "type": "string",
+            "enum": [
+              "vanilla",
+              "soluble",
+              "ca_only",
+              "abmpnn"
+            ],
+            "title": "Model Variant",
+            "default": "vanilla"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name",
+            "default": "v_48_020"
+          },
+          "seed": {
+            "type": "integer",
+            "title": "Seed",
+            "default": 0
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "default": 1
+          },
+          "backbone_noise": {
+            "type": "number",
+            "title": "Backbone Noise",
+            "default": 0.0
+          },
+          "num_seq_per_target": {
+            "type": "integer",
+            "title": "Num Seq Per Target",
+            "default": 10
+          },
+          "sampling_temp": {
+            "type": "string",
+            "title": "Sampling Temp",
+            "default": "0.1"
+          },
+          "chains_to_design": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chains To Design",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "save_score": {
+            "type": "boolean",
+            "title": "Save Score",
+            "default": true
           }
         },
         "type": "object",
         "title": "Body_post_score_api_score_post"
       },
-      "Body_post_score_batch_api_score_batch_post": {
-        "properties": {
-          "native": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native"
-          },
-          "native_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native Uri"
-          },
-          "models": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "contentMediaType": "application/octet-stream"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models"
-          },
-          "models_zip_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models Zip Uri",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
-          },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
-            "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
-          },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
-            "bioq_default": {
-              "kind": "auto",
-              "note": "use all available cores"
-            }
-          },
-          "sort_by": {
-            "type": "string",
-            "title": "Sort By",
-            "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
-            "default": "DockQ"
-          }
-        },
-        "type": "object",
-        "title": "Body_post_score_batch_api_score_batch_post"
-      },
-      "Body_post_score_batch_task_api_tasks_score_batch_post": {
-        "properties": {
-          "native": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native"
-          },
-          "native_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native Uri"
-          },
-          "models": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "contentMediaType": "application/octet-stream"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models"
-          },
-          "models_zip_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models Zip Uri",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
-          },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
-            "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
-          },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
-            "bioq_default": {
-              "kind": "auto",
-              "note": "use all available cores"
-            }
-          },
-          "sort_by": {
-            "type": "string",
-            "title": "Sort By",
-            "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
-            "default": "DockQ"
-          }
-        },
-        "type": "object",
-        "title": "Body_post_score_batch_task_api_tasks_score_batch_post"
-      },
       "Body_post_score_task_api_tasks_score_post": {
         "properties": {
-          "model": {
+          "pdb": {
             "anyOf": [
               {
                 "type": "string",
@@ -993,21 +1363,9 @@
                 "type": "null"
               }
             ],
-            "title": "Model"
+            "title": "Pdb"
           },
-          "native": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native"
-          },
-          "model_uri": {
+          "pdb_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -1016,26 +1374,56 @@
                 "type": "null"
               }
             ],
-            "title": "Model Uri"
-          },
-          "native_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native Uri"
+            "title": "Pdb Uri"
           },
           "name": {
             "type": "string",
             "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
+            "description": "Output basename. Restricted to [A-Za-z0-9_.-] (no slashes/spaces) because it becomes the input PDB filename and ProteinMPNN derives the output FASTA name from the PDB stem, so `name=foo` → `seqs/foo.fa`.",
             "default": "run"
           },
-          "mapping": {
+          "model_variant": {
+            "type": "string",
+            "enum": [
+              "vanilla",
+              "soluble",
+              "ca_only",
+              "abmpnn"
+            ],
+            "title": "Model Variant",
+            "default": "vanilla"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name",
+            "default": "v_48_020"
+          },
+          "seed": {
+            "type": "integer",
+            "title": "Seed",
+            "default": 0
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "default": 1
+          },
+          "backbone_noise": {
+            "type": "number",
+            "title": "Backbone Noise",
+            "default": 0.0
+          },
+          "num_seq_per_target": {
+            "type": "integer",
+            "title": "Num Seq Per Target",
+            "default": 10
+          },
+          "sampling_temp": {
+            "type": "string",
+            "title": "Sampling Temp",
+            "default": "0.1"
+          },
+          "chains_to_design": {
             "anyOf": [
               {
                 "type": "string"
@@ -1044,58 +1432,16 @@
                 "type": "null"
               }
             ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
+            "title": "Chains To Design",
             "bioq_default": {
               "kind": "unset",
               "note": "only used when explicitly provided"
             }
           },
-          "small_molecule": {
+          "save_score": {
             "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
-            "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
-          },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
-            "bioq_default": {
-              "kind": "auto",
-              "note": "use all available cores"
-            }
+            "title": "Save Score",
+            "default": true
           }
         },
         "type": "object",

@@ -1,0 +1,282 @@
+{
+  "service": "esmfold2",
+  "title": "ESMFold2 Server",
+  "version": "0.0.7",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/fold",
+      "summary": "Predict 3D structure of a biomolecular complex using ESMFold2.",
+      "description": "Predict 3D structure of a biomolecular complex using ESMFold2.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_fold_api_fold_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "msa_files",
+          "type": "array[file]",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "sequences",
+          "type": "string",
+          "required": true,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_loops",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 3,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_sampling_steps",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_diffusion_samples",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        },
+        {
+          "name": "noise_scale",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "step_scale",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": [
+        {
+          "title": "single protein, single-sequence mode",
+          "curl": "curl -X POST $URL/api/fold -F 'sequences=[{\"type\":\"protein\",\"id\":\"A\",\"sequence\":\"MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG\"}]'",
+          "python": null,
+          "body": null,
+          "notes": "Ubiquitin (76 aa). Single-sequence mode, no MSA needed."
+        },
+        {
+          "title": "protein-DNA complex with ligand",
+          "curl": "curl -X POST $URL/api/fold -F num_loops=3 -F num_sampling_steps=50 -F 'sequences=[{\"type\":\"protein\",\"id\":\"A\",\"sequence\":\"MIEIKDKQLTGLR...\"},{\"type\":\"dna\",\"id\":\"B\",\"sequence\":\"GATAGCGCTATC\"},{\"type\":\"ligand\",\"id\":\"L\",\"ccd\":[\"SAH\"]}]'",
+          "python": null,
+          "body": null,
+          "notes": "Multi-chain complex with DNA and small molecule ligand."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/fold",
+      "summary": "Predict 3D structure as a single atomic task.",
+      "description": "Predict 3D structure as a single atomic task.\n\nBlocks until pipeline completion.  For submit/poll, use POST /api/fold.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_fold_task_api_tasks_fold_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "msa_files",
+          "type": "array[file]",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "msa_zip_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI to a zip of per-chain A3M files (oss://, file://, job://, http(s)://) as an alternative to multipart msa_files — used by the gateway.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "sequences",
+          "type": "string",
+          "required": true,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_loops",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 3,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_sampling_steps",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_diffusion_samples",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        },
+        {
+          "name": "noise_scale",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "step_scale",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": []
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/esmfold2_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "tool_outputs": {
+      "fold": "output/prediction_*.cif (one per diffusion sample, mmCIF format). output/metrics.json carries per-sample scores (ptm, iptm, plddt_mean)."
+    },
+    "model": {
+      "name": "ESMFold2",
+      "base": "ESMC 6B + diffusion structure prediction",
+      "weights": "biohub/ESMFold2 (HuggingFace)",
+      "supports": [
+        "protein",
+        "DNA",
+        "RNA",
+        "ligand (CCD/SMILES)"
+      ],
+      "output_format": "mmCIF"
+    },
+    "input_uri_schemes": {
+      "upload": "multipart/form-data — MSA files as `msa_files` (A3M format).",
+      "job://<id>/<file>": "Re-use a file from a prior job.",
+      "file:///abs/path": "Direct NAS path.",
+      "oss://<bucket>/<key>": "Alibaba Cloud OSS object.",
+      "http(s)://...": "Generic URL."
+    },
+    "config_tips": {
+      "num_loops": "Default 3. More loops = slightly higher accuracy, linear runtime increase.",
+      "num_sampling_steps": "Default 50. Range 10-400. Higher = more accurate but slower. 50 is a good default; use 200+ for publication-quality structures.",
+      "num_diffusion_samples": "Default 1 (single structure). Set >1 for ensemble generation — useful for conformational sampling or ranking.",
+      "msa": "Optional. Upload per-chain A3M files via msa_files (filename stem = chain id). Without MSA, ESMFold2 uses single-sequence mode (fast, still accurate)."
+    },
+    "endpoints_summary": {
+      "/api/fold": "Structure prediction for protein/DNA/RNA/ligand complexes."
+    }
+  },
+  "openapi_url": "/openapi.json"
+}

@@ -1,7 +1,7 @@
 {
   "service": "dockq",
   "title": "DockQ Server",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "description": null,
   "endpoints": [
     {
@@ -20,7 +20,9 @@
           "required": false,
           "description": null,
           "is_file": true,
-          "default": null
+          "default": null,
+          "default_kind": null,
+          "default_note": null
         },
         {
           "name": "native",
@@ -28,7 +30,9 @@
           "required": false,
           "description": null,
           "is_file": true,
-          "default": null
+          "default": null,
+          "default_kind": null,
+          "default_note": null
         },
         {
           "name": "model_uri",
@@ -36,7 +40,9 @@
           "required": false,
           "description": null,
           "is_file": false,
-          "default": null
+          "default": null,
+          "default_kind": null,
+          "default_note": null
         },
         {
           "name": "native_uri",
@@ -44,7 +50,9 @@
           "required": false,
           "description": null,
           "is_file": false,
-          "default": null
+          "default": null,
+          "default_kind": null,
+          "default_note": null
         },
         {
           "name": "name",
@@ -52,7 +60,9 @@
           "required": false,
           "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
           "is_file": false,
-          "default": "run"
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "mapping",
@@ -60,7 +70,9 @@
           "required": false,
           "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
           "is_file": false,
-          "default": null
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
         },
         {
           "name": "small_molecule",
@@ -68,7 +80,9 @@
           "required": false,
           "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
           "is_file": false,
-          "default": false
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "capri_peptide",
@@ -76,7 +90,9 @@
           "required": false,
           "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
           "is_file": false,
-          "default": false
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "no_align",
@@ -84,7 +100,9 @@
           "required": false,
           "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
           "is_file": false,
-          "default": false
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "allowed_mismatches",
@@ -92,7 +110,9 @@
           "required": false,
           "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
           "is_file": false,
-          "default": 0
+          "default": 0,
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "optDockQF1",
@@ -100,7 +120,9 @@
           "required": false,
           "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
           "is_file": false,
-          "default": false
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "n_cpu",
@@ -108,7 +130,9 @@
           "required": false,
           "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
           "is_file": false,
-          "default": null
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use all available cores"
         }
       ],
       "examples": [
@@ -151,7 +175,9 @@
           "required": false,
           "description": null,
           "is_file": true,
-          "default": null
+          "default": null,
+          "default_kind": null,
+          "default_note": null
         },
         {
           "name": "native_uri",
@@ -159,15 +185,19 @@
           "required": false,
           "description": null,
           "is_file": false,
-          "default": null
+          "default": null,
+          "default_kind": null,
+          "default_note": null
         },
         {
           "name": "models",
           "type": "array[file]",
           "required": false,
           "description": null,
-          "is_file": false,
-          "default": null
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
         },
         {
           "name": "models_zip_uri",
@@ -175,7 +205,9 @@
           "required": false,
           "description": null,
           "is_file": false,
-          "default": null
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
         },
         {
           "name": "name",
@@ -183,7 +215,9 @@
           "required": false,
           "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
           "is_file": false,
-          "default": "run"
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "mapping",
@@ -191,7 +225,9 @@
           "required": false,
           "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
           "is_file": false,
-          "default": null
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
         },
         {
           "name": "small_molecule",
@@ -199,7 +235,9 @@
           "required": false,
           "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
           "is_file": false,
-          "default": false
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "capri_peptide",
@@ -207,7 +245,9 @@
           "required": false,
           "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
           "is_file": false,
-          "default": false
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "no_align",
@@ -215,7 +255,9 @@
           "required": false,
           "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
           "is_file": false,
-          "default": false
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "allowed_mismatches",
@@ -223,7 +265,9 @@
           "required": false,
           "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
           "is_file": false,
-          "default": 0
+          "default": 0,
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "optDockQF1",
@@ -231,7 +275,9 @@
           "required": false,
           "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
           "is_file": false,
-          "default": false
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "n_cpu",
@@ -239,7 +285,9 @@
           "required": false,
           "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
           "is_file": false,
-          "default": null
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use all available cores"
         },
         {
           "name": "sort_by",
@@ -247,7 +295,9 @@
           "required": false,
           "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
           "is_file": false,
-          "default": "DockQ"
+          "default": "DockQ",
+          "default_kind": "literal",
+          "default_note": null
         }
       ],
       "examples": [
@@ -283,7 +333,9 @@
           "required": false,
           "description": null,
           "is_file": true,
-          "default": null
+          "default": null,
+          "default_kind": null,
+          "default_note": null
         },
         {
           "name": "native",
@@ -291,7 +343,9 @@
           "required": false,
           "description": null,
           "is_file": true,
-          "default": null
+          "default": null,
+          "default_kind": null,
+          "default_note": null
         },
         {
           "name": "model_uri",
@@ -299,7 +353,9 @@
           "required": false,
           "description": null,
           "is_file": false,
-          "default": null
+          "default": null,
+          "default_kind": null,
+          "default_note": null
         },
         {
           "name": "native_uri",
@@ -307,7 +363,9 @@
           "required": false,
           "description": null,
           "is_file": false,
-          "default": null
+          "default": null,
+          "default_kind": null,
+          "default_note": null
         },
         {
           "name": "name",
@@ -315,7 +373,9 @@
           "required": false,
           "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
           "is_file": false,
-          "default": "run"
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "mapping",
@@ -323,7 +383,9 @@
           "required": false,
           "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
           "is_file": false,
-          "default": null
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
         },
         {
           "name": "small_molecule",
@@ -331,7 +393,9 @@
           "required": false,
           "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
           "is_file": false,
-          "default": false
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "capri_peptide",
@@ -339,7 +403,9 @@
           "required": false,
           "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
           "is_file": false,
-          "default": false
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "no_align",
@@ -347,7 +413,9 @@
           "required": false,
           "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
           "is_file": false,
-          "default": false
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "allowed_mismatches",
@@ -355,7 +423,9 @@
           "required": false,
           "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
           "is_file": false,
-          "default": 0
+          "default": 0,
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "optDockQF1",
@@ -363,7 +433,9 @@
           "required": false,
           "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
           "is_file": false,
-          "default": false
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "n_cpu",
@@ -371,7 +443,9 @@
           "required": false,
           "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
           "is_file": false,
-          "default": null
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use all available cores"
         }
       ],
       "examples": []
@@ -392,7 +466,9 @@
           "required": false,
           "description": null,
           "is_file": true,
-          "default": null
+          "default": null,
+          "default_kind": null,
+          "default_note": null
         },
         {
           "name": "native_uri",
@@ -400,15 +476,19 @@
           "required": false,
           "description": null,
           "is_file": false,
-          "default": null
+          "default": null,
+          "default_kind": null,
+          "default_note": null
         },
         {
           "name": "models",
           "type": "array[file]",
           "required": false,
           "description": null,
-          "is_file": false,
-          "default": null
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
         },
         {
           "name": "models_zip_uri",
@@ -416,7 +496,9 @@
           "required": false,
           "description": null,
           "is_file": false,
-          "default": null
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
         },
         {
           "name": "name",
@@ -424,7 +506,9 @@
           "required": false,
           "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
           "is_file": false,
-          "default": "run"
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "mapping",
@@ -432,7 +516,9 @@
           "required": false,
           "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
           "is_file": false,
-          "default": null
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
         },
         {
           "name": "small_molecule",
@@ -440,7 +526,9 @@
           "required": false,
           "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
           "is_file": false,
-          "default": false
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "capri_peptide",
@@ -448,7 +536,9 @@
           "required": false,
           "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
           "is_file": false,
-          "default": false
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "no_align",
@@ -456,7 +546,9 @@
           "required": false,
           "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
           "is_file": false,
-          "default": false
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "allowed_mismatches",
@@ -464,7 +556,9 @@
           "required": false,
           "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
           "is_file": false,
-          "default": 0
+          "default": 0,
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "optDockQF1",
@@ -472,7 +566,9 @@
           "required": false,
           "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
           "is_file": false,
-          "default": false
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
         },
         {
           "name": "n_cpu",
@@ -480,7 +576,9 @@
           "required": false,
           "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
           "is_file": false,
-          "default": null
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use all available cores"
         },
         {
           "name": "sort_by",
@@ -488,7 +586,9 @@
           "required": false,
           "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
           "is_file": false,
-          "default": "DockQ"
+          "default": "DockQ",
+          "default_kind": "literal",
+          "default_note": null
         }
       ],
       "examples": []

@@ -1,0 +1,288 @@
+{
+  "service": "flowmol",
+  "title": "FlowMol Server",
+  "version": "0.0.4",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/generate",
+      "summary": "Run unconditional generation. Returns a JobInfo; poll until completed.",
+      "description": "Run unconditional generation. Returns a JobInfo; poll until completed.",
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body_post_generate_api_generate_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "n_mols",
+          "type": "integer",
+          "required": false,
+          "description": "Number of molecules to generate. Batched sampling; runtime scales linearly in ceil(n_mols / max_batch_size) forward passes.",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_timesteps",
+          "type": "integer",
+          "required": false,
+          "description": "Number of Euler integration steps. 250 is the paper sweet spot; 100 already usable at slightly lower PB-Valid rate.",
+          "is_file": false,
+          "default": 250,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_atoms_per_mol",
+          "type": "integer",
+          "required": false,
+          "description": "If set, every molecule has exactly this many atoms. Default (null) samples atom counts from the training distribution per molecule — recommended.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "model_variant",
+          "type": "string",
+          "required": false,
+          "description": "Which trained model to use. See flowmol3 wiki for the 3 primary + 19 ablation variants. `flowmol3` is the paper SOTA (default). Only pre-staged variants on NAS are usable — check /healthz/detail.staged_variants.",
+          "is_file": false,
+          "default": "flowmol3",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": "pytorch-lightning `seed_everything`; null → framework fills a random seed and records it in JobInfo.input_params.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        },
+        {
+          "name": "stochasticity",
+          "type": "number",
+          "required": false,
+          "description": "CTMC sampling stochasticity η_t. Applies to `fm3_*` CTMC-parameterised variants (all of them). Null → upstream config default.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "hc_thresh",
+          "type": "number",
+          "required": false,
+          "description": "High-confidence threshold for CTMC purity sampling. Null → upstream config default.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "max_batch_size",
+          "type": "integer",
+          "required": false,
+          "description": "Sampling batch size cap. n_mols > max_batch_size splits into ceil(n_mols / max_batch_size) forward passes.",
+          "is_file": false,
+          "default": 128,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "basic generation (100 mols, default flowmol3 variant)",
+          "curl": "curl -X POST $URL/api/generate -F n_mols=100 -F n_timesteps=250",
+          "python": null,
+          "body": null,
+          "notes": "Smallest useful call. Returns a JobInfo; poll /api/jobs/<id> until completed, then GET /api/jobs/<id>/file/molecules.sdf."
+        },
+        {
+          "title": "fast smoke (10 mols, 100 steps)",
+          "curl": "curl -X POST $URL/api/generate -F n_mols=10 -F n_timesteps=100",
+          "python": null,
+          "body": null,
+          "notes": "Roughly 5-10 s on T4; useful for CI / warm-up."
+        },
+        {
+          "title": "fixed molecule size (25 atoms each)",
+          "curl": "curl -X POST $URL/api/generate -F n_mols=50 -F n_atoms_per_mol=25 -F seed=42",
+          "python": null,
+          "body": null,
+          "notes": "Pins every generated molecule to exactly N atoms."
+        },
+        {
+          "title": "ablation variant (no geometry distortion)",
+          "curl": "curl -X POST $URL/api/generate -F n_mols=100 -F model_variant=fm3_nodistort",
+          "python": null,
+          "body": null,
+          "notes": "Requires fm3_nodistort pre-staged to NAS (check /healthz/detail.staged_variants)."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/generate",
+      "summary": "Unconditional molecule generation (single atomic task).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body__task_handler_api_tasks_generate_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "n_mols",
+          "type": "integer",
+          "required": false,
+          "description": "Number of molecules to generate. Batched sampling; runtime scales linearly in ceil(n_mols / max_batch_size) forward passes.",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_timesteps",
+          "type": "integer",
+          "required": false,
+          "description": "Number of Euler integration steps. 250 is the paper sweet spot; 100 already usable at slightly lower PB-Valid rate.",
+          "is_file": false,
+          "default": 250,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_atoms_per_mol",
+          "type": "integer",
+          "required": false,
+          "description": "If set, every molecule has exactly this many atoms. Default (null) samples atom counts from the training distribution per molecule — recommended.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "model_variant",
+          "type": "string",
+          "required": false,
+          "description": "Which trained model to use. See flowmol3 wiki for the 3 primary + 19 ablation variants. `flowmol3` is the paper SOTA (default). Only pre-staged variants on NAS are usable — check /healthz/detail.staged_variants.",
+          "is_file": false,
+          "default": "flowmol3",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": "pytorch-lightning `seed_everything`; null → framework fills a random seed and records it in JobInfo.input_params.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        },
+        {
+          "name": "stochasticity",
+          "type": "number",
+          "required": false,
+          "description": "CTMC sampling stochasticity η_t. Applies to `fm3_*` CTMC-parameterised variants (all of them). Null → upstream config default.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "hc_thresh",
+          "type": "number",
+          "required": false,
+          "description": "High-confidence threshold for CTMC purity sampling. Null → upstream config default.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "max_batch_size",
+          "type": "integer",
+          "required": false,
+          "description": "Sampling batch size cap. n_mols > max_batch_size splits into ceil(n_mols / max_batch_size) forward passes.",
+          "is_file": false,
+          "default": 128,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "FC async task mode (single 202 + blocking compute)",
+          "curl": "curl -X POST $URL/api/tasks/generate -H 'X-Fc-Invocation-Type: Async' -H 'X-Bioagent-Job-Id: my-job-001' -F n_mols=100 -F n_timesteps=250",
+          "python": null,
+          "body": null,
+          "notes": "Returns 202 immediately; FC keeps the instance alive until sampling completes. Preferred production entry."
+        }
+      ]
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/flowmol_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "model": {
+      "name": "FlowMol3",
+      "paper": "arXiv:2508.12629",
+      "task": "unconditional 3D de novo small-molecule generation (flow matching)",
+      "primary_variants": [
+        "flowmol3",
+        "fm3_nodistort",
+        "fm3_none",
+        "fm3_ahigh"
+      ],
+      "output_format": "single SDF with N molecules (kekulize=False)",
+      "training_data": "GEOM-Drugs (243k drug-like molecules)",
+      "params": "6M"
+    },
+    "tool_outputs": {
+      "generate": "output/molecules.sdf — up to n_mols valid 3D molecules (SDF, kekulize=False). Actual count ≤ n_mols since unbuildable graphs are skipped. output/sampling_stats.json reports n_written vs n_requested."
+    },
+    "config_tips": {
+      "n_mols": "100 is a good sweet spot; batched sampling scales sublinearly.",
+      "n_timesteps": "250 is paper SOTA; drop to 100 for quick smoke checks (small %PB-Valid loss).",
+      "model_variant": "Start with flowmol3 (paper SOTA). Ablation variants are for research; pre-stage them on NAS first."
+    },
+    "input_uri_schemes": {
+      "none": "unconditional — no receptor/ligand inputs"
+    }
+  },
+  "openapi_url": "/openapi.json"
+}

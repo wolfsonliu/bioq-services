@@ -1,0 +1,913 @@
+{
+  "service": "boltzgen",
+  "title": "BoltzGen Server",
+  "version": "0.0.14",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/design",
+      "summary": "Run the full BoltzGen binder design pipeline.",
+      "description": "Run the full BoltzGen binder design pipeline.\n\nRequires a design specification YAML describing the target structure and\ndesigned region. Reference CIF/PDB files referenced in the YAML should be\nuploaded via `ref_files`, or bundled into a zip referenced by\n`ref_files_zip_uri` (oss://, file://, job://, http(s)://) — the gateway\nuses the zip form since it can't multipart-upload the `ref_files` list.\n\nPipeline: design -> inverse_folding -> folding -> [design_folding] ->\n[affinity] -> analysis -> filtering.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_design_api_design_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "design_yaml",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "design_yaml_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ref_files",
+          "type": "array[file]",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": [],
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "ref_files_zip_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Output name prefix.",
+          "is_file": false,
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "protocol",
+          "type": "string",
+          "required": false,
+          "description": "Design protocol — determines default settings for filtering/analysis.",
+          "is_file": false,
+          "default": "protein-anything",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_designs",
+          "type": "integer",
+          "required": false,
+          "description": "Number of designs to generate (upstream default 10000; FC recommended 50-500).",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "budget",
+          "type": "integer",
+          "required": false,
+          "description": "Number of final designs after diversity-quality filtering.",
+          "is_file": false,
+          "default": 30,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffusion_batch_size",
+          "type": "integer",
+          "required": false,
+          "description": "Diffusion samples per trunk run. None=auto (1 if num_designs<100, else 10).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "step_scale",
+          "type": "string",
+          "required": false,
+          "description": "Fixed step scale (e.g. '1.8'). Default uses a schedule.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "noise_scale",
+          "type": "string",
+          "required": false,
+          "description": "Fixed noise scale (e.g. '0.98'). Default uses a schedule.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "use_kernels",
+          "type": "string",
+          "required": false,
+          "description": "cuequivariance kernel usage. 'auto' detects GPU capability >= 8.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "skip_inverse_folding",
+          "type": "boolean",
+          "required": false,
+          "description": "Skip inverse folding step.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "inverse_fold_num_sequences",
+          "type": "integer",
+          "required": false,
+          "description": "Number of sequences per backbone in inverse fold step.",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "inverse_fold_avoid",
+          "type": "string",
+          "required": false,
+          "description": "Disallowed residues as one-letter AA codes (e.g. 'C' to avoid Cys). Default: 'C' for peptide/nanobody/antibody protocols, none for others.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "alpha",
+          "type": "number",
+          "required": false,
+          "description": "Diversity/quality trade-off for filtering (0=quality-only, 1=diversity-only).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "filter_biased",
+          "type": "string",
+          "required": false,
+          "description": "Remove amino-acid composition outliers.",
+          "is_file": false,
+          "default": "true",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "reuse",
+          "type": "boolean",
+          "required": false,
+          "description": "Reuse existing results (resume interrupted pipeline).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "analysis_num_processes",
+          "type": "integer",
+          "required": false,
+          "description": "Parallel workers for the analysis step (upstream default 32; use 8-16 on nodes with ≤64 GB RAM to avoid OOM). None=upstream default.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-detect available devices/processes"
+        }
+      ],
+      "examples": [
+        {
+          "title": "de novo protein binder design",
+          "curl": "curl -X POST $URL/api/design -F design_yaml=@design_spec.yaml -F ref_files=@target.cif -F protocol=protein-anything -F num_designs=100 -F budget=30",
+          "python": null,
+          "body": null,
+          "notes": "design_spec.yaml defines the target structure and designed region. ref_files should include all CIF/PDB files referenced by the YAML."
+        },
+        {
+          "title": "nanobody CDR design",
+          "curl": "curl -X POST $URL/api/design -F design_yaml=@nanobody.yaml -F ref_files=@scaffold.cif -F protocol=nanobody-anything -F num_designs=50",
+          "python": null,
+          "body": null,
+          "notes": "Protocol auto-filters Cys in inverse fold step."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/inverse_fold",
+      "summary": "Run BoltzGen in inverse-fold-only mode.",
+      "description": "Run BoltzGen in inverse-fold-only mode.\n\nSkips the design diffusion step; runs inverse_folding -> folding ->\nanalysis -> filtering on a provided backbone structure. The backbone CIF/PDB\nreferenced by the YAML comes via `ref_files` (upload) or `ref_files_zip_uri`\n(zip URI — used by the gateway).",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_inverse_fold_api_inverse_fold_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "design_yaml",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "design_yaml_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ref_files",
+          "type": "array[file]",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": [],
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "ref_files_zip_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Output name prefix.",
+          "is_file": false,
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "protocol",
+          "type": "string",
+          "required": false,
+          "description": "Design protocol — determines default settings for filtering/analysis.",
+          "is_file": false,
+          "default": "protein-anything",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_designs",
+          "type": "integer",
+          "required": false,
+          "description": "Number of designs to generate (upstream default 10000; FC recommended 50-500).",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "budget",
+          "type": "integer",
+          "required": false,
+          "description": "Number of final designs after diversity-quality filtering.",
+          "is_file": false,
+          "default": 30,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffusion_batch_size",
+          "type": "integer",
+          "required": false,
+          "description": "Diffusion samples per trunk run. None=auto (1 if num_designs<100, else 10).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "step_scale",
+          "type": "string",
+          "required": false,
+          "description": "Fixed step scale (e.g. '1.8'). Default uses a schedule.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "noise_scale",
+          "type": "string",
+          "required": false,
+          "description": "Fixed noise scale (e.g. '0.98'). Default uses a schedule.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "use_kernels",
+          "type": "string",
+          "required": false,
+          "description": "cuequivariance kernel usage. 'auto' detects GPU capability >= 8.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "skip_inverse_folding",
+          "type": "boolean",
+          "required": false,
+          "description": "Skip inverse folding step.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "inverse_fold_num_sequences",
+          "type": "integer",
+          "required": false,
+          "description": "Number of sequences per backbone in inverse fold step.",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "inverse_fold_avoid",
+          "type": "string",
+          "required": false,
+          "description": "Disallowed residues as one-letter AA codes (e.g. 'C' to avoid Cys). Default: 'C' for peptide/nanobody/antibody protocols, none for others.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "alpha",
+          "type": "number",
+          "required": false,
+          "description": "Diversity/quality trade-off for filtering (0=quality-only, 1=diversity-only).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "filter_biased",
+          "type": "string",
+          "required": false,
+          "description": "Remove amino-acid composition outliers.",
+          "is_file": false,
+          "default": "true",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "reuse",
+          "type": "boolean",
+          "required": false,
+          "description": "Reuse existing results (resume interrupted pipeline).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "analysis_num_processes",
+          "type": "integer",
+          "required": false,
+          "description": "Parallel workers for the analysis step (upstream default 32; use 8-16 on nodes with ≤64 GB RAM to avoid OOM). None=upstream default.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-detect available devices/processes"
+        }
+      ],
+      "examples": [
+        {
+          "title": "inverse fold existing structure",
+          "curl": "curl -X POST $URL/api/inverse_fold -F design_yaml=@backbone.yaml -F ref_files=@structure.cif -F inverse_fold_num_sequences=10",
+          "python": null,
+          "body": null,
+          "notes": "Skips design diffusion; runs inverse_folding -> folding -> analysis -> filtering on the provided backbone."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/design",
+      "summary": "Run the full BoltzGen design pipeline as a single atomic task.",
+      "description": "Run the full BoltzGen design pipeline as a single atomic task.\n\nBlocks until pipeline completion.  Designed to be invoked via FC Async\nTask Mode (X-Fc-Invocation-Type: Async): FC enqueues and dispatches,\nthe HTTP request stays active for the full subprocess lifetime so FC\nwon't recycle the instance mid-run.\n\nFor the legacy submit/poll interface, use POST /api/design instead.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_design_task_api_tasks_design_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "design_yaml",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "design_yaml_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ref_files",
+          "type": "array[file]",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": [],
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "ref_files_zip_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Output name prefix.",
+          "is_file": false,
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "protocol",
+          "type": "string",
+          "required": false,
+          "description": "Design protocol — determines default settings for filtering/analysis.",
+          "is_file": false,
+          "default": "protein-anything",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_designs",
+          "type": "integer",
+          "required": false,
+          "description": "Number of designs to generate (upstream default 10000; FC recommended 50-500).",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "budget",
+          "type": "integer",
+          "required": false,
+          "description": "Number of final designs after diversity-quality filtering.",
+          "is_file": false,
+          "default": 30,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffusion_batch_size",
+          "type": "integer",
+          "required": false,
+          "description": "Diffusion samples per trunk run. None=auto (1 if num_designs<100, else 10).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "step_scale",
+          "type": "string",
+          "required": false,
+          "description": "Fixed step scale (e.g. '1.8'). Default uses a schedule.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "noise_scale",
+          "type": "string",
+          "required": false,
+          "description": "Fixed noise scale (e.g. '0.98'). Default uses a schedule.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "use_kernels",
+          "type": "string",
+          "required": false,
+          "description": "cuequivariance kernel usage. 'auto' detects GPU capability >= 8.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "skip_inverse_folding",
+          "type": "boolean",
+          "required": false,
+          "description": "Skip inverse folding step.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "inverse_fold_num_sequences",
+          "type": "integer",
+          "required": false,
+          "description": "Number of sequences per backbone in inverse fold step.",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "inverse_fold_avoid",
+          "type": "string",
+          "required": false,
+          "description": "Disallowed residues as one-letter AA codes (e.g. 'C' to avoid Cys). Default: 'C' for peptide/nanobody/antibody protocols, none for others.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "alpha",
+          "type": "number",
+          "required": false,
+          "description": "Diversity/quality trade-off for filtering (0=quality-only, 1=diversity-only).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "filter_biased",
+          "type": "string",
+          "required": false,
+          "description": "Remove amino-acid composition outliers.",
+          "is_file": false,
+          "default": "true",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "reuse",
+          "type": "boolean",
+          "required": false,
+          "description": "Reuse existing results (resume interrupted pipeline).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "analysis_num_processes",
+          "type": "integer",
+          "required": false,
+          "description": "Parallel workers for the analysis step (upstream default 32; use 8-16 on nodes with ≤64 GB RAM to avoid OOM). None=upstream default.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-detect available devices/processes"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/inverse_fold",
+      "summary": "Run BoltzGen inverse-fold-only mode as a single atomic task.",
+      "description": "Run BoltzGen inverse-fold-only mode as a single atomic task.\n\nSame lifecycle as /api/tasks/design but skips the design diffusion\nstep; runs inverse_folding -> folding -> analysis -> filtering.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_inverse_fold_task_api_tasks_inverse_fold_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "design_yaml",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "design_yaml_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ref_files",
+          "type": "array[file]",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": [],
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "ref_files_zip_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Output name prefix.",
+          "is_file": false,
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "protocol",
+          "type": "string",
+          "required": false,
+          "description": "Design protocol — determines default settings for filtering/analysis.",
+          "is_file": false,
+          "default": "protein-anything",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_designs",
+          "type": "integer",
+          "required": false,
+          "description": "Number of designs to generate (upstream default 10000; FC recommended 50-500).",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "budget",
+          "type": "integer",
+          "required": false,
+          "description": "Number of final designs after diversity-quality filtering.",
+          "is_file": false,
+          "default": 30,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffusion_batch_size",
+          "type": "integer",
+          "required": false,
+          "description": "Diffusion samples per trunk run. None=auto (1 if num_designs<100, else 10).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "step_scale",
+          "type": "string",
+          "required": false,
+          "description": "Fixed step scale (e.g. '1.8'). Default uses a schedule.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "noise_scale",
+          "type": "string",
+          "required": false,
+          "description": "Fixed noise scale (e.g. '0.98'). Default uses a schedule.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "use_kernels",
+          "type": "string",
+          "required": false,
+          "description": "cuequivariance kernel usage. 'auto' detects GPU capability >= 8.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "skip_inverse_folding",
+          "type": "boolean",
+          "required": false,
+          "description": "Skip inverse folding step.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "inverse_fold_num_sequences",
+          "type": "integer",
+          "required": false,
+          "description": "Number of sequences per backbone in inverse fold step.",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "inverse_fold_avoid",
+          "type": "string",
+          "required": false,
+          "description": "Disallowed residues as one-letter AA codes (e.g. 'C' to avoid Cys). Default: 'C' for peptide/nanobody/antibody protocols, none for others.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "alpha",
+          "type": "number",
+          "required": false,
+          "description": "Diversity/quality trade-off for filtering (0=quality-only, 1=diversity-only).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "filter_biased",
+          "type": "string",
+          "required": false,
+          "description": "Remove amino-acid composition outliers.",
+          "is_file": false,
+          "default": "true",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "reuse",
+          "type": "boolean",
+          "required": false,
+          "description": "Reuse existing results (resume interrupted pipeline).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "analysis_num_processes",
+          "type": "integer",
+          "required": false,
+          "description": "Parallel workers for the analysis step (upstream default 32; use 8-16 on nodes with ≤64 GB RAM to avoid OOM). None=upstream default.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-detect available devices/processes"
+        }
+      ],
+      "examples": []
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/boltzgen_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "tool_outputs": {
+      "design": "output/final_ranked_designs/ — filtered CIF structures + metrics CSV. Also: output/**/aggregate_metrics_analyze.csv for all-design metrics.",
+      "inverse_fold": "output/final_ranked_designs/ — same structure as design, but starting from inverse folding of a provided backbone.",
+      "note": "Use GET /api/jobs/{id}/files to enumerate; download a single file via /api/jobs/{id}/file/{relpath} or zip the whole dir via /download."
+    },
+    "protocols": {
+      "protein-anything": "De novo protein binder design (default)",
+      "peptide-anything": "Peptide binder design (auto-filters Cys, stricter RMSD)",
+      "protein-small_molecule": "Protein binder for small molecule (includes affinity prediction)",
+      "nanobody-anything": "Nanobody binder design (auto-filters Cys)",
+      "antibody-anything": "Fab antibody CDR design (auto-filters Cys)",
+      "protein-redesign": "Redesign existing protein interfaces"
+    },
+    "models": {
+      "design-diverse": "boltzgen1_diverse.ckpt — diverse backbone generation",
+      "design-adherence": "boltzgen1_adherence.ckpt — adherence-optimized generation",
+      "inverse-fold": "boltzgen1_ifold.ckpt — sequence prediction from backbone",
+      "folding": "boltz2_conf_final.ckpt — structure refolding + confidence",
+      "affinity": "boltz2_aff.ckpt — binding affinity prediction"
+    },
+    "input_uri_schemes": {
+      "upload": "multipart/form-data fields `design_yaml` and `ref_files`.",
+      "design_yaml_uri": "URI to the design spec YAML (instead of a `design_yaml` upload).",
+      "ref_files_zip_uri": "URI to a zip of the CIF/PDB files the YAML references, extracted flat next to the spec. Use this when `ref_files` can't be uploaded (e.g. via the gateway, which dispatches form fields only).",
+      "job://<id>/<file>": "Re-use a file from a prior job on the same NAS.",
+      "file:///abs/path": "Direct NAS path.",
+      "oss://<bucket>/<key>": "Alibaba Cloud OSS object.",
+      "http(s)://...": "Generic URL, including OSS signed URLs."
+    },
+    "config_tips": {
+      "num_designs": "default 100 (upstream default 10000); FC recommended 50-500",
+      "budget": "final selection count after quality+diversity filtering; default 30",
+      "protocol": "auto-configures filtering/analysis settings per use case",
+      "use_kernels": "auto=detect GPU capability; set 'false' for older GPUs",
+      "skip_inverse_folding": "when design spec fully specifies sequences",
+      "design_yaml": "BoltzGen design spec YAML — see https://github.com/HannesStark/boltzgen/tree/main/example for format"
+    },
+    "not_in_scope_v0_0_1": "merge, per-step execution, multi-GPU, training, structured sequence input (use YAML directly)"
+  },
+  "openapi_url": "/openapi.json"
+}

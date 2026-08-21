@@ -1,0 +1,1033 @@
+{
+  "service": "proteinmpnn",
+  "title": "ProteinMPNN Server",
+  "version": "0.0.16",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/design",
+      "summary": "Sequence design (FASTA output) over the input PDB.",
+      "description": "Sequence design (FASTA output) over the input PDB.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_design_api_design_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "pdb",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "pdb_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Output basename. Restricted to [A-Za-z0-9_.-] (no slashes/spaces) because it becomes the input PDB filename and ProteinMPNN derives the output FASTA name from the PDB stem, so `name=foo` → `seqs/foo.fa`.",
+          "is_file": false,
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model_variant",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "vanilla",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model_name",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "v_48_020",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "backbone_noise",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_seq_per_target",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 8,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "sampling_temp",
+          "type": "string",
+          "required": false,
+          "description": "Space-separated list of temperatures, e.g. '0.1 0.2 0.3'.",
+          "is_file": false,
+          "default": "0.1",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "chains_to_design",
+          "type": "string",
+          "required": false,
+          "description": "Space-separated chain IDs, e.g. 'A C'. Omit to design all chains.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "fixed_positions",
+          "type": "string",
+          "required": false,
+          "description": "Per-chain residue indices to fix, e.g. '1 2 3, 10 11' (segments aligned to chains_to_design).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "tied_positions",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "homooligomer",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "bias_AA",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "bias_by_res",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "omit_AAs",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "X",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "omit_AA_per_chain",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": [
+        {
+          "title": "basic vanilla design",
+          "curl": "curl -X POST $URL/api/design -F pdb=@input.pdb -F model_variant=vanilla -F model_name=v_48_020 -F num_seq_per_target=8 -F sampling_temp=0.1 -F name=run1",
+          "python": null,
+          "body": null,
+          "notes": "Output: output/seqs/run1.fa once the job completes."
+        },
+        {
+          "title": "abmpnn CDR design with fixed framework",
+          "curl": "curl -X POST $URL/api/design -F pdb=@antibody.pdb -F model_variant=abmpnn -F model_name=abmpnn -F 'chains_to_design=H L' -F 'fixed_positions=1 2 3 4 5, 1 2 3 4 5' -F name=cdr_run",
+          "python": null,
+          "body": null,
+          "notes": "AbMPNN weights; framework positions fixed, CDRs free to design."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/probs",
+      "summary": "Per-residue AA probability output (conditional / unconditional).",
+      "description": "Per-residue AA probability output (conditional / unconditional).",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_probs_api_probs_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "pdb",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "pdb_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Output basename. Restricted to [A-Za-z0-9_.-] (no slashes/spaces) because it becomes the input PDB filename and ProteinMPNN derives the output FASTA name from the PDB stem, so `name=foo` → `seqs/foo.fa`.",
+          "is_file": false,
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model_variant",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "vanilla",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model_name",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "v_48_020",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "backbone_noise",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "kind",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "conditional",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "save_probs",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "chains_to_design",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": [
+        {
+          "title": "conditional residue probabilities",
+          "curl": "curl -X POST $URL/api/probs -F pdb=@input.pdb -F kind=conditional -F name=p1",
+          "python": null,
+          "body": null,
+          "notes": "Output: output/probs/p1.npz with per-residue 21-vector log probs."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/score",
+      "summary": "Score a (structure, sequence) pair via --score_only 1.",
+      "description": "Score a (structure, sequence) pair via --score_only 1.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_score_api_score_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "pdb",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "pdb_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Output basename. Restricted to [A-Za-z0-9_.-] (no slashes/spaces) because it becomes the input PDB filename and ProteinMPNN derives the output FASTA name from the PDB stem, so `name=foo` → `seqs/foo.fa`.",
+          "is_file": false,
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model_variant",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "vanilla",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model_name",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "v_48_020",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "backbone_noise",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_seq_per_target",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "sampling_temp",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "0.1",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "chains_to_design",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "save_score",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "score complex against vanilla weights",
+          "curl": "curl -X POST $URL/api/score -F pdb=@complex.pdb -F num_seq_per_target=10 -F name=score1",
+          "python": null,
+          "body": null,
+          "notes": "Score output: output/score_only/score1_pdb.npz."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/design",
+      "summary": "Sequence design as a single atomic task.",
+      "description": "Sequence design as a single atomic task.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_design_task_api_tasks_design_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "pdb",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "pdb_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Output basename. Restricted to [A-Za-z0-9_.-] (no slashes/spaces) because it becomes the input PDB filename and ProteinMPNN derives the output FASTA name from the PDB stem, so `name=foo` → `seqs/foo.fa`.",
+          "is_file": false,
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model_variant",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "vanilla",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model_name",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "v_48_020",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "backbone_noise",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_seq_per_target",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 8,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "sampling_temp",
+          "type": "string",
+          "required": false,
+          "description": "Space-separated list of temperatures, e.g. '0.1 0.2 0.3'.",
+          "is_file": false,
+          "default": "0.1",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "chains_to_design",
+          "type": "string",
+          "required": false,
+          "description": "Space-separated chain IDs, e.g. 'A C'. Omit to design all chains.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "fixed_positions",
+          "type": "string",
+          "required": false,
+          "description": "Per-chain residue indices to fix, e.g. '1 2 3, 10 11' (segments aligned to chains_to_design).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "tied_positions",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "homooligomer",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "bias_AA",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "bias_by_res",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "omit_AAs",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "X",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "omit_AA_per_chain",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/probs",
+      "summary": "Probabilities as a single atomic task.",
+      "description": "Probabilities as a single atomic task.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_probs_task_api_tasks_probs_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "pdb",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "pdb_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Output basename. Restricted to [A-Za-z0-9_.-] (no slashes/spaces) because it becomes the input PDB filename and ProteinMPNN derives the output FASTA name from the PDB stem, so `name=foo` → `seqs/foo.fa`.",
+          "is_file": false,
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model_variant",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "vanilla",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model_name",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "v_48_020",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "backbone_noise",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "kind",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "conditional",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "save_probs",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "chains_to_design",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/score",
+      "summary": "Score as a single atomic task.",
+      "description": "Score as a single atomic task.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_score_task_api_tasks_score_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "pdb",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "pdb_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Output basename. Restricted to [A-Za-z0-9_.-] (no slashes/spaces) because it becomes the input PDB filename and ProteinMPNN derives the output FASTA name from the PDB stem, so `name=foo` → `seqs/foo.fa`.",
+          "is_file": false,
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model_variant",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "vanilla",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model_name",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "v_48_020",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "backbone_noise",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_seq_per_target",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "sampling_temp",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "0.1",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "chains_to_design",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "save_score",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": []
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/proteinmpnn_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "tool_outputs": {
+      "design": "output/seqs/<name>.fa",
+      "score": "output/score_only/<name>_pdb.npz",
+      "probs_conditional": "output/conditional_probs_only/<name>.npz",
+      "probs_unconditional": "output/unconditional_probs_only/<name>.npz",
+      "note": "Use GET /api/jobs/{id}/files to enumerate; download a single file via /api/jobs/{id}/file/{relpath}."
+    },
+    "model_variants": {
+      "vanilla": {
+        "weights_dir": "vanilla_model_weights/",
+        "model_names": [
+          "v_48_002",
+          "v_48_010",
+          "v_48_020",
+          "v_48_030"
+        ],
+        "description": "Full backbone (default)."
+      },
+      "soluble": {
+        "weights_dir": "soluble_model_weights/",
+        "model_names": [
+          "v_48_002",
+          "v_48_010",
+          "v_48_020",
+          "v_48_030"
+        ],
+        "description": "Trained on soluble proteins only."
+      },
+      "ca_only": {
+        "weights_dir": "ca_model_weights/",
+        "model_names": [
+          "v_48_002",
+          "v_48_010",
+          "v_48_020"
+        ],
+        "description": "CA-only structures (no v_48_030 available)."
+      },
+      "abmpnn": {
+        "weights_dir": "AbMPNN_model_weights/",
+        "model_names": [
+          "abmpnn"
+        ],
+        "description": "Antibody-specific weights (ICML 2023 Workshop)."
+      }
+    },
+    "input_uri_schemes": {
+      "upload": "multipart/form-data (field name `pdb`).",
+      "job://<id>/<file>": "Re-use a file from a prior proteinmpnn job (same NAS).",
+      "file:///abs/path": "Direct NAS path; works across services on the shared mount.",
+      "oss://<bucket>/<key>": "Alibaba Cloud OSS object (needs OSS_ACCESS_KEY_ID / _SECRET env vars).",
+      "http(s)://...": "Generic URL, including OSS signed URLs."
+    },
+    "config_tips": {
+      "fixed_positions": "Format '<idx idx ...>, <idx idx ...>' — comma segments aligned to chains_to_design. Residue indices are 1-based and refer to position in the chain, NOT PDB residue numbers.",
+      "tied_positions": "Same format as fixed_positions. Set homooligomer=true to repeat the first chain's tied positions across symmetric subunits.",
+      "sampling_temp": "Space-separated list of temperatures, e.g. '0.1 0.2'. Each one is sampled num_seq_per_target times. Suggested 0.1–0.3.",
+      "bias_AA": "JSON dict mapping single-letter AA → bias float. Positive = more likely. Example: {\"D\":1.39,\"E\":1.39} biases toward acidic residues."
+    },
+    "endpoints_summary": {
+      "/api/design": "Generate new sequences for the given backbone.",
+      "/api/score": "Score a (structure, sequence) pair via --score_only.",
+      "/api/probs": "Output per-residue AA probabilities (conditional / conditional_backbone / unconditional)."
+    },
+    "not_in_scope_v0_0_1": "PSSM inputs, batch multi-PDB designs, and score-from-fasta are deferred to v0.0.2. For now, submit one job per PDB."
+  },
+  "openapi_url": "/openapi.json"
+}

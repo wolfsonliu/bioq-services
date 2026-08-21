@@ -1,0 +1,255 @@
+{
+  "service": "megalodon",
+  "title": "Megalodon Server",
+  "version": "0.0.4",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/generate",
+      "summary": "Run unconditional generation. Returns a JobInfo; poll until completed.",
+      "description": "Run unconditional generation. Returns a JobInfo; poll until completed.",
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body_post_generate_api_generate_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "model_name",
+          "type": "string",
+          "required": false,
+          "description": "Which pre-staged variant to use: {qm9,drugs}_{diffusion,fm,quick}. `drugs_*` are drug-like (GEOM-Drugs); `qm9_*` are small molecules. Only variants present on NAS are usable — check /api/models or /healthz/detail.",
+          "is_file": false,
+          "default": "drugs_diffusion",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_molecules",
+          "type": "integer",
+          "required": false,
+          "description": "Number of molecules to generate. Batched internally; runtime scales with ceil(n_molecules / batch_size) sampling passes.",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_atoms_per_mol",
+          "type": "integer",
+          "required": false,
+          "description": "If set, every molecule has exactly this many atoms. Default (null) samples atom counts from the training size distribution (train_n_h.pickle) — recommended. Model tested up to 125 atoms.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "timesteps",
+          "type": "integer",
+          "required": false,
+          "description": "Number of sampling steps. Diffusion default 500; flow-matching variants work well at ~100. Fewer = faster, lower quality.",
+          "is_file": false,
+          "default": 500,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": "Internal sampling batch size. n_molecules > batch_size is split into multiple passes automatically.",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": "Random seed (torch.manual_seed). null → unseeded; recorded in JobInfo.input_params.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        }
+      ],
+      "examples": [
+        {
+          "title": "basic generation (100 mols, drugs diffusion)",
+          "curl": "curl -X POST $URL/api/generate -F model_name=drugs_diffusion -F n_molecules=100",
+          "python": null,
+          "body": null,
+          "notes": "Returns a JobInfo; poll /api/jobs/<id> until completed, then GET /api/jobs/<id>/file/generated_molecules.sdf."
+        },
+        {
+          "title": "fast smoke (10 mols, fm variant, 100 steps)",
+          "curl": "curl -X POST $URL/api/generate -F model_name=drugs_fm -F n_molecules=10 -F timesteps=100",
+          "python": null,
+          "body": null,
+          "notes": "Fastest useful call for CI / warm-up."
+        },
+        {
+          "title": "fixed molecule size (25 atoms each)",
+          "curl": "curl -X POST $URL/api/generate -F model_name=qm9_diffusion -F n_molecules=50 -F n_atoms_per_mol=25 -F seed=42",
+          "python": null,
+          "body": null,
+          "notes": "n_atoms_per_mol pins every molecule to a fixed size."
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/models",
+      "summary": "List the 6 variants with NAS presence status.",
+      "description": "List the 6 variants with NAS presence status.",
+      "operation_id": null,
+      "request_content_type": null,
+      "request_schema_ref": null,
+      "response_schema_ref": null,
+      "request_fields": [],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/generate",
+      "summary": "Unconditional generation (single atomic task).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body__task_handler_api_tasks_generate_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "model_name",
+          "type": "string",
+          "required": false,
+          "description": "Which pre-staged variant to use: {qm9,drugs}_{diffusion,fm,quick}. `drugs_*` are drug-like (GEOM-Drugs); `qm9_*` are small molecules. Only variants present on NAS are usable — check /api/models or /healthz/detail.",
+          "is_file": false,
+          "default": "drugs_diffusion",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_molecules",
+          "type": "integer",
+          "required": false,
+          "description": "Number of molecules to generate. Batched internally; runtime scales with ceil(n_molecules / batch_size) sampling passes.",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_atoms_per_mol",
+          "type": "integer",
+          "required": false,
+          "description": "If set, every molecule has exactly this many atoms. Default (null) samples atom counts from the training size distribution (train_n_h.pickle) — recommended. Model tested up to 125 atoms.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "timesteps",
+          "type": "integer",
+          "required": false,
+          "description": "Number of sampling steps. Diffusion default 500; flow-matching variants work well at ~100. Fewer = faster, lower quality.",
+          "is_file": false,
+          "default": 500,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "batch_size",
+          "type": "integer",
+          "required": false,
+          "description": "Internal sampling batch size. n_molecules > batch_size is split into multiple passes automatically.",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": "Random seed (torch.manual_seed). null → unseeded; recorded in JobInfo.input_params.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        }
+      ],
+      "examples": [
+        {
+          "title": "FC async task mode (single 202 + blocking compute)",
+          "curl": "curl -X POST $URL/api/tasks/generate -H 'X-Fc-Invocation-Type: Async' -H 'X-Bioagent-Job-Id: my-job-001' -F model_name=drugs_diffusion -F n_molecules=100",
+          "python": null,
+          "body": null,
+          "notes": "Returns 202 immediately; FC keeps the instance alive until sampling completes. Preferred production entry."
+        }
+      ]
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/megalodon_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "model": {
+      "name": "Megalodon",
+      "paper": "Reidenbach et al., arXiv:2505.18392 (2025) — EGNN-Transformer co-design, diffusion + flow matching",
+      "task": "unconditional 3D de novo small-molecule generation",
+      "models": [
+        "drugs_diffusion",
+        "drugs_fm",
+        "drugs_quick",
+        "qm9_diffusion",
+        "qm9_fm",
+        "qm9_quick"
+      ],
+      "output_format": "generated_molecules.sdf (RDKit SDF, N molecules) + metrics.json (2D/3D/train-data) + generation_stats.json",
+      "training_data": "QM9 / GEOM-Drugs",
+      "license": "Apache-2.0 (code) / NVIDIA Open Model License (weights)"
+    },
+    "tool_outputs": {
+      "generate": "output/generated_molecules.sdf — up to n_molecules valid 3D molecules (SDF). Actual count <= n_molecules (unbuildable graphs skipped). output/metrics.json reports generative metrics; output/generation_stats.json reports n_valid vs n_requested + timing."
+    },
+    "config_tips": {
+      "model_name": "drugs_* = drug-like (GEOM-Drugs); qm9_* = small molecules. *_diffusion = highest quality; *_fm = flow matching (fast at ~100 steps); *_quick = lighter/faster architecture.",
+      "n_atoms_per_mol": "null samples atom counts from the training distribution (recommended); set an int to fix molecule size.",
+      "timesteps": "500 for diffusion; ~100 for fm variants."
+    },
+    "input_uri_schemes": {
+      "none": "unconditional — no receptor/ligand/SMILES inputs"
+    }
+  },
+  "openapi_url": "/openapi.json"
+}

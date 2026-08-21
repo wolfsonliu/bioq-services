@@ -1,0 +1,579 @@
+{
+  "service": "chembounce",
+  "title": "ChemBounce Server",
+  "version": "0.0.5",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/scaffold_hop",
+      "summary": "Run ChemBounce scaffold hopping.  Returns JobInfo; poll until completed.",
+      "description": "Run ChemBounce scaffold hopping.  Returns JobInfo; poll until completed.",
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body_post_scaffold_hop_api_scaffold_hop_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_smiles_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_smiles",
+          "type": "string",
+          "required": true,
+          "description": "Input SMILES string of the target molecule to scaffold-hop.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "database",
+          "type": "string",
+          "required": false,
+          "description": "Which scaffold fingerprint DB to search:\n- '250mw': scaffolds with MW ≤ 250 (~tens of MB, fast, low recall)\n- 'full' : ~4M scaffolds (~GB, paper-grade, needs ≥64 GB RAM)",
+          "is_file": false,
+          "default": "250mw",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "core_smiles",
+          "type": "string",
+          "required": false,
+          "description": "A core substructure SMILES that must be preserved in the final candidate; if not actually contained in `input_smiles`, ChemBounce raises an error.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "frag_max_n",
+          "type": "integer",
+          "required": false,
+          "description": "Maximum candidates per fragment.",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "overall_max_n",
+          "type": "integer",
+          "required": false,
+          "description": "Hard cap on total candidates across all fragments.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "scaffold_top_n",
+          "type": "integer",
+          "required": false,
+          "description": "Number of scaffolds to test per fragment.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "cand_max_n__rplc",
+          "type": "integer",
+          "required": false,
+          "description": "Maximum candidates per replaced scaffold.",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "tanimoto_threshold",
+          "type": "number",
+          "required": false,
+          "description": "Tanimoto similarity threshold between original and generated SMILES.",
+          "is_file": false,
+          "default": 0.5,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "qed_min",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "qed_max",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "sa_min",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "sa_max",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "logp_min",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "logp_max",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "mw_min",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "mw_max",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "h_donor_min",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "h_donor_max",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "h_acceptor_min",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "h_acceptor_max",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "wo_lipinski",
+          "type": "boolean",
+          "required": false,
+          "description": "Turn off Lipinski's rule of five.  Enable for macrocycles / peptides that naturally violate it.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "low_mem",
+          "type": "boolean",
+          "required": false,
+          "description": "Upstream's `-l` flag.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "basic scaffold hopping (250 MW DB, default thresholds)",
+          "curl": "curl -X POST $URL/api/scaffold_hop -F 'input_smiles=CCCCC1=NC(=C(N1CC2=CC=C(C=C2)C3=CC=CC=C3C4=NNN=N4)CO)Cl' -F 'frag_max_n=100' -F 'tanimoto_threshold=0.5'",
+          "python": null,
+          "body": null,
+          "notes": "Smallest useful call.  Returns a JobInfo; poll /api/jobs/<id> until completed, then GET /api/jobs/<id>/file/output/overall_result.txt."
+        },
+        {
+          "title": "full DB + tight Tanimoto + core lock",
+          "curl": "curl -X POST $URL/api/scaffold_hop -F 'input_smiles=CCCCC1=NC(=C(N1CC2=CC=C(C=C2)C3=CC=CC=C3C4=NNN=N4)CO)Cl' -F 'database=full' -F 'tanimoto_threshold=0.7' -F 'core_smiles=C4=NNN=N4' -F 'frag_max_n=50'",
+          "python": null,
+          "body": null,
+          "notes": "Lock the tetrazole core; search the full 4M-scaffold DB.  Significantly more memory + time than the default."
+        },
+        {
+          "title": "macrocycle / peptide (Lipinski off)",
+          "curl": "curl -X POST $URL/api/scaffold_hop -F 'input_smiles=<peptide SMILES>' -F 'wo_lipinski=true' -F 'mw_max=4000'",
+          "python": null,
+          "body": null,
+          "notes": "wo_lipinski disables the rule-of-five gate; mw_max still enforced because peptide candidates can exceed 5 kDa."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/scaffold_hop",
+      "summary": "FC async task mode — blocks until done; HTTP 202 on submit.",
+      "description": "FC async task mode — blocks until done; HTTP 202 on submit.",
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body_post_scaffold_hop_task_api_tasks_scaffold_hop_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_smiles_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_smiles",
+          "type": "string",
+          "required": true,
+          "description": "Input SMILES string of the target molecule to scaffold-hop.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "database",
+          "type": "string",
+          "required": false,
+          "description": "Which scaffold fingerprint DB to search:\n- '250mw': scaffolds with MW ≤ 250 (~tens of MB, fast, low recall)\n- 'full' : ~4M scaffolds (~GB, paper-grade, needs ≥64 GB RAM)",
+          "is_file": false,
+          "default": "250mw",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "core_smiles",
+          "type": "string",
+          "required": false,
+          "description": "A core substructure SMILES that must be preserved in the final candidate; if not actually contained in `input_smiles`, ChemBounce raises an error.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "frag_max_n",
+          "type": "integer",
+          "required": false,
+          "description": "Maximum candidates per fragment.",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "overall_max_n",
+          "type": "integer",
+          "required": false,
+          "description": "Hard cap on total candidates across all fragments.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "scaffold_top_n",
+          "type": "integer",
+          "required": false,
+          "description": "Number of scaffolds to test per fragment.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "cand_max_n__rplc",
+          "type": "integer",
+          "required": false,
+          "description": "Maximum candidates per replaced scaffold.",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "tanimoto_threshold",
+          "type": "number",
+          "required": false,
+          "description": "Tanimoto similarity threshold between original and generated SMILES.",
+          "is_file": false,
+          "default": 0.5,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "qed_min",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "qed_max",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "sa_min",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "sa_max",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "logp_min",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "logp_max",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "mw_min",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "mw_max",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "h_donor_min",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "h_donor_max",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "h_acceptor_min",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "h_acceptor_max",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "wo_lipinski",
+          "type": "boolean",
+          "required": false,
+          "description": "Turn off Lipinski's rule of five.  Enable for macrocycles / peptides that naturally violate it.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "low_mem",
+          "type": "boolean",
+          "required": false,
+          "description": "Upstream's `-l` flag.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "FC async task mode",
+          "curl": "curl -X POST $URL/api/tasks/scaffold_hop -H 'X-Fc-Invocation-Type: Async' -H 'X-Bioagent-Job-Id: my-hop-001' -F 'input_smiles=CCCCC1=NC(=C(N1CC2=CC=C(C=C2)C3=CC=CC=C3C4=NNN=N4)CO)Cl' -F 'frag_max_n=100'",
+          "python": null,
+          "body": null,
+          "notes": "Returns 202 immediately; FC keeps the instance alive until the search completes.  Use in production behind the FC async-task console toggle."
+        }
+      ]
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/chembounce_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "model": {
+      "name": "ChemBounce",
+      "method": "classical scaffold hopping (fragmentation + similarity search + drug-likeness filtering)",
+      "task": "ligand-based scaffold hopping (no pocket / protein target required)",
+      "output_format": "TSV (overall_result.txt) + per-fragment TSVs + resource_cost.json",
+      "license_note": "INTERNAL RESEARCH USE ONLY — upstream repo has no LICENSE file. See design doc §10.1."
+    },
+    "tool_outputs": {
+      "scaffold_hop": "output/overall_result.txt — main TSV with columns: Fragment_no, Final structure, Standardized final structure, Tanimoto Similarity, Electron shape Similarity"
+    },
+    "config_tips": {
+      "database": "Start with '250mw' (default — scaffolds with MW ≤ 250, fast). Switch to 'full' only for comprehensive paper-grade search (~4M scaffolds, needs ≥64 GB RAM).",
+      "frag_max_n": "100 is a sensible default.  >1000 stresses runtime exponentially on multi-ring molecules (upstream caveat).",
+      "tanimoto_threshold": "0.5 retains broad diversity.  Raise to 0.6–0.7 for tighter similarity to the original molecule.",
+      "wo_lipinski": "Enable for macrocycles / peptides that naturally violate Lipinski's rule of five (MW > 500, > 5 H-bond donors, etc).",
+      "core_smiles": "Use to lock a substructure (e.g. a known pharmacophore) that must be preserved in the final candidates."
+    },
+    "input_uri_schemes": {
+      "string": "SMILES passed directly as a form field (recommended)"
+    },
+    "task_comparison": {
+      "vs_diffusion_hopping_server": "Both do 'scaffold hopping' but differ fundamentally: ChemBounce is ligand-based (no protein required, classical similarity search); diffusion-hopping-server is pocket-conditional (requires protein PDB + reference ligand, neural diffusion preserves binding pose).  Pick ChemBounce for early hit-to-lead medicinal chemistry, anti-patent redesign, or when no protein structure is available."
+    }
+  },
+  "openapi_url": "/openapi.json"
+}

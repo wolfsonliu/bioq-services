@@ -1,0 +1,321 @@
+{
+  "service": "openbpmd",
+  "title": "OpenBPMD Server",
+  "version": "0.0.4",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/score",
+      "summary": "Score a binding pose via metadynamics. Returns a JobInfo; poll until done.",
+      "description": "Score a binding pose via metadynamics. Returns a JobInfo; poll until done.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_score_api_score_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "structure",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "structure_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "parameters",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "parameters_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "lig_resname",
+          "type": "string",
+          "required": false,
+          "description": "Ligand residue name in the topology (upstream argparse default is 'MOL'; some systems use 'LIG'/'UNK' — match your file).",
+          "is_file": false,
+          "default": "MOL",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "nreps",
+          "type": "integer",
+          "required": false,
+          "description": "Number of independent metadynamics repeats (run in series). 10 is the standard BPMD protocol.",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "hill_height",
+          "type": "number",
+          "required": false,
+          "description": "Metadynamical hill height in kcal/mol. 0.3 is standard.",
+          "is_file": false,
+          "default": 0.3,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "system_format",
+          "type": "string",
+          "required": false,
+          "description": "Force input format. None = auto-detect by extension (.gro -> gromacs, else amber).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "sim_ns",
+          "type": "number",
+          "required": false,
+          "description": "ADVANCED/TESTING: production metadynamics length in ns. None -> upstream standard 10 ns. Non-standard values break score comparability.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "equil_steps",
+          "type": "integer",
+          "required": false,
+          "description": "ADVANCED/TESTING: NVT equilibration steps (2 fs each). None -> upstream standard 250000 (500 ps).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": [
+        {
+          "title": "score a docked pose (Amber system)",
+          "curl": "curl -X POST $URL/api/score -F structure=@solvated.rst7 -F parameters=@solvated.prm7 -F lig_resname=MOL -F nreps=10 -F hill_height=0.3",
+          "python": null,
+          "body": null,
+          "notes": "Long-running (hours on 1 GPU). Returns a JobInfo; poll /api/jobs/<id> until completed, then GET /api/jobs/<id>/files for results.csv."
+        },
+        {
+          "title": "Gromacs system via OSS URIs",
+          "curl": "curl -X POST $URL/api/score -F structure_uri=oss://mybucket/solvated.gro -F parameters_uri=oss://mybucket/solvated.top -F lig_resname=LIG -F nreps=10",
+          "python": null,
+          "body": null,
+          "notes": "URI inputs avoid the 128 KiB multipart cap."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/score",
+      "summary": "FC async task mode — blocks until done, HTTP request returns 202.",
+      "description": "FC async task mode — blocks until done, HTTP request returns 202.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_score_task_api_tasks_score_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "structure",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "structure_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "parameters",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "parameters_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "lig_resname",
+          "type": "string",
+          "required": false,
+          "description": "Ligand residue name in the topology (upstream argparse default is 'MOL'; some systems use 'LIG'/'UNK' — match your file).",
+          "is_file": false,
+          "default": "MOL",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "nreps",
+          "type": "integer",
+          "required": false,
+          "description": "Number of independent metadynamics repeats (run in series). 10 is the standard BPMD protocol.",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "hill_height",
+          "type": "number",
+          "required": false,
+          "description": "Metadynamical hill height in kcal/mol. 0.3 is standard.",
+          "is_file": false,
+          "default": 0.3,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "system_format",
+          "type": "string",
+          "required": false,
+          "description": "Force input format. None = auto-detect by extension (.gro -> gromacs, else amber).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "sim_ns",
+          "type": "number",
+          "required": false,
+          "description": "ADVANCED/TESTING: production metadynamics length in ns. None -> upstream standard 10 ns. Non-standard values break score comparability.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "equil_steps",
+          "type": "integer",
+          "required": false,
+          "description": "ADVANCED/TESTING: NVT equilibration steps (2 fs each). None -> upstream standard 250000 (500 ps).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": [
+        {
+          "title": "FC async task mode (single 202 + blocking compute)",
+          "curl": "curl -X POST $URL/api/tasks/score -H 'X-Fc-Invocation-Type: Async' -H 'X-Bioagent-Job-Id: bpmd-001' -F structure_uri=oss://mybucket/solvated.rst7 -F parameters_uri=oss://mybucket/solvated.prm7 -F lig_resname=MOL -F nreps=10",
+          "python": null,
+          "body": null,
+          "notes": "Returns 202; FC keeps the instance alive until the metadynamics finishes. Duplicate submits with the same X-Bioagent-Job-Id are deduped. Prefer URI inputs (128 KiB async payload cap)."
+        }
+      ]
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/openbpmd_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "model": {
+      "name": "OpenBPMD",
+      "paper": "Lukauskis et al., J. Chem. Inf. Model. 2022, 62, 6209-6216 (DOI:10.1021/acs.jcim.2c01142)",
+      "method": "Binding Pose Metadynamics (OpenMM), Clark et al. 2016 protocol",
+      "task": "ligand binding-pose stability scoring / post-docking re-ranking (NOT a binding free-energy / affinity predictor)",
+      "long_running": true,
+      "typical_duration": "hours (10 reps x 10 ns, serial, single GPU)",
+      "score_semantics": "CompScore = PoseScore - 5*ContactScore; MORE NEGATIVE = more stable pose. PoseScore = ligand heavy-atom RMSD (lower better); ContactScore = fraction of native contacts retained (higher better)."
+    },
+    "tool_outputs": {
+      "results.csv": "final CompScore/PoseScore/ContactScore + SD, averaged over the last 2 ns of each rep (single row).",
+      "rep_*/bpm_results.csv": "time-resolved per-frame scores per replica.",
+      "scoring_stats.json": "wrapper summary: nreps_done, comp/pose/contact score, wall_time_s, platform, sim_ns.",
+      "*_system.pdb": "minimized_system.pdb / equil_system.pdb / centred_equil_system.pdb intermediate structures."
+    },
+    "input_requirements": {
+      "system": "PRE-SOLVATED + PARAMETRISED complex (Amber .prm7/.rst7 OR Gromacs .top/.gro). OpenBPMD does NOT prepare systems — provide ligand FF params, water, and ions upstream.",
+      "lig_resname": "must match the ligand residue name in the topology (default 'MOL')."
+    },
+    "config_tips": {
+      "nreps": "10 is the standard BPMD protocol; reduce for a faster/cheaper triage at lower confidence.",
+      "hill_height": "0.3 kcal/mol is standard; do not change unless replicating a specific study.",
+      "sim_ns": "ADVANCED/TESTING ONLY. Leave unset. Non-standard lengths break comparability with published BPMD scores.",
+      "large_inputs": "Use *_uri (oss:// / job:// / file://) — a typical .prm7 is ~8 MB and exceeds the FC async 128 KiB event-payload cap for multipart uploads."
+    },
+    "input_uri_schemes": {
+      "upload": "multipart/form-data — structure + parameters files",
+      "oss://<bucket>/<key>": "fetched at submit-time",
+      "job://<prev_job_id>/<file>": "pipeline chaining",
+      "file:///<path>": "absolute path on the FC NAS mount",
+      "http(s)://...": "streamed at submit-time"
+    }
+  },
+  "openapi_url": "/openapi.json"
+}

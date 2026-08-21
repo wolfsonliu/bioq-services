@@ -1,0 +1,768 @@
+{
+  "service": "iggm",
+  "title": "IgGM Server",
+  "version": "0.0.4",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/affinity-maturation",
+      "summary": "Affinity maturation: per-position mutation scan of an existing antibody.",
+      "description": "Affinity maturation: per-position mutation scan of an existing antibody.\n\nRequires fasta_origin (the original sequence to mature from).",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_affinity_maturation_api_affinity_maturation_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "fasta",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "fasta_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "antigen",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "antigen_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "fasta_origin",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "fasta_origin_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "epitope",
+          "type": "string",
+          "required": false,
+          "description": "Antigen interface residue numbers (1-based). If omitted, IgGM's cal_ppi infers the epitope from the complex structure when possible. Get one from POST /api/epitope.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "steps",
+          "type": "integer",
+          "required": false,
+          "description": "Number of sampling steps (upstream default 10; 200 is the internal full schedule).",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_samples",
+          "type": "integer",
+          "required": false,
+          "description": "Number of maturation rounds. Total outputs scale as num_samples x masked positions x (chains-1); keep modest on FC and use the CLI/Slurm mode for large sweeps.",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "chunk_size",
+          "type": "integer",
+          "required": false,
+          "description": "Chunk size for long-chain inference (memory/speed tradeoff).",
+          "is_file": false,
+          "default": 64,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "temperature",
+          "type": "number",
+          "required": false,
+          "description": "Sampling temperature.",
+          "is_file": false,
+          "default": 1.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "max_antigen_size",
+          "type": "integer",
+          "required": false,
+          "description": "Truncate the antigen chain to this many residues to avoid OOM. Upstream suggests 384 for large antigens.",
+          "is_file": false,
+          "default": 2000,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": "Random seed. If omitted, the upstream default (42) is used.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        }
+      ],
+      "examples": [
+        {
+          "title": "affinity maturation",
+          "curl": "curl -X POST $URL/api/affinity-maturation -F fasta=@ab_CDR_H3.fasta -F antigen=@antigen.pdb -F fasta_origin=@ab_native.fasta -F num_samples=10",
+          "python": null,
+          "body": null,
+          "notes": "Requires fasta_origin. Output count scales with num_samples x masked positions."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/design",
+      "summary": "Antibody design: CDR sequence + structure co-design (design), sequence",
+      "description": "Antibody design: CDR sequence + structure co-design (design), sequence\non a fixed backbone (inverse_design), or framework-region redesign\n(fr_design), selected via run_task.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_design_api_design_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "fasta",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "fasta_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "antigen",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "antigen_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "epitope",
+          "type": "string",
+          "required": false,
+          "description": "Antigen interface residue numbers (1-based). If omitted, IgGM's cal_ppi infers the epitope from the complex structure when possible. Get one from POST /api/epitope.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "steps",
+          "type": "integer",
+          "required": false,
+          "description": "Number of sampling steps (upstream default 10; 200 is the internal full schedule).",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_samples",
+          "type": "integer",
+          "required": false,
+          "description": "Number of designs to generate.",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "chunk_size",
+          "type": "integer",
+          "required": false,
+          "description": "Chunk size for long-chain inference (memory/speed tradeoff).",
+          "is_file": false,
+          "default": 64,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "temperature",
+          "type": "number",
+          "required": false,
+          "description": "Sampling temperature.",
+          "is_file": false,
+          "default": 1.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "max_antigen_size",
+          "type": "integer",
+          "required": false,
+          "description": "Truncate the antigen chain to this many residues to avoid OOM. Upstream suggests 384 for large antigens.",
+          "is_file": false,
+          "default": 2000,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": "Random seed. If omitted, the upstream default (42) is used.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        },
+        {
+          "name": "run_task",
+          "type": "string",
+          "required": false,
+          "description": "design = CDR sequence + full complex structure co-design; inverse_design = sequence design on a fixed backbone (FASTA only); fr_design = framework-region redesign (humanization).",
+          "is_file": false,
+          "default": "design",
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "CDR design + structure (antibody vs antigen)",
+          "curl": "curl -X POST $URL/api/design -F run_task=design -F fasta=@ab_CDR_H3.fasta -F antigen=@antigen.pdb -F 'epitope=[7,8,9,10,11]'",
+          "python": null,
+          "body": null,
+          "notes": "fasta has 'X' at the CDR to design; antigen chain id matches the last FASTA record. Poll /api/jobs/<id>, then GET /api/jobs/<id>/download."
+        },
+        {
+          "title": "inverse design (sequence only, fixed backbone)",
+          "curl": "curl -X POST $URL/api/design -F run_task=inverse_design -F fasta=@complex.fasta -F antigen=@complex.pdb",
+          "python": null,
+          "body": null,
+          "notes": "Produces FASTA only."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/epitope",
+      "summary": "Compute the antigen interface epitope from a complex (fasta + antigen).",
+      "description": "Compute the antigen interface epitope from a complex (fasta + antigen).",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_epitope_api_epitope_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "fasta",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "fasta_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "antigen",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "antigen_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "compute interface epitope from a complex",
+          "curl": "curl -X POST $URL/api/epitope -F fasta=@complex.fasta -F antigen=@complex.pdb",
+          "python": null,
+          "body": null,
+          "notes": "Returns epitope.json with 1-based residue numbers."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/affinity-maturation",
+      "summary": "Affinity maturation as a single blocking task (FC Async).",
+      "description": "Affinity maturation as a single blocking task (FC Async).",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_affinity_maturation_task_api_tasks_affinity_maturation_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "fasta",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "fasta_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "antigen",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "antigen_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "fasta_origin",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "fasta_origin_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "epitope",
+          "type": "string",
+          "required": false,
+          "description": "Antigen interface residue numbers (1-based). If omitted, IgGM's cal_ppi infers the epitope from the complex structure when possible. Get one from POST /api/epitope.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "steps",
+          "type": "integer",
+          "required": false,
+          "description": "Number of sampling steps (upstream default 10; 200 is the internal full schedule).",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_samples",
+          "type": "integer",
+          "required": false,
+          "description": "Number of maturation rounds. Total outputs scale as num_samples x masked positions x (chains-1); keep modest on FC and use the CLI/Slurm mode for large sweeps.",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "chunk_size",
+          "type": "integer",
+          "required": false,
+          "description": "Chunk size for long-chain inference (memory/speed tradeoff).",
+          "is_file": false,
+          "default": 64,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "temperature",
+          "type": "number",
+          "required": false,
+          "description": "Sampling temperature.",
+          "is_file": false,
+          "default": 1.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "max_antigen_size",
+          "type": "integer",
+          "required": false,
+          "description": "Truncate the antigen chain to this many residues to avoid OOM. Upstream suggests 384 for large antigens.",
+          "is_file": false,
+          "default": 2000,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": "Random seed. If omitted, the upstream default (42) is used.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/design",
+      "summary": "design/inverse_design/fr_design as a single blocking task (FC Async).",
+      "description": "design/inverse_design/fr_design as a single blocking task (FC Async).",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_design_task_api_tasks_design_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "fasta",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "fasta_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "antigen",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "antigen_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "epitope",
+          "type": "string",
+          "required": false,
+          "description": "Antigen interface residue numbers (1-based). If omitted, IgGM's cal_ppi infers the epitope from the complex structure when possible. Get one from POST /api/epitope.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "steps",
+          "type": "integer",
+          "required": false,
+          "description": "Number of sampling steps (upstream default 10; 200 is the internal full schedule).",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "num_samples",
+          "type": "integer",
+          "required": false,
+          "description": "Number of designs to generate.",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "chunk_size",
+          "type": "integer",
+          "required": false,
+          "description": "Chunk size for long-chain inference (memory/speed tradeoff).",
+          "is_file": false,
+          "default": 64,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "temperature",
+          "type": "number",
+          "required": false,
+          "description": "Sampling temperature.",
+          "is_file": false,
+          "default": 1.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "max_antigen_size",
+          "type": "integer",
+          "required": false,
+          "description": "Truncate the antigen chain to this many residues to avoid OOM. Upstream suggests 384 for large antigens.",
+          "is_file": false,
+          "default": 2000,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "required": false,
+          "description": "Random seed. If omitted, the upstream default (42) is used.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "random seed selected by the tool at runtime"
+        },
+        {
+          "name": "run_task",
+          "type": "string",
+          "required": false,
+          "description": "design = CDR sequence + full complex structure co-design; inverse_design = sequence design on a fixed backbone (FASTA only); fr_design = framework-region redesign (humanization).",
+          "is_file": false,
+          "default": "design",
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "FC async task mode",
+          "curl": "curl -X POST $URL/api/tasks/design -H 'X-Fc-Invocation-Type: Async' -H 'X-Bioagent-Job-Id: ab-001' -F run_task=design -F fasta=@ab.fasta -F antigen=@ag.pdb",
+          "python": null,
+          "body": null,
+          "notes": "Returns 202 immediately; preferred production entry."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/epitope",
+      "summary": "Epitope calculation as a single blocking task (FC Async).",
+      "description": "Epitope calculation as a single blocking task (FC Async).",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_epitope_task_api_tasks_epitope_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "fasta",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "fasta_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "antigen",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "antigen_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        }
+      ],
+      "examples": []
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/iggm_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "model": {
+      "name": "IgGM",
+      "paper": "Wang et al. ICLR 2025 + bioRxiv 2025.09.12.675771 (generative foundation model for antibody design)",
+      "task": "antibody/nanobody sequence + structure co-design",
+      "run_tasks": [
+        "design (CDR sequence + complex structure co-design)",
+        "inverse_design (sequence design on fixed backbone)",
+        "fr_design (framework-region redesign / humanization)",
+        "affinity_maturation (per-position mutation scan)"
+      ],
+      "output_format": "complex PDB + designed-sequence FASTA (inverse_design: FASTA only)"
+    },
+    "tool_outputs": {
+      "design": "output/<name>_<i>.pdb (antibody-antigen complex) + output/<name>_<i>.fasta (designed sequence), one per sample. inverse_design emits FASTA only.",
+      "affinity-maturation": "output/<id>_<pos>_<n>.{pdb,fasta} — many candidates; count = num_samples x masked positions.",
+      "epitope": "output/epitope.json — {epitope: [residue numbers (1-based)], antigen_id, antigen_length}. Feed epitope back into /api/design."
+    },
+    "input_spec": {
+      "fasta": "1-3 chains, antigen LAST; 'X' marks residues to design. 2 chains = nanobody (H,A); 3 = antibody (H,L,A).",
+      "antigen": "antigen structure as PDB (chain id must match the last FASTA record).",
+      "fasta_origin": "affinity-maturation only: the original antibody sequence to mature from."
+    },
+    "config_tips": {
+      "epitope": "Optional JSON-encoded int list, e.g. epitope=[7,8,9]. If omitted, cal_ppi infers it from the complex structure. Precompute with POST /api/epitope.",
+      "max_antigen_size": "Set 384 for large antigens to avoid OOM.",
+      "num_samples": "affinity-maturation output scales as num_samples x masked positions; keep modest on FC."
+    },
+    "input_uri_schemes": {
+      "upload": "multipart/form-data",
+      "uri": "job:// / file:// / oss:// / http(s)://"
+    }
+  },
+  "openapi_url": "/openapi.json"
+}

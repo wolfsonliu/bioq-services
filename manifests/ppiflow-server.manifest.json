@@ -1,0 +1,1046 @@
+{
+  "service": "ppiflow",
+  "title": "PPIFlow Server",
+  "version": "0.0.14",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/sample/antibody",
+      "summary": "Antibody (heavy + light) CDR design over an uploaded framework.",
+      "description": "Antibody (heavy + light) CDR design over an uploaded framework.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_sample_antibody_api_sample_antibody_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "antigen",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "antigen_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "framework",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "framework_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Identifier used as a subfolder under the output directory (`output/<name>/`). Restricted to [A-Za-z0-9_.-] (no slashes / spaces) to prevent path injection — `name='..'` would write outside the job dir.",
+          "is_file": false,
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "samples_per_target",
+          "type": "integer",
+          "required": false,
+          "description": "How many samples to generate per (target, length) combination.",
+          "is_file": false,
+          "default": 5,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "antigen_chain",
+          "type": "string",
+          "required": true,
+          "description": "Chain ID of antigen.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "heavy_chain",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "A",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "specified_hotspots",
+          "type": "string",
+          "required": false,
+          "description": "Hotspot residues on the antigen, e.g. 'C56,C58'.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "cdr_length",
+          "type": "string",
+          "required": false,
+          "description": "CDR length spec including all six CDRs.",
+          "is_file": false,
+          "default": "CDRH1,5-12,CDRH2,4-17,CDRH3,5-26,CDRL1,5-12,CDRL2,3-10,CDRL3,4-13",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "light_chain",
+          "type": "string",
+          "required": false,
+          "description": "Chain ID of light chain in framework.",
+          "is_file": false,
+          "default": "B",
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "antibody CDR design against IL-13",
+          "curl": "curl -X POST $URL/api/sample/antibody -F antigen=@antigen.pdb -F framework=@framework.pdb -F antigen_chain=C -F heavy_chain=A -F light_chain=B -F 'specified_hotspots=C11,C14,C15,C101,C107,C108' -F 'cdr_length=CDRH1,8-8,CDRH2,8-8,CDRH3,10-20,CDRL1,6-9,CDRL2,3-3,CDRL3,9-11' -F samples_per_target=5 -F name=1IJZ_IL13",
+          "python": null,
+          "body": null,
+          "notes": "Framework PDB needs IMGT numbering and CDRs removed (see upstream README)."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/sample/binder",
+      "summary": "PPI binder design against an uploaded (or URI-referenced) target PDB.",
+      "description": "PPI binder design against an uploaded (or URI-referenced) target PDB.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_sample_binder_api_sample_binder_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "target",
+          "type": "file",
+          "required": false,
+          "description": "Target PDB. Mutually exclusive with `target_uri`.",
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "target_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI to fetch target instead of uploading (job:// / file:// / oss:// / http(s)://).",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Identifier used as a subfolder under the output directory (`output/<name>/`). Restricted to [A-Za-z0-9_.-] (no slashes / spaces) to prevent path injection — `name='..'` would write outside the job dir.",
+          "is_file": false,
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "samples_per_target",
+          "type": "integer",
+          "required": false,
+          "description": "How many samples to generate per (target, length) combination.",
+          "is_file": false,
+          "default": 5,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "target_chain",
+          "type": "string",
+          "required": true,
+          "description": "Chain ID of the target in target PDB.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "binder_chain",
+          "type": "string",
+          "required": false,
+          "description": "Chain ID assigned to generated binder.",
+          "is_file": false,
+          "default": "A",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "specified_hotspots",
+          "type": "string",
+          "required": false,
+          "description": "Comma-separated hotspot residues on the target, e.g. 'B119,B141,B200'. Optional: if absent PPIFlow samples hotspots via `sample_hotspot_rate_{min,max}`.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "sample_hotspot_rate_min",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.05,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "sample_hotspot_rate_max",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.2,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "samples_min_length",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 75,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "samples_max_length",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 120,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "basic binder against IL7Ra target",
+          "curl": "curl -X POST $URL/api/sample/binder -F target=@target.pdb -F target_chain=B -F binder_chain=A -F 'specified_hotspots=B119,B141,B200' -F samples_min_length=75 -F samples_max_length=120 -F samples_per_target=5 -F name=IL7Ra",
+          "python": null,
+          "body": null,
+          "notes": "Mirrors the upstream README example. Output PDBs land in output/IL7Ra/*.pdb."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/sample/monomer",
+      "summary": "Unconditional monomer generation at the requested lengths.",
+      "description": "Unconditional monomer generation at the requested lengths.",
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body_sample_monomer_api_sample_monomer_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Identifier used as a subfolder under the output directory (`output/<name>/`). Restricted to [A-Za-z0-9_.-] (no slashes / spaces) to prevent path injection — `name='..'` would write outside the job dir.",
+          "is_file": false,
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "samples_per_target",
+          "type": "integer",
+          "required": false,
+          "description": "How many samples to generate per (target, length) combination.",
+          "is_file": false,
+          "default": 5,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "length_subset",
+          "type": "string",
+          "required": false,
+          "description": "List of target lengths. PPIFlow samples `samples_per_target` per length.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        }
+      ],
+      "examples": [
+        {
+          "title": "unconditional monomer at two lengths",
+          "curl": "curl -X POST $URL/api/sample/monomer -F 'length_subset=[50, 100]' -F samples_per_target=5 -F name=monomer_test",
+          "python": null,
+          "body": null,
+          "notes": "length_subset is a JSON list. Produces 5 samples at each length."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/sample/nanobody",
+      "summary": "VHH (heavy-only) CDR design over an uploaded nanobody framework.",
+      "description": "VHH (heavy-only) CDR design over an uploaded nanobody framework.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_sample_nanobody_api_sample_nanobody_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "antigen",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "antigen_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "framework",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "framework_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Identifier used as a subfolder under the output directory (`output/<name>/`). Restricted to [A-Za-z0-9_.-] (no slashes / spaces) to prevent path injection — `name='..'` would write outside the job dir.",
+          "is_file": false,
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "samples_per_target",
+          "type": "integer",
+          "required": false,
+          "description": "How many samples to generate per (target, length) combination.",
+          "is_file": false,
+          "default": 5,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "antigen_chain",
+          "type": "string",
+          "required": true,
+          "description": "Chain ID of antigen.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "heavy_chain",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "A",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "specified_hotspots",
+          "type": "string",
+          "required": false,
+          "description": "Hotspot residues on the antigen, e.g. 'C56,C58'.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "cdr_length",
+          "type": "string",
+          "required": false,
+          "description": "CDR length spec, comma-separated `CDR<name>,min-max,...`. Antibody adds CDRL1/CDRL2/CDRL3; nanobody uses heavy-only by default.",
+          "is_file": false,
+          "default": "CDRH1,5-12,CDRH2,4-17,CDRH3,5-26",
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "VHH design against FGFR1",
+          "curl": "curl -X POST $URL/api/sample/nanobody -F antigen=@antigen.pdb -F framework=@nanobody_framework.pdb -F antigen_chain=C -F heavy_chain=A -F 'specified_hotspots=C101,C135,C171,C198' -F 'cdr_length=CDRH1,8-8,CDRH2,8-8,CDRH3,9-21' -F samples_per_target=5 -F name=1CVS_FGFR1",
+          "python": null,
+          "body": null,
+          "notes": "Same script as antibody but with nanobody.ckpt and no light chain. Output: output/1CVS_FGFR1/*.pdb."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/sample/scaffolding",
+      "summary": "Motif scaffolding from a CSV + motif PDB(s) (uses monomer.ckpt).",
+      "description": "Motif scaffolding from a CSV + motif PDB(s) (uses monomer.ckpt).",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_sample_scaffolding_api_sample_scaffolding_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "motif_csv",
+          "type": "file",
+          "required": false,
+          "description": "Motif metadata CSV (target,length,contig,motif_path).",
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "motif_csv_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Identifier used as a subfolder under the output directory (`output/<name>/`). Restricted to [A-Za-z0-9_.-] (no slashes / spaces) to prevent path injection — `name='..'` would write outside the job dir.",
+          "is_file": false,
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "samples_per_target",
+          "type": "integer",
+          "required": false,
+          "description": "How many samples to generate per (target, length) combination.",
+          "is_file": false,
+          "default": 5,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "motif_names",
+          "type": "string",
+          "required": true,
+          "description": "Subset of target names from the CSV to scaffold, e.g. ['01_1LDB'].",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "motif scaffolding from a CSV",
+          "curl": "curl -X POST $URL/api/sample/scaffolding -F motif_csv=@motif_metadata.csv -F 'motif_names=[\"01_1LDB\"]' -F samples_per_target=5 -F name=motif_test",
+          "python": null,
+          "body": null,
+          "notes": "CSV columns: target,length,contig,motif_path. motif_path is a PDB filename relative to the CSV's directory; upload the PDB(s) alongside in a sibling location reachable from the CSV's parent (typically include them in the same upload zip)."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/sample/antibody",
+      "summary": "Antibody CDR design as a single atomic task.",
+      "description": "Antibody CDR design as a single atomic task.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_sample_antibody_task_api_tasks_sample_antibody_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "antigen",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "antigen_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "framework",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "framework_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Identifier used as a subfolder under the output directory (`output/<name>/`). Restricted to [A-Za-z0-9_.-] (no slashes / spaces) to prevent path injection — `name='..'` would write outside the job dir.",
+          "is_file": false,
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "samples_per_target",
+          "type": "integer",
+          "required": false,
+          "description": "How many samples to generate per (target, length) combination.",
+          "is_file": false,
+          "default": 5,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "antigen_chain",
+          "type": "string",
+          "required": true,
+          "description": "Chain ID of antigen.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "heavy_chain",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "A",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "specified_hotspots",
+          "type": "string",
+          "required": false,
+          "description": "Hotspot residues on the antigen, e.g. 'C56,C58'.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "cdr_length",
+          "type": "string",
+          "required": false,
+          "description": "CDR length spec including all six CDRs.",
+          "is_file": false,
+          "default": "CDRH1,5-12,CDRH2,4-17,CDRH3,5-26,CDRL1,5-12,CDRL2,3-10,CDRL3,4-13",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "light_chain",
+          "type": "string",
+          "required": false,
+          "description": "Chain ID of light chain in framework.",
+          "is_file": false,
+          "default": "B",
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/sample/binder",
+      "summary": "PPI binder design as a single atomic task.",
+      "description": "PPI binder design as a single atomic task.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_sample_binder_task_api_tasks_sample_binder_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "target",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "target_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Identifier used as a subfolder under the output directory (`output/<name>/`). Restricted to [A-Za-z0-9_.-] (no slashes / spaces) to prevent path injection — `name='..'` would write outside the job dir.",
+          "is_file": false,
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "samples_per_target",
+          "type": "integer",
+          "required": false,
+          "description": "How many samples to generate per (target, length) combination.",
+          "is_file": false,
+          "default": 5,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "target_chain",
+          "type": "string",
+          "required": true,
+          "description": "Chain ID of the target in target PDB.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "binder_chain",
+          "type": "string",
+          "required": false,
+          "description": "Chain ID assigned to generated binder.",
+          "is_file": false,
+          "default": "A",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "specified_hotspots",
+          "type": "string",
+          "required": false,
+          "description": "Comma-separated hotspot residues on the target, e.g. 'B119,B141,B200'. Optional: if absent PPIFlow samples hotspots via `sample_hotspot_rate_{min,max}`.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "sample_hotspot_rate_min",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.05,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "sample_hotspot_rate_max",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.2,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "samples_min_length",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 75,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "samples_max_length",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 120,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/sample/monomer",
+      "summary": "Unconditional monomer generation at the requested lengths (single atomic task).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body__task_handler_api_tasks_sample_monomer_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Identifier used as a subfolder under the output directory (`output/<name>/`). Restricted to [A-Za-z0-9_.-] (no slashes / spaces) to prevent path injection — `name='..'` would write outside the job dir.",
+          "is_file": false,
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "samples_per_target",
+          "type": "integer",
+          "required": false,
+          "description": "How many samples to generate per (target, length) combination.",
+          "is_file": false,
+          "default": 5,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "length_subset",
+          "type": "string",
+          "required": false,
+          "description": "List of target lengths. PPIFlow samples `samples_per_target` per length.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/sample/nanobody",
+      "summary": "VHH (nanobody) CDR design as a single atomic task.",
+      "description": "VHH (nanobody) CDR design as a single atomic task.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_sample_nanobody_task_api_tasks_sample_nanobody_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "antigen",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "antigen_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "framework",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "framework_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Identifier used as a subfolder under the output directory (`output/<name>/`). Restricted to [A-Za-z0-9_.-] (no slashes / spaces) to prevent path injection — `name='..'` would write outside the job dir.",
+          "is_file": false,
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "samples_per_target",
+          "type": "integer",
+          "required": false,
+          "description": "How many samples to generate per (target, length) combination.",
+          "is_file": false,
+          "default": 5,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "antigen_chain",
+          "type": "string",
+          "required": true,
+          "description": "Chain ID of antigen.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "heavy_chain",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "A",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "specified_hotspots",
+          "type": "string",
+          "required": false,
+          "description": "Hotspot residues on the antigen, e.g. 'C56,C58'.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "cdr_length",
+          "type": "string",
+          "required": false,
+          "description": "CDR length spec, comma-separated `CDR<name>,min-max,...`. Antibody adds CDRL1/CDRL2/CDRL3; nanobody uses heavy-only by default.",
+          "is_file": false,
+          "default": "CDRH1,5-12,CDRH2,4-17,CDRH3,5-26",
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/sample/scaffolding",
+      "summary": "Motif scaffolding as a single atomic task.",
+      "description": "Motif scaffolding as a single atomic task.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_sample_scaffolding_task_api_tasks_sample_scaffolding_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "motif_csv",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "motif_csv_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false,
+          "description": "Identifier used as a subfolder under the output directory (`output/<name>/`). Restricted to [A-Za-z0-9_.-] (no slashes / spaces) to prevent path injection — `name='..'` would write outside the job dir.",
+          "is_file": false,
+          "default": "run",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "samples_per_target",
+          "type": "integer",
+          "required": false,
+          "description": "How many samples to generate per (target, length) combination.",
+          "is_file": false,
+          "default": 5,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "motif_names",
+          "type": "string",
+          "required": true,
+          "description": "Subset of target names from the CSV to scaffold, e.g. ['01_1LDB'].",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        }
+      ],
+      "examples": []
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/ppiflow_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "tool_outputs": {
+      "binder": "output/<name>_<idx>.pdb (flat) + output/sample_metrics.csv",
+      "antibody": "output/<name>/*.pdb",
+      "nanobody": "output/<name>/*.pdb",
+      "monomer": "output/<name>/*.pdb",
+      "scaffolding": "output/<name>/*.pdb",
+      "note": "Binder outputs are flat under `output/` with files named `<name>_<idx>.pdb` plus `sample_metrics.csv`.  The other four modes nest under `output/<name>/`.  Use GET /api/jobs/{id}/files to enumerate, or /file/{relpath} for one."
+    },
+    "input_uri_schemes": {
+      "upload": "multipart/form-data file fields (target_pdb / antigen_pdb / framework_pdb / motif_csv).",
+      "job://<id>/<file>": "Re-use a file from a prior ppiflow job (same NAS).",
+      "file:///abs/path": "Direct NAS path; works across services on the shared mount.",
+      "oss://<bucket>/<key>": "Alibaba Cloud OSS object (needs OSS_ACCESS_KEY_ID / _SECRET env vars).",
+      "http(s)://...": "Generic URL, including OSS signed URLs."
+    },
+    "weights": {
+      "binder": "checkpoint/binder.ckpt",
+      "antibody": "checkpoint/antibody.ckpt",
+      "nanobody": "checkpoint/nanobody.ckpt",
+      "monomer": "checkpoint/monomer.ckpt (used by both monomer + scaffolding endpoints)",
+      "note": "Baked into the Docker image. Missing files log a warning; the subprocess will then fail with a clearer message."
+    },
+    "config_tips": {
+      "cdr_length": "Comma-separated `CDR<name>,min-max,...`. Antibody must include all six CDRs (CDRH1-3 + CDRL1-3); nanobody covers heavy only (CDRH1-3). Defaults are upstream's recommendations.",
+      "length_subset": "Monomer endpoint takes a JSON list of target lengths. PPIFlow samples `samples_per_target` structures at each length.",
+      "specified_hotspots": "Format `<chain><resnum>,<chain><resnum>,...` (e.g. `B119,B141,B200`). Omitting it puts PPIFlow into random hotspot sampling via `sample_hotspot_rate_{min,max}`.",
+      "framework_pdb": "Antibody/nanobody only. CDR loops must already be removed and IMGT numbering applied. See PPIFlow README for preprocessing."
+    },
+    "endpoints_summary": {
+      "/api/sample/binder": "PPI binder design against an uploaded target PDB.",
+      "/api/sample/antibody": "Full antibody CDR design (heavy + light) over a framework.",
+      "/api/sample/nanobody": "VHH CDR design (heavy-only) over a framework.",
+      "/api/sample/monomer": "Unconditional monomer generation at requested lengths.",
+      "/api/sample/scaffolding": "Motif scaffolding from a CSV + motif PDBs."
+    },
+    "not_in_scope_v0_0_1": "Partial-flow redesign (sample_*_partial.py) is not exposed in v0.0.1. Sequence design (ProteinMPNN/AbMPNN), packing (Flowpacker), scoring (AF3Score), and Rosetta steps live in their own bioagent services."
+  },
+  "openapi_url": "/openapi.json"
+}

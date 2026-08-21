@@ -1,0 +1,1189 @@
+{
+  "service": "drughive",
+  "title": "DrugHIVE Server",
+  "version": "0.0.7",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/generate",
+      "summary": "De novo ligand generation.  Returns a JobInfo; poll until completed.",
+      "description": "De novo ligand generation.  Returns a JobInfo; poll until completed.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_generate_api_generate_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "target",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "target_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ligand",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ligand_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "pdb_id",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "target",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_samples",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "zbetas",
+          "type": "string",
+          "required": false,
+          "description": "Prior↔posterior interpolation per latent resolution.  List of length 4 or scalar (broadcast to length 4).",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        },
+        {
+          "name": "temps",
+          "type": "string",
+          "required": false,
+          "description": "Sampling temperature per latent resolution.  List of length 4 or scalar (broadcast to length 4).",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        },
+        {
+          "name": "random_rotate",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "random_translate",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "ffopt_mols",
+          "type": "boolean",
+          "required": false,
+          "description": "RDKit FF post-processing on generated molecules.",
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mol_filter",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        }
+      ],
+      "examples": [
+        {
+          "title": "minimal de novo generation",
+          "curl": "curl -X POST $URL/api/generate -F target=@pocket.pdb -F ligand=@ref_ligand.sdf -F n_samples=10 -F pdb_id=5d3h",
+          "python": null,
+          "body": null,
+          "notes": "zbetas defaults to [0,0,0,0] (prior); increase toward 1 to move toward posterior."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/generate_spatial",
+      "summary": "Substructure modification / scaffold hopping.  Provide EITHER an",
+      "description": "Substructure modification / scaffold hopping.  Provide EITHER an\n``substruct_modify`` SDF (upload/URI) OR a ``substruct_modify_pattern``\nSMILES/SMARTS string in params.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_generate_spatial_api_generate_spatial_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "target",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "target_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ligand",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ligand_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "substruct_modify",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "substruct_modify_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "pdb_id",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "target",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_samples",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "zbetas",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        },
+        {
+          "name": "temps",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        },
+        {
+          "name": "random_rotate",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "random_translate",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "ffopt_mols",
+          "type": "boolean",
+          "required": false,
+          "description": "RDKit FF post-processing on generated molecules.",
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mol_filter",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        },
+        {
+          "name": "substruct_modify_pattern",
+          "type": "string",
+          "required": false,
+          "description": "SMILES / SMARTS for the substructure to preserve.  Provide EITHER this field OR upload `substruct_modify` file (and matching `substruct_modify_uri`), never both.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": [
+        {
+          "title": "scaffold hopping via SMARTS pattern",
+          "curl": "curl -X POST $URL/api/generate_spatial -F target=@pocket.pdb -F ligand=@ref_ligand.sdf -F substruct_modify_pattern=\"[CH2]C1:C:C:C:C:C:1\" -F n_samples=10 -F pdb_id=4w9f",
+          "python": null,
+          "body": null,
+          "notes": "Preserves the SMARTS-matched substructure, regenerates the rest."
+        },
+        {
+          "title": "scaffold hopping via SDF fragment",
+          "curl": "curl -X POST $URL/api/generate_spatial -F target=@pocket.pdb -F ligand=@ref_ligand.sdf -F substruct_modify=@fragment.sdf -F n_samples=10 -F pdb_id=4w9f",
+          "python": null,
+          "body": null,
+          "notes": "Alternative: upload the preserved fragment as SDF instead of SMARTS pattern."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/optimize",
+      "summary": "Multi-cycle QVina2 property optimization.  Long-running: default",
+      "description": "Multi-cycle QVina2 property optimization.  Long-running: default\nparams take 4-8 h — prefer /api/tasks/optimize (async task mode).",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_optimize_api_optimize_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "target",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "target_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ligand",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ligand_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "target_pdbqt",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "target_pdbqt_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "pdb_id",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "target",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "key_opt",
+          "type": "string",
+          "required": false,
+          "description": "Optimization target: affinity_qvina | qed | alogp | sa",
+          "is_file": false,
+          "default": "affinity_qvina",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "opt_increase",
+          "type": "boolean",
+          "required": false,
+          "description": "True = maximize; False = minimize (default matches affinity_qvina where lower kcal/mol is better).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "save_name",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "optimization_run",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_cycles",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 8,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_samples_initial",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1000,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_samples",
+          "type": "integer",
+          "required": false,
+          "description": "Children per parent per cycle.",
+          "is_file": false,
+          "default": 20,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_best_parents",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 20,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "affinity_quantile_thresh",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.5,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "cluster_parents",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "random_rotate",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "random_translate",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "zbetas_initial",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.3,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "temps_initial",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "zbetas",
+          "type": "string",
+          "required": false,
+          "description": "Per-cycle zbetas — list of length n_cycles, or scalar (broadcast to length n_cycles).",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        },
+        {
+          "name": "temps",
+          "type": "string",
+          "required": false,
+          "description": "Per-cycle temperature — list of length n_cycles, or scalar (broadcast to length n_cycles).",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        },
+        {
+          "name": "protonate",
+          "type": "boolean",
+          "required": false,
+          "description": "obabel protonation before QVina.",
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mol_filter",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        }
+      ],
+      "examples": [
+        {
+          "title": "quick QVina2 affinity optimization (test-friendly)",
+          "curl": "curl -X POST $URL/api/tasks/optimize -H \"X-Fc-Invocation-Type: Async\" -F target=@pocket.pdb -F ligand=@ref_ligand.sdf -F target_pdbqt=@pocket.pdbqt -F key_opt=affinity_qvina -F n_cycles=2 -F n_samples_initial=20 -F n_samples=4",
+          "python": null,
+          "body": null,
+          "notes": "Use /api/tasks/optimize (async mode) — default params (8 cycles × 1000 initial × 20) take 4-8 h."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/generate",
+      "summary": "De novo ligand generation (single atomic task).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_generate_task_api_tasks_generate_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "target",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "target_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ligand",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ligand_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "pdb_id",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "target",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_samples",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "zbetas",
+          "type": "string",
+          "required": false,
+          "description": "Prior↔posterior interpolation per latent resolution.  List of length 4 or scalar (broadcast to length 4).",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        },
+        {
+          "name": "temps",
+          "type": "string",
+          "required": false,
+          "description": "Sampling temperature per latent resolution.  List of length 4 or scalar (broadcast to length 4).",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        },
+        {
+          "name": "random_rotate",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "random_translate",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "ffopt_mols",
+          "type": "boolean",
+          "required": false,
+          "description": "RDKit FF post-processing on generated molecules.",
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mol_filter",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/generate_spatial",
+      "summary": "Substructure modification / scaffold hopping (single atomic task).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_generate_spatial_task_api_tasks_generate_spatial_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "target",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "target_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ligand",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ligand_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "substruct_modify",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "substruct_modify_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "pdb_id",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "target",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_samples",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "zbetas",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        },
+        {
+          "name": "temps",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        },
+        {
+          "name": "random_rotate",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "random_translate",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "ffopt_mols",
+          "type": "boolean",
+          "required": false,
+          "description": "RDKit FF post-processing on generated molecules.",
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mol_filter",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        },
+        {
+          "name": "substruct_modify_pattern",
+          "type": "string",
+          "required": false,
+          "description": "SMILES / SMARTS for the substructure to preserve.  Provide EITHER this field OR upload `substruct_modify` file (and matching `substruct_modify_uri`), never both.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/optimize",
+      "summary": "Multi-cycle QVina2 property optimization (single atomic task; long-running).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_post_optimize_task_api_tasks_optimize_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "target",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "target_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ligand",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "ligand_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "target_pdbqt",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "target_pdbqt_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "pdb_id",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "target",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "key_opt",
+          "type": "string",
+          "required": false,
+          "description": "Optimization target: affinity_qvina | qed | alogp | sa",
+          "is_file": false,
+          "default": "affinity_qvina",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "opt_increase",
+          "type": "boolean",
+          "required": false,
+          "description": "True = maximize; False = minimize (default matches affinity_qvina where lower kcal/mol is better).",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "save_name",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "optimization_run",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_cycles",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 8,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_samples_initial",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1000,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_samples",
+          "type": "integer",
+          "required": false,
+          "description": "Children per parent per cycle.",
+          "is_file": false,
+          "default": 20,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "n_best_parents",
+          "type": "integer",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 20,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "affinity_quantile_thresh",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.5,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "cluster_parents",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "random_rotate",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "random_translate",
+          "type": "boolean",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "zbetas_initial",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.3,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "temps_initial",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 1.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "zbetas",
+          "type": "string",
+          "required": false,
+          "description": "Per-cycle zbetas — list of length n_cycles, or scalar (broadcast to length n_cycles).",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        },
+        {
+          "name": "temps",
+          "type": "string",
+          "required": false,
+          "description": "Per-cycle temperature — list of length n_cycles, or scalar (broadcast to length n_cycles).",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        },
+        {
+          "name": "protonate",
+          "type": "boolean",
+          "required": false,
+          "description": "obabel protonation before QVina.",
+          "is_file": false,
+          "default": true,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mol_filter",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        }
+      ],
+      "examples": []
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/drughive_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "model": {
+      "id": "c9_pdbzinc",
+      "checkpoint_filename": "drughive_model_ch9.ckpt",
+      "paper": "Weller & Rohs, JCIM 2024 (10.1021/acs.jcim.4c01193)",
+      "license": "USC-RL v2.0 (non-commercial academic research only)"
+    },
+    "tool_outputs": {
+      "generate": "output/<gen_name>/<pdb_id>/mols_gen.sdf (+ mols_gen_opt.sdf if ffopt_mols=true)",
+      "generate_spatial": "output/<gen_name>/<pdb_id>/mols_gen.sdf (spatial mode; MolGeneratorSpatial writes the same filename)",
+      "optimize": "output/pdbzinc_initial/<pdb_id>/mols_gen.sdf + output/<save_name>/<model_id>_<save_name>_opt<i>/<pdb_id>/mols_gen.sdf per cycle + *_qvina.csv docking scores"
+    },
+    "input_uri_schemes": {
+      "target": "multipart / oss:// / file:// / job:// / http(s)://",
+      "ligand": "multipart / oss:// / file:// / job:// / http(s)://",
+      "substruct_modify": "multipart / oss:// / file:// / job:// / http(s)://",
+      "target_pdbqt": "multipart / oss:// / file:// / job:// / http(s)://"
+    },
+    "long_running": {
+      "optimize": "single call may take 4-8 h; use /api/tasks/optimize (async task mode) rather than submit/poll"
+    }
+  },
+  "openapi_url": "/openapi.json"
+}

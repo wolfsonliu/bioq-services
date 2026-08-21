@@ -1,0 +1,1425 @@
+{
+  "service": "rfdiffusion",
+  "title": "RFdiffusion Server",
+  "version": "0.0.13",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/generate",
+      "summary": "Raw contig + arbitrary Hydra overrides — partial diffusion, fold conditioning, ...",
+      "description": "Raw contig + arbitrary Hydra overrides — partial diffusion, fold conditioning, ...",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_generate_custom_api_generate_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_pdb",
+          "type": "file",
+          "required": false,
+          "description": "Optional input PDB (motif / partial diffusion). Or pass `input_pdb_uri`.",
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_pdb_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI to fetch the input PDB (see /motif).",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_designs",
+          "type": "integer",
+          "required": false,
+          "description": "Number of designs to sample.",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffuser_t",
+          "type": "integer",
+          "required": false,
+          "description": "Reverse-diffusion timesteps. 50 is the upstream default; lowering speeds up but hurts quality.",
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "final_step",
+          "type": "integer",
+          "required": false,
+          "description": "Stop the trajectory at step N (default 1 = run to completion).",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "write_trajectory",
+          "type": "boolean",
+          "required": false,
+          "description": "Write the full reverse-diffusion trajectory under output/traj/. Default off to save disk.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "deterministic",
+          "type": "boolean",
+          "required": false,
+          "description": "Fix RNG so reruns reproduce exactly.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "noise_scale",
+          "type": "number",
+          "required": false,
+          "description": "Sets both denoiser.noise_scale_ca and noise_scale_frame. Lower (e.g. 0.5 or 0.0) → higher quality, less diversity. Binder mode defaults to 0.0.",
+          "is_file": false,
+          "default": 1.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "required": false,
+          "description": "Override checkpoint. Leave unset to let run_inference.py auto-select based on the inputs (recommended). Choices: active_site, base, complex_base, complex_beta, complex_fold, epoch8, inpaint_seq, inpaint_seq_fold",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select by the tool from the request inputs"
+        },
+        {
+          "name": "contigs",
+          "type": "string",
+          "required": true,
+          "description": "Raw contig string, passed as `contigmap.contigs=[<value>]`.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "config_name",
+          "type": "string",
+          "required": false,
+          "description": "Hydra `--config-name`. Use `symmetry` for symmetric inputs; otherwise `base`.",
+          "is_file": false,
+          "default": "base",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "extra_overrides",
+          "type": "string",
+          "required": false,
+          "description": "JSON object mapping dotted Hydra paths → values, e.g. `{\"diffuser.partial_T\": 10, \"ppi.hotspot_res\": \"[A59,A83,A91]\"}`. Each key/value is appended to argv as `key=value`.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": [
+        {
+          "title": "partial diffusion around an existing fold",
+          "curl": "curl -X POST $URL/api/generate -F input_pdb=@2KL8.pdb -F 'contigs=79-79' -F num_designs=10 -F 'extra_overrides={\"diffuser.partial_T\": 10}'",
+          "python": null,
+          "body": null,
+          "notes": "Use this escape hatch for partial diffusion, fold-conditioning, scaffold-guided runs, or any Hydra key not exposed by the structured endpoints."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/generate/binder",
+      "summary": "PPI binder design vs a target PDB; supply hotspots for site control.",
+      "description": "PPI binder design vs a target PDB; supply hotspots for site control.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_generate_binder_api_generate_binder_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_pdb",
+          "type": "file",
+          "required": false,
+          "description": "Target PDB. Mutually exclusive with `input_pdb_uri`.",
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_pdb_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI to fetch the target PDB (see /motif).",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_designs",
+          "type": "integer",
+          "required": false,
+          "description": "Number of designs to sample.",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffuser_t",
+          "type": "integer",
+          "required": false,
+          "description": "Reverse-diffusion timesteps. 50 is the upstream default; lowering speeds up but hurts quality.",
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "final_step",
+          "type": "integer",
+          "required": false,
+          "description": "Stop the trajectory at step N (default 1 = run to completion).",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "write_trajectory",
+          "type": "boolean",
+          "required": false,
+          "description": "Write the full reverse-diffusion trajectory under output/traj/. Default off to save disk.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "deterministic",
+          "type": "boolean",
+          "required": false,
+          "description": "Fix RNG so reruns reproduce exactly.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "noise_scale",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "required": false,
+          "description": "Override checkpoint. Leave unset to let run_inference.py auto-select based on the inputs (recommended). Choices: active_site, base, complex_base, complex_beta, complex_fold, epoch8, inpaint_seq, inpaint_seq_fold",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select by the tool from the request inputs"
+        },
+        {
+          "name": "contigs",
+          "type": "string",
+          "required": true,
+          "description": "Contig string with the target chain + binder length range, e.g. `A1-150/0 70-100` (target A residues 1-150, chainbreak, 70-100 residue binder).",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "hotspots",
+          "type": "string",
+          "required": false,
+          "description": "Comma-separated hotspot residues on the target the binder must contact. Format `<chain><resnum>`, e.g. `A59,A83,A91`. 3-6 recommended.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": [
+        {
+          "title": "binder vs insulin receptor with hotspots",
+          "curl": "curl -X POST $URL/api/generate/binder -F input_pdb=@insulin_target.pdb -F 'contigs=A1-150/0 70-100' -F 'hotspots=A59,A83,A91' -F num_designs=10 -F noise_scale=0.0",
+          "python": null,
+          "body": null,
+          "notes": "Binder mode defaults to noise_scale=0 (per upstream README). Provide 3–6 hotspots on the target."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/generate/motif",
+      "summary": "Motif scaffolding — contig references chain+residue ranges in the input PDB.",
+      "description": "Motif scaffolding — contig references chain+residue ranges in the input PDB.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_generate_motif_api_generate_motif_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_pdb",
+          "type": "file",
+          "required": false,
+          "description": "Input PDB carrying the motif. Mutually exclusive with `input_pdb_uri`.",
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_pdb_uri",
+          "type": "string",
+          "required": false,
+          "description": "URI to fetch the input PDB instead of uploading. Schemes: job://<id>/<file>, file:///path, oss://<bucket>/<key>, http(s)://...",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_designs",
+          "type": "integer",
+          "required": false,
+          "description": "Number of designs to sample.",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffuser_t",
+          "type": "integer",
+          "required": false,
+          "description": "Reverse-diffusion timesteps. 50 is the upstream default; lowering speeds up but hurts quality.",
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "final_step",
+          "type": "integer",
+          "required": false,
+          "description": "Stop the trajectory at step N (default 1 = run to completion).",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "write_trajectory",
+          "type": "boolean",
+          "required": false,
+          "description": "Write the full reverse-diffusion trajectory under output/traj/. Default off to save disk.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "deterministic",
+          "type": "boolean",
+          "required": false,
+          "description": "Fix RNG so reruns reproduce exactly.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "noise_scale",
+          "type": "number",
+          "required": false,
+          "description": "Sets both denoiser.noise_scale_ca and noise_scale_frame. Lower (e.g. 0.5 or 0.0) → higher quality, less diversity. Binder mode defaults to 0.0.",
+          "is_file": false,
+          "default": 1.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "required": false,
+          "description": "Override checkpoint. Leave unset to let run_inference.py auto-select based on the inputs (recommended). Choices: active_site, base, complex_base, complex_beta, complex_fold, epoch8, inpaint_seq, inpaint_seq_fold",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select by the tool from the request inputs"
+        },
+        {
+          "name": "contigs",
+          "type": "string",
+          "required": true,
+          "description": "Hydra contig string, e.g. `10-40/A163-181/10-40`. Letters reference chains/residues in the input PDB; bare ranges (`10-40`) are residues to be designed.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "length",
+          "type": "string",
+          "required": false,
+          "description": "Total length constraint, e.g. `55-55`. Useful when contigs span a wide range.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "inpaint_seq",
+          "type": "string",
+          "required": false,
+          "description": "Residues whose sequence should be masked (auto-switches model to InpaintSeq).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": [
+        {
+          "title": "scaffold RSV-F site 5",
+          "curl": "curl -X POST $URL/api/generate/motif -F input_pdb=@5TPN.pdb -F 'contigs=10-40/A163-181/10-40' -F num_designs=10",
+          "python": null,
+          "body": null,
+          "notes": "Letters in contigs reference chain+residue in the input PDB."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/generate/symmetry",
+      "summary": "Symmetric oligomer (cyclic / dihedral / tetrahedral).",
+      "description": "Symmetric oligomer (cyclic / dihedral / tetrahedral).",
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body_generate_symmetry_api_generate_symmetry_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "num_designs",
+          "type": "integer",
+          "required": false,
+          "description": "Number of designs to sample.",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffuser_t",
+          "type": "integer",
+          "required": false,
+          "description": "Reverse-diffusion timesteps. 50 is the upstream default; lowering speeds up but hurts quality.",
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "final_step",
+          "type": "integer",
+          "required": false,
+          "description": "Stop the trajectory at step N (default 1 = run to completion).",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "write_trajectory",
+          "type": "boolean",
+          "required": false,
+          "description": "Write the full reverse-diffusion trajectory under output/traj/. Default off to save disk.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "deterministic",
+          "type": "boolean",
+          "required": false,
+          "description": "Fix RNG so reruns reproduce exactly.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "noise_scale",
+          "type": "number",
+          "required": false,
+          "description": "Sets both denoiser.noise_scale_ca and noise_scale_frame. Lower (e.g. 0.5 or 0.0) → higher quality, less diversity. Binder mode defaults to 0.0.",
+          "is_file": false,
+          "default": 1.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "required": false,
+          "description": "Override checkpoint. Leave unset to let run_inference.py auto-select based on the inputs (recommended). Choices: active_site, base, complex_base, complex_beta, complex_fold, epoch8, inpaint_seq, inpaint_seq_fold",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select by the tool from the request inputs"
+        },
+        {
+          "name": "symmetry",
+          "type": "string",
+          "required": true,
+          "description": "Symmetry group: `c<N>` (cyclic), `d<N>` (dihedral), or `tetrahedral`.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "total_length",
+          "type": "integer",
+          "required": true,
+          "description": "Total length of the oligomer. Must be divisible by the number of chains.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "guiding_potentials",
+          "type": "string",
+          "required": false,
+          "description": "Raw Hydra list-string for `potentials.guiding_potentials`, e.g. `[\"type:olig_contacts,weight_intra:1,weight_inter:0.1\"]`.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "guide_scale",
+          "type": "number",
+          "required": false,
+          "description": "Strength of the guiding potential (default 10).",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        },
+        {
+          "name": "guide_decay",
+          "type": "string",
+          "required": false,
+          "description": "`constant` / `linear` / `quadratic` / `cubic`.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        },
+        {
+          "name": "olig_inter_all",
+          "type": "boolean",
+          "required": false,
+          "description": "`potentials.olig_inter_all=True` if set.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "olig_intra_all",
+          "type": "boolean",
+          "required": false,
+          "description": "`potentials.olig_intra_all=True` if set.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "C6 oligomer with olig_contacts potential",
+          "curl": "curl -X POST $URL/api/generate/symmetry -F symmetry=c6 -F total_length=480 -F num_designs=10 -F 'guiding_potentials=[\"type:olig_contacts,weight_intra:1,weight_inter:0.1\"]' -F guide_scale=2.0 -F guide_decay=quadratic -F olig_intra_all=true -F olig_inter_all=true",
+          "python": null,
+          "body": null,
+          "notes": "`total_length` must be divisible by the chain count for the chosen symmetry."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/generate/unconditional",
+      "summary": "Unconditional monomer (or macrocycle with `cyclic=true`).",
+      "description": "Unconditional monomer (or macrocycle with `cyclic=true`).",
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body_generate_unconditional_api_generate_unconditional_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "num_designs",
+          "type": "integer",
+          "required": false,
+          "description": "Number of designs to sample.",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffuser_t",
+          "type": "integer",
+          "required": false,
+          "description": "Reverse-diffusion timesteps. 50 is the upstream default; lowering speeds up but hurts quality.",
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "final_step",
+          "type": "integer",
+          "required": false,
+          "description": "Stop the trajectory at step N (default 1 = run to completion).",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "write_trajectory",
+          "type": "boolean",
+          "required": false,
+          "description": "Write the full reverse-diffusion trajectory under output/traj/. Default off to save disk.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "deterministic",
+          "type": "boolean",
+          "required": false,
+          "description": "Fix RNG so reruns reproduce exactly.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "noise_scale",
+          "type": "number",
+          "required": false,
+          "description": "Sets both denoiser.noise_scale_ca and noise_scale_frame. Lower (e.g. 0.5 or 0.0) → higher quality, less diversity. Binder mode defaults to 0.0.",
+          "is_file": false,
+          "default": 1.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "required": false,
+          "description": "Override checkpoint. Leave unset to let run_inference.py auto-select based on the inputs (recommended). Choices: active_site, base, complex_base, complex_beta, complex_fold, epoch8, inpaint_seq, inpaint_seq_fold",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select by the tool from the request inputs"
+        },
+        {
+          "name": "min_length",
+          "type": "integer",
+          "required": false,
+          "description": "Lower bound (residues) for each design. Length sampled per trajectory.",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "max_length",
+          "type": "integer",
+          "required": false,
+          "description": "Upper bound (residues).",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "cyclic",
+          "type": "boolean",
+          "required": false,
+          "description": "RFpeptides macrocycle mode (inference.cyclic=True, cyc_chains='a').",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "150aa unconditional monomer",
+          "curl": "curl -X POST $URL/api/generate/unconditional -F min_length=150 -F max_length=150 -F num_designs=10",
+          "python": null,
+          "body": null,
+          "notes": "No PDB required. Set cyclic=true for an RFpeptides macrocycle."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/generate",
+      "summary": "Custom Hydra-override generation as a single atomic task.",
+      "description": "Custom Hydra-override generation as a single atomic task.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_generate_custom_task_api_tasks_generate_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_pdb",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_pdb_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_designs",
+          "type": "integer",
+          "required": false,
+          "description": "Number of designs to sample.",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffuser_t",
+          "type": "integer",
+          "required": false,
+          "description": "Reverse-diffusion timesteps. 50 is the upstream default; lowering speeds up but hurts quality.",
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "final_step",
+          "type": "integer",
+          "required": false,
+          "description": "Stop the trajectory at step N (default 1 = run to completion).",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "write_trajectory",
+          "type": "boolean",
+          "required": false,
+          "description": "Write the full reverse-diffusion trajectory under output/traj/. Default off to save disk.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "deterministic",
+          "type": "boolean",
+          "required": false,
+          "description": "Fix RNG so reruns reproduce exactly.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "noise_scale",
+          "type": "number",
+          "required": false,
+          "description": "Sets both denoiser.noise_scale_ca and noise_scale_frame. Lower (e.g. 0.5 or 0.0) → higher quality, less diversity. Binder mode defaults to 0.0.",
+          "is_file": false,
+          "default": 1.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "required": false,
+          "description": "Override checkpoint. Leave unset to let run_inference.py auto-select based on the inputs (recommended). Choices: active_site, base, complex_base, complex_beta, complex_fold, epoch8, inpaint_seq, inpaint_seq_fold",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select by the tool from the request inputs"
+        },
+        {
+          "name": "contigs",
+          "type": "string",
+          "required": true,
+          "description": "Raw contig string, passed as `contigmap.contigs=[<value>]`.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "config_name",
+          "type": "string",
+          "required": false,
+          "description": "Hydra `--config-name`. Use `symmetry` for symmetric inputs; otherwise `base`.",
+          "is_file": false,
+          "default": "base",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "extra_overrides",
+          "type": "string",
+          "required": false,
+          "description": "JSON object mapping dotted Hydra paths → values, e.g. `{\"diffuser.partial_T\": 10, \"ppi.hotspot_res\": \"[A59,A83,A91]\"}`. Each key/value is appended to argv as `key=value`.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/generate/binder",
+      "summary": "PPI binder design as a single atomic task.",
+      "description": "PPI binder design as a single atomic task.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_generate_binder_task_api_tasks_generate_binder_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_pdb",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_pdb_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_designs",
+          "type": "integer",
+          "required": false,
+          "description": "Number of designs to sample.",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffuser_t",
+          "type": "integer",
+          "required": false,
+          "description": "Reverse-diffusion timesteps. 50 is the upstream default; lowering speeds up but hurts quality.",
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "final_step",
+          "type": "integer",
+          "required": false,
+          "description": "Stop the trajectory at step N (default 1 = run to completion).",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "write_trajectory",
+          "type": "boolean",
+          "required": false,
+          "description": "Write the full reverse-diffusion trajectory under output/traj/. Default off to save disk.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "deterministic",
+          "type": "boolean",
+          "required": false,
+          "description": "Fix RNG so reruns reproduce exactly.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "noise_scale",
+          "type": "number",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": 0.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "required": false,
+          "description": "Override checkpoint. Leave unset to let run_inference.py auto-select based on the inputs (recommended). Choices: active_site, base, complex_base, complex_beta, complex_fold, epoch8, inpaint_seq, inpaint_seq_fold",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select by the tool from the request inputs"
+        },
+        {
+          "name": "contigs",
+          "type": "string",
+          "required": true,
+          "description": "Contig string with the target chain + binder length range, e.g. `A1-150/0 70-100` (target A residues 1-150, chainbreak, 70-100 residue binder).",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "hotspots",
+          "type": "string",
+          "required": false,
+          "description": "Comma-separated hotspot residues on the target the binder must contact. Format `<chain><resnum>`, e.g. `A59,A83,A91`. 3-6 recommended.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/generate/motif",
+      "summary": "Motif scaffolding as a single atomic task.",
+      "description": "Motif scaffolding as a single atomic task.",
+      "operation_id": null,
+      "request_content_type": "multipart/form-data",
+      "request_schema_ref": "#/components/schemas/Body_generate_motif_task_api_tasks_generate_motif_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "input_pdb",
+          "type": "file",
+          "required": false,
+          "description": null,
+          "is_file": true,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "input_pdb_uri",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "num_designs",
+          "type": "integer",
+          "required": false,
+          "description": "Number of designs to sample.",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffuser_t",
+          "type": "integer",
+          "required": false,
+          "description": "Reverse-diffusion timesteps. 50 is the upstream default; lowering speeds up but hurts quality.",
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "final_step",
+          "type": "integer",
+          "required": false,
+          "description": "Stop the trajectory at step N (default 1 = run to completion).",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "write_trajectory",
+          "type": "boolean",
+          "required": false,
+          "description": "Write the full reverse-diffusion trajectory under output/traj/. Default off to save disk.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "deterministic",
+          "type": "boolean",
+          "required": false,
+          "description": "Fix RNG so reruns reproduce exactly.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "noise_scale",
+          "type": "number",
+          "required": false,
+          "description": "Sets both denoiser.noise_scale_ca and noise_scale_frame. Lower (e.g. 0.5 or 0.0) → higher quality, less diversity. Binder mode defaults to 0.0.",
+          "is_file": false,
+          "default": 1.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "required": false,
+          "description": "Override checkpoint. Leave unset to let run_inference.py auto-select based on the inputs (recommended). Choices: active_site, base, complex_base, complex_beta, complex_fold, epoch8, inpaint_seq, inpaint_seq_fold",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select by the tool from the request inputs"
+        },
+        {
+          "name": "contigs",
+          "type": "string",
+          "required": true,
+          "description": "Hydra contig string, e.g. `10-40/A163-181/10-40`. Letters reference chains/residues in the input PDB; bare ranges (`10-40`) are residues to be designed.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "length",
+          "type": "string",
+          "required": false,
+          "description": "Total length constraint, e.g. `55-55`. Useful when contigs span a wide range.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "inpaint_seq",
+          "type": "string",
+          "required": false,
+          "description": "Residues whose sequence should be masked (auto-switches model to InpaintSeq).",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/generate/symmetry",
+      "summary": "Symmetric oligomer: cyclic / dihedral / tetrahedral (single atomic task).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body__task_handler_api_tasks_generate_symmetry_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "num_designs",
+          "type": "integer",
+          "required": false,
+          "description": "Number of designs to sample.",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffuser_t",
+          "type": "integer",
+          "required": false,
+          "description": "Reverse-diffusion timesteps. 50 is the upstream default; lowering speeds up but hurts quality.",
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "final_step",
+          "type": "integer",
+          "required": false,
+          "description": "Stop the trajectory at step N (default 1 = run to completion).",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "write_trajectory",
+          "type": "boolean",
+          "required": false,
+          "description": "Write the full reverse-diffusion trajectory under output/traj/. Default off to save disk.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "deterministic",
+          "type": "boolean",
+          "required": false,
+          "description": "Fix RNG so reruns reproduce exactly.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "noise_scale",
+          "type": "number",
+          "required": false,
+          "description": "Sets both denoiser.noise_scale_ca and noise_scale_frame. Lower (e.g. 0.5 or 0.0) → higher quality, less diversity. Binder mode defaults to 0.0.",
+          "is_file": false,
+          "default": 1.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "required": false,
+          "description": "Override checkpoint. Leave unset to let run_inference.py auto-select based on the inputs (recommended). Choices: active_site, base, complex_base, complex_beta, complex_fold, epoch8, inpaint_seq, inpaint_seq_fold",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select by the tool from the request inputs"
+        },
+        {
+          "name": "symmetry",
+          "type": "string",
+          "required": true,
+          "description": "Symmetry group: `c<N>` (cyclic), `d<N>` (dihedral), or `tetrahedral`.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "total_length",
+          "type": "integer",
+          "required": true,
+          "description": "Total length of the oligomer. Must be divisible by the number of chains.",
+          "is_file": false,
+          "default": null,
+          "default_kind": null,
+          "default_note": null
+        },
+        {
+          "name": "guiding_potentials",
+          "type": "string",
+          "required": false,
+          "description": "Raw Hydra list-string for `potentials.guiding_potentials`, e.g. `[\"type:olig_contacts,weight_intra:1,weight_inter:0.1\"]`.",
+          "is_file": false,
+          "default": "unset",
+          "default_kind": "unset",
+          "default_note": "only used when explicitly provided"
+        },
+        {
+          "name": "guide_scale",
+          "type": "number",
+          "required": false,
+          "description": "Strength of the guiding potential (default 10).",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        },
+        {
+          "name": "guide_decay",
+          "type": "string",
+          "required": false,
+          "description": "`constant` / `linear` / `quadratic` / `cubic`.",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "use the tool's default when omitted"
+        },
+        {
+          "name": "olig_inter_all",
+          "type": "boolean",
+          "required": false,
+          "description": "`potentials.olig_inter_all=True` if set.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "olig_intra_all",
+          "type": "boolean",
+          "required": false,
+          "description": "`potentials.olig_intra_all=True` if set.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/generate/unconditional",
+      "summary": "Unconditional monomer, or macrocycle with cyclic=true (single atomic task).",
+      "description": null,
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body__task_handler_api_tasks_generate_unconditional_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "num_designs",
+          "type": "integer",
+          "required": false,
+          "description": "Number of designs to sample.",
+          "is_file": false,
+          "default": 10,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "diffuser_t",
+          "type": "integer",
+          "required": false,
+          "description": "Reverse-diffusion timesteps. 50 is the upstream default; lowering speeds up but hurts quality.",
+          "is_file": false,
+          "default": 50,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "final_step",
+          "type": "integer",
+          "required": false,
+          "description": "Stop the trajectory at step N (default 1 = run to completion).",
+          "is_file": false,
+          "default": 1,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "write_trajectory",
+          "type": "boolean",
+          "required": false,
+          "description": "Write the full reverse-diffusion trajectory under output/traj/. Default off to save disk.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "deterministic",
+          "type": "boolean",
+          "required": false,
+          "description": "Fix RNG so reruns reproduce exactly.",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "noise_scale",
+          "type": "number",
+          "required": false,
+          "description": "Sets both denoiser.noise_scale_ca and noise_scale_frame. Lower (e.g. 0.5 or 0.0) → higher quality, less diversity. Binder mode defaults to 0.0.",
+          "is_file": false,
+          "default": 1.0,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "required": false,
+          "description": "Override checkpoint. Leave unset to let run_inference.py auto-select based on the inputs (recommended). Choices: active_site, base, complex_base, complex_beta, complex_fold, epoch8, inpaint_seq, inpaint_seq_fold",
+          "is_file": false,
+          "default": "auto",
+          "default_kind": "auto",
+          "default_note": "auto-select by the tool from the request inputs"
+        },
+        {
+          "name": "min_length",
+          "type": "integer",
+          "required": false,
+          "description": "Lower bound (residues) for each design. Length sampled per trajectory.",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "max_length",
+          "type": "integer",
+          "required": false,
+          "description": "Upper bound (residues).",
+          "is_file": false,
+          "default": 100,
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "cyclic",
+          "type": "boolean",
+          "required": false,
+          "description": "RFpeptides macrocycle mode (inference.cyclic=True, cyc_chains='a').",
+          "is_file": false,
+          "default": false,
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": []
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/rfdiffusion_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "tool_outputs": {
+      "all_modes": "output/design_*.pdb (+ matching .trb metadata)",
+      "trajectory": "output/traj/*.pdb (only when write_trajectory=true)",
+      "note": "Per-trajectory backbones land at output/design_<N>.pdb. The matching .trb file holds the contig used, the resolved config, and the input→output residue mapping. Every residue is glycine since RFdiffusion is backbone-only; run ProteinMPNN downstream for sequence design."
+    },
+    "input_uri_schemes": {
+      "upload": "multipart/form-data UploadFile (`input_pdb`) — works for motif/binder/generic.",
+      "job://<job_id>/<filename>": "Pull a PDB from a previous job on this NAS.",
+      "file:///abs/path": "Direct NAS path (shared across services on the same mount).",
+      "oss://<bucket>/<key>": "Alibaba Cloud OSS object.",
+      "http(s)://...": "Generic HTTP(S) URL — incl. signed OSS URLs.",
+      "unconditional": "No input PDB needed for `/api/generate/unconditional`."
+    },
+    "endpoints_summary": {
+      "/api/generate/unconditional": "Length-only monomer or macrocycle (cyclic=true).",
+      "/api/generate/motif": "Scaffold around motif residues in an input PDB.",
+      "/api/generate/binder": "PPI binder design vs a target PDB; optional hotspots.",
+      "/api/generate/symmetry": "Cyclic / dihedral / tetrahedral oligomers.",
+      "/api/generate": "Raw contig + freeform Hydra overrides (partial diffusion, fold conditioning, ...)."
+    },
+    "models": {
+      "directory": "/data/models/rfdiffusion/models",
+      "checkpoints": {
+        "base": "Base_ckpt.pt",
+        "epoch8": "Base_epoch8_ckpt.pt",
+        "complex_base": "Complex_base_ckpt.pt",
+        "complex_beta": "Complex_beta_ckpt.pt",
+        "complex_fold": "Complex_Fold_base_ckpt.pt",
+        "inpaint_seq": "InpaintSeq_ckpt.pt",
+        "inpaint_seq_fold": "InpaintSeq_Fold_ckpt.pt",
+        "active_site": "ActiveSite_ckpt.pt"
+      },
+      "note": "Leave `model` unset to let run_inference.py pick the right checkpoint based on the inputs (provide_seq → InpaintSeq, scaffoldguided → Fold, etc)."
+    },
+    "downstream_pipeline_tip": "RFdiffusion outputs backbone-only poly-G PDBs. Standard next steps: (1) ProteinMPNN for sequence design (see proteinmpnn-server), (2) AF2 / RF2 for structure validation. The proteinmpnn-server accepts `input_pdb_uri=job://<rfdiffusion_job_id>/design_0.pdb` for zero-copy chaining."
+  },
+  "openapi_url": "/openapi.json"
+}

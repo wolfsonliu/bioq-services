@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "DockQ Server",
-    "version": "0.0.13"
+    "title": "OpenADMET Server",
+    "version": "0.0.8"
   },
   "paths": {
     "/healthz": {
@@ -20,26 +20,6 @@
                   },
                   "type": "object",
                   "title": "Response Health Healthz Get"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/healthz/detail": {
-      "get": {
-        "summary": "Health Detail",
-        "operationId": "health_detail_healthz_detail_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Health Detail Healthz Detail Get"
                 }
               }
             }
@@ -372,16 +352,132 @@
         }
       }
     },
-    "/api/score": {
+    "/healthz/detail": {
+      "get": {
+        "summary": "Healthz Detail",
+        "description": "Probe weights_dir mount + CheMeleon foundation + registered models.",
+        "operationId": "healthz_detail_healthz_detail_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Healthz Detail Healthz Detail Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/models": {
+      "get": {
+        "summary": "List Models",
+        "description": "List NAS-registered anvil model_dirs with their metadata.",
+        "operationId": "list_models_api_models_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response List Models Api Models Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/predict": {
       "post": {
-        "summary": "Post Score",
-        "description": "Score a single (model, native) pair via DockQ; returns DockQ's JSON output.",
-        "operationId": "post_score_api_score_post",
+        "summary": "Predict",
+        "description": "Run one or more ADMET predictions against pre-registered models.\n\nMultiple `model_names` may share the same input_col (single subprocess)\nor differ (split into per-input-col groups; results merged into\noutput/predictions.csv).",
+        "operationId": "predict_api_predict_post",
         "requestBody": {
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_api_score_post"
+                "$ref": "#/components/schemas/Body_predict_api_predict_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/predict": {
+      "post": {
+        "summary": "Predict Task",
+        "description": "Predict as a single atomic task (blocks until pipeline completion).",
+        "operationId": "predict_task_api_tasks_predict_post",
+        "parameters": [
+          {
+            "name": "X-Bioagent-Job-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Bioagent-Job-Id"
+            }
+          },
+          {
+            "name": "X-Fc-Async-Task-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fc-Async-Task-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_predict_task_api_tasks_predict_post"
               }
             }
           }
@@ -410,16 +506,16 @@
         }
       }
     },
-    "/api/score_batch": {
+    "/api/compare": {
       "post": {
-        "summary": "Post Score Batch",
-        "description": "Score N candidate models against 1 reference native.\n\nModels come either as repeated `models` uploads OR as a single zip\nreferenced by `models_zip_uri` (oss://, file://, job://, http(s)://) — the\ngateway uses the zip form since it can't multipart-upload the `models` list.\n\nPer-model JSONs land in `output/per_model/<basename>.json`; the sorted\nsummary is `output/scores.csv`. Models that errored show up in\n`output/failed.csv` (job still completes successfully if at least one\nmodel produced a valid score).",
-        "operationId": "post_score_batch_api_score_batch_post",
+        "summary": "Compare",
+        "description": "Post-hoc comparison of pre-trained models (Mode A) or their stats JSON (Mode B).",
+        "operationId": "compare_api_compare_post",
         "requestBody": {
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_batch_api_score_batch_post"
+                "$ref": "#/components/schemas/Body_compare_api_compare_post"
               }
             }
           }
@@ -448,11 +544,10 @@
         }
       }
     },
-    "/api/tasks/score": {
+    "/api/tasks/compare": {
       "post": {
-        "summary": "Post Score Task",
-        "description": "Score a single (model, native) pair as a single atomic task.\n\nBlocks until DockQ completes.  For the submit/poll interface, use POST /api/score.",
-        "operationId": "post_score_task_api_tasks_score_post",
+        "summary": "Post-hoc comparison of pre-trained models (Mode A) or their stats JSON (Mode B; single atomic task).",
+        "operationId": "compare_task_api_tasks_compare_post",
         "parameters": [
           {
             "name": "X-Bioagent-Job-Id",
@@ -491,79 +586,7 @@
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_task_api_tasks_score_post"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JobInfo"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/tasks/score_batch": {
-      "post": {
-        "summary": "Post Score Batch Task",
-        "description": "Score N candidate models against 1 native as a single atomic task.\n\nModels come as repeated `models` uploads OR a single `models_zip_uri`\nzip (used by the gateway, which can't multipart-upload the list).",
-        "operationId": "post_score_batch_task_api_tasks_score_batch_post",
-        "parameters": [
-          {
-            "name": "X-Bioagent-Job-Id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Bioagent-Job-Id"
-            }
-          },
-          {
-            "name": "X-Fc-Async-Task-Id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Fc-Async-Task-Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_post_score_batch_task_api_tasks_score_batch_post"
+                "$ref": "#/components/schemas/Body_compare_task_api_tasks_compare_post"
               }
             }
           }
@@ -595,33 +618,18 @@
   },
   "components": {
     "schemas": {
-      "Body_post_score_api_score_post": {
+      "Body_compare_api_compare_post": {
         "properties": {
-          "model": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model"
+          "model_stats_files": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
+            "title": "Model Stats Files",
+            "default": []
           },
-          "native": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native"
-          },
-          "model_uri": {
+          "model_names": {
             "anyOf": [
               {
                 "type": "string"
@@ -630,9 +638,14 @@
                 "type": "null"
               }
             ],
-            "title": "Model Uri"
+            "title": "Model Names",
+            "description": "Pre-registered model names on NAS (Mode A).",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
           },
-          "native_uri": {
+          "label_types": {
             "anyOf": [
               {
                 "type": "string"
@@ -641,15 +654,13 @@
                 "type": "null"
               }
             ],
-            "title": "Native Uri"
+            "title": "Label Types",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
           },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
-          },
-          "mapping": {
+          "labels": {
             "anyOf": [
               {
                 "type": "string"
@@ -658,78 +669,65 @@
                 "type": "null"
               }
             ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
+            "title": "Labels",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
+          },
+          "task_names": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Names",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
+          },
+          "mt_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mt Id",
+            "description": "Multitask identifier — required when comparing multitask models.",
             "bioq_default": {
               "kind": "unset",
               "note": "only used when explicitly provided"
             }
           },
-          "small_molecule": {
+          "report": {
             "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
+            "title": "Report",
+            "description": "Generate a PDF report in addition to the JSON stats.",
             "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
-            "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
-          },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
-            "bioq_default": {
-              "kind": "auto",
-              "note": "use all available cores"
-            }
           }
         },
         "type": "object",
-        "title": "Body_post_score_api_score_post"
+        "title": "Body_compare_api_compare_post"
       },
-      "Body_post_score_batch_api_score_batch_post": {
+      "Body_compare_task_api_tasks_compare_post": {
         "properties": {
-          "native": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native"
+          "model_stats_files": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
+            "title": "Model Stats Files",
+            "default": []
           },
-          "native_uri": {
+          "model_names": {
             "anyOf": [
               {
                 "type": "string"
@@ -738,24 +736,14 @@
                 "type": "null"
               }
             ],
-            "title": "Native Uri"
+            "title": "Model Names",
+            "description": "Pre-registered model names on NAS (Mode A).",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
           },
-          "models": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "contentMediaType": "application/octet-stream"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models"
-          },
-          "models_zip_uri": {
+          "label_types": {
             "anyOf": [
               {
                 "type": "string"
@@ -764,93 +752,71 @@
                 "type": "null"
               }
             ],
-            "title": "Models Zip Uri",
+            "title": "Label Types",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
+          },
+          "labels": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Labels",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
+          },
+          "task_names": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Names",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
+          },
+          "mt_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mt Id",
+            "description": "Multitask identifier — required when comparing multitask models.",
             "bioq_default": {
               "kind": "unset",
               "note": "only used when explicitly provided"
             }
           },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
-          },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "small_molecule": {
+          "report": {
             "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
+            "title": "Report",
+            "description": "Generate a PDF report in addition to the JSON stats.",
             "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
-            "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
-          },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
-            "bioq_default": {
-              "kind": "auto",
-              "note": "use all available cores"
-            }
-          },
-          "sort_by": {
-            "type": "string",
-            "title": "Sort By",
-            "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
-            "default": "DockQ"
           }
         },
         "type": "object",
-        "title": "Body_post_score_batch_api_score_batch_post"
+        "title": "Body_compare_task_api_tasks_compare_post"
       },
-      "Body_post_score_batch_task_api_tasks_score_batch_post": {
+      "Body_predict_api_predict_post": {
         "properties": {
-          "native": {
+          "input_csv": {
             "anyOf": [
               {
                 "type": "string",
@@ -860,9 +826,21 @@
                 "type": "null"
               }
             ],
-            "title": "Native"
+            "title": "Input Csv"
           },
-          "native_uri": {
+          "input_sdf": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Sdf"
+          },
+          "input_smiles": {
             "anyOf": [
               {
                 "type": "string"
@@ -871,45 +849,14 @@
                 "type": "null"
               }
             ],
-            "title": "Native Uri"
-          },
-          "models": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "contentMediaType": "application/octet-stream"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models"
-          },
-          "models_zip_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Models Zip Uri",
+            "title": "Input Smiles",
+            "description": "Inline SMILES: comma- or newline-separated. Up to 200 molecules for quick probing. For larger batches use `input_csv` upload or URI.",
             "bioq_default": {
               "kind": "unset",
               "note": "only used when explicitly provided"
             }
           },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
-          },
-          "mapping": {
+          "input_csv_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -918,72 +865,138 @@
                 "type": "null"
               }
             ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
+            "title": "Input Csv Uri",
+            "description": "URI (oss://, file://, http(s)://, job://) pointing to an input CSV.",
             "bioq_default": {
               "kind": "unset",
               "note": "only used when explicitly provided"
             }
           },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
-            "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
-          },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
+          "input_sdf_uri": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Input Sdf Uri",
+            "description": "URI pointing to an input SDF.",
             "bioq_default": {
-              "kind": "auto",
-              "note": "use all available cores"
+              "kind": "unset",
+              "note": "only used when explicitly provided"
             }
           },
-          "sort_by": {
+          "input_col": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Col",
+            "description": "Column name in the input CSV containing SMILES. If omitted, the server derives it from the first `model_names` entry's recipe_components/data.yaml::input_col (auto-derive).",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "model_names": {
             "type": "string",
-            "title": "Sort By",
-            "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
-            "default": "DockQ"
+            "title": "Model Names",
+            "description": "Pre-registered model names on NAS. GET /api/models to enumerate. All requested models will be applied to the same input; the output CSV has OADMET_PRED_* columns per (model, task)."
+          },
+          "accelerator": {
+            "type": "string",
+            "enum": [
+              "cpu",
+              "gpu",
+              "auto",
+              "mps",
+              "tpu",
+              "ipu"
+            ],
+            "title": "Accelerator",
+            "default": "gpu"
+          },
+          "aq_fxns": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aq Fxns",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
+          },
+          "beta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Beta",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
+          },
+          "best_y": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Y",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
+          },
+          "xi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Xi",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
+          },
+          "debug": {
+            "type": "boolean",
+            "title": "Debug",
+            "default": false
           }
         },
         "type": "object",
-        "title": "Body_post_score_batch_task_api_tasks_score_batch_post"
+        "required": [
+          "model_names"
+        ],
+        "title": "Body_predict_api_predict_post"
       },
-      "Body_post_score_task_api_tasks_score_post": {
+      "Body_predict_task_api_tasks_predict_post": {
         "properties": {
-          "model": {
+          "input_csv": {
             "anyOf": [
               {
                 "type": "string",
@@ -993,9 +1006,9 @@
                 "type": "null"
               }
             ],
-            "title": "Model"
+            "title": "Input Csv"
           },
-          "native": {
+          "input_sdf": {
             "anyOf": [
               {
                 "type": "string",
@@ -1005,9 +1018,9 @@
                 "type": "null"
               }
             ],
-            "title": "Native"
+            "title": "Input Sdf"
           },
-          "model_uri": {
+          "input_smiles": {
             "anyOf": [
               {
                 "type": "string"
@@ -1016,90 +1029,150 @@
                 "type": "null"
               }
             ],
-            "title": "Model Uri"
-          },
-          "native_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native Uri"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
-            "default": "run"
-          },
-          "mapping": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
+            "title": "Input Smiles",
+            "description": "Inline SMILES: comma- or newline-separated. Up to 200 molecules for quick probing. For larger batches use `input_csv` upload or URI.",
             "bioq_default": {
               "kind": "unset",
               "note": "only used when explicitly provided"
             }
           },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
-            "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
-          },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
+          "input_csv_uri": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Input Csv Uri",
+            "description": "URI (oss://, file://, http(s)://, job://) pointing to an input CSV.",
             "bioq_default": {
-              "kind": "auto",
-              "note": "use all available cores"
+              "kind": "unset",
+              "note": "only used when explicitly provided"
             }
+          },
+          "input_sdf_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Sdf Uri",
+            "description": "URI pointing to an input SDF.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "input_col": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Col",
+            "description": "Column name in the input CSV containing SMILES. If omitted, the server derives it from the first `model_names` entry's recipe_components/data.yaml::input_col (auto-derive).",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "model_names": {
+            "type": "string",
+            "title": "Model Names",
+            "description": "Pre-registered model names on NAS. GET /api/models to enumerate. All requested models will be applied to the same input; the output CSV has OADMET_PRED_* columns per (model, task)."
+          },
+          "accelerator": {
+            "type": "string",
+            "enum": [
+              "cpu",
+              "gpu",
+              "auto",
+              "mps",
+              "tpu",
+              "ipu"
+            ],
+            "title": "Accelerator",
+            "default": "gpu"
+          },
+          "aq_fxns": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aq Fxns",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
+          },
+          "beta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Beta",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
+          },
+          "best_y": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Y",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
+          },
+          "xi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Xi",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
+          },
+          "debug": {
+            "type": "boolean",
+            "title": "Debug",
+            "default": false
           }
         },
         "type": "object",
-        "title": "Body_post_score_task_api_tasks_score_post"
+        "required": [
+          "model_names"
+        ],
+        "title": "Body_predict_task_api_tasks_predict_post"
       },
       "Body_upload_file_api_uploads_post": {
         "properties": {

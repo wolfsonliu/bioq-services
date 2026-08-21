@@ -1,0 +1,3194 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "PocketXMol Server",
+    "version": "0.0.4"
+  },
+  "paths": {
+    "/healthz": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_healthz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Healthz Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/uploads": {
+      "post": {
+        "summary": "Upload File",
+        "description": "Stage a file on shared NAS and return a `file://` URI.\n\nFor inputs too large for the 128 KiB FC async event payload: upload the\nbytes here over sync HTTP, then pass the returned `uri` as a `*_uri`\nfield on the real submit / async-task request. Because the file lands on\nthe shared NAS mount, any instance can resolve it later.",
+        "operationId": "upload_file_api_uploads_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_file_api_uploads_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pre-stop": {
+      "get": {
+        "summary": "Pre Stop",
+        "description": "FC PreStop hook — mark this instance's running jobs as interrupted.",
+        "operationId": "pre_stop_pre_stop_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Pre Stop Pre Stop Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/{job_id}": {
+      "get": {
+        "summary": "Get Job",
+        "operationId": "get_job_api_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Job",
+        "operationId": "delete_job_api_jobs__job_id__delete",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Delete Job Api Jobs  Job Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/{job_id}/files": {
+      "get": {
+        "summary": "List Job Files",
+        "operationId": "list_job_files_api_jobs__job_id__files_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response List Job Files Api Jobs  Job Id  Files Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/{job_id}/log": {
+      "get": {
+        "summary": "Get Job Log",
+        "operationId": "get_job_log_api_jobs__job_id__log_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Get Job Log Api Jobs  Job Id  Log Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/{job_id}/download": {
+      "get": {
+        "summary": "Download Job",
+        "operationId": "download_job_api_jobs__job_id__download_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/{job_id}/file/{file_path}": {
+      "get": {
+        "summary": "Download Single File",
+        "operationId": "download_single_file_api_jobs__job_id__file__file_path__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "file_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/manifest": {
+      "get": {
+        "summary": "Agent-friendly protocol description for this service.",
+        "operationId": "get_manifest_api_manifest_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceManifest"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthz/detail": {
+      "get": {
+        "summary": "Healthz Detail",
+        "description": "Report weight-file presence for the 3 checkpoints (PXM + 2 cfd).\n\nDoes not raise on missing files so the service can boot before NAS is\nmounted; agents see the state via the response.  CCD dir is optional\n(only future sdf2pdb_robust endpoint uses it) so it's not part of the\nhard readiness gate.",
+        "operationId": "healthz_detail_healthz_detail_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Healthz Detail Healthz Detail Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/dock": {
+      "post": {
+        "summary": "Post Dock",
+        "description": "Molecular docking (small-molecule or peptide).",
+        "operationId": "post_dock_api_dock_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_dock_api_dock_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sbdd": {
+      "post": {
+        "summary": "Post Sbdd",
+        "description": "De novo structure-based drug design.",
+        "operationId": "post_sbdd_api_sbdd_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_sbdd_api_sbdd_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/linking": {
+      "post": {
+        "summary": "Post Linking",
+        "description": "Fragment linking / growing / PROTAC linker design.",
+        "operationId": "post_linking_api_linking_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_linking_api_linking_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/optimize": {
+      "post": {
+        "summary": "Post Optimize",
+        "description": "Molecular optimization (local refinement of an input ligand).",
+        "operationId": "post_optimize_api_optimize_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_optimize_api_optimize_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/pepdesign": {
+      "post": {
+        "summary": "Post Pepdesign",
+        "description": "Peptide design (linear/cyclic de novo, inverse folding, sc-packing).",
+        "operationId": "post_pepdesign_api_pepdesign_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_pepdesign_api_pepdesign_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/confidence": {
+      "post": {
+        "summary": "Post Confidence",
+        "description": "Tuned-ranker confidence scoring on a previously completed job.",
+        "operationId": "post_confidence_api_confidence_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_confidence_api_confidence_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/dock": {
+      "post": {
+        "summary": "Molecular docking, small-molecule or peptide (single atomic task).",
+        "operationId": "post_dock_task_api_tasks_dock_post",
+        "parameters": [
+          {
+            "name": "X-Bioagent-Job-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Bioagent-Job-Id"
+            }
+          },
+          {
+            "name": "X-Fc-Async-Task-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fc-Async-Task-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_dock_task_api_tasks_dock_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/sbdd": {
+      "post": {
+        "summary": "De novo structure-based drug design (single atomic task).",
+        "operationId": "post_sbdd_task_api_tasks_sbdd_post",
+        "parameters": [
+          {
+            "name": "X-Bioagent-Job-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Bioagent-Job-Id"
+            }
+          },
+          {
+            "name": "X-Fc-Async-Task-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fc-Async-Task-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_sbdd_task_api_tasks_sbdd_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/linking": {
+      "post": {
+        "summary": "Fragment linking / growing / PROTAC linker design (single atomic task).",
+        "operationId": "post_linking_task_api_tasks_linking_post",
+        "parameters": [
+          {
+            "name": "X-Bioagent-Job-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Bioagent-Job-Id"
+            }
+          },
+          {
+            "name": "X-Fc-Async-Task-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fc-Async-Task-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_linking_task_api_tasks_linking_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/optimize": {
+      "post": {
+        "summary": "Molecular optimization: local refinement of an input ligand (single atomic task).",
+        "operationId": "post_optimize_task_api_tasks_optimize_post",
+        "parameters": [
+          {
+            "name": "X-Bioagent-Job-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Bioagent-Job-Id"
+            }
+          },
+          {
+            "name": "X-Fc-Async-Task-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fc-Async-Task-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_optimize_task_api_tasks_optimize_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/pepdesign": {
+      "post": {
+        "summary": "Peptide design: linear/cyclic de novo, inverse folding, sc-packing (single atomic task).",
+        "operationId": "post_pepdesign_task_api_tasks_pepdesign_post",
+        "parameters": [
+          {
+            "name": "X-Bioagent-Job-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Bioagent-Job-Id"
+            }
+          },
+          {
+            "name": "X-Fc-Async-Task-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fc-Async-Task-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_pepdesign_task_api_tasks_pepdesign_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/confidence": {
+      "post": {
+        "summary": "Tuned-ranker confidence scoring on a previously completed job (single atomic task).",
+        "operationId": "post_confidence_task_api_tasks_confidence_post",
+        "parameters": [
+          {
+            "name": "X-Bioagent-Job-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Bioagent-Job-Id"
+            }
+          },
+          {
+            "name": "X-Fc-Async-Task-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fc-Async-Task-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_confidence_task_api_tasks_confidence_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Body_post_confidence_api_confidence_post": {
+        "properties": {
+          "source_job_id": {
+            "type": "string",
+            "title": "Source Job Id",
+            "description": "job_id of a previously completed generation job.  Its output/<exp_name>_<timestamp>_SDF/ dir is what the tuned ranker consumes."
+          },
+          "variant": {
+            "$ref": "#/components/schemas/ConfidenceVariant",
+            "default": "tuned_cfd"
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "default": 50
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_job_id"
+        ],
+        "title": "Body_post_confidence_api_confidence_post"
+      },
+      "Body_post_confidence_task_api_tasks_confidence_post": {
+        "properties": {
+          "source_job_id": {
+            "type": "string",
+            "title": "Source Job Id",
+            "description": "job_id of a previously completed generation job.  Its output/<exp_name>_<timestamp>_SDF/ dir is what the tuned ranker consumes."
+          },
+          "variant": {
+            "$ref": "#/components/schemas/ConfidenceVariant",
+            "default": "tuned_cfd"
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "default": 50
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_job_id"
+        ],
+        "title": "Body_post_confidence_task_api_tasks_confidence_post"
+      },
+      "Body_post_dock_api_dock_post": {
+        "properties": {
+          "protein": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein"
+          },
+          "protein_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein Uri"
+          },
+          "ligand": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ligand"
+          },
+          "ligand_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ligand Uri"
+          },
+          "ref_ligand": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref Ligand"
+          },
+          "ref_ligand_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref Ligand Uri"
+          },
+          "num_samples": {
+            "type": "integer",
+            "title": "Num Samples",
+            "description": "Number of docked poses to generate.",
+            "default": 10
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "description": "GPU batch size; reduce on OOM.",
+            "default": 50
+          },
+          "is_pep": {
+            "type": "boolean",
+            "title": "Is Pep",
+            "description": "True for peptide docking (peptide PDB input or `pep_sequence`).",
+            "default": false
+          },
+          "noise_mode": {
+            "$ref": "#/components/schemas/NoiseMode",
+            "default": "gaussian"
+          },
+          "pocket_radius": {
+            "type": "number",
+            "title": "Pocket Radius",
+            "default": 10.0
+          },
+          "pocket_criterion": {
+            "$ref": "#/components/schemas/PocketCriterion",
+            "default": "center_of_mass"
+          },
+          "pocket_coord": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pocket Coord",
+            "description": "Explicit pocket center [x, y, z]. Mutually exclusive with providing `ref_ligand` as pocket source.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "smiles": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smiles",
+            "description": "SMILES string of the small-molecule ligand (alternative to uploading `ligand` file).",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "pep_sequence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pep Sequence",
+            "description": "Peptide sequence for docking from sequence (only when is_pep=true); equivalent to upstream `pepseq_<seq>` shortcut.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "random seed selected by the tool at runtime"
+            }
+          }
+        },
+        "type": "object",
+        "title": "Body_post_dock_api_dock_post"
+      },
+      "Body_post_dock_task_api_tasks_dock_post": {
+        "properties": {
+          "protein": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein"
+          },
+          "protein_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein Uri"
+          },
+          "ligand": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ligand"
+          },
+          "ligand_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ligand Uri"
+          },
+          "ref_ligand": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref Ligand"
+          },
+          "ref_ligand_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref Ligand Uri"
+          },
+          "num_samples": {
+            "type": "integer",
+            "title": "Num Samples",
+            "description": "Number of docked poses to generate.",
+            "default": 10
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "description": "GPU batch size; reduce on OOM.",
+            "default": 50
+          },
+          "is_pep": {
+            "type": "boolean",
+            "title": "Is Pep",
+            "description": "True for peptide docking (peptide PDB input or `pep_sequence`).",
+            "default": false
+          },
+          "noise_mode": {
+            "$ref": "#/components/schemas/NoiseMode",
+            "default": "gaussian"
+          },
+          "pocket_radius": {
+            "type": "number",
+            "title": "Pocket Radius",
+            "default": 10.0
+          },
+          "pocket_criterion": {
+            "$ref": "#/components/schemas/PocketCriterion",
+            "default": "center_of_mass"
+          },
+          "pocket_coord": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pocket Coord",
+            "description": "Explicit pocket center [x, y, z]. Mutually exclusive with providing `ref_ligand` as pocket source.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "smiles": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smiles",
+            "description": "SMILES string of the small-molecule ligand (alternative to uploading `ligand` file).",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "pep_sequence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pep Sequence",
+            "description": "Peptide sequence for docking from sequence (only when is_pep=true); equivalent to upstream `pepseq_<seq>` shortcut.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "random seed selected by the tool at runtime"
+            }
+          }
+        },
+        "type": "object",
+        "title": "Body_post_dock_task_api_tasks_dock_post"
+      },
+      "Body_post_linking_api_linking_post": {
+        "properties": {
+          "protein": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein"
+          },
+          "protein_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein Uri"
+          },
+          "input_ligand": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Ligand"
+          },
+          "input_ligand_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Ligand Uri"
+          },
+          "num_samples": {
+            "type": "integer",
+            "title": "Num Samples",
+            "default": 50
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "default": 50
+          },
+          "fragments": {
+            "type": "string",
+            "title": "Fragments",
+            "description": "Fragment atom index groups (0-based) from `input_ligand`. 1 group = growing, 2+ groups = linking / PROTAC."
+          },
+          "part1_pert": {
+            "$ref": "#/components/schemas/Part1Pert",
+            "description": "Fragment perturbation: `fixed`=lock poses; `free`=allow movement; `small`=slight perturbation (opt_partial).",
+            "default": "fixed"
+          },
+          "mol_size_mean": {
+            "type": "integer",
+            "title": "Mol Size Mean",
+            "description": "Target atom count of the linked mol.",
+            "default": 40
+          },
+          "mol_size_std": {
+            "type": "integer",
+            "title": "Mol Size Std",
+            "default": 3
+          },
+          "use_input_center": {
+            "type": "boolean",
+            "title": "Use Input Center",
+            "description": "Use input ligand centroid as denoising space center; False → pocket centroid.",
+            "default": true
+          },
+          "pocket_radius": {
+            "type": "number",
+            "title": "Pocket Radius",
+            "default": 10.0
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "random seed selected by the tool at runtime"
+            }
+          }
+        },
+        "type": "object",
+        "required": [
+          "fragments"
+        ],
+        "title": "Body_post_linking_api_linking_post"
+      },
+      "Body_post_linking_task_api_tasks_linking_post": {
+        "properties": {
+          "protein": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein"
+          },
+          "protein_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein Uri"
+          },
+          "input_ligand": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Ligand"
+          },
+          "input_ligand_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Ligand Uri"
+          },
+          "num_samples": {
+            "type": "integer",
+            "title": "Num Samples",
+            "default": 50
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "default": 50
+          },
+          "fragments": {
+            "type": "string",
+            "title": "Fragments",
+            "description": "Fragment atom index groups (0-based) from `input_ligand`. 1 group = growing, 2+ groups = linking / PROTAC."
+          },
+          "part1_pert": {
+            "$ref": "#/components/schemas/Part1Pert",
+            "description": "Fragment perturbation: `fixed`=lock poses; `free`=allow movement; `small`=slight perturbation (opt_partial).",
+            "default": "fixed"
+          },
+          "mol_size_mean": {
+            "type": "integer",
+            "title": "Mol Size Mean",
+            "description": "Target atom count of the linked mol.",
+            "default": 40
+          },
+          "mol_size_std": {
+            "type": "integer",
+            "title": "Mol Size Std",
+            "default": 3
+          },
+          "use_input_center": {
+            "type": "boolean",
+            "title": "Use Input Center",
+            "description": "Use input ligand centroid as denoising space center; False → pocket centroid.",
+            "default": true
+          },
+          "pocket_radius": {
+            "type": "number",
+            "title": "Pocket Radius",
+            "default": 10.0
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "random seed selected by the tool at runtime"
+            }
+          }
+        },
+        "type": "object",
+        "required": [
+          "fragments"
+        ],
+        "title": "Body_post_linking_task_api_tasks_linking_post"
+      },
+      "Body_post_optimize_api_optimize_post": {
+        "properties": {
+          "protein": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein"
+          },
+          "protein_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein Uri"
+          },
+          "input_ligand": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Ligand"
+          },
+          "input_ligand_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Ligand Uri"
+          },
+          "num_samples": {
+            "type": "integer",
+            "title": "Num Samples",
+            "default": 50
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "default": 50
+          },
+          "init_step": {
+            "type": "number",
+            "title": "Init Step",
+            "description": "Initial noise fraction; smaller = closer to input, larger = more exploration.",
+            "default": 0.5
+          },
+          "num_steps": {
+            "type": "integer",
+            "title": "Num Steps",
+            "default": 50
+          },
+          "mol_size_mean": {
+            "type": "integer",
+            "title": "Mol Size Mean",
+            "default": 38
+          },
+          "mol_size_std": {
+            "type": "integer",
+            "title": "Mol Size Std",
+            "default": 3
+          },
+          "pocket_radius": {
+            "type": "number",
+            "title": "Pocket Radius",
+            "default": 10.0
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "random seed selected by the tool at runtime"
+            }
+          }
+        },
+        "type": "object",
+        "title": "Body_post_optimize_api_optimize_post"
+      },
+      "Body_post_optimize_task_api_tasks_optimize_post": {
+        "properties": {
+          "protein": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein"
+          },
+          "protein_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein Uri"
+          },
+          "input_ligand": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Ligand"
+          },
+          "input_ligand_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Ligand Uri"
+          },
+          "num_samples": {
+            "type": "integer",
+            "title": "Num Samples",
+            "default": 50
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "default": 50
+          },
+          "init_step": {
+            "type": "number",
+            "title": "Init Step",
+            "description": "Initial noise fraction; smaller = closer to input, larger = more exploration.",
+            "default": 0.5
+          },
+          "num_steps": {
+            "type": "integer",
+            "title": "Num Steps",
+            "default": 50
+          },
+          "mol_size_mean": {
+            "type": "integer",
+            "title": "Mol Size Mean",
+            "default": 38
+          },
+          "mol_size_std": {
+            "type": "integer",
+            "title": "Mol Size Std",
+            "default": 3
+          },
+          "pocket_radius": {
+            "type": "number",
+            "title": "Pocket Radius",
+            "default": 10.0
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "random seed selected by the tool at runtime"
+            }
+          }
+        },
+        "type": "object",
+        "title": "Body_post_optimize_task_api_tasks_optimize_post"
+      },
+      "Body_post_pepdesign_api_pepdesign_post": {
+        "properties": {
+          "protein": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein"
+          },
+          "protein_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein Uri"
+          },
+          "input_peptide": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Peptide"
+          },
+          "input_peptide_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Peptide Uri"
+          },
+          "ref_ligand": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref Ligand"
+          },
+          "ref_ligand_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref Ligand Uri"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/PepDesignMode",
+            "default": "denovo_linear"
+          },
+          "pep_length": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pep Length",
+            "description": "Peptide residue count (required for de novo modes; ignored for inverse_fold / sc_pack — length taken from input PDB).",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "num_samples": {
+            "type": "integer",
+            "title": "Num Samples",
+            "default": 10
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "default": 50
+          },
+          "pocket_coord": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pocket Coord",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "pocket_radius": {
+            "type": "number",
+            "title": "Pocket Radius",
+            "description": "Peptide pockets are larger than small-molecule pockets; default = 20 Å.",
+            "default": 20.0
+          },
+          "fix_pos_res_bb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fix Pos Res Bb",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
+          },
+          "fix_pos_res_sc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fix Pos Res Sc",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
+          },
+          "fix_type_res_bb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fix Type Res Bb",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
+          },
+          "fix_type_res_sc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fix Type Res Sc",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "random seed selected by the tool at runtime"
+            }
+          }
+        },
+        "type": "object",
+        "title": "Body_post_pepdesign_api_pepdesign_post"
+      },
+      "Body_post_pepdesign_task_api_tasks_pepdesign_post": {
+        "properties": {
+          "protein": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein"
+          },
+          "protein_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein Uri"
+          },
+          "input_peptide": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Peptide"
+          },
+          "input_peptide_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Peptide Uri"
+          },
+          "ref_ligand": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref Ligand"
+          },
+          "ref_ligand_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref Ligand Uri"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/PepDesignMode",
+            "default": "denovo_linear"
+          },
+          "pep_length": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pep Length",
+            "description": "Peptide residue count (required for de novo modes; ignored for inverse_fold / sc_pack — length taken from input PDB).",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "num_samples": {
+            "type": "integer",
+            "title": "Num Samples",
+            "default": 10
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "default": 50
+          },
+          "pocket_coord": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pocket Coord",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "pocket_radius": {
+            "type": "number",
+            "title": "Pocket Radius",
+            "description": "Peptide pockets are larger than small-molecule pockets; default = 20 Å.",
+            "default": 20.0
+          },
+          "fix_pos_res_bb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fix Pos Res Bb",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
+          },
+          "fix_pos_res_sc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fix Pos Res Sc",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
+          },
+          "fix_type_res_bb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fix Type Res Bb",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
+          },
+          "fix_type_res_sc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fix Type Res Sc",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "empty when omitted"
+            }
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "random seed selected by the tool at runtime"
+            }
+          }
+        },
+        "type": "object",
+        "title": "Body_post_pepdesign_task_api_tasks_pepdesign_post"
+      },
+      "Body_post_sbdd_api_sbdd_post": {
+        "properties": {
+          "protein": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein"
+          },
+          "protein_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein Uri"
+          },
+          "num_samples": {
+            "type": "integer",
+            "title": "Num Samples",
+            "default": 50
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "default": 50
+          },
+          "mode": {
+            "$ref": "#/components/schemas/SbddMode",
+            "description": "`ar` = auto-regressive refinement (better quality); `simple` = one-shot (fast).",
+            "default": "ar"
+          },
+          "pocket_coord": {
+            "type": "string",
+            "title": "Pocket Coord",
+            "description": "Explicit pocket center [x, y, z].  Required — de novo SBDD has no reference ligand to derive it from."
+          },
+          "pocket_radius": {
+            "type": "number",
+            "title": "Pocket Radius",
+            "default": 15.0
+          },
+          "mol_size_mean": {
+            "type": "integer",
+            "title": "Mol Size Mean",
+            "default": 28
+          },
+          "mol_size_std": {
+            "type": "integer",
+            "title": "Mol Size Std",
+            "default": 2
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "random seed selected by the tool at runtime"
+            }
+          }
+        },
+        "type": "object",
+        "required": [
+          "pocket_coord"
+        ],
+        "title": "Body_post_sbdd_api_sbdd_post"
+      },
+      "Body_post_sbdd_task_api_tasks_sbdd_post": {
+        "properties": {
+          "protein": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein"
+          },
+          "protein_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein Uri"
+          },
+          "num_samples": {
+            "type": "integer",
+            "title": "Num Samples",
+            "default": 50
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Batch Size",
+            "default": 50
+          },
+          "mode": {
+            "$ref": "#/components/schemas/SbddMode",
+            "description": "`ar` = auto-regressive refinement (better quality); `simple` = one-shot (fast).",
+            "default": "ar"
+          },
+          "pocket_coord": {
+            "type": "string",
+            "title": "Pocket Coord",
+            "description": "Explicit pocket center [x, y, z].  Required — de novo SBDD has no reference ligand to derive it from."
+          },
+          "pocket_radius": {
+            "type": "number",
+            "title": "Pocket Radius",
+            "default": 15.0
+          },
+          "mol_size_mean": {
+            "type": "integer",
+            "title": "Mol Size Mean",
+            "default": 28
+          },
+          "mol_size_std": {
+            "type": "integer",
+            "title": "Mol Size Std",
+            "default": 2
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "bioq_default": {
+              "kind": "auto",
+              "note": "random seed selected by the tool at runtime"
+            }
+          }
+        },
+        "type": "object",
+        "required": [
+          "pocket_coord"
+        ],
+        "title": "Body_post_sbdd_task_api_tasks_sbdd_post"
+      },
+      "Body_upload_file_api_uploads_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_file_api_uploads_post"
+      },
+      "ConfidenceVariant": {
+        "type": "string",
+        "enum": [
+          "tuned_cfd",
+          "flex_cfd"
+        ],
+        "title": "ConfidenceVariant"
+      },
+      "EndpointExample": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Short label (e.g., 'chain from previous job')."
+          },
+          "curl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Curl",
+            "description": "Ready-to-run curl command."
+          },
+          "python": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Python",
+            "description": "Equivalent Python (httpx / requests) snippet."
+          },
+          "body": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body",
+            "description": "Structured request body, useful for JSON endpoints. Files are not represented here."
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes",
+            "description": "When an agent should reach for this example over the others."
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "EndpointExample",
+        "description": "A copy-pasteable example for one endpoint."
+      },
+      "EndpointInfo": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "title": "Method",
+            "description": "HTTP method, e.g. 'POST'."
+          },
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "description": "URL path, e.g. '/api/rfdiffusion'."
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary",
+            "description": "One-line purpose (FastAPI route summary or first docstring line)."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Longer prose (FastAPI route description or docstring body)."
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation Id",
+            "description": "OpenAPI operation id; agents can fetch /openapi.json and look up /paths/{path}/{method} for the full request/response schemas."
+          },
+          "request_content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Content Type",
+            "description": "Wire format the body uses: 'application/json' for plain JSON, 'multipart/form-data' when files are involved, etc."
+          },
+          "request_schema_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Schema Ref",
+            "description": "JSON pointer into /openapi.json (e.g. '#/components/schemas/Body_run_rfdiffusion_api_rfdiffusion_post'). Resolve there for the full schema; the flat `request_fields` list below covers the common case."
+          },
+          "response_schema_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Schema Ref",
+            "description": "Pointer to the 200-response schema (typically '#/components/schemas/JobInfo')."
+          },
+          "request_fields": {
+            "items": {
+              "$ref": "#/components/schemas/FieldInfo"
+            },
+            "type": "array",
+            "title": "Request Fields",
+            "description": "Top-level fields of the request body, flattened for agent consumption."
+          },
+          "examples": {
+            "items": {
+              "$ref": "#/components/schemas/EndpointExample"
+            },
+            "type": "array",
+            "title": "Examples",
+            "description": "Copy-pasteable examples (from `adapter.endpoint_examples()`)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "method",
+          "path"
+        ],
+        "title": "EndpointInfo",
+        "description": "One service-defined HTTP operation, with enough metadata to construct a request."
+      },
+      "FailureKind": {
+        "type": "string",
+        "enum": [
+          "subprocess_error",
+          "no_outputs",
+          "timeout",
+          "dataset_invalid",
+          "interrupted"
+        ],
+        "title": "FailureKind",
+        "description": "Coarse classification of why a job failed.\n\nSet by `finalize_job` based on subprocess return code + output detection,\nor by `reload_from_disk` when a job was RUNNING at the moment of restart.\nLets the client distinguish recoverable from fatal failures without parsing\n`error_summary` strings."
+      },
+      "FieldInfo": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Field name as it appears in the request body / form."
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "description": "Human-friendly type name: 'string', 'integer', 'file' (multipart upload), 'array[string]', 'array[file]', or the name of a referenced pydantic model (in which case look it up in /openapi.json#/components/schemas)."
+          },
+          "required": {
+            "type": "boolean",
+            "title": "Required",
+            "description": "True iff the field must be present in the request."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "From Field(description=...) / docstring."
+          },
+          "is_file": {
+            "type": "boolean",
+            "title": "Is File",
+            "description": "True iff this is a multipart file upload — a scalar 'file' or an 'array[file]' (rather than a form/json scalar).",
+            "default": false
+          },
+          "default": {
+            "title": "Default",
+            "description": "Effective default when omitted: a literal (default_kind='literal') or a semantics token 'auto'/'unset'."
+          },
+          "default_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Kind",
+            "description": "'literal' | 'auto' | 'unset'. 'auto'/'unset' are semantics tokens (not sendable literals); 'literal' means `default` is a real value."
+          },
+          "default_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Note",
+            "description": "One-line prose for the 'auto'/'unset' omission semantics."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "type",
+          "required"
+        ],
+        "title": "FieldInfo",
+        "description": "One request-body field, flattened from the OpenAPI schema."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "JobInfo": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Job Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "service": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service"
+          },
+          "endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "input_params": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Params"
+          },
+          "output_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Count"
+          },
+          "output_total_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Total Bytes"
+          },
+          "error_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Summary"
+          },
+          "error_tail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Tail"
+          },
+          "failure_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FailureKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "instance_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instance Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "status"
+        ],
+        "title": "JobInfo",
+        "description": "Public job state — what `GET /api/jobs/{id}` returns."
+      },
+      "JobLifecycle": {
+        "properties": {
+          "poll_endpoint": {
+            "type": "string",
+            "title": "Poll Endpoint",
+            "default": "/api/jobs/{job_id}"
+          },
+          "files_endpoint": {
+            "type": "string",
+            "title": "Files Endpoint",
+            "default": "/api/jobs/{job_id}/files"
+          },
+          "log_endpoint": {
+            "type": "string",
+            "title": "Log Endpoint",
+            "default": "/api/jobs/{job_id}/log"
+          },
+          "download_endpoint": {
+            "type": "string",
+            "title": "Download Endpoint",
+            "default": "/api/jobs/{job_id}/download"
+          },
+          "single_file_endpoint": {
+            "type": "string",
+            "title": "Single File Endpoint",
+            "default": "/api/jobs/{job_id}/file/{path}"
+          },
+          "delete_endpoint": {
+            "type": "string",
+            "title": "Delete Endpoint",
+            "default": "/api/jobs/{job_id}"
+          },
+          "statuses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Statuses",
+            "description": "All possible values of JobInfo.status."
+          },
+          "failure_kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Failure Kinds",
+            "description": "All possible values of JobInfo.failure_kind (only set on failure)."
+          },
+          "poll_recommendation": {
+            "type": "string",
+            "title": "Poll Recommendation",
+            "default": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch."
+          },
+          "restart_semantics": {
+            "type": "string",
+            "title": "Restart Semantics",
+            "default": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+          }
+        },
+        "type": "object",
+        "title": "JobLifecycle",
+        "description": "Framework-provided job state machine. Identical across all bioagent services."
+      },
+      "JobStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "completed",
+          "failed"
+        ],
+        "title": "JobStatus",
+        "description": "Lifecycle state of a job. Strings so JSON serialization is human-readable."
+      },
+      "NasLayout": {
+        "properties": {
+          "jobs_base_dir": {
+            "type": "string",
+            "format": "path",
+            "title": "Jobs Base Dir",
+            "description": "Root directory under which per-job dirs are created."
+          },
+          "per_job_structure": {
+            "type": "string",
+            "title": "Per Job Structure",
+            "default": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}"
+          },
+          "cross_instance_consistency": {
+            "type": "string",
+            "title": "Cross Instance Consistency",
+            "default": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess."
+          },
+          "cross_service_sharing": {
+            "type": "string",
+            "title": "Cross Service Sharing",
+            "default": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+          }
+        },
+        "type": "object",
+        "required": [
+          "jobs_base_dir"
+        ],
+        "title": "NasLayout",
+        "description": "Where each job's data lives on disk; shared across multi-instance FC."
+      },
+      "NoiseMode": {
+        "type": "string",
+        "enum": [
+          "gaussian",
+          "flexible"
+        ],
+        "title": "NoiseMode",
+        "description": "/api/dock — controls the two settings weights (`free` vs `flexible`)."
+      },
+      "Part1Pert": {
+        "type": "string",
+        "enum": [
+          "fixed",
+          "free",
+          "small"
+        ],
+        "title": "Part1Pert",
+        "description": "/api/linking — how to treat the fixed fragment (part1)."
+      },
+      "PepDesignMode": {
+        "type": "string",
+        "enum": [
+          "denovo_linear",
+          "denovo_cyclic",
+          "inverse_fold",
+          "sc_pack"
+        ],
+        "title": "PepDesignMode",
+        "description": "/api/pepdesign — 4 sub-modes."
+      },
+      "PocketCriterion": {
+        "type": "string",
+        "enum": [
+          "center_of_mass",
+          "min"
+        ],
+        "title": "PocketCriterion"
+      },
+      "SbddMode": {
+        "type": "string",
+        "enum": [
+          "ar",
+          "simple"
+        ],
+        "title": "SbddMode",
+        "description": "/api/sbdd — one-shot (`simple`) vs auto-regressive (`ar`, refine loop)."
+      },
+      "ServiceManifest": {
+        "properties": {
+          "service": {
+            "type": "string",
+            "title": "Service",
+            "description": "Adapter.name; stable identifier across versions."
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Human-readable title (FastAPI app title)."
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "description": "Semantic version of the service image."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Free-form prose (FastAPI app description)."
+          },
+          "endpoints": {
+            "items": {
+              "$ref": "#/components/schemas/EndpointInfo"
+            },
+            "type": "array",
+            "title": "Endpoints",
+            "description": "Service-specific POST routes. Framework lifecycle routes are NOT included."
+          },
+          "job_lifecycle": {
+            "$ref": "#/components/schemas/JobLifecycle"
+          },
+          "nas_layout": {
+            "$ref": "#/components/schemas/NasLayout"
+          },
+          "service_specific": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Service Specific",
+            "description": "Whatever `adapter.manifest_extras()` returned. Services document their output filename conventions, supported input URI schemes, and any tool-specific hints here."
+          },
+          "openapi_url": {
+            "type": "string",
+            "title": "Openapi Url",
+            "description": "Where to fetch the full JSON Schema for every request/response model.",
+            "default": "/openapi.json"
+          }
+        },
+        "type": "object",
+        "required": [
+          "service",
+          "title",
+          "version",
+          "job_lifecycle",
+          "nas_layout"
+        ],
+        "title": "ServiceManifest",
+        "description": "Agent-facing protocol description for one bioagent service."
+      },
+      "UploadInfo": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "title": "Filename",
+            "description": "Sanitized basename of the staged file."
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Size Bytes",
+            "description": "Bytes written to disk."
+          },
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "description": "Absolute path on the shared NAS mount."
+          },
+          "uri": {
+            "type": "string",
+            "title": "Uri",
+            "description": "file:// URI resolvable by any service's *_uri input."
+          }
+        },
+        "type": "object",
+        "required": [
+          "filename",
+          "size_bytes",
+          "path",
+          "uri"
+        ],
+        "title": "UploadInfo",
+        "description": "What `POST /api/uploads` returns after staging a file on shared NAS.\n\n`uri` is a `file://` reference the caller passes as a `*_uri` field on a\nlater submit / async-task request, keeping large bytes out of the 128 KiB\nasync event payload."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

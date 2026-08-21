@@ -1,0 +1,256 @@
+{
+  "service": "mmseqs2",
+  "title": "MMseqs2 Server",
+  "version": "0.0.6",
+  "description": null,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/tasks/msa",
+      "summary": "Monomer MSA as a single atomic task (blocks until completion).",
+      "description": "Monomer MSA as a single atomic task (blocks until completion).",
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body_post_tasks_msa_api_tasks_msa_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "q",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mode",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "",
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "monomer MSA via FC async task mode",
+          "curl": "curl -X POST $URL/api/tasks/msa -H 'X-Fc-Invocation-Type: Async' -H 'X-Bioagent-Job-Id: mmseqs-$(date +%s)' -H 'X-Fc-Async-Task-Id: mmseqs-$(date +%s)' -F 'q=>query1\\nMKQHKAMIVALIVICITAVVAAL...' -F mode=env",
+          "python": null,
+          "body": null,
+          "notes": "Returns HTTP 202 immediately; FC enqueues the task and the function runs synchronously inside the instance. Poll JobInfo via the framework's GET /api/jobs/{id}, or use FCDispatcher.get_status for production (HTTP polling is rate-limit-prone — see engineering/decisions/2026-06-17-fc-async-task-mode.md)."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/pair",
+      "summary": "Multimer paired MSA as a single atomic task (blocks until completion).",
+      "description": "Multimer paired MSA as a single atomic task (blocks until completion).",
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body_post_tasks_pair_api_tasks_pair_post",
+      "response_schema_ref": "#/components/schemas/JobInfo",
+      "request_fields": [
+        {
+          "name": "q",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mode",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "",
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "multimer paired MSA via FC async task mode",
+          "curl": "curl -X POST $URL/api/tasks/pair -H 'X-Fc-Invocation-Type: Async' -H 'X-Bioagent-Job-Id: mmseqs-$(date +%s)' -H 'X-Fc-Async-Task-Id: mmseqs-$(date +%s)' -F 'q=>chainA\\nMKQHKAM...\\n>chainB\\nLLLLLLL...' -F mode=pairgreedy",
+          "python": null,
+          "body": null,
+          "notes": "Same task-mode semantics as /api/tasks/msa, but for paired multimer modes. Returns JobInfo (200 + status=completed/failed) — distinct from the ColabFold-protocol 200 + {status: ERROR} convention of /ticket/*."
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/result/download/{job_id}",
+      "summary": "Stream a tar.gz of the job's a3m outputs in ColabFold-canonical layout.",
+      "description": "Stream a tar.gz of the job's a3m outputs in ColabFold-canonical layout.\n\nThe tarball contains ``uniref.a3m`` and/or ``pair.a3m`` at the top level\nwith per-query MSAs concatenated using ``\\x00`` separators — the wire\nformat both upstream ColabFold and Boltz expect from\n``https://api.colabfold.com/result/download/<id>``.  See\n``_build_colabfold_tarball`` for the full contract.\n\nThe ColabFold client parses the response body as a tarball regardless of\nContent-Type (``tarfile.open(fileobj=response.raw, mode='r|gz')``), but we\nstill set ``application/x-tar`` for honest HTTP semantics. Errors return\nHTTP 503 with ``{\"status\": \"ERROR\"}`` per the design doc.",
+      "operation_id": null,
+      "request_content_type": null,
+      "request_schema_ref": null,
+      "response_schema_ref": null,
+      "request_fields": [],
+      "examples": []
+    },
+    {
+      "method": "POST",
+      "path": "/ticket/msa",
+      "summary": "Submit a monomer (unpaired) MSA job. ColabFold protocol.",
+      "description": "Submit a monomer (unpaired) MSA job. ColabFold protocol.",
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body_post_ticket_msa_ticket_msa_post",
+      "response_schema_ref": null,
+      "request_fields": [
+        {
+          "name": "q",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mode",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "",
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "monomer MSA (UniRef30 + env)",
+          "curl": "curl -X POST $URL/ticket/msa -F 'q=>query1\\nMKQHKAMIVALIVICITAVVAALVTRKDLCEVHIRTGQTEV' -F mode=env",
+          "python": null,
+          "body": null,
+          "notes": "Returns {'id': '<job_id>', 'status': 'PENDING'}. Poll GET /ticket/<id> until status is COMPLETE then GET /result/download/<id> for the .a3m tarball."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/ticket/pair",
+      "summary": "Submit a multimer (paired) MSA job. ColabFold protocol.",
+      "description": "Submit a multimer (paired) MSA job. ColabFold protocol.",
+      "operation_id": null,
+      "request_content_type": "application/x-www-form-urlencoded",
+      "request_schema_ref": "#/components/schemas/Body_post_ticket_pair_ticket_pair_post",
+      "response_schema_ref": null,
+      "request_fields": [
+        {
+          "name": "q",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "",
+          "default_kind": "literal",
+          "default_note": null
+        },
+        {
+          "name": "mode",
+          "type": "string",
+          "required": false,
+          "description": null,
+          "is_file": false,
+          "default": "",
+          "default_kind": "literal",
+          "default_note": null
+        }
+      ],
+      "examples": [
+        {
+          "title": "multimer paired MSA (greedy)",
+          "curl": "curl -X POST $URL/ticket/pair -F 'q=>chainA\\nMKQHKAM...\\n>chainB\\nLLLLLLL...' -F mode=pairgreedy",
+          "python": null,
+          "body": null,
+          "notes": "Requires at least 2 FASTA records. Use pairgreedy / paircomplete (strategy 0 / 1). The -env variants add the ColabFoldDB environmental DB on top."
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/ticket/{job_id}",
+      "summary": "Poll job status, translated to ColabFold's protocol vocabulary.",
+      "description": "Poll job status, translated to ColabFold's protocol vocabulary.\n\nReturns HTTP 200 with `{\"status\": \"ERROR\"}` if the job is missing — the\nColabFold client doesn't handle 404 gracefully so we collapse \"not found\"\nand \"failed\" into the same response shape.",
+      "operation_id": null,
+      "request_content_type": null,
+      "request_schema_ref": null,
+      "response_schema_ref": "#/components/schemas/TicketStatusResponse",
+      "request_fields": [],
+      "examples": []
+    }
+  ],
+  "job_lifecycle": {
+    "poll_endpoint": "/api/jobs/{job_id}",
+    "files_endpoint": "/api/jobs/{job_id}/files",
+    "log_endpoint": "/api/jobs/{job_id}/log",
+    "download_endpoint": "/api/jobs/{job_id}/download",
+    "single_file_endpoint": "/api/jobs/{job_id}/file/{path}",
+    "delete_endpoint": "/api/jobs/{job_id}",
+    "statuses": [
+      "pending",
+      "running",
+      "completed",
+      "failed"
+    ],
+    "failure_kinds": [
+      "subprocess_error",
+      "no_outputs",
+      "timeout",
+      "dataset_invalid",
+      "interrupted"
+    ],
+    "poll_recommendation": "Poll the status endpoint every 5–120 s until status ∈ {'completed', 'failed'}. On failure, JobInfo.error_summary holds a one-line exception summary and error_tail holds the trailing ~4 KB of the subprocess log — usually enough for triage without a separate /log fetch.",
+    "restart_semantics": "Jobs survive process and FC instance restarts via a `job.json` sidecar in each job directory. Jobs that were RUNNING at the moment of restart are downgraded to FAILED with failure_kind='interrupted'."
+  },
+  "nas_layout": {
+    "jobs_base_dir": "/data/mmseqs2_jobs",
+    "per_job_structure": "<jobs_base_dir>/<job_id>/{input/, output/, logs/run.log, job.json}",
+    "cross_instance_consistency": "When multiple FC instances mount the same NAS at jobs_base_dir, all of them can see each other's jobs via read-through cache on GET. Writes (create/update) only happen on the instance that owns the subprocess.",
+    "cross_service_sharing": "Other bioagent services mounted on the same NAS can read this service's output files directly by path, avoiding HTTP round-trips. Example: another service does `Path('/data/rfantibody_jobs/<id>/output/file.qv').read_bytes()`."
+  },
+  "service_specific": {
+    "protocol": "ColabFold MSA HTTP protocol — four endpoints (POST /ticket/msa, POST /ticket/pair, GET /ticket/<id>, GET /result/download/<id>). All errors are returned as {'status': 'ERROR'} with HTTP 200 (the ColabFold client treats 4xx as fatal).",
+    "modes": {
+      "env": "UniRef30 + ColabFoldDB env, with filter (monomer).",
+      "all": "UniRef30 only, with filter (monomer).",
+      "env-nofilter": "UniRef30 + env, no filter (monomer).",
+      "nofilter": "UniRef30 only, no filter (monomer).",
+      "pairgreedy": "Paired multimer, pairaln strategy=0 (greedy per species).",
+      "paircomplete": "Paired multimer, pairaln strategy=1 (all chains required).",
+      "pairgreedy-env": "pairgreedy + env DB.",
+      "paircomplete-env": "paircomplete + env DB."
+    },
+    "tool_outputs": {
+      "msa": "<job_dir>/output/<safe_jobname>.a3m — one per FASTA record in the query. Multimer paired runs additionally emit <safe_jobname>_paired.a3m and per-chain auxiliary files."
+    },
+    "endpoints_summary": {
+      "/ticket/msa": "Submit a monomer (unpaired) MSA job (ColabFold protocol).",
+      "/ticket/pair": "Submit a multimer (paired) MSA job (ColabFold protocol).",
+      "/ticket/{id}": "Poll job status (PENDING/RUNNING/COMPLETE/ERROR).",
+      "/result/download/{id}": "Download a tar.gz of *.a3m output files.",
+      "/api/tasks/msa": "Monomer MSA as an atomic task; blocks until completion (FC async task mode).",
+      "/api/tasks/pair": "Multimer paired MSA as an atomic task; blocks until completion (FC async task mode).",
+      "/healthz/detail": "Extended health (db_loaded, gpu_free_mb, active_jobs)."
+    },
+    "limits": {
+      "max_residues_per_chain": 1023,
+      "valid_alphabet": "20 standard AAs + X + *"
+    },
+    "not_in_scope_v0_0_1": "Templates, AF3-JSON output, custom DBs, MSA caching, rate-limit / maintenance responses (RATELIMIT / MAINTENANCE are part of the protocol for forward compatibility but the server never emits them in v0.0.1)."
+  },
+  "openapi_url": "/openapi.json"
+}

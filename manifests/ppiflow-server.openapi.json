@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "DockQ Server",
-    "version": "0.0.13"
+    "title": "PPIFlow Server",
+    "version": "0.0.14"
   },
   "paths": {
     "/healthz": {
@@ -20,26 +20,6 @@
                   },
                   "type": "object",
                   "title": "Response Health Healthz Get"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/healthz/detail": {
-      "get": {
-        "summary": "Health Detail",
-        "operationId": "health_detail_healthz_detail_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Health Detail Healthz Detail Get"
                 }
               }
             }
@@ -372,16 +352,154 @@
         }
       }
     },
-    "/api/score": {
+    "/healthz/detail": {
+      "get": {
+        "summary": "Healthz Detail",
+        "description": "Extended health: report whether NAS-mounted checkpoints are reachable.\n\nCheckpoints live on NAS at `PPIFLOW_CKPT_DIR` (default\n`/data/models/ppiflow/checkpoint/`).  Probes for the 4 expected .ckpt\nfiles; `weights_loaded=false` lets the agent detect a misconfigured FC\nmount / unbound SIF without crashing the service.",
+        "operationId": "healthz_detail_healthz_detail_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Healthz Detail Healthz Detail Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sample/binder": {
       "post": {
-        "summary": "Post Score",
-        "description": "Score a single (model, native) pair via DockQ; returns DockQ's JSON output.",
-        "operationId": "post_score_api_score_post",
+        "summary": "Sample Binder",
+        "description": "PPI binder design against an uploaded (or URI-referenced) target PDB.",
+        "operationId": "sample_binder_api_sample_binder_post",
         "requestBody": {
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_api_score_post"
+                "$ref": "#/components/schemas/Body_sample_binder_api_sample_binder_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sample/antibody": {
+      "post": {
+        "summary": "Sample Antibody",
+        "description": "Antibody (heavy + light) CDR design over an uploaded framework.",
+        "operationId": "sample_antibody_api_sample_antibody_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_sample_antibody_api_sample_antibody_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sample/nanobody": {
+      "post": {
+        "summary": "Sample Nanobody",
+        "description": "VHH (heavy-only) CDR design over an uploaded nanobody framework.",
+        "operationId": "sample_nanobody_api_sample_nanobody_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_sample_nanobody_api_sample_nanobody_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sample/monomer": {
+      "post": {
+        "summary": "Sample Monomer",
+        "description": "Unconditional monomer generation at the requested lengths.",
+        "operationId": "sample_monomer_api_sample_monomer_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_sample_monomer_api_sample_monomer_post"
               }
             }
           }
@@ -410,19 +528,20 @@
         }
       }
     },
-    "/api/score_batch": {
+    "/api/sample/scaffolding": {
       "post": {
-        "summary": "Post Score Batch",
-        "description": "Score N candidate models against 1 reference native.\n\nModels come either as repeated `models` uploads OR as a single zip\nreferenced by `models_zip_uri` (oss://, file://, job://, http(s)://) — the\ngateway uses the zip form since it can't multipart-upload the `models` list.\n\nPer-model JSONs land in `output/per_model/<basename>.json`; the sorted\nsummary is `output/scores.csv`. Models that errored show up in\n`output/failed.csv` (job still completes successfully if at least one\nmodel produced a valid score).",
-        "operationId": "post_score_batch_api_score_batch_post",
+        "summary": "Sample Scaffolding",
+        "description": "Motif scaffolding from a CSV + motif PDB(s) (uses monomer.ckpt).",
+        "operationId": "sample_scaffolding_api_sample_scaffolding_post",
         "requestBody": {
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_batch_api_score_batch_post"
+                "$ref": "#/components/schemas/Body_sample_scaffolding_api_sample_scaffolding_post"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "200": {
@@ -448,11 +567,11 @@
         }
       }
     },
-    "/api/tasks/score": {
+    "/api/tasks/sample/binder": {
       "post": {
-        "summary": "Post Score Task",
-        "description": "Score a single (model, native) pair as a single atomic task.\n\nBlocks until DockQ completes.  For the submit/poll interface, use POST /api/score.",
-        "operationId": "post_score_task_api_tasks_score_post",
+        "summary": "Sample Binder Task",
+        "description": "PPI binder design as a single atomic task.",
+        "operationId": "sample_binder_task_api_tasks_sample_binder_post",
         "parameters": [
           {
             "name": "X-Bioagent-Job-Id",
@@ -488,10 +607,11 @@
           }
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_task_api_tasks_score_post"
+                "$ref": "#/components/schemas/Body_sample_binder_task_api_tasks_sample_binder_post"
               }
             }
           }
@@ -520,11 +640,11 @@
         }
       }
     },
-    "/api/tasks/score_batch": {
+    "/api/tasks/sample/antibody": {
       "post": {
-        "summary": "Post Score Batch Task",
-        "description": "Score N candidate models against 1 native as a single atomic task.\n\nModels come as repeated `models` uploads OR a single `models_zip_uri`\nzip (used by the gateway, which can't multipart-upload the list).",
-        "operationId": "post_score_batch_task_api_tasks_score_batch_post",
+        "summary": "Sample Antibody Task",
+        "description": "Antibody CDR design as a single atomic task.",
+        "operationId": "sample_antibody_task_api_tasks_sample_antibody_post",
         "parameters": [
           {
             "name": "X-Bioagent-Job-Id",
@@ -560,10 +680,244 @@
           }
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_score_batch_task_api_tasks_score_batch_post"
+                "$ref": "#/components/schemas/Body_sample_antibody_task_api_tasks_sample_antibody_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/sample/nanobody": {
+      "post": {
+        "summary": "Sample Nanobody Task",
+        "description": "VHH (nanobody) CDR design as a single atomic task.",
+        "operationId": "sample_nanobody_task_api_tasks_sample_nanobody_post",
+        "parameters": [
+          {
+            "name": "X-Bioagent-Job-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Bioagent-Job-Id"
+            }
+          },
+          {
+            "name": "X-Fc-Async-Task-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fc-Async-Task-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_sample_nanobody_task_api_tasks_sample_nanobody_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/sample/scaffolding": {
+      "post": {
+        "summary": "Sample Scaffolding Task",
+        "description": "Motif scaffolding as a single atomic task.",
+        "operationId": "sample_scaffolding_task_api_tasks_sample_scaffolding_post",
+        "parameters": [
+          {
+            "name": "X-Bioagent-Job-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Bioagent-Job-Id"
+            }
+          },
+          {
+            "name": "X-Fc-Async-Task-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fc-Async-Task-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_sample_scaffolding_task_api_tasks_sample_scaffolding_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/sample/monomer": {
+      "post": {
+        "summary": "Unconditional monomer generation at the requested lengths (single atomic task).",
+        "operationId": "_task_handler_api_tasks_sample_monomer_post",
+        "parameters": [
+          {
+            "name": "X-Bioagent-Job-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Bioagent-Job-Id"
+            }
+          },
+          {
+            "name": "X-Fc-Async-Task-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fc-Async-Task-Id"
+            }
+          },
+          {
+            "name": "X-Bioagent-Oss-Prefix",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Bioagent-Oss-Prefix"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body__task_handler_api_tasks_sample_monomer_post"
               }
             }
           }
@@ -595,61 +949,21 @@
   },
   "components": {
     "schemas": {
-      "Body_post_score_api_score_post": {
+      "Body__task_handler_api_tasks_sample_monomer_post": {
         "properties": {
-          "model": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model"
-          },
-          "native": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native"
-          },
-          "model_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model Uri"
-          },
-          "native_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native Uri"
-          },
           "name": {
             "type": "string",
             "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
+            "description": "Identifier used as a subfolder under the output directory (`output/<name>/`). Restricted to [A-Za-z0-9_.-] (no slashes / spaces) to prevent path injection — `name='..'` would write outside the job dir.",
             "default": "run"
           },
-          "mapping": {
+          "samples_per_target": {
+            "type": "integer",
+            "title": "Samples Per Target",
+            "description": "How many samples to generate per (target, length) combination.",
+            "default": 5
+          },
+          "length_subset": {
             "anyOf": [
               {
                 "type": "string"
@@ -658,66 +972,20 @@
                 "type": "null"
               }
             ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
-          },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
-            "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
-          },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Length Subset",
+            "description": "List of target lengths. PPIFlow samples `samples_per_target` per length.",
             "bioq_default": {
               "kind": "auto",
-              "note": "use all available cores"
+              "note": "use the tool's default when omitted"
             }
           }
         },
         "type": "object",
-        "title": "Body_post_score_api_score_post"
+        "title": "Body__task_handler_api_tasks_sample_monomer_post"
       },
-      "Body_post_score_batch_api_score_batch_post": {
+      "Body_sample_antibody_api_sample_antibody_post": {
         "properties": {
-          "native": {
+          "antigen": {
             "anyOf": [
               {
                 "type": "string",
@@ -727,9 +995,9 @@
                 "type": "null"
               }
             ],
-            "title": "Native"
+            "title": "Antigen"
           },
-          "native_uri": {
+          "antigen_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -738,24 +1006,21 @@
                 "type": "null"
               }
             ],
-            "title": "Native Uri"
+            "title": "Antigen Uri"
           },
-          "models": {
+          "framework": {
             "anyOf": [
               {
-                "items": {
-                  "type": "string",
-                  "contentMediaType": "application/octet-stream"
-                },
-                "type": "array"
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Models"
+            "title": "Framework"
           },
-          "models_zip_uri": {
+          "framework_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -764,19 +1029,31 @@
                 "type": "null"
               }
             ],
-            "title": "Models Zip Uri",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
+            "title": "Framework Uri"
           },
           "name": {
             "type": "string",
             "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
+            "description": "Identifier used as a subfolder under the output directory (`output/<name>/`). Restricted to [A-Za-z0-9_.-] (no slashes / spaces) to prevent path injection — `name='..'` would write outside the job dir.",
             "default": "run"
           },
-          "mapping": {
+          "samples_per_target": {
+            "type": "integer",
+            "title": "Samples Per Target",
+            "description": "How many samples to generate per (target, length) combination.",
+            "default": 5
+          },
+          "antigen_chain": {
+            "type": "string",
+            "title": "Antigen Chain",
+            "description": "Chain ID of antigen."
+          },
+          "heavy_chain": {
+            "type": "string",
+            "title": "Heavy Chain",
+            "default": "A"
+          },
+          "specified_hotspots": {
             "anyOf": [
               {
                 "type": "string"
@@ -785,72 +1062,35 @@
                 "type": "null"
               }
             ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
+            "title": "Specified Hotspots",
+            "description": "Hotspot residues on the antigen, e.g. 'C56,C58'.",
             "bioq_default": {
               "kind": "unset",
               "note": "only used when explicitly provided"
             }
           },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
-            "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
-          },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
-            "bioq_default": {
-              "kind": "auto",
-              "note": "use all available cores"
-            }
-          },
-          "sort_by": {
+          "cdr_length": {
             "type": "string",
-            "title": "Sort By",
-            "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
-            "default": "DockQ"
+            "title": "Cdr Length",
+            "description": "CDR length spec including all six CDRs.",
+            "default": "CDRH1,5-12,CDRH2,4-17,CDRH3,5-26,CDRL1,5-12,CDRL2,3-10,CDRL3,4-13"
+          },
+          "light_chain": {
+            "type": "string",
+            "title": "Light Chain",
+            "description": "Chain ID of light chain in framework.",
+            "default": "B"
           }
         },
         "type": "object",
-        "title": "Body_post_score_batch_api_score_batch_post"
+        "required": [
+          "antigen_chain"
+        ],
+        "title": "Body_sample_antibody_api_sample_antibody_post"
       },
-      "Body_post_score_batch_task_api_tasks_score_batch_post": {
+      "Body_sample_antibody_task_api_tasks_sample_antibody_post": {
         "properties": {
-          "native": {
+          "antigen": {
             "anyOf": [
               {
                 "type": "string",
@@ -860,9 +1100,9 @@
                 "type": "null"
               }
             ],
-            "title": "Native"
+            "title": "Antigen"
           },
-          "native_uri": {
+          "antigen_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -871,24 +1111,21 @@
                 "type": "null"
               }
             ],
-            "title": "Native Uri"
+            "title": "Antigen Uri"
           },
-          "models": {
+          "framework": {
             "anyOf": [
               {
-                "items": {
-                  "type": "string",
-                  "contentMediaType": "application/octet-stream"
-                },
-                "type": "array"
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Models"
+            "title": "Framework"
           },
-          "models_zip_uri": {
+          "framework_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -897,19 +1134,31 @@
                 "type": "null"
               }
             ],
-            "title": "Models Zip Uri",
-            "bioq_default": {
-              "kind": "unset",
-              "note": "only used when explicitly provided"
-            }
+            "title": "Framework Uri"
           },
           "name": {
             "type": "string",
             "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
+            "description": "Identifier used as a subfolder under the output directory (`output/<name>/`). Restricted to [A-Za-z0-9_.-] (no slashes / spaces) to prevent path injection — `name='..'` would write outside the job dir.",
             "default": "run"
           },
-          "mapping": {
+          "samples_per_target": {
+            "type": "integer",
+            "title": "Samples Per Target",
+            "description": "How many samples to generate per (target, length) combination.",
+            "default": 5
+          },
+          "antigen_chain": {
+            "type": "string",
+            "title": "Antigen Chain",
+            "description": "Chain ID of antigen."
+          },
+          "heavy_chain": {
+            "type": "string",
+            "title": "Heavy Chain",
+            "default": "A"
+          },
+          "specified_hotspots": {
             "anyOf": [
               {
                 "type": "string"
@@ -918,72 +1167,35 @@
                 "type": "null"
               }
             ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
+            "title": "Specified Hotspots",
+            "description": "Hotspot residues on the antigen, e.g. 'C56,C58'.",
             "bioq_default": {
               "kind": "unset",
               "note": "only used when explicitly provided"
             }
           },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
-          },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
-          },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
-            "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
-          },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
-            "bioq_default": {
-              "kind": "auto",
-              "note": "use all available cores"
-            }
-          },
-          "sort_by": {
+          "cdr_length": {
             "type": "string",
-            "title": "Sort By",
-            "description": "Column name in scores.csv to sort the summary by (descending). Common choices: DockQ, DockQ_F1, fnat, iRMSD (ascending preferred for RMSDs).",
-            "default": "DockQ"
+            "title": "Cdr Length",
+            "description": "CDR length spec including all six CDRs.",
+            "default": "CDRH1,5-12,CDRH2,4-17,CDRH3,5-26,CDRL1,5-12,CDRL2,3-10,CDRL3,4-13"
+          },
+          "light_chain": {
+            "type": "string",
+            "title": "Light Chain",
+            "description": "Chain ID of light chain in framework.",
+            "default": "B"
           }
         },
         "type": "object",
-        "title": "Body_post_score_batch_task_api_tasks_score_batch_post"
+        "required": [
+          "antigen_chain"
+        ],
+        "title": "Body_sample_antibody_task_api_tasks_sample_antibody_post"
       },
-      "Body_post_score_task_api_tasks_score_post": {
+      "Body_sample_binder_api_sample_binder_post": {
         "properties": {
-          "model": {
+          "target": {
             "anyOf": [
               {
                 "type": "string",
@@ -993,21 +1205,10 @@
                 "type": "null"
               }
             ],
-            "title": "Model"
+            "title": "Target",
+            "description": "Target PDB. Mutually exclusive with `target_uri`."
           },
-          "native": {
-            "anyOf": [
-              {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native"
-          },
-          "model_uri": {
+          "target_uri": {
             "anyOf": [
               {
                 "type": "string"
@@ -1016,26 +1217,33 @@
                 "type": "null"
               }
             ],
-            "title": "Model Uri"
-          },
-          "native_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Native Uri"
+            "title": "Target Uri",
+            "description": "URI to fetch target instead of uploading (job:// / file:// / oss:// / http(s)://)."
           },
           "name": {
             "type": "string",
             "title": "Name",
-            "description": "Output basename; appears in result paths (output/<name>.json for the single endpoint, output/scores.csv key column for batch). Restricted to [A-Za-z0-9_.-] (no slashes/spaces).",
+            "description": "Identifier used as a subfolder under the output directory (`output/<name>/`). Restricted to [A-Za-z0-9_.-] (no slashes / spaces) to prevent path injection — `name='..'` would write outside the job dir.",
             "default": "run"
           },
-          "mapping": {
+          "samples_per_target": {
+            "type": "integer",
+            "title": "Samples Per Target",
+            "description": "How many samples to generate per (target, length) combination.",
+            "default": 5
+          },
+          "target_chain": {
+            "type": "string",
+            "title": "Target Chain",
+            "description": "Chain ID of the target in target PDB."
+          },
+          "binder_chain": {
+            "type": "string",
+            "title": "Binder Chain",
+            "description": "Chain ID assigned to generated binder.",
+            "default": "A"
+          },
+          "specified_hotspots": {
             "anyOf": [
               {
                 "type": "string"
@@ -1044,62 +1252,461 @@
                 "type": "null"
               }
             ],
-            "title": "Mapping",
-            "description": "DockQ --mapping flag, format MODELCHAINS:NATIVECHAINS. Use `*` as a wildcard; e.g. ':HL' restricts the native interfaces to H-L.",
+            "title": "Specified Hotspots",
+            "description": "Comma-separated hotspot residues on the target, e.g. 'B119,B141,B200'. Optional: if absent PPIFlow samples hotspots via `sample_hotspot_rate_{min,max}`.",
             "bioq_default": {
               "kind": "unset",
               "note": "only used when explicitly provided"
             }
           },
-          "small_molecule": {
-            "type": "boolean",
-            "title": "Small Molecule",
-            "description": "Pass --small_molecule. Required when scoring PDB/CIF inputs that contain HEM / cofactor / ligand chains.",
-            "default": false
+          "sample_hotspot_rate_min": {
+            "type": "number",
+            "title": "Sample Hotspot Rate Min",
+            "default": 0.05
           },
-          "capri_peptide": {
-            "type": "boolean",
-            "title": "Capri Peptide",
-            "description": "Pass --capri_peptide. Use only for peptide-protein scoring; DockQ explicitly warns the score is unreliable in this mode.",
-            "default": false
+          "sample_hotspot_rate_max": {
+            "type": "number",
+            "title": "Sample Hotspot Rate Max",
+            "default": 0.2
           },
-          "no_align": {
-            "type": "boolean",
-            "title": "No Align",
-            "description": "Pass --no_align. Skips sequence alignment; trusts residue numbering directly. Faster, but only safe when model + native share the exact residue indexing.",
-            "default": false
-          },
-          "allowed_mismatches": {
+          "samples_min_length": {
             "type": "integer",
-            "title": "Allowed Mismatches",
-            "description": "Number of allowed mismatches when mapping model→native sequences (--allowed_mismatches).",
-            "default": 0
+            "title": "Samples Min Length",
+            "default": 75
           },
-          "optDockQF1": {
-            "type": "boolean",
-            "title": "Optdockqf1",
-            "description": "Pass --optDockQF1. Optimizes the chain mapping for DockQ_F1 instead of DockQ.",
-            "default": false
-          },
-          "n_cpu": {
+          "samples_max_length": {
+            "type": "integer",
+            "title": "Samples Max Length",
+            "default": 120
+          }
+        },
+        "type": "object",
+        "required": [
+          "target_chain"
+        ],
+        "title": "Body_sample_binder_api_sample_binder_post"
+      },
+      "Body_sample_binder_task_api_tasks_sample_binder_post": {
+        "properties": {
+          "target": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "N Cpu",
-            "description": "Override DOCKQ_DEFAULT_N_CPU for this call. Forwarded to DockQ's --n_cpu.",
+            "title": "Target"
+          },
+          "target_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Uri"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Identifier used as a subfolder under the output directory (`output/<name>/`). Restricted to [A-Za-z0-9_.-] (no slashes / spaces) to prevent path injection — `name='..'` would write outside the job dir.",
+            "default": "run"
+          },
+          "samples_per_target": {
+            "type": "integer",
+            "title": "Samples Per Target",
+            "description": "How many samples to generate per (target, length) combination.",
+            "default": 5
+          },
+          "target_chain": {
+            "type": "string",
+            "title": "Target Chain",
+            "description": "Chain ID of the target in target PDB."
+          },
+          "binder_chain": {
+            "type": "string",
+            "title": "Binder Chain",
+            "description": "Chain ID assigned to generated binder.",
+            "default": "A"
+          },
+          "specified_hotspots": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Specified Hotspots",
+            "description": "Comma-separated hotspot residues on the target, e.g. 'B119,B141,B200'. Optional: if absent PPIFlow samples hotspots via `sample_hotspot_rate_{min,max}`.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "sample_hotspot_rate_min": {
+            "type": "number",
+            "title": "Sample Hotspot Rate Min",
+            "default": 0.05
+          },
+          "sample_hotspot_rate_max": {
+            "type": "number",
+            "title": "Sample Hotspot Rate Max",
+            "default": 0.2
+          },
+          "samples_min_length": {
+            "type": "integer",
+            "title": "Samples Min Length",
+            "default": 75
+          },
+          "samples_max_length": {
+            "type": "integer",
+            "title": "Samples Max Length",
+            "default": 120
+          }
+        },
+        "type": "object",
+        "required": [
+          "target_chain"
+        ],
+        "title": "Body_sample_binder_task_api_tasks_sample_binder_post"
+      },
+      "Body_sample_monomer_api_sample_monomer_post": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Identifier used as a subfolder under the output directory (`output/<name>/`). Restricted to [A-Za-z0-9_.-] (no slashes / spaces) to prevent path injection — `name='..'` would write outside the job dir.",
+            "default": "run"
+          },
+          "samples_per_target": {
+            "type": "integer",
+            "title": "Samples Per Target",
+            "description": "How many samples to generate per (target, length) combination.",
+            "default": 5
+          },
+          "length_subset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Length Subset",
+            "description": "List of target lengths. PPIFlow samples `samples_per_target` per length.",
             "bioq_default": {
               "kind": "auto",
-              "note": "use all available cores"
+              "note": "use the tool's default when omitted"
             }
           }
         },
         "type": "object",
-        "title": "Body_post_score_task_api_tasks_score_post"
+        "title": "Body_sample_monomer_api_sample_monomer_post"
+      },
+      "Body_sample_nanobody_api_sample_nanobody_post": {
+        "properties": {
+          "antigen": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Antigen"
+          },
+          "antigen_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Antigen Uri"
+          },
+          "framework": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Framework"
+          },
+          "framework_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Framework Uri"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Identifier used as a subfolder under the output directory (`output/<name>/`). Restricted to [A-Za-z0-9_.-] (no slashes / spaces) to prevent path injection — `name='..'` would write outside the job dir.",
+            "default": "run"
+          },
+          "samples_per_target": {
+            "type": "integer",
+            "title": "Samples Per Target",
+            "description": "How many samples to generate per (target, length) combination.",
+            "default": 5
+          },
+          "antigen_chain": {
+            "type": "string",
+            "title": "Antigen Chain",
+            "description": "Chain ID of antigen."
+          },
+          "heavy_chain": {
+            "type": "string",
+            "title": "Heavy Chain",
+            "default": "A"
+          },
+          "specified_hotspots": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Specified Hotspots",
+            "description": "Hotspot residues on the antigen, e.g. 'C56,C58'.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "cdr_length": {
+            "type": "string",
+            "title": "Cdr Length",
+            "description": "CDR length spec, comma-separated `CDR<name>,min-max,...`. Antibody adds CDRL1/CDRL2/CDRL3; nanobody uses heavy-only by default.",
+            "default": "CDRH1,5-12,CDRH2,4-17,CDRH3,5-26"
+          }
+        },
+        "type": "object",
+        "required": [
+          "antigen_chain"
+        ],
+        "title": "Body_sample_nanobody_api_sample_nanobody_post"
+      },
+      "Body_sample_nanobody_task_api_tasks_sample_nanobody_post": {
+        "properties": {
+          "antigen": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Antigen"
+          },
+          "antigen_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Antigen Uri"
+          },
+          "framework": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Framework"
+          },
+          "framework_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Framework Uri"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Identifier used as a subfolder under the output directory (`output/<name>/`). Restricted to [A-Za-z0-9_.-] (no slashes / spaces) to prevent path injection — `name='..'` would write outside the job dir.",
+            "default": "run"
+          },
+          "samples_per_target": {
+            "type": "integer",
+            "title": "Samples Per Target",
+            "description": "How many samples to generate per (target, length) combination.",
+            "default": 5
+          },
+          "antigen_chain": {
+            "type": "string",
+            "title": "Antigen Chain",
+            "description": "Chain ID of antigen."
+          },
+          "heavy_chain": {
+            "type": "string",
+            "title": "Heavy Chain",
+            "default": "A"
+          },
+          "specified_hotspots": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Specified Hotspots",
+            "description": "Hotspot residues on the antigen, e.g. 'C56,C58'.",
+            "bioq_default": {
+              "kind": "unset",
+              "note": "only used when explicitly provided"
+            }
+          },
+          "cdr_length": {
+            "type": "string",
+            "title": "Cdr Length",
+            "description": "CDR length spec, comma-separated `CDR<name>,min-max,...`. Antibody adds CDRL1/CDRL2/CDRL3; nanobody uses heavy-only by default.",
+            "default": "CDRH1,5-12,CDRH2,4-17,CDRH3,5-26"
+          }
+        },
+        "type": "object",
+        "required": [
+          "antigen_chain"
+        ],
+        "title": "Body_sample_nanobody_task_api_tasks_sample_nanobody_post"
+      },
+      "Body_sample_scaffolding_api_sample_scaffolding_post": {
+        "properties": {
+          "motif_csv": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motif Csv",
+            "description": "Motif metadata CSV (target,length,contig,motif_path)."
+          },
+          "motif_csv_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motif Csv Uri"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Identifier used as a subfolder under the output directory (`output/<name>/`). Restricted to [A-Za-z0-9_.-] (no slashes / spaces) to prevent path injection — `name='..'` would write outside the job dir.",
+            "default": "run"
+          },
+          "samples_per_target": {
+            "type": "integer",
+            "title": "Samples Per Target",
+            "description": "How many samples to generate per (target, length) combination.",
+            "default": 5
+          },
+          "motif_names": {
+            "type": "string",
+            "title": "Motif Names",
+            "description": "Subset of target names from the CSV to scaffold, e.g. ['01_1LDB']."
+          }
+        },
+        "type": "object",
+        "required": [
+          "motif_names"
+        ],
+        "title": "Body_sample_scaffolding_api_sample_scaffolding_post"
+      },
+      "Body_sample_scaffolding_task_api_tasks_sample_scaffolding_post": {
+        "properties": {
+          "motif_csv": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motif Csv"
+          },
+          "motif_csv_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motif Csv Uri"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Identifier used as a subfolder under the output directory (`output/<name>/`). Restricted to [A-Za-z0-9_.-] (no slashes / spaces) to prevent path injection — `name='..'` would write outside the job dir.",
+            "default": "run"
+          },
+          "samples_per_target": {
+            "type": "integer",
+            "title": "Samples Per Target",
+            "description": "How many samples to generate per (target, length) combination.",
+            "default": 5
+          },
+          "motif_names": {
+            "type": "string",
+            "title": "Motif Names",
+            "description": "Subset of target names from the CSV to scaffold, e.g. ['01_1LDB']."
+          }
+        },
+        "type": "object",
+        "required": [
+          "motif_names"
+        ],
+        "title": "Body_sample_scaffolding_task_api_tasks_sample_scaffolding_post"
       },
       "Body_upload_file_api_uploads_post": {
         "properties": {
