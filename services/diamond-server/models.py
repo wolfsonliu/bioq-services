@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Optional
 
 from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401 (re-exports)
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field, field_validator
 
 __all__ = [
@@ -53,6 +54,7 @@ class _SearchCommon(BaseModel):
             "more-sensitive / very-sensitive / ultra-sensitive. None → server "
             "default (DIAMOND's fast mode)."
         ),
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     evalue: float = Field(
         default=0.001, gt=0,
@@ -65,6 +67,7 @@ class _SearchCommon(BaseModel):
     threads: Optional[int] = Field(
         default=None, ge=1, le=128,
         description="Override DIAMOND_THREADS for this call (DIAMOND -p).",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
 
     @field_validator("sensitivity")
@@ -135,10 +138,12 @@ class ClusterRequest(_SearchCommon):
     approx_id: Optional[float] = Field(
         default=None, ge=0, le=100,
         description="Minimum approx. identity%% to cluster sequences (--approx-id).",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
     member_cover: Optional[float] = Field(
         default=None, ge=0, le=100,
         description="Minimum member coverage%% (--member-cover).",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )
 
     @field_validator("algorithm")
@@ -159,4 +164,5 @@ class MakedbRequest(BaseModel):
     threads: Optional[int] = Field(
         default=None, ge=1, le=128,
         description="Override DIAMOND_THREADS for this call (DIAMOND -p).",
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
     )

@@ -16,6 +16,7 @@ from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
+    default_semantics,
     execute_task,
     model_form_depends,
     read_version_file,
@@ -149,7 +150,7 @@ def post_design(
     design_yaml: Optional[UploadFile] = File(None),
     design_yaml_uri: Optional[str] = Form(None),
     ref_files: List[UploadFile] = File([]),
-    ref_files_zip_uri: Optional[str] = Form(None),
+    ref_files_zip_uri: Optional[str] = Form(None, json_schema_extra=default_semantics("unset", "only used when explicitly provided")),
 ) -> JobInfo:
     """Run the full BoltzGen binder design pipeline.
 
@@ -182,7 +183,7 @@ def post_inverse_fold(
     design_yaml: Optional[UploadFile] = File(None),
     design_yaml_uri: Optional[str] = Form(None),
     ref_files: List[UploadFile] = File([]),
-    ref_files_zip_uri: Optional[str] = Form(None),
+    ref_files_zip_uri: Optional[str] = Form(None, json_schema_extra=default_semantics("unset", "only used when explicitly provided")),
 ) -> JobInfo:
     """Run BoltzGen in inverse-fold-only mode.
 
@@ -213,7 +214,7 @@ if settings.task_endpoints_enabled:
         design_yaml: Optional[UploadFile] = File(None),
         design_yaml_uri: Optional[str] = Form(None),
         ref_files: List[UploadFile] = File([]),
-        ref_files_zip_uri: Optional[str] = Form(None),
+        ref_files_zip_uri: Optional[str] = Form(None, json_schema_extra=default_semantics("unset", "only used when explicitly provided")),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
     ) -> JobInfo:
@@ -254,7 +255,7 @@ if settings.task_endpoints_enabled:
         design_yaml: Optional[UploadFile] = File(None),
         design_yaml_uri: Optional[str] = Form(None),
         ref_files: List[UploadFile] = File([]),
-        ref_files_zip_uri: Optional[str] = Form(None),
+        ref_files_zip_uri: Optional[str] = Form(None, json_schema_extra=default_semantics("unset", "only used when explicitly provided")),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
     ) -> JobInfo:

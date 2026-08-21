@@ -16,6 +16,7 @@ from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
+    default_semantics,
     execute_task,
     model_form_depends,
     read_version_file,
@@ -116,7 +117,7 @@ def post_score_batch(
     native: Optional[UploadFile] = File(None),
     native_uri: Optional[str] = Form(None),
     models: Optional[list[UploadFile]] = File(None),
-    models_zip_uri: Optional[str] = Form(None),
+    models_zip_uri: Optional[str] = Form(None, json_schema_extra=default_semantics("unset", "only used when explicitly provided")),
 ) -> JobInfo:
     """Score N candidate models against 1 reference native.
 
@@ -216,7 +217,7 @@ if settings.task_endpoints_enabled:
         native: Optional[UploadFile] = File(None),
         native_uri: Optional[str] = Form(None),
         models: Optional[list[UploadFile]] = File(None),
-        models_zip_uri: Optional[str] = Form(None),
+        models_zip_uri: Optional[str] = Form(None, json_schema_extra=default_semantics("unset", "only used when explicitly provided")),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
     ) -> JobInfo:

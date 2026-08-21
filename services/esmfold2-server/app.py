@@ -16,6 +16,7 @@ from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
+    default_semantics,
     execute_task,
     model_form_depends,
     read_version_file,
@@ -145,6 +146,7 @@ if settings.task_endpoints_enabled:
             description="URI to a zip of per-chain A3M files (oss://, file://, "
                         "job://, http(s)://) as an alternative to multipart "
                         "msa_files — used by the gateway.",
+            json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
         ),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),

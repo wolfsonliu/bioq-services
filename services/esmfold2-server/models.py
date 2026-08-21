@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Literal, Optional, Union
 
 from bioq_service import FailureKind, JobInfo, JobStatus  # noqa: F401
+from bioq_service import default_semantics
 from pydantic import BaseModel, Field, model_validator
 
 # ---- Sequence entry types ----
@@ -74,9 +75,18 @@ class FoldRequest(BaseModel):
     num_loops: int = Field(default=3, ge=1, le=20)
     num_sampling_steps: int = Field(default=50, ge=1, le=1000)
     num_diffusion_samples: int = Field(default=1, ge=1, le=50)
-    seed: Optional[int] = Field(default=None)
-    noise_scale: Optional[float] = Field(default=None, ge=0.0, le=10.0)
-    step_scale: Optional[float] = Field(default=None, ge=0.0, le=10.0)
+    seed: Optional[int] = Field(
+        default=None,
+        json_schema_extra=default_semantics("auto", "random seed selected by the tool at runtime"),
+    )
+    noise_scale: Optional[float] = Field(
+        default=None, ge=0.0, le=10.0,
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
+    )
+    step_scale: Optional[float] = Field(
+        default=None, ge=0.0, le=10.0,
+        json_schema_extra=default_semantics("unset", "only used when explicitly provided"),
+    )
 
 
 __all__ = [

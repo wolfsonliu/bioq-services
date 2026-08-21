@@ -29,6 +29,7 @@ from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
+    default_semantics,
     execute_task,
     maybe_resolve_input,
     model_form_depends,
@@ -226,7 +227,7 @@ def generate_custom(
     dataset: Optional[UploadFile] = File(
         None, description="Optional dataset zip; extracted to <job>/input/dataset/.",
     ),
-    num_devices: Optional[int] = Form(None, description="Override GPU auto-detect."),
+    num_devices: Optional[int] = Form(None, description="Override GPU auto-detect.", json_schema_extra=default_semantics("auto", "auto-detect available devices/processes")),
 ) -> JobInfo:
     """Run `genie3 generate` with a fully custom YAML config.
 
@@ -388,7 +389,7 @@ if settings.task_endpoints_enabled:
             description="URI to an optional dataset zip (oss://, file://, job://, "
                         "http(s)://) as an alternative to a multipart upload.",
         ),
-        num_devices: Optional[int] = Form(None),
+        num_devices: Optional[int] = Form(None, json_schema_extra=default_semantics("auto", "auto-detect available devices/processes")),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
     ) -> JobInfo:

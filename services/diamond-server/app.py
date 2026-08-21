@@ -16,6 +16,7 @@ from bioq_service import (
     JobInfo,
     attach_mcp,
     create_app,
+    default_semantics,
     execute_task,
     model_form_depends,
     read_version_file,
@@ -136,7 +137,7 @@ def post_blastp(
     query_uri: Optional[str] = Form(None),
     subject: Optional[UploadFile] = File(None),
     subject_uri: Optional[str] = Form(None),
-    db_uri: Optional[str] = Form(None),
+    db_uri: Optional[str] = Form(None, json_schema_extra=default_semantics("unset", "only used when explicitly provided")),
 ) -> JobInfo:
     """Align a protein query FASTA against a protein DB."""
 
@@ -165,7 +166,7 @@ def post_blastx(
     query_uri: Optional[str] = Form(None),
     subject: Optional[UploadFile] = File(None),
     subject_uri: Optional[str] = Form(None),
-    db_uri: Optional[str] = Form(None),
+    db_uri: Optional[str] = Form(None, json_schema_extra=default_semantics("unset", "only used when explicitly provided")),
 ) -> JobInfo:
     """Align a translated-DNA query FASTA against a protein DB."""
 
@@ -215,7 +216,7 @@ def post_msa(
     params: MsaRequest = Depends(model_form_depends(MsaRequest)),
     query: Optional[UploadFile] = File(None),
     query_uri: Optional[str] = Form(None),
-    db_uri: Optional[str] = Form(None),
+    db_uri: Optional[str] = Form(None, json_schema_extra=default_semantics("unset", "only used when explicitly provided")),
 ) -> JobInfo:
     """Build a query-anchored a3m MSA via blastp against a reference DB."""
 
@@ -242,7 +243,7 @@ if settings.task_endpoints_enabled:
         query_uri: Optional[str] = Form(None),
         subject: Optional[UploadFile] = File(None),
         subject_uri: Optional[str] = Form(None),
-        db_uri: Optional[str] = Form(None),
+        db_uri: Optional[str] = Form(None, json_schema_extra=default_semantics("unset", "only used when explicitly provided")),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
     ) -> JobInfo:
@@ -276,7 +277,7 @@ if settings.task_endpoints_enabled:
         query_uri: Optional[str] = Form(None),
         subject: Optional[UploadFile] = File(None),
         subject_uri: Optional[str] = Form(None),
-        db_uri: Optional[str] = Form(None),
+        db_uri: Optional[str] = Form(None, json_schema_extra=default_semantics("unset", "only used when explicitly provided")),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
     ) -> JobInfo:
@@ -335,7 +336,7 @@ if settings.task_endpoints_enabled:
         params: MsaRequest = Depends(model_form_depends(MsaRequest)),
         query: Optional[UploadFile] = File(None),
         query_uri: Optional[str] = Form(None),
-        db_uri: Optional[str] = Form(None),
+        db_uri: Optional[str] = Form(None, json_schema_extra=default_semantics("unset", "only used when explicitly provided")),
         x_bioagent_job_id: Optional[str] = Header(default=None, alias="X-Bioagent-Job-Id"),
         x_fc_async_task_id: Optional[str] = Header(default=None, alias="X-Fc-Async-Task-Id"),
     ) -> JobInfo:
