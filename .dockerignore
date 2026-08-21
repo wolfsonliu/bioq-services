@@ -33,3 +33,12 @@
 /*.lock
 /Makefile
 /sif
+
+# ECS runtime state (mirrors deploy/ecs/.gitignore). pgdata/ is the bound
+# postgres datadir chowned to the container's postgres uid, and data/ is the
+# gateway job scratch (written by the container as root) — Docker's
+# build-context sender lstat's files under both and fails with
+# "permission denied". Never needed by any COPY instruction (deploy/conda/
+# stays included: it is COPY'd by the service Dockerfiles).
+/deploy/ecs/pgdata/
+/deploy/ecs/data/
