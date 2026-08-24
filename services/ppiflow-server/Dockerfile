@@ -158,6 +158,29 @@ WORKDIR /opt/ppiflow
 # ---------------------------------------------------------------------------
 COPY services/ppiflow-server/upstream /opt/ppiflow-src
 
+# ---------------------------------------------------------------------------
+# Patch upstream's environment.yml before `env create`.
+#
+# The upstream `channels:` list hardcodes Tsinghua (TUNA) mirror URLs:
+#
+#     - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
+#     - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
+#     - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/pytorch/
+#
+# These sit inside `-f environment.yml`, whose `channels:` take precedence over
+# `/root/.condarc` — so the PKU mapping from deploy/conda/mirrors.condarc is
+# bypassed entirely. TUNA has removed the legacy `pkgs/free` channel (returns
+# 404 today), and libmamba 2.x treats a 404 repodata.json as a fatal error,
+# aborting `env create` ("Multiple errors occurred").
+#
+# Strip every TUNA line; the remaining channels (defaults / conda-forge /
+# pytorch / bioconda) then resolve through mirrors.condarc → PKU, while
+# nvidia / schrodinger / ostrokach / anaconda fall through to conda.anaconda.org
+# as documented above.
+# ---------------------------------------------------------------------------
+RUN sed -i '/mirrors\.tuna\.tsinghua\.edu\.cn/d' \
+    /opt/ppiflow-src/tool/PPIFlow/environment.yml
+
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     micromamba env create -y -n ppiflow \
