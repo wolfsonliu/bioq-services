@@ -134,6 +134,15 @@ in. Internal VPC hosts are bypassed and land on `/admin` directly. Write forms a
 CSRF-protected; the session cookie is `SameSite=lax` and signed with
 `GATEWAY_SESSION_SECRET` (set it explicitly for multi-instance).
 
+The four `/admin` views (screenshots are illustrative — the UI may drift from
+the current build):
+
+| Dashboard | Accounts |
+| --- | --- |
+| <img src="assets/Gateway_Console_1_Dashboard.png" alt="Admin console — dashboard" width="420"> | <img src="assets/Gateway_Console_2_Accounts.png" alt="Admin console — accounts" width="420"> |
+| **Jobs** | **Services** |
+| <img src="assets/Gateway_Console_3_Jobs.png" alt="Admin console — jobs" width="420"> | <img src="assets/Gateway_Console_4_Services.png" alt="Admin console — services" width="420"> |
+
 ## Tests
 ```bash
 uv run python -m pytest gateway/tests/ -v
