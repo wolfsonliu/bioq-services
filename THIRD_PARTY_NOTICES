@@ -1,0 +1,86 @@
+# Third-Party Notices
+
+This repository's own code — `framework/`, `gateway/`, `edge/`, and each `services/<name>-server/`
+component (the `server` package, adapters, Dockerfiles, `tests/`, and `scripts/`) — is released under
+the MIT License (see [`LICENSE`](LICENSE)).
+
+The third-party tools listed below are **NOT** covered by that MIT License. Each is fetched at build
+time by the corresponding `services/<name>-server/scripts/vendor.sh` into a git-ignored
+`services/<name>-server/upstream/` directory at a pinned revision, and a service's model weights are
+fetched separately by `scripts/fetch_weights.sh`. Every upstream tool and every set of weights
+retains its own license and usage terms.
+
+Anyone who builds, distributes, or runs these images is responsible for reviewing and complying with
+the applicable license of each upstream component. This document is a convenience summary, **not** a
+legal substitute for the license text shipped inside each `upstream/` directory.
+
+## License summary
+
+| Service | Upstream project | Upstream repository | License |
+|---|---|---|---|
+| alphafold-server | AlphaFold | google-deepmind/alphafold | Apache-2.0 (code); CC BY 4.0 (weights) |
+| bindflow-server | BindFlow | ale94mleon/BindFlow | See upstream `LICENSE` |
+| boltzgen-server | boltzgen | HannesStark/boltzgen | See upstream `LICENSE` |
+| boltz-server | Boltz | jwohlwend/boltz | See upstream `LICENSE` |
+| chembounce-server | ChemBounce | jyryu3161/chembounce | See upstream `LICENSE` |
+| deeprank-ab-server | DeepRank-Ab | haddocking/DeepRank-Ab | See upstream `LICENSE` |
+| diamond-server | DIAMOND | bbuchfink/diamond | GPL-3.0 (binary) |
+| diffdock-pp-server | DiffDock-PP | ketatam/DiffDock-PP | See upstream `LICENSE` |
+| diffdock-server | DiffDock | gcorso/DiffDock | MIT |
+| diffusion-hopping-server | diffusion-hopping | jostorge/diffusion-hopping | See upstream `LICENSE` |
+| dockq-server | DockQ | wallnerlab/DockQ | MIT |
+| drughive-server | DrugHIVE | jssweller/DrugHIVE | USC-RL v2.0 (research / non-commercial only) |
+| esmfold2-server | ESM | Biohub/esm | MIT (code); see upstream for weights terms |
+| flowmol-server | FlowMol | Dunni3/FlowMol | See upstream `LICENSE` |
+| genie3-server | GENIE3 | aqlaboratory/genie3 | See upstream `LICENSE` |
+| haddock3-server | HADDOCK3 | haddocking/haddock3 | Apache-2.0 |
+| iggm-server | IgGM | TencentAI4S/IgGM | See upstream `LICENSE` |
+| immunebuilder-server | ImmuneBuilder | brennanaba/ImmuneBuilder | See upstream `LICENSE` |
+| lasermpnn-server | LASErMPNN | polizzilab/LASErMPNN | See upstream `LICENSE` |
+| lightdock-server | LightDock | lightdock/lightdock | GPL-3.0 |
+| megalodon-server | MegaLodon | NVIDIA-BioNeMo/megalodon | See upstream `LICENSE` |
+| mmseqs2-server | MMseqs2 | soedinglab/MMseqs2 | GPL-3.0 (binary) |
+| odesign-server | ODesign | OTeam-AI4S/ODesign | See upstream `LICENSE` |
+| openadmet-server | OpenADMET | OpenADMET/openadmet-models | See upstream `LICENSE` |
+| openbpmd-server | OpenBPMD | Gervasiolab/OpenBPMD | See upstream `LICENSE` |
+| plip-server | PLIP | pharmai/plip | GPL-2.0 |
+| pocketxmol-server | PocketXMol | pengxingang/PocketXMol | See upstream `LICENSE` |
+| ppiflow-server | PPIFlow | Mingchenchen/PPIFlow | See upstream `LICENSE` |
+| promera-server | Promera (tinyprot) | bjing2016/tinyprot | See upstream `LICENSE` |
+| proteinmpnn-server | ProteinMPNN | dauparas/ProteinMPNN | MIT |
+| qligfep-server | QligFEP | qusers/qligfep | See upstream `LICENSE` |
+| reinvent-server | REINVENT4 | MolecularAI/REINVENT4 | Apache-2.0 |
+| rfantibody-server | RFantibody | RosettaCommons/RFantibody | RFdiffusion-family license (non-commercial) |
+| rfdiffusion2-server | RFdiffusion2 | RosettaCommons/RFdiffusion2 | RFdiffusion-family license (non-commercial); includes NVIDIA SE3-Transformer (MIT) and Microsoft se3-flow-matching (MIT) |
+| rfdiffusion-server | RFdiffusion | RosettaCommons/RFdiffusion | RFdiffusion-family license (non-commercial) |
+| semlaflow-server | SEMLA Flow | rssrwn/semla-flow | MIT |
+| seqkit-server | SeqKit | shenwei356/seqkit | MIT (binary) |
+| turbohopp-server | TurboHopp | orgw/TurboHopp | See upstream `LICENSE` |
+
+`ensemble-server` has no vendored upstream (it orchestrates other services).
+
+## Important compliance notes
+
+- **Copyleft upstreams**: `lightdock-server` (GPL-3.0) and `plip-server` (GPL-2.0) are copyleft
+  tools. In this project they are invoked as separate processes/CLI tools rather than linked or
+  copied into the framework, so this repository's MIT-licensed code is not automatically subject to
+  the GPL. If any of their code is ever copied into the wrapper or framework, those files must be
+  re-licensed under the corresponding GPL.
+- **Non-commercial upstreams**: `drughive-server` (USC-RL v2.0, commercial use requires a license
+  from the University of Southern California) and the RFdiffusion-family tools (RFdiffusion /
+  RFdiffusion2 / RFantibody, commercial use requires an agreement with the Institute for Protein
+  Design / RosettaCommons) restrict commercial use. MIT-licensing this repository's wrapper code
+  does not grant anyone the right to use these underlying tools commercially.
+- **Model weights**: weights fetched by `services/*/scripts/fetch_weights.sh` (e.g. AlphaFold,
+  ESMFold, RFdiffusion-family, DiffDock) carry their own, often more restrictive, terms. Review
+  every `fetch_weights.sh` and the corresponding upstream weight license separately.
+
+## How to verify
+
+1. Run the service's `scripts/vendor.sh` to fetch the pinned upstream revision.
+2. Read `services/<name>-server/upstream/LICENSE*` (and any nested `LICENSE` files).
+3. Read the service's `scripts/fetch_weights.sh` for weight sources and their terms.
+
+The pinned Git revision in each `vendor.sh` is the authoritative reference; entries marked
+"See upstream `LICENSE`" were not read from a vendored copy at the time this file was written and
+should be confirmed before distribution.
