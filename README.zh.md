@@ -1,4 +1,4 @@
-# bioq-services
+# <img src="assets/bioq.svg" alt="bioq logo" width="40"> bioq-services
 
 [English](README.md) | 中文
 
