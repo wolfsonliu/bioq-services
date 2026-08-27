@@ -1,6 +1,6 @@
 tmp*
-services/*-server/upstream/*
-services/*-server/qvina/*
+services/*-server/upstream/
+services/*-server/qvina/
 .worktrees/
 
 # Byte-compiled / optimized / DLL files
