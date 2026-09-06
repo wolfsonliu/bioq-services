@@ -171,6 +171,24 @@ kubectl -n bioq rollout restart deploy/bioq-gateway
 
 > 设计文档统一归档到 [`docs/specs/`](docs/specs/)。
 
+## bioq CLI（gateway 客户端）
+
+[`bioq`](https://github.com/wolfsonliu/bioq) 是 gateway 的瘦 REST 客户端 —— 一个 gateway URL + 一套凭据即可
+**发现**服务、**上传**输入、**提交**作业、**轮询**状态、**下载**结果；不含任何 FC / OSS / JWT 代码，
+平台复杂度全部留在 gateway。
+
+```bash
+uv pip install -e .                          # 安装（在 bioq 仓库内）
+bioq login --oidc ...                        # 人：OIDC device flow（token 缓存 + 自动刷新）
+bioq login --client-credentials ...          # 机器 / CI：无人值守
+bioq services                                # 列出服务（短名，去掉 -server 后缀）
+bioq describe <svc> [<endpoint>]             # 看 endpoint / 参数 / 文件输入字段
+bioq run <svc> <endpoint> ... --wait -o DIR  # 上传 + 提交 + 轮询 + 下载一条命令完成
+bioq submit | status | download | cancel     # 生命周期拆成独立步骤
+```
+
+完整命令、凭据优先级与退出码见 [bioq 仓库](https://github.com/wolfsonliu/bioq)。
+
 ## 相关仓库
 
 - **`bioq`** —— 瘦客户端 CLI（gateway REST 客户端）

@@ -194,6 +194,25 @@ the way.
 
 > Design docs are archived in [`docs/specs/`](docs/specs/).
 
+## The bioq CLI (gateway client)
+
+[`bioq`](https://github.com/wolfsonliu/bioq) is the thin gateway REST client — one gateway URL + one set of
+credentials lets you **discover** services, **upload** inputs, **submit** jobs, **poll** status, and
+**download** results. It carries no FC / OSS / JWT code; all platform complexity stays in the gateway.
+
+```bash
+uv pip install -e .                          # install (inside the bioq repo)
+bioq login --oidc ...                        # human: OIDC device flow (token cached + auto-refreshed)
+bioq login --client-credentials ...          # machine / CI: unattended
+bioq services                                # list services (short names, -server stripped)
+bioq describe <svc> [<endpoint>]             # endpoints / params / file-input fields
+bioq run <svc> <endpoint> ... --wait -o DIR  # upload + submit + poll + download in one shot
+bioq submit | status | download | cancel     # lifecycle as separate steps
+```
+
+Full command reference, credential precedence, and exit codes: see the
+[bioq repo](https://github.com/wolfsonliu/bioq).
+
 ## Related repositories
 
 - **`bioq`** — thin-client CLI (gateway REST client)
