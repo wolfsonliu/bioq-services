@@ -218,3 +218,21 @@ Full command reference, credential precedence, and exit codes: see the
 - **`bioq`** — thin-client CLI (gateway REST client)
 - **`bioagent`** — research knowledge base (`wiki/`), pipeline orchestration (`pipelines/`),
   engineering docs (`engineering/`)
+
+## Citation
+
+If `bioq-services` contributes to your work, please cite:
+
+> Liu, Z. & Wang, Y. bioq: a unified, agent-native command-line interface to a fleet of
+> AI drug-discovery methods. Preprint at https://doi.org/10.64898/2026.09.03.749148 (2026).
+
+```bibtex
+@misc{liu2026bioq,
+  title  = {bioq: a unified, agent-native command-line interface to a fleet of AI drug-discovery methods},
+  author = {Liu, Z. and Wang, Y.},
+  year   = {2026},
+  note   = {Preprint},
+  doi    = {10.64898/2026.09.03.749148},
+  url    = {https://doi.org/10.64898/2026.09.03.749148}
+}
+```

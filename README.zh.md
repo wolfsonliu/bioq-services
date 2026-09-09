@@ -193,3 +193,21 @@ bioq submit | status | download | cancel     # 生命周期拆成独立步骤
 
 - **`bioq`** —— 瘦客户端 CLI（gateway REST 客户端）
 - **`bioagent`** —— 研究知识库（`wiki/`）、pipeline 编排（`pipelines/`）、工程文档（`engineering/`）
+
+## 引用
+
+如果你的工作用到了 `bioq-services`，请引用：
+
+> Liu, Z. & Wang, Y. bioq: a unified, agent-native command-line interface to a fleet of
+> AI drug-discovery methods. Preprint at https://doi.org/10.64898/2026.09.03.749148 (2026).
+
+```bibtex
+@misc{liu2026bioq,
+  title  = {bioq: a unified, agent-native command-line interface to a fleet of AI drug-discovery methods},
+  author = {Liu, Z. and Wang, Y.},
+  year   = {2026},
+  note   = {Preprint},
+  doi    = {10.64898/2026.09.03.749148},
+  url    = {https://doi.org/10.64898/2026.09.03.749148}
+}
+```
