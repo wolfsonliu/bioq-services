@@ -187,6 +187,29 @@ def _input_suffix(filename: Optional[str]) -> str:
     return ".pdb"
 
 
+def _resolve_target_input(
+    target: Optional[UploadFile],
+    target_uri: Optional[str],
+    dest: Path,
+    settings: Bindcraft2Settings,
+) -> Path:
+    """`resolve_input` 的包装：客户端输入错误一律 422，不要漏成 500。
+
+    submit/poll 与 FC 异步任务两条入口共用（孪生端点若各写一份，很容易只修一处）。
+    """
+    try:
+        return resolve_input(target, target_uri, dest, settings, field_name="target")
+    except HTTPException:
+        # 框架已给出合理的 4xx/502，原样透传。
+        raise
+    except Exception as exc:
+        # 其余都是客户端输入错误（目录、坏 URI、缺凭证……），映射成 422，
+        # 否则 FastAPI 会把它当服务端故障返回 500。
+        raise HTTPException(
+            status_code=422, detail=f"Could not resolve target: {exc}"
+        ) from exc
+
+
 @app.post("/api/design", response_model=JobInfo)
 def run_design(
     target: Optional[UploadFile] = File(
@@ -208,19 +231,7 @@ def run_design(
         target_path = None
         if not params.target_name:
             dest = job_dir / "input" / f"target{_input_suffix(target_uri or getattr(target, 'filename', None))}"
-            try:
-                target_path = resolve_input(
-                    target, target_uri, dest, settings, field_name="target"
-                )
-            except HTTPException:
-                # 框架已给出合理的 4xx/502，原样透传。
-                raise
-            except Exception as exc:
-                # 其余都是客户端输入错误（目录、坏 URI、缺凭证……），映射成 422，
-                # 否则 FastAPI 会把它当服务端故障返回 500。
-                raise HTTPException(
-                    status_code=422, detail=f"Could not resolve target: {exc}"
-                ) from exc
+            target_path = _resolve_target_input(target, target_uri, dest, settings)
         campaign_file = prepare_design(
             params, job_dir=job_dir, target_path=target_path, settings=settings
         )
@@ -285,9 +296,7 @@ if settings.task_endpoints_enabled:
             if params.target_name:
                 return
             dest = input_dir / f"target{_input_suffix(target_uri or getattr(target, 'filename', None))}"
-            paths["target"] = resolve_input(
-                target, target_uri, dest, settings, field_name="target"
-            )
+            paths["target"] = _resolve_target_input(target, target_uri, dest, settings)
 
         def _build(req, _job_id: str, job_dir: Path) -> list[str]:
             campaign_file = prepare_design(

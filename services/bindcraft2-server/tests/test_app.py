@@ -140,6 +140,22 @@ def test_design_rejects_unresolvable_target_uri(offline_settings, monkeypatch):
         assert r.status_code == 422, f"{uri} -> {r.status_code}: {r.text}"
 
 
+def test_task_design_rejects_unresolvable_target_uri(offline_settings, monkeypatch):
+    """孪生端点必须和 /api/design 同样映射成 422。
+
+    FC 异步任务模式走的正是这条；只包装 submit/poll 那条路时，同样的坏 URI 会在这里
+    变成 500——两个入口共用 `_resolve_target_input` 就是为了不让它再分叉。
+    """
+    client = _client(offline_settings, monkeypatch)
+    for uri in ("oss://bucket/key", "file:///etc", "http://"):
+        r = client.post(
+            "/api/tasks/design",
+            data={"target_uri": uri},
+            headers={"bioagent-session-id": "s1"},
+        )
+        assert r.status_code == 422, f"{uri} -> {r.status_code}: {r.text}"
+
+
 def test_design_upload_keeps_cif_suffix(offline_settings, monkeypatch):
     """落盘后缀必须跟着上传文件走：上游按后缀识别 mmCIF，改成常量就废掉这条。"""
     client = _client(offline_settings, monkeypatch)
