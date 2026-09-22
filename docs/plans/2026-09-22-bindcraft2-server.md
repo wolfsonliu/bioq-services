@@ -34,7 +34,7 @@
 |---|---|---|---|
 | B1 | 只有 `settings.py`，测试命令用 `uv run --with pytest --with fastapi ...` 现搭临时环境 | 建 `pyproject.toml`（`dependencies` / `[dependency-groups] dev` / `[tool.ruff]` / `[tool.uv] package = false`），所有测试命令统一为 `uv run --group dev python -m pytest ...` | 仓库里 **39/39** 服务每个都是独立 uv 项目；AGENTS.md 的离线测试入口就是 `uv run --group dev`。`pyproject.toml` 进版本控制，`uv.lock` 被 gitignore |
 | B2 | `tests/conftest.py` 在 Task 6 才建（当时计划 Task 2–5 用 `PYTHONPATH=..` 绕） | conftest 提前到 Task 1，只含 `server` 别名 + fc marker；Task 6 改为**追加**离线 fixture。Task 2–5 跑 `uv run --group dev python -m pytest tests/test_x.py -q` | 服务目录名 `bindcraft2-server` 含连字符，不是合法 Python 标识符；`PYTHONPATH=..` 会指向 `services/`，`import server.models` 必然失败。别名只能由 conftest 提供，且必须早于第一个 `from server.x import y` |
-| B3 | `pyproject.toml` 只有 `[tool.ruff] line-length/target-version` | 补 `[tool.ruff.lint]`：`ignore = ["N999"]`（`seqkit-server` 有同样先例）、`extend-select = ["E402"]`、`known-first-party = ["server"]` | 三步实测：plan-exact 配置在 ruff 0.16.8 下报 4 个错（`N999`×2 / `RUF100` / `I001`），加了这三块才 `All checks passed!`。Task 7 Step 5 与 Task 13 Step 6 的验收条件就是它。注意 ruff 版本由全新 `uv sync` 决定（`uv.lock` 被 gitignore），所以不能依赖旧版默认规则集 |
+| B3 | `pyproject.toml` 只有 `[tool.ruff] line-length/target-version` | 补 `[tool.ruff.lint]` 并**钉住规则集**：`select = ["E4","E7","E9","F"]` + `extend-select = ["E402"]` | 不钉住就没有可复现的 lint：`uv.lock` 被 gitignore → ruff 版本随每次 `uv sync` 漂移 → ruff 0.16.8 默认启用 **413** 条规则，把 `Optional[X]`（UP045）、FastAPI 的 `Depends()/File()/Form()` 参数默认值（B008）等既有写法一并报错。实测 plan-exact 的 `models.py` 在钉住的规则集下 `All checks passed!`、在 0.16 默认集下报 16 个错。钉住后本计划所有代码无需为 lint 改写 |
 
 ---
 
@@ -139,20 +139,19 @@ line-length = 100
 target-version = "py310"
 
 [tool.ruff.lint]
-# N999：`<svc>-server` 目录名含连字符，不是合法 Python 模块名——仓库里每个
-# 服务都是这个命名（镜像内以 `server` 导入），属对目录名的固有误报。
-# 仓库既有先例：services/seqkit-server/pyproject.toml。
-ignore = ["N999"]
-# E402 不在 ruff 0.16 的默认集合里，但 conftest 确实是"先有代码、后有 import"
-# （先注册 `server` 别名，再 import 框架与 server.*）。显式启用它，让既有的
-# `# noqa: E402` 真正起作用、并让以后新出现的违规被发现——而不是用 RUF100 去
-# 掩盖一个"未使用的 noqa"。验证：去掉 noqa 后 E402 确实报错。
+# 显式钉住规则集。原因：uv.lock 被 gitignore，ruff 版本随每次 `uv sync` 漂移，
+# 而 ruff 0.16 的默认集比仓库其它 38 个服务写代码时的默认集宽得多（实测启用
+# 413 条规则）。不钉住的话，同一份代码在不同机器上 lint 结果不同，并且会要求把
+# 既有写法一并改掉（`Optional[X]`、FastAPI 的 `Depends()` / `File()` 作为参数
+# 默认值等）。钉在 pycodestyle + Pyflakes 这套长期默认上：结果可复现、与兄弟
+# 服务风格一致。注意 N999（连字符目录名）、I001（`server` 别名让 ruff 误判
+# `server.*` 为第三方包）、B008（FastAPI 参数默认值里的 Depends/File/Form）都
+# 不在这个子集内，所以无需 ignore —— 仓库既有先例 services/seqkit-server 用
+# per-file-ignores 处理 B008，是因为它没钉 select。
+select = ["E4", "E7", "E9", "F"]
+# E402 不在上面的子集里但确实适用：conftest 是"先注册 server 别名、后 import"。
+# 显式启用，让既有的 `# noqa: E402` 真正起作用（而不是被 RUF100 判成无用 noqa）。
 extend-select = ["E402"]
-
-[tool.ruff.lint.isort]
-# conftest 用 importlib 把服务目录按 `server` 别名挂进 sys.modules；ruff 静态
-# 分析看不到该别名，会把 `server.*` 误判成第三方包而要求重排 import。
-known-first-party = ["server"]
 
 [tool.uv.sources]
 bioq-service-framework = { path = "../../framework", editable = true }
@@ -161,10 +160,11 @@ bioq-service-framework = { path = "../../framework", editable = true }
 package = false
 ```
 
-`[tool.ruff.lint]` 三块不是从模板抄的——模板（`rfantibody-server`）没有这段，且在
-ruff 0.16.8 下它自己会报错。新服务要么带一段干净的 lint 配置，要么 `ruff check` 恒定
-失败；Task 7 Step 5 与 Task 13 Step 6 的验收条件都是 `All checks passed!`，所以这里
-补齐。三个子块各自消掉一个具体误报（N999×2 / E402 的 RUF100 / I001），已逐一验证。
+**这条 `select` 是硬要求，不是风格偏好。** 本计划里所有「`ruff check` 全绿」的验收
+（Task 7 Step 5、Task 13 Step 6）都以它为前提。**不要为了让更宽的规则集通过而去改动
+计划给出的代码**——`Optional[X]`、`Depends(...)` / `File(...)` / `Form(...)` 作参数
+默认值等写法在本计划里是刻意保留的，实测：plan-exact 的 `models.py` 在钉住的规则集下
+`All checks passed!`，在 ruff 0.16 默认集下报 16 个错（全是 UP045 之类的风格改写）。
 
 `package = false` 是关键：服务代码是扁平目录、靠 `PYTHONPATH` + `server` 别名导入，
 不作为 wheel 打包。
@@ -416,6 +416,15 @@ def test_binder_lengths_rejects_descending():
 def test_binder_lengths_rejects_three_entries():
     with pytest.raises(ValueError, match="1 or 2"):
         DesignRequest(binder_lengths=[60, 70, 80])
+
+
+def test_binder_lengths_rejects_non_positive():
+    # 覆盖 `any(value < 1 ...)` 分支——少了这个测试，删掉该分支所有测试仍全绿
+    # （Task 2 实现者用变异测试证明了这个缺口）。
+    with pytest.raises(ValueError, match="must be >= 1"):
+        DesignRequest(binder_lengths=[0])
+    with pytest.raises(ValueError, match="must be >= 1"):
+        DesignRequest(binder_lengths=[-5, 80])
 
 
 def test_binder_lengths_rejects_non_integer():
@@ -716,7 +725,7 @@ class FilterRequest(BaseModel):
 cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_models.py -q
 ```
 
-Expected：`18 passed`。
+Expected：`19 passed`。
 
 - [ ] **Step 5: Commit**
 
