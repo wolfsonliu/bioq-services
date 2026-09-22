@@ -61,13 +61,19 @@ services:
     tier: warm
     function: fc_boltzgen
     oss_mount: true
-  # bindcraft2-server: url 是先占位；Task 12 首次 FC 部署后回填真实 hash。
-  bindcraft2-server:
-    url: https://fc-bindcraft2-<hash>.cn-hangzhou-vpc.fcapp.run
-    tier: warm
-    function: fc_bindcraft2
-    gpu: fc.gpu.ada.1
-    oss_mount: true
+  # bindcraft2-server: GPU binder design (BindCraft2). Not deployed yet — uncomment
+  # and fill the real url after the first FC deploy, and after staging the 7
+  # AlphaFold2 checkpoints to NAS /data/models/bindcraft2/alphafold (or symlinking
+  # /data/models/alphafold, which already holds the same 7 files). See
+  # docs/plans/2026-09-22-bindcraft2-server.md Task 12.
+  # A literal `<hash>` placeholder must NOT be left uncommented: fc_url() would
+  # return an unreachable host instead of failing clearly.
+  # bindcraft2-server:
+  #   url: https://fc-bindcraft2-XXXXXX.cn-hangzhou-vpc.fcapp.run
+  #   tier: warm
+  #   function: fc_bindcraft2
+  #   gpu: fc.gpu.ada.1
+  #   oss_mount: true
   immunebuilder-server:
     url: https://fc-immuebuilder-mhxbldkfhc.cn-hangzhou-vpc.fcapp.run
     tier: warm

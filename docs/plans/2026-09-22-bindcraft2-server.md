@@ -4227,7 +4227,10 @@ def test_task_endpoints_are_registered(client):
    （`bioagent-inputs` 是计划初稿的笔误：仓库里 30 个部署描述符一律用 `bio-gateway`，与本服务的 `deploy/fc.yaml` 一致。以控制台实际值为准。）
 3. **开启异步任务模式**、清空 keepalive URL、会话亲和 = HeaderField `bioagent-session-id`、
    `sessionConcurrencyPerInstance=1`。
-4. 把真实 URL / function 名 / gpuType 回填 `services.yaml` 与 `deploy/fc.yaml`。
+4. 把真实 URL / function 名 / gpuType 回填 `deploy/fc.yaml`，并**取消 `services.yaml` 里
+   `bindcraft2-server` 条目的注释**、把 `url` 换成真实 hash（仓库里未部署服务的既有约定就是
+   整条注释掉 + `<XXXXXX>` 占位；留着未注释的 `<hash>` 占位很危险——`fc_url()` 会返回一个
+   不可达主机而不是干脆报错。实测 `fc_url('bindcraft2-server')` 在注释状态下抛 `KeyError: service 'bindcraft2-server' not in services.yaml`，并列出已知服务名）。
 
 - [ ] **Step 4: 从 VPC 内跑 smoke（不跑 design）**
 
