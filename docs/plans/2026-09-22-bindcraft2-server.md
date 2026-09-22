@@ -462,6 +462,13 @@ def test_max_trajectories_must_be_positive():
         DesignRequest(max_trajectories=0)
 
 
+def test_max_trajectories_is_bounded():
+    # 上界兜住共享卡上的 GPU 成本：没有它 10**30 会被原样写进 campaign。
+    assert DesignRequest(max_trajectories=100_000).max_trajectories == 100_000
+    with pytest.raises(ValueError):
+        DesignRequest(max_trajectories=100_001)
+
+
 def test_top_must_be_positive():
     with pytest.raises(ValueError):
         RankRequest(campaign_uri="job://abc", top=0)
@@ -666,7 +673,12 @@ class DesignRequest(BaseModel):
     max_trajectories: Optional[int] = Field(
         default=None,
         ge=1,
-        description="尝试次数硬上限；未给则用服务端 default_max_trajectories。",
+        le=100_000,
+        # 上界用来兜住共享卡上的 GPU 成本：不给上限时 10**30 这类值会被原样写进
+        # campaign，等于一次无界 GPU 运行（服务端默认 500，10 万已经很宽松）。
+        description=(
+            "尝试次数硬上限；未给则用服务端 default_max_trajectories。上限 100000。"
+        ),
     )
 
     forced_targeting: bool = False
@@ -777,7 +789,7 @@ class FilterRequest(BaseModel):
 cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_models.py -q
 ```
 
-Expected：`23 passed`。
+Expected：`24 passed`。
 
 - [ ] **Step 5: Commit**
 
@@ -2193,14 +2205,14 @@ import time
 from fastapi.testclient import TestClient
 
 
-def _client(settings, monkeypatch) -> TestClient:
+def _client(settings, monkeypatch, module: str = "") -> TestClient:
     # server.app 在 import 期用自己的 settings 构造 app；把 env 指到 tmp，
     # 再 reload，避免写到 /data/bindcraft2_jobs。
     monkeypatch.setenv("BINDCRAFT2_JOBS_BASE_DIR", str(settings.jobs_base_dir))
     monkeypatch.setenv("BINDCRAFT2_ROOT", str(settings.root))
     monkeypatch.setenv("BINDCRAFT2_SHIPPED_WEIGHTS_DIR", str(settings.shipped_weights_dir))
     monkeypatch.setenv("BINDCRAFT2_PYTHON", settings.python)
-    monkeypatch.setenv("BINDCRAFT2_MODULE", "")
+    monkeypatch.setenv("BINDCRAFT2_MODULE", module)
     monkeypatch.setenv("BINDCRAFT2_ALPHAFOLD_PARAMS_DIR", str(settings.alphafold_params_dir))
     monkeypatch.setenv("BINDCRAFT2_COMPILE_CACHE_DIR", str(settings.compile_cache_dir))
     monkeypatch.setenv("BINDCRAFT2_GPU_PROBE_TTL_SECONDS", "0")
@@ -2230,6 +2242,14 @@ def test_health_and_detail(offline_settings, monkeypatch):
     assert detail["gpu_backend"] == "gpu"  # stub 探针
     assert detail["weights_loaded"] is False
     assert len(detail["weights_missing"]) == 7
+
+
+def test_healthz_detail_reports_job_counters(offline_settings, monkeypatch):
+    """跑批并发度是 /healthz/detail 的契约字段；缺了它们调用方无法判断容量。"""
+    client = _client(offline_settings, monkeypatch)
+    detail = client.get("/healthz/detail").json()
+    assert detail["active_jobs"] == 0
+    assert detail["max_concurrent_jobs"] == 1
 
 
 def test_detail_reports_loaded_weights(offline_settings, monkeypatch, tmp_path):
@@ -2290,6 +2310,65 @@ def test_design_with_upload(offline_settings, monkeypatch):
     ).read_text(encoding="utf-8")
     assert '"name": "target"' in campaign
     assert (offline_settings.jobs_base_dir / job_id / "input" / "target.pdb").is_file()
+
+
+def test_design_with_file_uri_target(offline_settings, monkeypatch, tmp_path):
+    """`target_uri=file://...` 的 happy path（此前完全没测）。"""
+    pdb = tmp_path / "bait.pdb"
+    pdb.write_text("ATOM      1  CA  ALA A   1\n", encoding="utf-8")
+
+    client = _client(offline_settings, monkeypatch)
+    r = client.post(
+        "/api/design",
+        data={"target_uri": f"file://{pdb}", "max_trajectories": "1"},
+    )
+    assert r.status_code == 200, r.text
+    job_id = r.json()["job_id"]
+    body = _wait(client, job_id)
+    assert body["status"] == "completed", body
+    assert (offline_settings.jobs_base_dir / job_id / "input" / "target.pdb").is_file()
+
+
+def test_design_rejects_unresolvable_target_uri(offline_settings, monkeypatch):
+    """客户端输入错误必须是 4xx；未包装时 FastAPI 会把它们当服务端故障报 500。"""
+    client = _client(offline_settings, monkeypatch)
+    for uri in ("oss://bucket/key", "file:///etc", "http://"):
+        r = client.post("/api/design", data={"target_uri": uri})
+        assert r.status_code == 422, f"{uri} -> {r.status_code}: {r.text}"
+
+
+def test_task_design_rejects_unresolvable_target_uri(offline_settings, monkeypatch):
+    """孪生端点必须和 /api/design 同样映射成 422。
+
+    FC 异步任务模式走的正是这条；只包装 submit/poll 那条路时，同样的坏 URI 会在这里
+    变成 500——两个入口共用 `_resolve_target_input` 就是为了不让它再分叉。
+    """
+    client = _client(offline_settings, monkeypatch)
+    for uri in ("oss://bucket/key", "file:///etc", "http://"):
+        r = client.post(
+            "/api/tasks/design",
+            data={"target_uri": uri},
+            headers={"bioagent-session-id": "s1"},
+        )
+        assert r.status_code == 422, f"{uri} -> {r.status_code}: {r.text}"
+
+
+def test_design_upload_keeps_cif_suffix(offline_settings, monkeypatch):
+    """落盘后缀必须跟着上传文件走：上游按后缀识别 mmCIF，改成常量就废掉这条。"""
+    client = _client(offline_settings, monkeypatch)
+    r = client.post(
+        "/api/design",
+        data={"target_chains": "A"},
+        files={"target": ("target.cif", b"data_demo\n", "chemical/x-cif")},
+    )
+    assert r.status_code == 200, r.text
+    job_id = r.json()["job_id"]
+    body = _wait(client, job_id)
+    assert body["status"] == "completed", body
+
+    saved = offline_settings.jobs_base_dir / job_id / "input" / "target.cif"
+    assert saved.is_file()
+    assert not (offline_settings.jobs_base_dir / job_id / "input" / "target.pdb").exists()
 
 
 def test_design_rejects_no_target(offline_settings, monkeypatch):
@@ -2452,6 +2531,31 @@ def test_gpu_probe_runs_out_of_process(offline_settings, monkeypatch):
     detail = client.get("/healthz/detail").json()
     assert detail["gpu_backend"] == "gpu"
     assert "jax" not in sys.modules
+
+
+def test_gpu_probe_ignores_upstream_module(offline_settings, monkeypatch):
+    """生产 settings 带 module="bindcraft.cli"，探针仍必须拿到 backend。
+
+    探针 argv 若拼成 `python -m bindcraft.cli -c <code>`，`-c <code>` 只会被当成
+    上游 CLI 的参数（stub 走 unknown subcommand 分支、什么都不打印），
+    gpu_backend 永远停在 "probe_failed"——这是生产里唯一能发现静默跑 CPU 的信号。
+    """
+    client = _client(offline_settings, monkeypatch, module="bindcraft.cli")
+    detail = client.get("/healthz/detail").json()
+    assert detail["gpu_backend"] == "gpu"
+    assert detail["gpu_devices"] == "cuda:0"
+
+
+def test_healthz_detail_warns_when_probe_cannot_run(offline_settings, monkeypatch):
+    """探针跑不起来（解释器不存在）也要 200 + warning，而不是 500。"""
+    broken = offline_settings.model_copy(update={"python": "/nonexistent/python-fixture"})
+    client = _client(broken, monkeypatch)
+    r = client.get("/healthz/detail")
+    assert r.status_code == 200, r.text
+    detail = r.json()
+    assert detail["gpu_backend"] == "probe_failed"
+    assert "warning" in detail
+    assert "GPU" in detail["warning"]
 ```
 
 - [ ] **Step 4: 跑测试确认失败**
@@ -2496,7 +2600,7 @@ from bioq_service import (
     resolve_task_id,
 )
 from bioq_service.uris import resolve_input
-from fastapi import Depends, File, Form, Header, Request, UploadFile
+from fastapi import Depends, File, Form, Header, HTTPException, Request, UploadFile
 
 from .adapter import Bindcraft2Adapter
 from .campaigns import resolve_campaign_dir
@@ -2554,16 +2658,18 @@ def _gpu_probe(settings: Bindcraft2Settings) -> tuple[str, str]:
         if now - float(_probe_cache["at"]) < settings.gpu_probe_ttl_seconds:
             return cached  # type: ignore[return-value]
     backend, devices = "probe_failed", ""
-    argv = [settings.python]
-    if settings.module:
-        argv += ["-m", settings.module]
-    argv += ["-c", _GPU_PROBE_CODE]
+    # 探针只做 `import jax`，与上游 CLI 无关，绝不能拼 `-m <module>`：生产里
+    # module="bindcraft.cli"，`python -m bindcraft.cli -c <code>` 会把 `-c <code>`
+    # 当成 CLI 的普通参数，代码永不执行（CLI 报 usage 并退出 2），于是
+    # gpu_backend 永远停在 "probe_failed"——唯一能发现静默回退 CPU 的信号被毁掉。
+    argv = [settings.python, "-c", _GPU_PROBE_CODE]
     try:
         proc = subprocess.run(
             argv,
             capture_output=True,
             text=True,
-            timeout=120,
+            # 探针卡死不能拖住健康检查；30 s 足够解释器 import jax。
+            timeout=30,
             cwd=str(settings.root) if settings.root.is_dir() else None,
         )
         lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
@@ -2586,6 +2692,12 @@ def _strip_route(router, path: str, method: str) -> None:
         for r in router.routes
         if not (getattr(r, "path", None) == path and method in getattr(r, "methods", set()))
     ]
+    # FastAPI 的 included-router 层按 route-version 计数器缓存有效候选；直接赋值
+    # routes 不会 bump 计数器，缓存已热时这次剥离会被静默忽略（框架的通用
+    # /healthz/detail 先匹配，还不报错）。有该方法就防御性地 bump 一次。
+    mark = getattr(router, "_mark_routes_changed", None)
+    if callable(mark):
+        mark()
     for r in router.routes:
         inner = getattr(r, "original_router", None)
         if inner is not None:
@@ -2646,6 +2758,29 @@ def _input_suffix(filename: Optional[str]) -> str:
     return ".pdb"
 
 
+def _resolve_target_input(
+    target: Optional[UploadFile],
+    target_uri: Optional[str],
+    dest: Path,
+    settings: Bindcraft2Settings,
+) -> Path:
+    """`resolve_input` 的包装：客户端输入错误一律 422，不要漏成 500。
+
+    submit/poll 与 FC 异步任务两条入口共用（孪生端点若各写一份，很容易只修一处）。
+    """
+    try:
+        return resolve_input(target, target_uri, dest, settings, field_name="target")
+    except HTTPException:
+        # 框架已给出合理的 4xx/502，原样透传。
+        raise
+    except Exception as exc:
+        # 其余都是客户端输入错误（目录、坏 URI、缺凭证……），映射成 422，
+        # 否则 FastAPI 会把它当服务端故障返回 500。
+        raise HTTPException(
+            status_code=422, detail=f"Could not resolve target: {exc}"
+        ) from exc
+
+
 @app.post("/api/design", response_model=JobInfo)
 def run_design(
     target: Optional[UploadFile] = File(
@@ -2667,7 +2802,7 @@ def run_design(
         target_path = None
         if not params.target_name:
             dest = job_dir / "input" / f"target{_input_suffix(target_uri or getattr(target, 'filename', None))}"
-            target_path = resolve_input(target, target_uri, dest, settings, field_name="target")
+            target_path = _resolve_target_input(target, target_uri, dest, settings)
         campaign_file = prepare_design(
             params, job_dir=job_dir, target_path=target_path, settings=settings
         )
@@ -2732,9 +2867,7 @@ if settings.task_endpoints_enabled:
             if params.target_name:
                 return
             dest = input_dir / f"target{_input_suffix(target_uri or getattr(target, 'filename', None))}"
-            paths["target"] = resolve_input(
-                target, target_uri, dest, settings, field_name="target"
-            )
+            paths["target"] = _resolve_target_input(target, target_uri, dest, settings)
 
         def _build(req, _job_id: str, job_dir: Path) -> list[str]:
             campaign_file = prepare_design(
@@ -2800,7 +2933,7 @@ attach_mcp(app)
 cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_app.py -q 2>&1 | tail -25
 ```
 
-Expected：`17 passed`（含专门钉住 GPU 探针进程隔离的那一条）。若 `test_health_and_detail` 报 `gpu_backend != "gpu"`，检查
+Expected：`24 passed`（含钉住 GPU 探针进程隔离、孪生端点 422 映射的那两条）。若 `test_health_and_detail` 报 `gpu_backend != "gpu"`，检查
 stub 是否被 chmod +x。
 
 - [ ] **Step 7: 跑全量离线测试**
