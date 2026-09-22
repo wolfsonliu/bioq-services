@@ -26,12 +26,24 @@
 
 ---
 
+## 计划期修订（动手前核验仓库约定后加的两项）
+
+首版计划漏了两条仓库既有约定，已改入 Task 1；记在这里以免后续步骤又按旧写法写。
+
+| # | 首版计划写的 | 实际做法 | 原因 |
+|---|---|---|---|
+| B1 | 只有 `settings.py`，测试命令用 `uv run --with pytest --with fastapi ...` 现搭临时环境 | 建 `pyproject.toml`（`dependencies` / `[dependency-groups] dev` / `[tool.ruff]` / `[tool.uv] package = false`），所有测试命令统一为 `uv run --group dev python -m pytest ...` | 仓库里 **39/39** 服务每个都是独立 uv 项目；AGENTS.md 的离线测试入口就是 `uv run --group dev`。`pyproject.toml` 进版本控制，`uv.lock` 被 gitignore |
+| B2 | `tests/conftest.py` 在 Task 6 才建（当时计划 Task 2–5 用 `PYTHONPATH=..` 绕） | conftest 提前到 Task 1，只含 `server` 别名 + fc marker；Task 6 改为**追加**离线 fixture。Task 2–5 跑 `uv run --group dev python -m pytest tests/test_x.py -q` | 服务目录名 `bindcraft2-server` 含连字符，不是合法 Python 标识符；`PYTHONPATH=..` 会指向 `services/`，`import server.models` 必然失败。别名只能由 conftest 提供，且必须早于第一个 `from server.x import y` |
+
+---
+
 ## 文件结构
 
 ```
 services/bindcraft2-server/
 ├── __init__.py                 # 空包标记
 ├── VERSION                     # v0.0.1（Makefile 读它做镜像 tag）
+├── pyproject.toml              # 独立 uv 项目（39 个服务共用的骨架）；uv.lock 被 gitignore
 ├── settings.py                 # Bindcraft2Settings（env_prefix=BINDCRAFT2_）
 ├── models.py                   # DesignRequest / RankRequest / FilterRequest + validate_target_selection
 ├── campaigns.py                # campaign *目录* URI 零拷贝解析（不复用 uris.resolve_uri）
@@ -47,7 +59,8 @@ services/bindcraft2-server/
 ├── upstream/                   # gitignored：vendor.sh 产物
 └── tests/
     ├── __init__.py
-    ├── conftest.py             # server 包别名 + fc marker + client/settings fixture
+    ├── conftest.py             # server 包别名 + fc marker（Task 1）；离线 fixture（Task 6）
+    ├── test_settings.py
     ├── test_models.py
     ├── test_campaigns.py
     ├── test_tools.py
@@ -68,13 +81,27 @@ services/bindcraft2-server/
 
 ---
 
-### Task 1: 骨架与 settings
+### Task 1: 骨架、uv 项目与 settings
 
 **Files:**
 - Create: `services/bindcraft2-server/__init__.py`
 - Create: `services/bindcraft2-server/VERSION`
+- Create: `services/bindcraft2-server/pyproject.toml`
 - Create: `services/bindcraft2-server/settings.py`
 - Create: `services/bindcraft2-server/tests/__init__.py`
+- Create: `services/bindcraft2-server/tests/conftest.py`
+- Test: `services/bindcraft2-server/tests/test_settings.py`
+
+**为什么必须建 `pyproject.toml`：** 仓库里 39 个服务每个都有自己的 uv 项目
+（`pyproject.toml` 进版本控制，`uv.lock` 被 gitignore）。AGENTS.md 的离线测试入口是
+`cd services/<svc>-server && uv run --group dev python -m pytest tests/ -q`——没有
+`pyproject.toml` 这一步跑不了。本计划里所有测试命令都走这个入口。
+
+**为什么 `tests/conftest.py` 在 Task 1 就要有：** 服务目录名 `bindcraft2-server` 含连字符，
+不是合法 Python 标识符，测试无法直接 `import bindcraft2_server`。镜像里是
+`/opt/bindcraft2/server/` + `server.app:app`；本地 pytest 靠 conftest 把该目录按 `server`
+这个别名挂进 `sys.modules` 来对齐。Task 2 起每个测试文件都 `from server.models import ...`，
+所以别名必须先存在。
 
 - [ ] **Step 1: 建目录与空包标记**
 
@@ -84,7 +111,89 @@ touch services/bindcraft2-server/__init__.py services/bindcraft2-server/tests/__
 printf 'v0.0.1\n' > services/bindcraft2-server/VERSION
 ```
 
-- [ ] **Step 2: 写 settings.py**
+- [ ] **Step 2: 写 pyproject.toml**
+
+以 `services/rfantibody-server/pyproject.toml` 为模板（39 个服务共用这套骨架）：
+
+```toml
+[project]
+name = "bindcraft2-server"
+version = "0.0.1"
+description = "HTTP service wrapping BindCraft2 protein binder design campaigns for FC GPU deployment"
+requires-python = ">=3.10"
+dependencies = [
+    "bioq-service-framework[mcp]",
+    "httpx>=0.27",
+    "alibabacloud-oss-v2>=0.4",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.uv.sources]
+bioq-service-framework = { path = "../../framework", editable = true }
+
+[tool.uv]
+package = false
+```
+
+`package = false` 是关键：服务代码是扁平目录、靠 `PYTHONPATH` + `server` 别名导入，
+不作为 wheel 打包。
+
+- [ ] **Step 3: 写 tests/conftest.py（本步只含 server 别名 + fc marker）**
+
+```python
+"""测试装置：把服务目录按镜像里的方式挂成 `server` 包。
+
+Dockerfile 把 `services/bindcraft2-server/` 拷到 `/opt/bindcraft2/server/` 并以
+`server.app:app` 导入；本地 pytest 用同样的别名，保证 import 路径与生产一致。
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import sys
+from pathlib import Path
+
+SERVICE_DIR = Path(__file__).resolve().parent.parent
+
+if "server" not in sys.modules:
+    spec = importlib.util.spec_from_file_location(
+        "server",
+        SERVICE_DIR / "__init__.py",
+        submodule_search_locations=[str(SERVICE_DIR)],
+    )
+    if spec is not None and spec.loader is not None:
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["server"] = module
+        spec.loader.exec_module(module)
+
+
+# `fc` marker：opt-in 的 FC 线上测试。
+from bioq_service.fc_testing import (  # noqa: E402
+    register_fc_marker,
+    skip_fc_tests_unless_enabled,
+)
+
+
+def pytest_configure(config):
+    register_fc_marker(config)
+
+
+def pytest_collection_modifyitems(config, items):
+    skip_fc_tests_unless_enabled(config, items)
+```
+
+（Task 6 会往这个文件追加 `OfflineSettings` 与 `offline_settings` fixture。）
+
+- [ ] **Step 4: 写 settings.py**
 
 ```python
 """bindcraft2-server 的运行时配置。
@@ -146,22 +255,67 @@ class Bindcraft2Settings(ServiceSettings):
     gpu_probe_ttl_seconds: int = Field(default=300, ge=0)
 ```
 
-- [ ] **Step 3: 确认 jobs_base_dir 可创建 + settings 可实例化**
+- [ ] **Step 5: 写 tests/test_settings.py**
 
-```bash
-cd services/bindcraft2-server && uv run --project ../../framework --with pydantic-settings \
-  python -c "
-from settings import Bindcraft2Settings
-s = Bindcraft2Settings()
-print(s.env_prefix if hasattr(s,'env_prefix') else 'n/a')
-print(s.jobs_base_dir, s.python, s.module, s.max_concurrent_jobs)
-"
+```python
+"""settings 的默认值与 env 覆盖行为。"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from server.settings import Bindcraft2Settings
+
+
+def test_defaults_match_container_layout():
+    s = Bindcraft2Settings(_env_file=None)
+    assert s.jobs_base_dir == Path("/data/bindcraft2_jobs")
+    assert s.root == Path("/opt/bindcraft")
+    assert s.shipped_weights_dir == Path("/opt/bindcraft")
+    assert s.python == "/opt/venv/bin/python"
+    assert s.module == "bindcraft.cli"
+    assert s.alphafold_params_dir == Path("/data/models/bindcraft2/alphafold")
+    assert s.compile_cache_dir == Path("/data/models/bindcraft2/xla_cache")
+    assert s.max_concurrent_jobs == 1
+    assert s.workers_per_gpu == 1
+    assert s.max_workers_per_gpu == 1
+    assert s.default_max_trajectories == 500
+    assert s.gpu_probe_ttl_seconds == 300
+
+
+def test_env_prefix_is_bindcraft2(monkeypatch):
+    monkeypatch.setenv("BINDCRAFT2_MAX_CONCURRENT_JOBS", "3")
+    monkeypatch.setenv("BINDCRAFT2_DEFAULT_MAX_TRAJECTORIES", "7")
+    s = Bindcraft2Settings(_env_file=None)
+    assert s.max_concurrent_jobs == 3
+    assert s.default_max_trajectories == 7
+
+
+def test_unknown_env_vars_are_ignored(monkeypatch):
+    monkeypatch.setenv("BINDCRAFT2_NOT_A_FIELD", "1")
+    assert Bindcraft2Settings(_env_file=None).module == "bindcraft.cli"
+
+
+def test_bounds_are_enforced():
+    with pytest.raises(ValueError):
+        Bindcraft2Settings(_env_file=None, workers_per_gpu=0)
+    with pytest.raises(ValueError):
+        Bindcraft2Settings(_env_file=None, max_concurrent_jobs=99)
 ```
 
-Expected：打印 `/data/bindcraft2_jobs /opt/venv/bin/python bindcraft.cli 1`。
-（此步只验证 import 与默认值；不需要 GPU。）
+- [ ] **Step 6: 建环境并跑测试**
 
-- [ ] **Step 4: 确认 .gitignore 已覆盖 upstream/**
+```bash
+cd services/bindcraft2-server && uv sync --group dev
+cd services/bindcraft2-server && uv run --group dev python -m pytest tests/ -q
+```
+
+Expected：`4 passed`。`uv sync` 会生成 `uv.lock` 与 `.venv`——两者都被 .gitignore 覆盖
+（`uv.lock` 在 "per-service test-env lockfiles" 一节里），不进版本控制。
+
+- [ ] **Step 7: 确认 .gitignore 已覆盖 upstream/**
 
 ```bash
 grep -n 'services/\*-server/upstream/' .gitignore
@@ -169,12 +323,14 @@ grep -n 'services/\*-server/upstream/' .gitignore
 
 Expected：`2:services/*-server/upstream/`。已覆盖，无需改动。
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add services/bindcraft2-server/__init__.py services/bindcraft2-server/VERSION \
-        services/bindcraft2-server/settings.py services/bindcraft2-server/tests/__init__.py
-git commit -m "feat(bindcraft2-server): add settings skeleton"
+        services/bindcraft2-server/pyproject.toml services/bindcraft2-server/settings.py \
+        services/bindcraft2-server/tests/__init__.py services/bindcraft2-server/tests/conftest.py \
+        services/bindcraft2-server/tests/test_settings.py
+git commit -m "feat(bindcraft2-server): add settings skeleton and uv project"
 ```
 
 ---
@@ -308,18 +464,11 @@ def test_validate_target_selection_rejects_two():
 - [ ] **Step 2: 跑测试确认失败**
 
 ```bash
-cd services/bindcraft2-server && uv run --with pytest --with fastapi --with pydantic-settings python -m pytest tests/test_models.py -q
+cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_models.py -q
 ```
 
-Expected：FAIL — `ModuleNotFoundError: No module named 'server'`（conftest 还没写；本任务先用直接 import 方式跑，见 Step 3 的临时命令）。
-
-临时替代（本任务内用，Task 6 之后统一走 conftest）：
-
-```bash
-cd services/bindcraft2-server && PYTHONPATH=.. uv run --with pytest --with fastapi --with pydantic-settings python -m pytest tests/test_models.py -q
-```
-
-Expected：`ModuleNotFoundError: No module named 'server.models'`。
+Expected：collection error — `ModuleNotFoundError: No module named 'server.models'`
+（`models.py` 还没写；`server` 别名由 Task 1 的 conftest 提供，所以报的是子模块而不是包）。
 
 - [ ] **Step 3: 写 models.py**
 
@@ -542,7 +691,7 @@ class FilterRequest(BaseModel):
 - [ ] **Step 4: 跑测试确认通过**
 
 ```bash
-cd services/bindcraft2-server && PYTHONPATH=.. uv run --with pytest --with fastapi --with pydantic-settings python -m pytest tests/test_models.py -q
+cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_models.py -q
 ```
 
 Expected：`17 passed`。
@@ -659,7 +808,7 @@ def test_empty_uri_is_422(settings):
 - [ ] **Step 2: 跑测试确认失败**
 
 ```bash
-cd services/bindcraft2-server && PYTHONPATH=.. uv run --with pytest --with fastapi --with pydantic-settings python -m pytest tests/test_campaigns.py -q
+cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_campaigns.py -q
 ```
 
 Expected：`ModuleNotFoundError: No module named 'server.campaigns'`。
@@ -739,7 +888,7 @@ def resolve_campaign_dir(campaign_uri: str, settings: Bindcraft2Settings) -> Pat
 - [ ] **Step 4: 跑测试确认通过**
 
 ```bash
-cd services/bindcraft2-server && PYTHONPATH=.. uv run --with pytest --with fastapi --with pydantic-settings python -m pytest tests/test_campaigns.py -q
+cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_campaigns.py -q
 ```
 
 Expected：`10 passed`。
@@ -1011,7 +1160,7 @@ def test_missing_proteinmpnn_weights(tmp_path):
 - [ ] **Step 2: 跑测试确认失败**
 
 ```bash
-cd services/bindcraft2-server && PYTHONPATH=.. uv run --with pytest --with fastapi --with pydantic-settings python -m pytest tests/test_tools.py -q
+cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_tools.py -q
 ```
 
 Expected：`ModuleNotFoundError: No module named 'server.tools'`。
@@ -1239,7 +1388,7 @@ def filter_argv(
 - [ ] **Step 4: 跑测试确认通过**
 
 ```bash
-cd services/bindcraft2-server && PYTHONPATH=.. uv run --with pytest --with fastapi --with pydantic-settings python -m pytest tests/test_tools.py -q
+cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_tools.py -q
 ```
 
 Expected：`21 passed`。
@@ -1417,7 +1566,7 @@ def test_endpoint_examples_cover_all_six(adapter):
 - [ ] **Step 2: 跑测试确认失败**
 
 ```bash
-cd services/bindcraft2-server && PYTHONPATH=.. uv run --with pytest --with fastapi --with pydantic-settings python -m pytest tests/test_adapter.py -q
+cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_adapter.py -q
 ```
 
 Expected：`ModuleNotFoundError: No module named 'server.adapter'`。
@@ -1715,7 +1864,7 @@ class Bindcraft2Adapter(JobAdapter):
 - [ ] **Step 4: 跑测试确认通过**
 
 ```bash
-cd services/bindcraft2-server && PYTHONPATH=.. uv run --with pytest --with fastapi --with pydantic-settings python -m pytest tests/test_adapter.py -q
+cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_adapter.py -q
 ```
 
 Expected：`18 passed`。
@@ -1729,11 +1878,11 @@ git commit -m "feat(bindcraft2-server): add job adapter with output detection an
 
 ---
 
-### Task 6: conftest + 离线 stub + app.py + test_app.py
+### Task 6: 离线 stub + app.py + test_app.py
 
 **Files:**
 - Create: `services/bindcraft2-server/tests/data/fake_bindcraft.sh`
-- Create: `services/bindcraft2-server/tests/conftest.py`
+- Modify: `services/bindcraft2-server/tests/conftest.py`（追加离线 fixture；别名在 Task 1 已建）
 - Create: `services/bindcraft2-server/app.py`
 - Test: `services/bindcraft2-server/tests/test_app.py`
 
@@ -1786,49 +1935,18 @@ echo "fake_bindcraft: unknown subcommand '${sub}'" >&2
 exit 2
 ```
 
-- [ ] **Step 2: 写 conftest.py**
+- [ ] **Step 2: 往 tests/conftest.py 追加离线 fixture**
+
+Task 1 已建好 conftest（`server` 别名 + fc marker）。本步只在文件**末尾追加**下面的内容，
+并把 `import shutil` 与 `from pydantic_settings import SettingsConfigDict` 补进顶部 import 区
+（Task 1 的版本只需要 `importlib.util` / `sys` / `Path` / `pytest`）。
 
 ```python
-"""测试装置：把服务目录按镜像里的方式挂成 `server` 包，并提供离线 fixture。"""
 
-from __future__ import annotations
-
-import importlib.util
-import shutil
-import sys
-from pathlib import Path
-
-import pytest
-
-SERVICE_DIR = Path(__file__).resolve().parent.parent
-
-# 镜像里 server 代码在 /opt/bindcraft2/server/ 并以 `server.app:app` 导入；
-# 本地 pytest 用同样的别名，保证 import 路径与生产一致。
-if "server" not in sys.modules:
-    spec = importlib.util.spec_from_file_location(
-        "server",
-        SERVICE_DIR / "__init__.py",
-        submodule_search_locations=[str(SERVICE_DIR)],
-    )
-    if spec is not None and spec.loader is not None:
-        module = importlib.util.module_from_spec(spec)
-        sys.modules["server"] = module
-        spec.loader.exec_module(module)
-
-from bioq_service.fc_testing import (  # noqa: E402
-    register_fc_marker,
-    skip_fc_tests_unless_enabled,
-)
-
-from server.settings import Bindcraft2Settings  # noqa: E402
-
-
-def pytest_configure(config):
-    register_fc_marker(config)
-
-
-def pytest_collection_modifyitems(config, items):
-    skip_fc_tests_unless_enabled(config, items)
+# ---------------------------------------------------------------------------
+# 离线 fixture：只把子进程换成 stub，其余全走真实框架
+# （真实 JobRunner、真实 HTTP 路由、真实 job 目录与日志）。
+# ---------------------------------------------------------------------------
 
 
 class OfflineSettings(Bindcraft2Settings):
@@ -1862,8 +1980,7 @@ def offline_settings(tmp_path: Path) -> OfflineSettings:
     return OfflineSettings.build(tmp_path)
 ```
 
-conftest 顶部的 import 需要包含 `from pydantic_settings import SettingsConfigDict`（放在
-`from server.settings import Bindcraft2Settings` 之后，`pytest_configure` 之前任意位置）。
+`env_prefix="BINDCRAFT2_TEST_"` 与生产前缀隔离，避免 CI 上真实的 `BINDCRAFT2_*` 变量污染测试。
 
 - [ ] **Step 3: 写 test_app.py（失败）**
 
@@ -2125,7 +2242,7 @@ def test_upload_field_names_follow_convention(offline_settings, monkeypatch):
 - [ ] **Step 4: 跑测试确认失败**
 
 ```bash
-cd services/bindcraft2-server && uv run --with pytest --with fastapi --with pydantic-settings --with httpx --with pytest-asyncio --python 3.12 python -m pytest tests/test_app.py -q 2>&1 | tail -20
+cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_app.py -q 2>&1 | tail -20
 ```
 
 Expected：collection error / `ModuleNotFoundError: No module named 'server.app'`。
@@ -2465,7 +2582,7 @@ attach_mcp(app)
 - [ ] **Step 6: 跑测试确认通过**
 
 ```bash
-cd services/bindcraft2-server && uv run --python 3.12 --with pytest --with fastapi --with pydantic-settings --with httpx python -m pytest tests/test_app.py -q 2>&1 | tail -25
+cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_app.py -q 2>&1 | tail -25
 ```
 
 Expected：全部通过（约 17 项）。若 `test_health_and_detail` 报 `gpu_backend != "gpu"`，检查
@@ -2474,7 +2591,7 @@ stub 是否被 chmod +x。
 - [ ] **Step 7: 跑全量离线测试**
 
 ```bash
-cd services/bindcraft2-server && uv run --python 3.12 --with pytest --with fastapi --with pydantic-settings --with httpx python -m pytest tests/ -q -m "not fc"
+cd services/bindcraft2-server && uv run --group dev python -m pytest tests/ -q -m "not fc"
 ```
 
 Expected：`test_models` + `test_campaigns` + `test_tools` + `test_adapter` + `test_app` 全绿。
@@ -2621,7 +2738,7 @@ def test_cli_requires_target_or_target_name(tmp_path, offline):
 - [ ] **Step 2: 跑测试确认失败**
 
 ```bash
-cd services/bindcraft2-server && uv run --python 3.12 --with pytest --with fastapi --with pydantic-settings --with httpx python -m pytest tests/test_cli.py -q 2>&1 | tail -10
+cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_cli.py -q 2>&1 | tail -10
 ```
 
 Expected：`ModuleNotFoundError: No module named 'server.__main__'`。
@@ -2713,7 +2830,7 @@ if __name__ == "__main__":
 - [ ] **Step 4: 跑测试确认通过**
 
 ```bash
-cd services/bindcraft2-server && uv run --python 3.12 --with pytest --with fastapi --with pydantic-settings --with httpx python -m pytest tests/test_cli.py -q 2>&1 | tail -20
+cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_cli.py -q 2>&1 | tail -20
 ```
 
 Expected：全部通过（约 8 项）。
@@ -2721,7 +2838,7 @@ Expected：全部通过（约 8 项）。
 另外单独确认 `import` 无副作用（守卫生效）：
 
 ```bash
-cd services/bindcraft2-server && uv run --python 3.12 --with pytest --with fastapi --with pydantic-settings --with httpx \
+cd services/bindcraft2-server && uv run --group dev \
   python -c "import server.__main__ as m; print('import side-effect free:', sorted(m.endpoints))"
 ```
 
@@ -3731,7 +3848,7 @@ def test_task_endpoints_are_registered(client):
 
 ```bash
 cd services/bindcraft2-server
-RUN_FC_TESTS=1 uv run --with pytest --with httpx --with fastapi --with pydantic-settings \
+RUN_FC_TESTS=1 uv run --group dev \
   python -m pytest -m fc tests/test_fc.py -v -k "healthz or manifest or bad_target_selection or unknown_campaign"
 ```
 
@@ -3741,7 +3858,7 @@ Expected：4 项通过。`weights_loaded` 若为 false → 按 `weights_missing`
 - [ ] **Step 5: 跑 design smoke（分钟级）**
 
 ```bash
-RUN_FC_TESTS=1 uv run --with pytest --with httpx --with fastapi --with pydantic-settings \
+RUN_FC_TESTS=1 uv run --group dev \
   python -m pytest -m fc tests/test_fc.py -v -k "design_shipped_target_smoke"
 ```
 
@@ -3756,7 +3873,7 @@ JOB=<design_job_id>
 ls -la --time-style=full-iso /data/bindcraft2_jobs/$JOB/output/ > /tmp/before.txt
 find /data/bindcraft2_jobs/$JOB/output -type f | sort > /tmp/before_files.txt
 
-RUN_FC_TESTS=1 uv run --with pytest --with httpx --with fastapi --with pydantic-settings \
+RUN_FC_TESTS=1 uv run --group dev \
   python -m pytest -m fc tests/test_fc.py -v -k "rank or filter"
 
 find /data/bindcraft2_jobs/$JOB/output -type f | sort > /tmp/after_files.txt
@@ -3770,7 +3887,7 @@ Expected：`P3: 源目录未被改动（零拷贝安全）`。若被改动，在
 - [ ] **Step 7: 跑 task 测试**
 
 ```bash
-RUN_FC_TESTS=1 uv run --with pytest --with httpx --with fastapi --with pydantic-settings \
+RUN_FC_TESTS=1 uv run --group dev \
   python -m pytest -m fc tests/test_fc_task.py -v
 ```
 
