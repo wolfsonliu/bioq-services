@@ -130,9 +130,20 @@ def test_manifest_extras_shape(adapter):
     extras = adapter.manifest_extras()
     assert extras["tool_outputs"]["ranked"].endswith("3_Ranked/!_Ranked.csv")
     assert extras["tool_outputs"]["summary"] == "summary.csv"
-    assert "job://<job_id>[/<subdir>]" in extras["input_uri_schemes"]
+    # input_uri_schemes 按输入面分层：campaign_uri 只吃 job:// / file:// / 裸绝对路径，
+    # 不含 oss:// 或 http(s)://（那两种只对 target 单文件输入有效）。
+    assert "job://<job_id>[/<subdir>]" in extras["input_uri_schemes"]["campaign_uri"]
+    assert "oss://<bucket>/<key>" in extras["input_uri_schemes"]["target"]
+    assert "oss://<bucket>/<key>" not in extras["input_uri_schemes"]["campaign_uri"]
     assert extras["weights"]["alphafold_params_dir"]
     assert len(extras["weights"]["expected_alphafold_models"]) == 7
+    # 四种候选布局都要列出（上游 alphafold_parameter_file 的顺序）。
+    assert extras["weights"]["expected_files"] == [
+        "params/params_<model>.npz",
+        "params_<model>.npz",
+        "params/<model>.npz",
+        "<model>.npz",
+    ]
 
 
 def test_endpoint_examples_cover_all_six(adapter):

@@ -126,7 +126,7 @@ services/bindcraft2-server/
 这个别名挂进 `sys.modules` 来对齐。Task 2 起每个测试文件都 `from server.models import ...`，
 所以别名必须先存在。
 
-- [ ] **Step 1: 建目录与空包标记**
+- [x] **Step 1: 建目录与空包标记**
 
 ```bash
 mkdir -p services/bindcraft2-server/{tests/data,scripts,deploy}
@@ -134,7 +134,7 @@ touch services/bindcraft2-server/__init__.py services/bindcraft2-server/tests/__
 printf 'v0.0.1\n' > services/bindcraft2-server/VERSION
 ```
 
-- [ ] **Step 2: 写 pyproject.toml**
+- [x] **Step 2: 写 pyproject.toml**
 
 以 `services/rfantibody-server/pyproject.toml` 为模板（39 个服务共用这套骨架）：
 
@@ -191,7 +191,7 @@ package = false
 `package = false` 是关键：服务代码是扁平目录、靠 `PYTHONPATH` + `server` 别名导入，
 不作为 wheel 打包。
 
-- [ ] **Step 3: 写 tests/conftest.py（本步只含 server 别名 + fc marker）**
+- [x] **Step 3: 写 tests/conftest.py（本步只含 server 别名 + fc marker）**
 
 ```python
 """测试装置：把服务目录按镜像里的方式挂成 `server` 包。
@@ -237,7 +237,7 @@ def pytest_collection_modifyitems(config, items):
 
 （Task 6 会往这个文件追加 `OfflineSettings` 与 `offline_settings` fixture。）
 
-- [ ] **Step 4: 写 settings.py**
+- [x] **Step 4: 写 settings.py**
 
 ```python
 """bindcraft2-server 的运行时配置。
@@ -299,7 +299,7 @@ class Bindcraft2Settings(ServiceSettings):
     gpu_probe_ttl_seconds: int = Field(default=300, ge=0)
 ```
 
-- [ ] **Step 5: 写 tests/test_settings.py**
+- [x] **Step 5: 写 tests/test_settings.py**
 
 ```python
 """settings 的默认值与 env 覆盖行为。"""
@@ -349,7 +349,7 @@ def test_bounds_are_enforced():
         Bindcraft2Settings(_env_file=None, max_concurrent_jobs=99)
 ```
 
-- [ ] **Step 6: 建环境并跑测试**
+- [x] **Step 6: 建环境并跑测试**
 
 ```bash
 cd services/bindcraft2-server && uv sync --group dev
@@ -359,7 +359,7 @@ cd services/bindcraft2-server && uv run --group dev python -m pytest tests/ -q
 Expected：`4 passed`。`uv sync` 会生成 `uv.lock` 与 `.venv`——两者都被 .gitignore 覆盖
 （`uv.lock` 在 "per-service test-env lockfiles" 一节里），不进版本控制。
 
-- [ ] **Step 7: 确认 .gitignore 已覆盖 upstream/**
+- [x] **Step 7: 确认 .gitignore 已覆盖 upstream/**
 
 ```bash
 grep -n 'services/\*-server/upstream/' .gitignore
@@ -367,7 +367,7 @@ grep -n 'services/\*-server/upstream/' .gitignore
 
 Expected：`2:services/*-server/upstream/`。已覆盖，无需改动。
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add services/bindcraft2-server/__init__.py services/bindcraft2-server/VERSION \
@@ -385,7 +385,7 @@ git commit -m "feat(bindcraft2-server): add settings skeleton and uv project"
 - Create: `services/bindcraft2-server/models.py`
 - Test: `services/bindcraft2-server/tests/test_models.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 """DesignRequest / RankRequest / FilterRequest 的校验行为。"""
@@ -549,7 +549,7 @@ def test_validate_target_selection_rejects_two():
     assert exc.value.status_code == 422
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 ```bash
 cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_models.py -q
@@ -558,7 +558,7 @@ cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_
 Expected：collection error — `ModuleNotFoundError: No module named 'server.models'`
 （`models.py` 还没写；`server` 别名由 Task 1 的 conftest 提供，所以报的是子模块而不是包）。
 
-- [ ] **Step 3: 写 models.py**
+- [x] **Step 3: 写 models.py**
 
 ```python
 """各 endpoint 的 pydantic 请求模型。
@@ -791,7 +791,7 @@ class FilterRequest(BaseModel):
         return _decode_list(value)
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 ```bash
 cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_models.py -q
@@ -799,7 +799,7 @@ cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_
 
 Expected：`24 passed`。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/bindcraft2-server/models.py services/bindcraft2-server/tests/test_models.py
@@ -814,7 +814,7 @@ git commit -m "feat(bindcraft2-server): add request models with offline-testable
 - Create: `services/bindcraft2-server/campaigns.py`
 - Test: `services/bindcraft2-server/tests/test_campaigns.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 """campaign 目录 URI 解析：零拷贝 + 目录穿越防护。"""
@@ -946,7 +946,7 @@ def test_empty_uri_is_422(settings):
     assert exc.value.status_code == 422
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 ```bash
 cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_campaigns.py -q
@@ -954,7 +954,7 @@ cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_
 
 Expected：`ModuleNotFoundError: No module named 'server.campaigns'`。
 
-- [ ] **Step 3: 写 campaigns.py**
+- [x] **Step 3: 写 campaigns.py**
 
 ```python
 """把 campaign *目录* URI 解析成本地路径——零拷贝。
@@ -1058,7 +1058,7 @@ def resolve_campaign_dir(campaign_uri: str, settings: Bindcraft2Settings) -> Pat
     return path
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 ```bash
 cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_campaigns.py -q
@@ -1066,7 +1066,7 @@ cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_
 
 Expected：`14 passed`。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/bindcraft2-server/campaigns.py services/bindcraft2-server/tests/test_campaigns.py
@@ -1081,7 +1081,7 @@ git commit -m "feat(bindcraft2-server): add zero-copy campaign directory resolve
 - Create: `services/bindcraft2-server/tools.py`
 - Test: `services/bindcraft2-server/tests/test_tools.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 """campaign JSON 拼装、三组 argv、权重探针。"""
@@ -1353,7 +1353,7 @@ def test_missing_proteinmpnn_weights_flags_truncated(tmp_path):
     assert missing_proteinmpnn_weights(root) == ["weights_negative/v_48_020.npz"]
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 ```bash
 cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_tools.py -q
@@ -1361,7 +1361,7 @@ cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_
 
 Expected：`ModuleNotFoundError: No module named 'server.tools'`。
 
-- [ ] **Step 3: 写 tools.py**
+- [x] **Step 3: 写 tools.py**
 
 ```python
 """campaign 文件拼装与 argv 构造。
@@ -1581,7 +1581,7 @@ def filter_argv(
     return cmd
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 ```bash
 cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_tools.py -q
@@ -1589,7 +1589,7 @@ cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_
 
 Expected：`22 passed`。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/bindcraft2-server/tools.py services/bindcraft2-server/tests/test_tools.py
@@ -1604,7 +1604,7 @@ git commit -m "feat(bindcraft2-server): add campaign builder, argv builders and 
 - Create: `services/bindcraft2-server/adapter.py`
 - Test: `services/bindcraft2-server/tests/test_adapter.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 """Bindcraft2Adapter：输出判定、子进程环境、manifest extras。"""
@@ -1759,7 +1759,7 @@ def test_endpoint_examples_cover_all_six(adapter):
         assert any(e.curl for e in examples[path]), f"no curl for {path}"
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 ```bash
 cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_adapter.py -q
@@ -1767,7 +1767,7 @@ cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_
 
 Expected：`ModuleNotFoundError: No module named 'server.adapter'`。
 
-- [ ] **Step 3: 写 adapter.py**
+- [x] **Step 3: 写 adapter.py**
 
 ```python
 """bindcraft2-server 的服务级策略。
@@ -2058,7 +2058,7 @@ class Bindcraft2Adapter(JobAdapter):
         }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 ```bash
 cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_adapter.py -q
@@ -2066,7 +2066,7 @@ cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_
 
 Expected：`16 passed`。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/bindcraft2-server/adapter.py services/bindcraft2-server/tests/test_adapter.py
@@ -2083,7 +2083,7 @@ git commit -m "feat(bindcraft2-server): add job adapter with output detection an
 - Create: `services/bindcraft2-server/app.py`
 - Test: `services/bindcraft2-server/tests/test_app.py`
 
-- [ ] **Step 1: 写离线 stub**
+- [x] **Step 1: 写离线 stub**
 
 `services/bindcraft2-server/tests/data/fake_bindcraft.sh`：
 
@@ -2132,7 +2132,7 @@ echo "fake_bindcraft: unknown subcommand '${sub}'" >&2
 exit 2
 ```
 
-- [ ] **Step 2: 往 tests/conftest.py 追加离线 fixture**
+- [x] **Step 2: 往 tests/conftest.py 追加离线 fixture**
 
 Task 1 已建好 conftest（`server` 别名 + fc marker，且已 `import pytest`）。本步只在文件
 **末尾追加**下面的内容，并补三处 import：顶部 import 区加 `import shutil` 与
@@ -2200,7 +2200,7 @@ def offline_settings(tmp_path: Path) -> OfflineSettings:
 
 `env_prefix="BINDCRAFT2_TEST_"` 与生产前缀隔离，避免 CI 上真实的 `BINDCRAFT2_*` 变量污染测试。
 
-- [ ] **Step 3: 写 test_app.py（失败）**
+- [x] **Step 3: 写 test_app.py（失败）**
 
 ```python
 """离线 HTTP 端到端：真实 server.app + 真实 runner，子进程换成 stub。"""
@@ -2566,7 +2566,7 @@ def test_healthz_detail_warns_when_probe_cannot_run(offline_settings, monkeypatc
     assert "GPU" in detail["warning"]
 ```
 
-- [ ] **Step 4: 跑测试确认失败**
+- [x] **Step 4: 跑测试确认失败**
 
 ```bash
 cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_app.py -q 2>&1 | tail -20
@@ -2574,7 +2574,7 @@ cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_
 
 Expected：collection error / `ModuleNotFoundError: No module named 'server.app'`。
 
-- [ ] **Step 5: 写 app.py**
+- [x] **Step 5: 写 app.py**
 
 ```python
 """bindcraft2-server 的 FastAPI app。
@@ -2935,7 +2935,7 @@ if settings.task_endpoints_enabled:
 attach_mcp(app)
 ```
 
-- [ ] **Step 6: 跑测试确认通过**
+- [x] **Step 6: 跑测试确认通过**
 
 ```bash
 cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_app.py -q 2>&1 | tail -25
@@ -2944,7 +2944,7 @@ cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_
 Expected：`24 passed`（含钉住 GPU 探针进程隔离、孪生端点 422 映射的那两条）。若 `test_health_and_detail` 报 `gpu_backend != "gpu"`，检查
 stub 是否被 chmod +x。
 
-- [ ] **Step 7: 跑全量离线测试**
+- [x] **Step 7: 跑全量离线测试**
 
 ```bash
 cd services/bindcraft2-server && uv run --group dev python -m pytest tests/ -q -m "not fc"
@@ -2952,19 +2952,24 @@ cd services/bindcraft2-server && uv run --group dev python -m pytest tests/ -q -
 
 Expected：`test_models` + `test_campaigns` + `test_tools` + `test_adapter` + `test_app` 全绿。
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add services/bindcraft2-server/app.py services/bindcraft2-server/tests/conftest.py \
         services/bindcraft2-server/tests/data/fake_bindcraft.sh \
         services/bindcraft2-server/tests/test_app.py
-git commit -m "feat(bin### Task 7: __main__.py（CLI 批处理）+ test_cli.py
+git commit -m "feat(bindcraft2-server): add CLI batch-mode entry with three subcommands"
+```
+
+---
+
+### Task 7: __main__.py（CLI 批处理）+ test_cli.py
 
 **Files:**
 - Create: `services/bindcraft2-server/__main__.py`
 - Test: `services/bindcraft2-server/tests/test_cli.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 """CLI 批处理模式：endpoint 注册、argv 回调、create_cli 端到端。"""
@@ -3086,7 +3091,7 @@ def test_cli_requires_target_or_target_name(tmp_path, offline):
     assert exc.value.code != 0
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 ```bash
 cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_cli.py -q 2>&1 | tail -10
@@ -3094,7 +3099,7 @@ cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_
 
 Expected：`ModuleNotFoundError: No module named 'server.__main__'`。
 
-- [ ] **Step 3: 写 __main__.py**
+- [x] **Step 3: 写 __main__.py**
 
 ```python
 """bindcraft2-server 的 CLI 批处理入口。
@@ -3186,7 +3191,7 @@ if __name__ == "__main__":
     create_cli(adapter, settings, endpoints, version="0.0.1")
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 ```bash
 cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_cli.py -q 2>&1 | tail -20
@@ -3203,7 +3208,7 @@ cd services/bindcraft2-server && uv run --group dev \
 
 Expected：`import side-effect free: ['design', 'filter', 'rank']`，退出码 0（没有 SystemExit）。
 
-- [ ] **Step 5: lint**
+- [x] **Step 5: lint**
 
 ```bash
 uvx ruff check services/bindcraft2-server/
@@ -3211,7 +3216,7 @@ uvx ruff check services/bindcraft2-server/
 
 Expected：`All checks passed!`。有问题就地修（常见：未使用的 import）。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add services/bindcraft2-server/__main__.py services/bindcraft2-server/tests/test_cli.py
@@ -3230,7 +3235,7 @@ git commit -m "feat(bindcraft2-server): add CLI batch-mode entry with three subc
 **Files:**
 - Create: `services/bindcraft2-server/scripts/vendor.sh`
 
-- [ ] **Step 1: 写 vendor.sh**
+- [x] **Step 1: 写 vendor.sh**
 
 ```bash
 #!/usr/bin/env bash
@@ -3304,7 +3309,7 @@ echo "  -> $DST"
 du -sh "$DST"
 ```
 
-- [ ] **Step 2: 跑 vendor 并验证产物**
+- [x] **Step 2: 跑 vendor 并验证产物**
 
 ```bash
 chmod +x services/bindcraft2-server/scripts/vendor.sh
@@ -3315,7 +3320,7 @@ ls services/bindcraft2-server/upstream/bindcraft/weights/proteinmpnn/
 
 Expected：末尾打印 `Vendored ... @ 5342aefa...` + 体积；`upstream/` 下有 `bindcraft/ settings/ scaffolds/ pyproject.toml` 等；`proteinmpnn/` 下有三个 `weights_*` 目录。
 
-- [ ] **Step 3: 确认 pin 版本正确**
+- [x] **Step 3: 确认 pin 版本正确**
 
 ```bash
 grep -n '^version' services/bindcraft2-server/upstream/pyproject.toml
@@ -3324,7 +3329,7 @@ grep -n 'CAMPAIGN_MODELS' services/bindcraft2-server/upstream/bindcraft/model_we
 
 Expected：`version = "1.0.1"`；`CAMPAIGN_MODELS = tuple(f'model_{index}_multimer_v3' for index in range(1, 6)) + ('model_1_ptm', 'model_2_ptm')`——与 `tools.CAMPAIGN_MODELS` 一致。
 
-- [ ] **Step 4: 确认 upstream/ 未被 git 跟踪**
+- [x] **Step 4: 确认 upstream/ 未被 git 跟踪**
 
 ```bash
 git status --short services/bindcraft2-server/ | head
@@ -3332,7 +3337,7 @@ git status --short services/bindcraft2-server/ | head
 
 Expected：只看到 `scripts/vendor.sh` 是 untracked；**没有** `upstream/...` 条目。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/bindcraft2-server/scripts/vendor.sh
@@ -3346,7 +3351,7 @@ git commit -m "build(bindcraft2-server): add upstream vendoring script pinned to
 **Files:**
 - Create: `services/bindcraft2-server/scripts/fetch_weights.sh`
 
-- [ ] **Step 1: 写 fetch_weights.sh**
+- [x] **Step 1: 写 fetch_weights.sh**
 
 ```bash
 #!/usr/bin/env bash
@@ -3437,7 +3442,7 @@ echo "Done. 7 checkpoints at $DST/params/"
 du -sh "$DST"
 ```
 
-- [ ] **Step 2: 语法检查（不实际下载 5.3 GB）**
+- [x] **Step 2: 语法检查（不实际下载 5.3 GB）**
 
 ```bash
 chmod +x services/bindcraft2-server/scripts/fetch_weights.sh
@@ -3468,7 +3473,7 @@ WEIGHTS_DST=/data/models/bindcraft2/alphafold ./services/bindcraft2-server/scrip
 
 Expected：`Done. 7 checkpoints at /data/models/bindcraft2/alphafold/params/`。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/bindcraft2-server/scripts/fetch_weights.sh
@@ -3488,7 +3493,7 @@ GNU tar 只要有**任意一个**模式匹配不到就以 2 退出（哪怕其�
 **Files:**
 - Create: `services/bindcraft2-server/Dockerfile`
 
-- [ ] **Step 1: 写 Dockerfile**
+- [x] **Step 1: 写 Dockerfile**
 
 ```dockerfile
 # 从仓库根构建：
@@ -3641,7 +3646,7 @@ Expected：`/api/design`、`/api/rank`、`/api/filter`、`/api/tasks/design`、
 `/api/tasks/rank`、`/api/tasks/filter` 六条齐全；manifest 的 endpoints 中每条都有非空
 `examples`。
 
-- [ ] **Step 5: 确认没有 git clone / weights COPY**
+- [x] **Step 5: 确认没有 git clone / weights COPY**
 
 ```bash
 grep -nE 'git clone|COPY [^ ]*weights' services/bindcraft2-server/Dockerfile || echo "clean"
@@ -3649,7 +3654,7 @@ grep -nE 'git clone|COPY [^ ]*weights' services/bindcraft2-server/Dockerfile || 
 
 Expected：`clean`。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add services/bindcraft2-server/Dockerfile
@@ -3666,7 +3671,7 @@ git commit -m "build(bindcraft2-server): add dual-mode docker image with jax cud
 - Modify: `services.yaml`（新增条目）
 - Modify: `THIRD_PARTY_NOTICES`（新增 BC2 行）
 
-- [ ] **Step 1: 写 deploy/fc.yaml**
+- [x] **Step 1: 写 deploy/fc.yaml**
 
 以 `services/alphafold-server/deploy/fc.yaml` 为模板，改这些字段：
 
@@ -3731,7 +3736,7 @@ VPC 三件套与 `gpuConfig` 的合法取值**必须**照 FC 控制台当前值�
 部署描述，不参与镜像构建，但它要能 `s deploy` 成功。若只是归档用，把不认识的行删掉并留
 注释（说明实际值在控制台上）。
 
-- [ ] **Step 2: 验证 YAML 可解析**
+- [x] **Step 2: 验证 YAML 可解析**
 
 ```bash
 python3 -c "import yaml,sys; yaml.safe_load(open('services/bindcraft2-server/deploy/fc.yaml')); print('fc.yaml OK')"
@@ -3739,7 +3744,7 @@ python3 -c "import yaml,sys; yaml.safe_load(open('services/bindcraft2-server/dep
 
 Expected：`fc.yaml OK`。
 
-- [ ] **Step 3: 写 README.md**
+- [x] **Step 3: 写 README.md**
 
 ```markdown
 # bindcraft2-server
@@ -3938,7 +3943,7 @@ apptainer exec --nv --bind /scratch/models:/data/models bindcraft2-server.sif \
 
 `url` / `function` / `gpu` 在 FC 部署（Task 12）拿到真实值后回填。
 
-- [ ] **Step 5: THIRD_PARTY_NOTICES 新增 BC2 行**
+- [x] **Step 5: THIRD_PARTY_NOTICES 新增 BC2 行**
 
 在 License summary 表里 `alphafold-server` 之后、`bindflow-server` 之前插入：
 
@@ -3956,7 +3961,7 @@ uvx ruff check services/bindcraft2-server/
 
 Expected：打印条目；NOTICES 有且仅有一行；ruff 通过。
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add services/bindcraft2-server/deploy/fc.yaml services/bindcraft2-server/README.md \
@@ -3972,7 +3977,7 @@ git commit -m "docs(bindcraft2-server): add deploy descriptor, README, registry 
 - Create: `services/bindcraft2-server/tests/test_fc.py`
 - Create: `services/bindcraft2-server/tests/test_fc_task.py`
 
-- [ ] **Step 1: 写 test_fc.py**
+- [x] **Step 1: 写 test_fc.py**
 
 ```python
 """针对已部署 FC 实例的集成测试（默认 skip；`-m fc` 或 RUN_FC_TESTS=1 才跑）。
@@ -4122,7 +4127,7 @@ def test_rank_rejects_unknown_campaign(client):
     assert resp.status_code == 404
 ```
 
-- [ ] **Step 2: 写 test_fc_task.py**
+- [x] **Step 2: 写 test_fc_task.py**
 
 ```python
 """FC 异步任务模式（`/api/tasks/*`）的集成测试。"""
@@ -4300,7 +4305,7 @@ Expected：两次 diff 都无差异 → `P3: 零拷贝安全`。**判定规则**
 **Files:**
 - Modify: `docs/specs/2026-09-22-bindcraft2-server-design.md`
 
-- [ ] **Step 1: 回写偏差 A1 / A2 / A3**
+- [x] **Step 1: 回写偏差 A1 / A2 / A3**
 
 在 §请求 Schema 末尾把"JSON 字符串"那段改成：
 
@@ -4328,7 +4333,7 @@ fixture：FC smoke 用 **shipped target `hPDL1` + `binder_lengths=[60,60]` +
 `tests/data/fake_bindcraft.sh` 供离线 HTTP / CLI 成功路径使用。
 ```
 
-- [ ] **Step 2: 回写 P1 / P2 / P3 实测结果**
+- [x] **Step 2: 回写 P1 / P2 / P3 实测结果**
 
 把 §部署前置核验的表改成"核验结果 + 处置"，逐条填实测值：
 
@@ -4340,13 +4345,13 @@ fixture：FC smoke 用 **shipped target `hPDL1` + `binder_lengths=[60,60]` +
 | P3 | `rank` / `filter` 是否只写 `--output` | <未改动 / 被改动> | <保持零拷贝 / 改为 copy 模式> |
 ```
 
-- [ ] **Step 3: 把状态改成已实现**
+- [x] **Step 3: 把状态改成已实现**
 
 ```markdown
 - **状态**：已实现（v0.0.1，镜像 tag 见 `services/bindcraft2-server/VERSION`）
 ```
 
-- [ ] **Step 4: 自检 + 提交**
+- [x] **Step 4: 自检 + 提交**
 
 ```bash
 grep -n "TODO\|TBD\|待定\|占位" docs/specs/2026-09-22-bindcraft2-server-design.md || echo "no placeholders"
@@ -4405,3 +4410,39 @@ Task 12 Step 3 部署后回填，Step 4/8 是回填动作。
 Task 5/6/7 引用一致；`resolve_campaign_dir(uri, settings)` 签名在 Task 3 定义、
 Task 6/7 引用一致；adapter 的 `name = "bindcraft2"` 与镜像名 `bindcraft2-server` 的区分在
 全程一致（服务名 `bindcraft2`、目录/镜像 `bindcraft2-server`、env 前缀 `BINDCRAFT2_`）。
+
+---
+
+## Task 13 收尾：实现后复查与回写
+
+**复查结论**：实现完成后对整份实现通读复查，发现并修复了 5 处代码问题，集中在提交
+`bd7466f`（`fix(bindcraft2-server): reject ignored target fields, emit modality lists, bound disk eviction`）：
+
+1. `target_name` 与 `target_chains` / `hotspots` / `coldspots` 同给时被静默丢弃 → 改为显式 422
+   （`models.py`、`test_models.py`、`test_app.py`）。
+2. `modality` 之前只能传单个名字，逗号组合从未生效 → 改为 `str | list[str]`，逗号串归一成
+   数组落盘（`models.py`、`tools.py`）。
+3. `rank` 产物只按第一个指标命名，不同 tie-break 撞名 → 改为全指标拼接 + 清洗
+   （`tools.py::rank_output_name`）。
+4. 框架默认 `disk_limit_mb=8000` 会在下一请求里删掉 `rank`/`filter` 要 chain 的源 campaign →
+   显式放宽到 1 TiB（`settings.py`、`deploy/fc.yaml`、`test_settings.py`）。
+5. `/healthz/detail` 的 `active_jobs` 容易被误读成"整实例在飞总量" → 增加 `active_jobs_scope` /
+   `concurrency_note` 明示只覆盖 submit/poll（`app.py`）。
+
+**仍然开放**（不阻塞 v0.0.1 文档定稿，但必须在首次部署 / 首次真实使用前解决）：
+
+- **GPU SKU / compute capability（P2）**：`deploy/fc.yaml` 的 `fc.gpu.ada.1` + 24576 MB 从未
+  对照 FC 控制台核验；owner = 部署执行者。
+- **P3 实测**：`rank` / `filter` 只在"源表已有记录行 + 请求指标可派生"时才是源目录只读；
+  源表无记录行但留有结构文件（或 `--rescore`）时上游会写 `scored.csv` 进源目录。Task 12
+  Step 6 的 curl 配方**未运行**，且用已记录指标做 smoke 会得到假阴性。owner = 首次在 NAS 上
+  跑 rank/filter 的人。
+- **`binder_lengths` 上界决策**：API 目前无上界，`multidomain [120,300]`、`large_binder
+  [250,600]` 这类超预算请求会在数小时后 OOM，而不是在请求时被拒。是否加上界、按哪张卡定，
+  尚未决定。
+
+**本环境未执行的部分**：Task 12 的 FC 部署与真实 URL 回填没有执行——本环境无 FC 凭据、
+无 `/data`、且禁止 `docker`。因此以下步骤保持未勾选：Task 9 Step 3/4（NAS 核验 / 下载）、
+Task 10 Step 2–4（镜像构建与容器 smoke）、Task 11 Step 4/6（`services.yaml` 取消注释与其
+校验——当前是**刻意的注释状态**，见 `5d6bc2c`）、Task 12 Step 3–6（FC 部署 + 三个 live smoke）。
+Task 13 本身（设计文档回写 + README 对齐 + 注释修正）已在本次完成。

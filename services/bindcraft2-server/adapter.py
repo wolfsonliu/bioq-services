@@ -6,8 +6,12 @@
     adapter 服务三组 endpoint。
   * `subprocess_env` 注入 BC2 必需的环境变量（AF2 参数目录、XLA 编译缓存、
     worker 上限），否则上游会尝试下载 5.3 GB 参数或按节点内存过度 pack worker。
-  * `subprocess_cwd` 返回上游源码树：`settings/` 与 `scaffolds/` 是相对仓库根
-    解析的，必须在根目录运行。
+  * `subprocess_cwd` 返回上游源码树（`settings.root`）——**但理由不是**"上游按
+    相对路径解析 `settings/` / `scaffolds/`"：上游用 `Path(__file__).parent.parent`
+    绝对定位 preset 树（`upstream/bindcraft/settings.py:41,353`），与 cwd 无关。
+    这里返回它只是因为 `Popen(cwd=...)` 要求一个**已存在**的目录（不存在直接
+    ENOENT）；指到一个"存在但无关"的目录在功能上无害，保留 `/opt/bindcraft` 只是
+    与镜像布局一致。
 """
 
 from __future__ import annotations
@@ -41,6 +45,8 @@ class Bindcraft2Adapter(JobAdapter):
     # ---- 子进程环境 / 工作目录 ----
 
     def subprocess_cwd(self) -> Path | None:
+        # 只因为 Popen(cwd=...) 需要一个存在的目录；上游的资源定位是绝对路径
+        # （见模块 docstring），cwd 不参与解析。
         return self.settings.root
 
     def subprocess_env(self) -> dict[str, str]:
@@ -125,19 +131,32 @@ class Bindcraft2Adapter(JobAdapter):
                 "summary": DESIGN_SUMMARY_CSV,
                 "trajectories": TRAJECTORIES_CSV,
                 "metadata": CAMPAIGN_METADATA_JSON,
-                "rank": "ranked_by_<metric>[_<metric>...].csv",
+                "rank": "ranked_by_<m1>[_<m2>...].csv",
                 "filter": FILTER_OUTPUT,
             },
+            # 按输入面分层：target（单文件）与 campaign_uri（目录）接受的 scheme 不同。
+            # 合成一个平铺 dict 会让人以为 campaign_uri 也吃 oss:// / http(s)://
+            # （它不吃，会 422）。
             "input_uri_schemes": {
-                "upload": "multipart/form-data UploadFile（target）",
-                "job://<job_id>[/<subdir>]": "上一 job 的 output/ 目录（零拷贝，共享 NAS）",
-                "file:///abs/path": "NAS 绝对路径（网关把 oss:// 改写成 /mnt/oss/... 后走这条）",
-                "oss://<bucket>/<key>": "仅 target 单文件输入支持",
-                "http(s)://...": "仅 target 单文件输入支持",
+                "target": {
+                    "upload": "multipart/form-data UploadFile",
+                    "job://<job_id>/<file>": "上一 job 的 output/ 里的单个文件",
+                    "file:///abs/path": "NAS 绝对路径（网关把 oss:// 改写成 /mnt/oss/... 后走这条）",
+                    "oss://<bucket>/<key>": "Alibaba Cloud OSS 对象",
+                    "http(s)://...": "通用 URL",
+                },
+                "campaign_uri": {
+                    "job://<job_id>[/<subdir>]": "上一 job 的 output/ 目录（通常零拷贝，共享 NAS）",
+                    "file:///abs/path": "NAS 绝对目录",
+                    "/abs/path": "裸绝对目录",
+                    "不支持": "oss:// 与 http(s):// 一律 422；网关把 oss:// 改写成 /mnt/oss/... 后走裸路径",
+                },
             },
             "chaining_tip": (
                 "design 完成后用 campaign_uri=job://<design_job_id> 调 /api/rank 或 "
-                "/api/filter，无需重新上传或重跑设计。rank 只读源目录、产物写进新 job。"
+                "/api/filter，无需重新上传或重跑设计。源表已有记录行且指标可派生时 rank "
+                "只读源目录；源表无记录行但有结构文件（或 --rescore）时上游会把 scored.csv "
+                "写进源目录。"
             ),
             "campaign_knobs": {
                 "modality": (
@@ -160,12 +179,19 @@ class Bindcraft2Adapter(JobAdapter):
             "weights": {
                 "alphafold_params_dir": str(self.settings.alphafold_params_dir),
                 "expected_alphafold_models": [f"params_{m}.npz" for m in CAMPAIGN_MODELS],
-                "expected_files": "params/params_<model>.npz 或 params_<model>.npz",
+                # 上游 alphafold_parameter_file 的四种候选布局（顺序敏感）。
+                "expected_files": [
+                    "params/params_<model>.npz",
+                    "params_<model>.npz",
+                    "params/<model>.npz",
+                    "<model>.npz",
+                ],
                 "proteinmpnn": "随包（<root>/bindcraft/weights/proteinmpnn/weights_{neutral,negative,positive}/v_48_020.npz）",
             },
             "gpu": (
                 "无 CPU 模式。cuda13 extra 需 compute capability >= 7.5；"
-                "单 worker 显存预算 2.0*(3.4GB + 38kB*N^2)，N=256 时约 11.8 GB。"
+                "单 worker 显存预算 2.0*(3.4GB + 38kB*N^2)，其中 N 是 padding(bucket 32) 后的"
+                "复合物残基数（不是 binder_lengths），另留 4 GB headroom。"
             ),
             "license_notice": (
                 "BindCraft2 采用 Source-Available License (Hosting-Restricted)。"

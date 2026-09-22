@@ -33,7 +33,10 @@ class Bindcraft2Settings(ServiceSettings):
     # BINDCRAFT2_DISK_LIMIT_MB 覆盖。
     disk_limit_mb: int = Field(default=1_048_576, ge=100)
 
-    # 上游源码树。editable install（pip install -e）记录了它的路径，运行时必须存在。
+    # 上游源码树，同时是子进程 cwd。**必须存在**只因为 Popen(cwd=...) 要求它是目录；
+    # 上游的 settings/ 与 preset 树用 Path(__file__).parent.parent 绝对定位
+    # （upstream/bindcraft/settings.py:41,353），不参与 cwd 解析——所以指到另一个
+    # 存在目录在功能上无害，保留 /opt/bindcraft 只是与镜像布局一致。
     root: Path = Field(default=Path("/opt/bindcraft"))
 
     # 解释器。离线测试指向 tests/data/fake_bindcraft.sh。
