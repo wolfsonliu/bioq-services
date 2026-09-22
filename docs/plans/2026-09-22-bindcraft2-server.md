@@ -19,12 +19,20 @@
 | 路径 | 机制 | 合法写法 | 非法写法 |
 |---|---|---|---|
 | HTTP 表单 | `forms.py` 在模型校验**之前**对复杂字段 `json.loads` | `-F 'binder_lengths=[80,80]'`、`-F 'on=["i_pTM"]'` | `-F binder_lengths=80,80` → **422 json_invalid** |
-| CLI | `cli._add_model_args` 对除 bool/int/float 外一律 `type=str`，不做 JSON 解析 | `--binder-lengths 80,80`、`--on i_pTM,i_pDAE` | `--binder-lengths '[80,80]'` → 422 |
+| CLI | `cli._add_model_args` 对除 bool/int/float 外一律 `type=str`，从不做 JSON 解析，原样交给 `model_validate` | `--binder-lengths 80,80`、`--on i_pTM,i_pDAE`；**JSON 写法也照收**（`--binder-lengths '[80,80]'` 一样成立，因为模型解码器两种都认） | 无——CLI 上两种写法都合法。区别只在 HTTP 侧**只**认 JSON |
 
 模型里的 `field_validator(mode="before")` 同时解码两种写法，**但 HTTP 上逗号分支永远不会被用到**
 （非法 JSON 在进模型前就已 422）。因此：**凡是 HTTP 示例/测试（`endpoint_examples()`、README、
 `test_app.py`、`test_fc*.py`）里的复杂字段都必须写成 JSON 字符串**；逗号写法只出现在 CLI 示例与
 CLI 测试里。另注：`--on` 不支持重复传参（后者覆盖前者），CLI 上多指标也用一个逗号串。
+
+### 顺带记下的框架级限制（不修，属既有行为）
+
+`framework/src/bioq_service/cli.py::_add_model_args` 从不给"模型里必填、但 argparse
+层没标 required"的字段设 `required=True`。因此 `python -m server rank`（漏 `--campaign-uri`）
+不会打 usage，而是抛 pydantic `ValidationError` 的整段 traceback、退出码 1。所有服务同样
+受影响，与本计划无关；本服务只能对"跨字段条件必填"（`--target` / `--target-name` 二选一）
+在 build 回调里自查（见 Task 7）。
 
 ---
 
@@ -2950,12 +2958,7 @@ Expected：`test_models` + `test_campaigns` + `test_tools` + `test_adapter` + `t
 git add services/bindcraft2-server/app.py services/bindcraft2-server/tests/conftest.py \
         services/bindcraft2-server/tests/data/fake_bindcraft.sh \
         services/bindcraft2-server/tests/test_app.py
-git commit -m "feat(bindcraft2-server): add FastAPI app with design/rank/filter and GPU health probe"
-```
-
----
-
-### Task 7: __main__.py（CLI 批处理）+ test_cli.py
+git commit -m "feat(bin### Task 7: __main__.py（CLI 批处理）+ test_cli.py
 
 **Files:**
 - Create: `services/bindcraft2-server/__main__.py`
@@ -3110,6 +3113,7 @@ Expected：`ModuleNotFoundError: No module named 'server.__main__'`。
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from bioq_service.cli import CLIEndpoint, create_cli
@@ -3126,6 +3130,13 @@ adapter = Bindcraft2Adapter(settings=settings)
 
 def _design_build(req: DesignRequest, inputs: dict[str, Path], job_dir: Path, settings) -> list[str]:
     target_path = inputs.get("target")
+    # "二选一"这种条件必填只能在 build 回调里查：create_cli 只强制 argparse 层的
+    # required，表达不了跨字段条件（`inputs["target"]` 声明为可选，见 CLIEndpoint）。
+    # 不查的话会一路走到 prepare_design 抛 ValueError，用户看到的是一整坨
+    # traceback 而不是用法提示。仓库既有先例：services/diffdock-server/cli_impl.py。
+    if target_path is None and not req.target_name:
+        print("error: one of --target or --target-name is required", file=sys.stderr)
+        raise SystemExit(2)
     campaign_file = prepare_design(
         req, job_dir=job_dir, target_path=target_path, settings=settings
     )
@@ -3205,6 +3216,11 @@ Expected：`All checks passed!`。有问题就地修（常见：未使用的 imp
 ```bash
 git add services/bindcraft2-server/__main__.py services/bindcraft2-server/tests/test_cli.py
 git commit -m "feat(bindcraft2-server): add CLI batch-mode entry with three subcommands"
+```
+
+---
+
+ -m "feat(bindcraft2-server): add CLI batch-mode entry with three subcommands"
 ```
 
 ---
