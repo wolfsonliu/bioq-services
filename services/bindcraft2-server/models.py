@@ -23,6 +23,11 @@ __all__ = [
     "validate_target_selection",
 ]
 
+# 长度解析失败的统一报错文案（两处 raise 共用，测试按它匹配）。
+_BINDER_LENGTHS_MESSAGE = (
+    "binder_lengths must be integers, e.g. '80,80' or '[60,100]'"
+)
+
 # 与上游 campaign JSON 顶层 key 一一对应的 9 个可选属性。
 PROPERTY_FIELDS: tuple[str, ...] = (
     "forced_targeting",
@@ -141,12 +146,17 @@ class DesignRequest(BaseModel):
         decoded = _decode_list(value)
         if decoded is None:
             return None
-        try:
-            return [int(item) for item in decoded]
-        except (TypeError, ValueError):
-            raise ValueError(
-                "binder_lengths must be integers, e.g. '80,80' or '[60,100]'"
-            ) from None
+        lengths: list[int] = []
+        for item in decoded:
+            # bool 是 int 的子类，必须先拦掉；float 也必须拦——`int(80.5)` 会静默
+            # 截断成 80，值变了却不报错，是最坏的一类错误。
+            if isinstance(item, bool) or not isinstance(item, (int, str)):
+                raise ValueError(_BINDER_LENGTHS_MESSAGE)
+            text = str(item).strip()
+            if not text.lstrip("+-").isdigit():
+                raise ValueError(_BINDER_LENGTHS_MESSAGE)
+            lengths.append(int(text))
+        return lengths
 
     @model_validator(mode="after")
     def _check_binder_lengths(self) -> "DesignRequest":

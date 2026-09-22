@@ -59,6 +59,34 @@ def test_binder_lengths_rejects_non_positive():
         DesignRequest(binder_lengths=[-5, 80])
 
 
+def test_binder_lengths_rejects_empty_list():
+    # 钉住 `is not None` 语义：改成真值判断会让 [] 被放行。
+    with pytest.raises(ValueError, match="1 or 2"):
+        DesignRequest(binder_lengths=[])
+
+
+def test_binder_lengths_rejects_float_and_bool():
+    # 钉住严格整数解析：`int(80.5)` 会静默截断成 80，必须报错而不是改值。
+    with pytest.raises(ValueError, match="must be integers"):
+        DesignRequest(binder_lengths=[80.5, 90.5])
+    with pytest.raises(ValueError, match="must be integers"):
+        DesignRequest(binder_lengths="[80.5,90.5]")
+    with pytest.raises(ValueError, match="must be integers"):
+        DesignRequest(binder_lengths=[True, True])
+
+
+def test_max_trajectories_must_be_positive():
+    with pytest.raises(ValueError):
+        DesignRequest(max_trajectories=0)
+
+
+def test_top_must_be_positive():
+    with pytest.raises(ValueError):
+        RankRequest(campaign_uri="job://abc", top=0)
+    with pytest.raises(ValueError):
+        FilterRequest(campaign_uri="job://abc", top=0)
+
+
 def test_binder_lengths_rejects_non_integer():
     with pytest.raises(ValueError, match="integers"):
         DesignRequest(binder_lengths="sixty,80")

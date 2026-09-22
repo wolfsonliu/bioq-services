@@ -12,6 +12,20 @@
 
 **上游 pin:** `PacesaLab/BindCraft2` @ `5342aefa18dedad653f7a5f6dbee1e566ca24d8f`（v1.0.1）
 
+## 读之前必知：两条输入路径的契约不同（踩过一次的坑）
+
+`binder_lengths` / `on` / `where` 是复杂类型，HTTP 与 CLI 两条路径接受的**写法不一样**：
+
+| 路径 | 机制 | 合法写法 | 非法写法 |
+|---|---|---|---|
+| HTTP 表单 | `forms.py` 在模型校验**之前**对复杂字段 `json.loads` | `-F 'binder_lengths=[80,80]'`、`-F 'on=["i_pTM"]'` | `-F binder_lengths=80,80` → **422 json_invalid** |
+| CLI | `cli._add_model_args` 对除 bool/int/float 外一律 `type=str`，不做 JSON 解析 | `--binder-lengths 80,80`、`--on i_pTM,i_pDAE` | `--binder-lengths '[80,80]'` → 422 |
+
+模型里的 `field_validator(mode="before")` 同时解码两种写法，**但 HTTP 上逗号分支永远不会被用到**
+（非法 JSON 在进模型前就已 422）。因此：**凡是 HTTP 示例/测试（`endpoint_examples()`、README、
+`test_app.py`、`test_fc*.py`）里的复杂字段都必须写成 JSON 字符串**；逗号写法只出现在 CLI 示例与
+CLI 测试里。另注：`--on` 不支持重复传参（后者覆盖前者），CLI 上多指标也用一个逗号串。
+
 ---
 
 ## 与设计文档的三处偏差（Task 13 回写）
@@ -20,7 +34,7 @@
 
 | # | 设计文档写的 | 实际做法 | 原因 |
 |---|---|---|---|
-| A1 | `binder_lengths` / `on` / `where` 以 **JSON 字符串**表单字段传入 | **JSON 或逗号分隔都接受**（`[80,80]` 与 `80,80` 等价） | `model_form_depends` 只对复杂字段做 `json.loads`，而 CLI 路径（`cli._add_model_args`）把 list 字段当 `type=str` 直接塞进 `model_validate`。加 `field_validator(mode="before")` 解码器同时喂饱 HTTP 与 CLI 两条路 |
+| A1 | `binder_lengths` / `on` / `where` 以 **JSON 字符串**表单字段传入 | **`mode="before"` 解码器同时接受两种写法，但两条路上的合法写法不同**：HTTP **只能**用 JSON（`[80,80]`、`["i_pTM"]`），CLI **只能**用逗号分隔（`--on i_pTM --on` 不支持，`80,80` 有效而 `[80,80]` 无效） | `model_form_depends` 在模型校验**之前**就对复杂字段做 `json.loads`，非法 JSON 直接 422，所以模型里的逗号分支永远不会被 HTTP 路径用到；CLI 路径（`cli._add_model_args`）对除 bool/int/float 外的字段一律用 `type=str`，绝不会 `json.loads`。**推论：所有 HTTP 示例（`endpoint_examples()` / README / 测试）里的复杂字段都必须写成 JSON 字符串**，写逗号形式会 422 |
 | A2 | `target_name` / `target` / `target_uri` 用 `model_validator(mode="after")` 交叉校验 | 用 `models.validate_target_selection()` 普通函数，在路由层调用 | 上传是路由级 `File(...)` / `Form(...)`，不是 model 字段，`model_validator` 看不到它们 |
 | A3 | FC 测试用 `tests/data/mini_target.pdb` 跑 design smoke | FC smoke 改用**shipped target `hPDL1`**；`mini_target.pdb` 只作离线上传路径的 fixture | 手写 PDB 有被上游 preflight 判为畸形结构的风险，会让 FC 测试以误导性方式失败。shipped target 保证可解析 |
 
@@ -427,6 +441,34 @@ def test_binder_lengths_rejects_non_positive():
         DesignRequest(binder_lengths=[-5, 80])
 
 
+def test_binder_lengths_rejects_empty_list():
+    # 钉住 `is not None` 语义：改成真值判断会让 [] 被放行。
+    with pytest.raises(ValueError, match="1 or 2"):
+        DesignRequest(binder_lengths=[])
+
+
+def test_binder_lengths_rejects_float_and_bool():
+    # 钉住严格整数解析：`int(80.5)` 会静默截断成 80，必须报错而不是改值。
+    with pytest.raises(ValueError, match="must be integers"):
+        DesignRequest(binder_lengths=[80.5, 90.5])
+    with pytest.raises(ValueError, match="must be integers"):
+        DesignRequest(binder_lengths="[80.5,90.5]")
+    with pytest.raises(ValueError, match="must be integers"):
+        DesignRequest(binder_lengths=[True, True])
+
+
+def test_max_trajectories_must_be_positive():
+    with pytest.raises(ValueError):
+        DesignRequest(max_trajectories=0)
+
+
+def test_top_must_be_positive():
+    with pytest.raises(ValueError):
+        RankRequest(campaign_uri="job://abc", top=0)
+    with pytest.raises(ValueError):
+        FilterRequest(campaign_uri="job://abc", top=0)
+
+
 def test_binder_lengths_rejects_non_integer():
     with pytest.raises(ValueError, match="integers"):
         DesignRequest(binder_lengths="sixty,80")
@@ -528,6 +570,11 @@ __all__ = [
     "RankTable",
     "validate_target_selection",
 ]
+
+# 长度解析失败的统一报错文案（两处 raise 共用，测试按它匹配）。
+_BINDER_LENGTHS_MESSAGE = (
+    "binder_lengths must be integers, e.g. '80,80' or '[60,100]'"
+)
 
 # 与上游 campaign JSON 顶层 key 一一对应的 9 个可选属性。
 PROPERTY_FIELDS: tuple[str, ...] = (
@@ -647,12 +694,17 @@ class DesignRequest(BaseModel):
         decoded = _decode_list(value)
         if decoded is None:
             return None
-        try:
-            return [int(item) for item in decoded]
-        except (TypeError, ValueError):
-            raise ValueError(
-                "binder_lengths must be integers, e.g. '80,80' or '[60,100]'"
-            ) from None
+        lengths: list[int] = []
+        for item in decoded:
+            # bool 是 int 的子类，必须先拦掉；float 也必须拦——`int(80.5)` 会静默
+            # 截断成 80，值变了却不报错，是最坏的一类错误。
+            if isinstance(item, bool) or not isinstance(item, (int, str)):
+                raise ValueError(_BINDER_LENGTHS_MESSAGE)
+            text = str(item).strip()
+            if not text.lstrip("+-").isdigit():
+                raise ValueError(_BINDER_LENGTHS_MESSAGE)
+            lengths.append(int(text))
+        return lengths
 
     @model_validator(mode="after")
     def _check_binder_lengths(self) -> "DesignRequest":
@@ -725,7 +777,7 @@ class FilterRequest(BaseModel):
 cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_models.py -q
 ```
 
-Expected：`19 passed`。
+Expected：`23 passed`。
 
 - [ ] **Step 5: Commit**
 
@@ -1794,7 +1846,8 @@ class Bindcraft2Adapter(JobAdapter):
                     ),
                     notes=(
                         "shipped target 见 `bindcraft design --list-targets`。"
-                        "binder_lengths 也接受逗号写法 80,80。"
+                        "HTTP 上复杂字段（binder_lengths / on / where）必须写成合法 JSON "
+                        "字符串；逗号写法只对 CLI 有效，表单里发 80,80 会 422 json_invalid。"
                     ),
                 ),
                 EndpointExample(
@@ -1851,7 +1904,7 @@ class Bindcraft2Adapter(JobAdapter):
                     curl=(
                         "curl -X POST $URL/api/rank "
                         "-F campaign_uri=job://<design_job_id> "
-                        "-F 'on=i_pTM,i_pDAE' "
+                        "-F 'on=[\"i_pTM\",\"i_pDAE\"]' "
                         "-F table=accepted"
                     ),
                     notes="产物写到新 job 的 output/ranked_by_i_pTM.csv，源目录只读。",
@@ -1864,7 +1917,7 @@ class Bindcraft2Adapter(JobAdapter):
                         "curl -X POST $URL/api/tasks/rank "
                         "-H 'X-Fc-Invocation-Type: Async' "
                         "-F campaign_uri=job://<design_job_id> "
-                        "-F on=i_pTM"
+                        "-F 'on=[\"i_pTM\"]'"
                     ),
                 ),
             ],
@@ -1874,7 +1927,7 @@ class Bindcraft2Adapter(JobAdapter):
                     curl=(
                         "curl -X POST $URL/api/filter "
                         "-F campaign_uri=job://<design_job_id> "
-                        "-F 'where=i_pAE=0.45,Interface_Residues>=7'"
+                        "-F 'where=[\"i_pAE=0.45\",\"Interface_Residues>=7\"]'"
                     ),
                     notes="where 为空等价于用 campaign 自身阈值重放。",
                 ),
@@ -2167,7 +2220,10 @@ def test_rank_reads_previous_job(offline_settings, monkeypatch):
     ).json()
     _wait(client, design["job_id"])
 
-    r = client.post("/api/rank", data={"campaign_uri": f"job://{design['job_id']}", "on": "i_pTM"})
+    r = client.post(
+        "/api/rank",
+        data={"campaign_uri": f"job://{design['job_id']}", "on": '["i_pTM"]'},
+    )
     assert r.status_code == 200, r.text
     body = _wait(client, r.json()["job_id"])
     assert body["status"] == "completed", body
@@ -3439,11 +3495,12 @@ curl -X POST $URL/api/design -F target=@target.pdb -F target_chains=A \
      -F 'hotspots=54,56,66-70' -F modality=VHH -F humanize=true
 
 # 对上一场结果换指标重排（零拷贝，共享 NAS）
-curl -X POST $URL/api/rank -F campaign_uri=job://<design_job_id> -F 'on=i_pTM,i_pDAE'
+curl -X POST $URL/api/rank -F campaign_uri=job://<design_job_id> \
+     -F 'on=["i_pTM","i_pDAE"]'
 
 # 换阈值重新筛选
 curl -X POST $URL/api/filter -F campaign_uri=job://<design_job_id> \
-     -F 'where=i_pAE=0.45,Interface_Residues>=7'
+     -F 'where=["i_pAE=0.45","Interface_Residues>=7"]'
 ```
 
 `binder_lengths` / `on` / `where` 在 HTTP 上以 **JSON 字符串**传入（`[80,80]`），
@@ -3734,7 +3791,7 @@ def test_rank_on_previous_campaign(client):
         pytest.skip("design smoke did not run")
     resp = client.post(
         "/api/rank",
-        data={"campaign_uri": f"job://{design_job_id}", "on": "i_pTM"},
+        data={"campaign_uri": f"job://{design_job_id}", "on": '["i_pTM"]'},
     )
     resp.raise_for_status()
     body = _poll(client, resp.json()["job_id"], timeout_s=900)
