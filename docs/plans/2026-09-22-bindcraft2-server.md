@@ -42,7 +42,7 @@ CLI 测试里。另注：`--on` 不支持重复传参（后者覆盖前者），
 
 | # | 设计文档写的 | 实际做法 | 原因 |
 |---|---|---|---|
-| A1 | `binder_lengths` / `on` / `where` 以 **JSON 字符串**表单字段传入 | **`mode="before"` 解码器同时接受两种写法，但两条路上的合法写法不同**：HTTP **只能**用 JSON（`[80,80]`、`["i_pTM"]`），CLI **只能**用逗号分隔（`--on i_pTM --on` 不支持，`80,80` 有效而 `[80,80]` 无效） | `model_form_depends` 在模型校验**之前**就对复杂字段做 `json.loads`，非法 JSON 直接 422，所以模型里的逗号分支永远不会被 HTTP 路径用到；CLI 路径（`cli._add_model_args`）对除 bool/int/float 外的字段一律用 `type=str`，绝不会 `json.loads`。**推论：所有 HTTP 示例（`endpoint_examples()` / README / 测试）里的复杂字段都必须写成 JSON 字符串**，写逗号形式会 422 |
+| A1 | `binder_lengths` / `on` / `where` 以 **JSON 字符串**表单字段传入 | **两条路上合法性不同**：HTTP **只能**用 JSON（`[80,80]`、`["i_pTM"]`，逗号写法在进模型前就 422）；CLI **两种都行**（`80,80` 与 `'[80,80]'` 都会被 `mode="before"` 解码器接受），但**文档与示例统一用逗号**，且 `--on` 不支持重复传参（后者覆盖前者） | `model_form_depends` 在模型校验**之前**就对复杂字段做 `json.loads`，非法 JSON 直接 422，所以模型里的逗号分支永远不会被 HTTP 路径用到；CLI 路径（`cli._add_model_args`）对除 bool/int/float 外的字段一律用 `type=str`，绝不 `json.loads`，原样交给 `model_validate`——所以两种写法都落到模型的解码器上（实测 `--binder-lengths '[80,80]'` 也能跑通）。**推论：所有 HTTP 示例（`endpoint_examples()` / README / 测试）里的复杂字段都必须写成 JSON 字符串**，写逗号形式会 422 |
 | A2 | `target_name` / `target` / `target_uri` 用 `model_validator(mode="after")` 交叉校验 | 用 `models.validate_target_selection()` 普通函数，在路由层调用 | 上传是路由级 `File(...)` / `Form(...)`，不是 model 字段，`model_validator` 看不到它们 |
 | A3 | FC 测试用 `tests/data/mini_target.pdb` 跑 design smoke | FC smoke 改用**shipped target `hPDL1`**；`mini_target.pdb` 只作离线上传路径的 fixture | 手写 PDB 有被上游 preflight 判为畸形结构的风险，会让 FC 测试以误导性方式失败。shipped target 保证可解析 |
 
