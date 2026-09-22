@@ -215,12 +215,23 @@ def test_missing_alphafold_params_reports_all_seven(tmp_path):
     assert "params_model_1_multimer_v3.npz" in missing
 
 
-def test_missing_alphafold_params_accepts_both_layouts(tmp_path):
-    af = tmp_path / "af" / "params"
-    af.mkdir(parents=True)
+@pytest.mark.parametrize(
+    "layout",
+    [
+        "params/params_{model}.npz",
+        "params_{model}.npz",
+        "params/{model}.npz",
+        "{model}.npz",
+    ],
+)
+def test_missing_alphafold_params_accepts_every_layout(tmp_path, layout):
+    """四种候选布局都要认——Task 9/12 才会确定 NAS 上真实是哪一种。"""
+    af = tmp_path / "af"
     for name in CAMPAIGN_MODELS:
-        (af / f"params_{name}.npz").write_bytes(b"x" * (101 << 20))
-    assert missing_alphafold_params(tmp_path / "af") == []
+        path = af / layout.format(model=name)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"x" * (101 << 20))
+    assert missing_alphafold_params(af) == []
 
 
 def test_missing_alphafold_params_flags_truncated(tmp_path):
@@ -242,3 +253,15 @@ def test_missing_proteinmpnn_weights(tmp_path):
 
     (root / "bindcraft" / "weights" / "proteinmpnn" / "weights_positive" / "v_48_020.npz").unlink()
     assert missing_proteinmpnn_weights(root) == ["weights_positive/v_48_020.npz"]
+
+
+def test_missing_proteinmpnn_weights_flags_truncated(tmp_path):
+    """半截下载的 checkpoint 必须算缺失，否则要跑到一半才炸。"""
+    root = tmp_path / "root"
+    for variant in ("neutral", "negative", "positive"):
+        d = root / "bindcraft" / "weights" / "proteinmpnn" / f"weights_{variant}"
+        d.mkdir(parents=True)
+        (d / "v_48_020.npz").write_bytes(b"x" * (2 << 20))
+    d = root / "bindcraft" / "weights" / "proteinmpnn" / "weights_negative"
+    (d / "v_48_020.npz").write_bytes(b"x")
+    assert missing_proteinmpnn_weights(root) == ["weights_negative/v_48_020.npz"]
