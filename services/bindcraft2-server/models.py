@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from enum import Enum
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -65,9 +65,9 @@ def _decode_list(value: Any) -> Any:
 
 
 def validate_target_selection(
-    target_name: str | None,
+    target_name: Optional[str],
     has_upload: bool,
-    target_uri: str | None,
+    target_uri: Optional[str],
 ) -> None:
     """`target_name` / `target` 上传 / `target_uri` 恰好提供一个。"""
     provided = [bool(target_name), bool(has_upload), bool(target_uri)]
@@ -84,33 +84,33 @@ def validate_target_selection(
 class DesignRequest(BaseModel):
     """`POST /api/design` 的参数；目标结构走路由层上传/URI。"""
 
-    target_name: str | None = Field(
+    target_name: Optional[str] = Field(
         default=None,
         description="上游 shipped target 名（bindcraft design --list-targets）。",
     )
-    target_chains: str | None = Field(
+    target_chains: Optional[str] = Field(
         default=None, description="目标链，如 'A' 或 'A,B'。", examples=["A"]
     )
-    hotspots: str | None = Field(
+    hotspots: Optional[str] = Field(
         default=None,
         description="结合位点残基，编号取自输入结构。",
         examples=["54,56,66-70"],
     )
-    coldspots: str | None = Field(
+    coldspots: Optional[str] = Field(
         default=None, description="要求保持自由的区域。", examples=["90-95"]
     )
     modality: str = Field(
         default="binder",
         description="上游 modality 名，允许逗号组合（binder,VHH,ARP,scFv,Fab,...）。",
     )
-    binder_lengths: list[int] | None = Field(
+    binder_lengths: Optional[list[int]] = Field(
         default=None,
         description="[80,80] 定长；[60,100] 范围。scaffold 模态不需要。",
     )
     number_of_final_designs: int = Field(
         default=10, ge=1, le=1000, description="收够 N 个 accepted 即停。"
     )
-    max_trajectories: int | None = Field(
+    max_trajectories: Optional[int] = Field(
         default=None,
         ge=1,
         description="尝试次数硬上限；未给则用服务端 default_max_trajectories。",
@@ -126,10 +126,10 @@ class DesignRequest(BaseModel):
     initial_guess: bool = False
     bigbang: bool = False
 
-    core: str | None = Field(
+    core: Optional[str] = Field(
         default=None, description="上游 core profile，如 'benchmark'。"
     )
-    campaign_name: str | None = Field(
+    campaign_name: Optional[str] = Field(
         default=None,
         pattern=r"^[A-Za-z0-9_-]{1,64}$",
         description="结果命名与元数据标签；未给则用 job_id。",
@@ -149,7 +149,7 @@ class DesignRequest(BaseModel):
             ) from None
 
     @model_validator(mode="after")
-    def _check_binder_lengths(self) -> DesignRequest:
+    def _check_binder_lengths(self) -> "DesignRequest":
         if self.binder_lengths is not None:
             if len(self.binder_lengths) not in (1, 2):
                 raise ValueError("binder_lengths must have 1 or 2 entries")
@@ -175,11 +175,11 @@ class RankRequest(BaseModel):
         description="源 campaign 目录：job://<id>、job://<id>/output、file:///abs 或裸绝对路径。"
     )
     on: list[str] = Field(default=["i_pDAE"], description="排序指标；多个用于 tie-break。")
-    lowest_first: bool | None = Field(
+    lowest_first: Optional[bool] = Field(
         default=None, description="为 None 时用上游自动方向判定。"
     )
     table: RankTable = RankTable.accepted
-    top: int | None = Field(default=None, ge=1, description="控制台显示行数上限。")
+    top: Optional[int] = Field(default=None, ge=1, description="控制台显示行数上限。")
 
     @field_validator("on", mode="before")
     @classmethod
@@ -187,7 +187,7 @@ class RankRequest(BaseModel):
         return _decode_list(value)
 
     @model_validator(mode="after")
-    def _check_on(self) -> RankRequest:
+    def _check_on(self) -> "RankRequest":
         if not self.on:
             raise ValueError("on must contain at least one metric")
         return self
@@ -199,13 +199,13 @@ class FilterRequest(BaseModel):
     campaign_uri: str = Field(
         description="源 campaign 目录：job://<id>、job://<id>/output、file:///abs 或裸绝对路径。"
     )
-    where: list[str] | None = Field(
+    where: Optional[list[str]] = Field(
         default=None,
         description="阈值表达式；空表示用 campaign 自身阈值重放。",
         examples=["i_pAE=0.45", "Interface_Residues>=7"],
     )
     table: RankTable = RankTable.candidates
-    top: int | None = Field(default=None, ge=1, description="控制台显示行数上限。")
+    top: Optional[int] = Field(default=None, ge=1, description="控制台显示行数上限。")
 
     @field_validator("where", mode="before")
     @classmethod

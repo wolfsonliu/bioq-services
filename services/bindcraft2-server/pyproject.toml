@@ -20,20 +20,19 @@ line-length = 100
 target-version = "py310"
 
 [tool.ruff.lint]
-# N999：`<svc>-server` 目录名含连字符，不是合法 Python 模块名——仓库里每个
-# 服务都是这个命名（镜像内以 `server` 导入），属对目录名的固有误报。
-# 仓库既有先例：services/seqkit-server/pyproject.toml。
-ignore = ["N999"]
-# E402 不在 ruff 0.16 的默认集合里，但 conftest 确实是"先有代码、后有 import"
-# （先注册 `server` 别名，再 import 框架与 server.*）。显式启用它，让既有的
-# `# noqa: E402` 真正起作用、并让以后新出现的违规被发现——而不是用 RUF100 去
-# 掩盖一个"未使用的 noqa"。验证：去掉 noqa 后 E402 确实报错。
+# 显式钉住规则集。原因：uv.lock 被 gitignore，ruff 版本随每次 `uv sync` 漂移，
+# 而 ruff 0.16 的默认集比仓库其它 38 个服务写代码时的默认集宽得多（实测启用
+# 413 条规则）。不钉住的话，同一份代码在不同机器上 lint 结果不同，并且会要求把
+# 既有写法一并改掉（`Optional[X]`、FastAPI 的 `Depends()` / `File()` 作为参数
+# 默认值等）。钉在 pycodestyle + Pyflakes 这套长期默认上：结果可复现、与兄弟
+# 服务风格一致。注意 N999（连字符目录名）、I001（`server` 别名让 ruff 误判
+# `server.*` 为第三方包）、B008（FastAPI 参数默认值里的 Depends/File/Form）都
+# 不在这个子集内，所以无需 ignore —— 仓库既有先例 services/seqkit-server 用
+# per-file-ignores 处理 B008，是因为它没钉 select。
+select = ["E4", "E7", "E9", "F"]
+# E402 不在上面的子集里但确实适用：conftest 是"先注册 server 别名、后 import"。
+# 显式启用，让既有的 `# noqa: E402` 真正起作用（而不是被 RUF100 判成无用 noqa）。
 extend-select = ["E402"]
-
-[tool.ruff.lint.isort]
-# conftest 用 importlib 把服务目录按 `server` 别名挂进 sys.modules；ruff 静态
-# 分析看不到该别名，会把 `server.*` 误判成第三方包而要求重排 import。
-known-first-party = ["server"]
 
 [tool.uv.sources]
 bioq-service-framework = { path = "../../framework", editable = true }

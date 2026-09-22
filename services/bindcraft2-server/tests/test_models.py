@@ -50,6 +50,15 @@ def test_binder_lengths_rejects_three_entries():
         DesignRequest(binder_lengths=[60, 70, 80])
 
 
+def test_binder_lengths_rejects_non_positive():
+    # 覆盖 `any(value < 1 ...)` 分支——少了这个测试，删掉该分支所有测试仍全绿
+    # （Task 2 实现者用变异测试证明了这个缺口）。
+    with pytest.raises(ValueError, match="must be >= 1"):
+        DesignRequest(binder_lengths=[0])
+    with pytest.raises(ValueError, match="must be >= 1"):
+        DesignRequest(binder_lengths=[-5, 80])
+
+
 def test_binder_lengths_rejects_non_integer():
     with pytest.raises(ValueError, match="integers"):
         DesignRequest(binder_lengths="sixty,80")
