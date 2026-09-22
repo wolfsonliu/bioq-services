@@ -2114,12 +2114,27 @@ exit 2
 
 - [ ] **Step 2: 往 tests/conftest.py 追加离线 fixture**
 
-Task 1 已建好 conftest（`server` 别名 + fc marker）。本步只在文件**末尾追加**下面的内容，
-并把 `import shutil` 与 `from pydantic_settings import SettingsConfigDict` 补进顶部 import 区
-（Task 1 的版本只需要 `importlib.util` / `sys` / `Path` / `pytest`）。
+Task 1 已建好 conftest（`server` 别名 + fc marker，且已 `import pytest`）。本步只在文件
+**末尾追加**下面的内容，并补三处 import：顶部 import 区加 `import shutil` 与
+`from pydantic_settings import SettingsConfigDict`，`# noqa: E402` 那一段加
+`from server.settings import Bindcraft2Settings`（`OfflineSettings` 要继承它——
+计划初稿漏了这一条，实测加载 conftest 时直接 `NameError`）。
+
+**追加内容里有两处不是可选的**（计划初稿漏了，实测暴露）：
+1. `(tmp_path / "root").mkdir(...)`——`adapter.subprocess_cwd()` 返回 `settings.root`，
+   生产里 `/opt/bindcraft` 必然存在，离线 tmp 目录不存在时 `Popen(cwd=...)` 直接
+   `ENOENT`，每个 job 都以 `rc=127` 失败。
+2. `shipped_weights_dir=tmp_path / "root"`——生产默认值 `shipped_weights_dir` 与 `root`
+   同为 `/opt/bindcraft`，只覆盖 `root` 会让权重探针去查宿主的 `/opt/bindcraft`（本地
+   不存在），`/healthz/detail` 的断言就失去意义。
+
+另有一条与 Task 6 无关、但在本机实测暴露的**既有框架问题**（不属于本计划范围，不要在
+本任务里修）：本机 `uv sync` 装到的是 `mcp` 2.x，其 `mcp.server.fastmcp` 已更名为
+`MCPServer`，因此 `bioq_service/app.py` 的 `attach_mcp` 会走降级分支（记 warning 后返回
+`None`，不抛错）。所有服务的 MCP 挂载都受影响，与 BindCraft2 无关；`app.py` 里
+`attach_mcp(app)` 仍必须放在最后，顺序契约不受影响。
 
 ```python
-
 # ---------------------------------------------------------------------------
 # 离线 fixture：只把子进程换成 stub，其余全走真实框架
 # （真实 JobRunner、真实 HTTP 路由、真实 job 目录与日志）。
@@ -2138,9 +2153,15 @@ class OfflineSettings(Bindcraft2Settings):
         stub = tmp_path / "fake_bindcraft"
         shutil.copy2(SERVICE_DIR / "tests" / "data" / "fake_bindcraft.sh", stub)
         stub.chmod(0o755)
+        # 子进程 cwd 是上游源码树（adapter.subprocess_cwd → settings.root）：生产里
+        # /opt/bindcraft 必然存在，离线时必须先建出来，否则 Popen(cwd=...) 直接 ENOENT。
+        (tmp_path / "root").mkdir(parents=True, exist_ok=True)
         params = dict(
             jobs_base_dir=tmp_path / "jobs",
             root=tmp_path / "root",
+            # ProteinMPNN 随包在源码树里；生产默认值二者同为 /opt/bindcraft，
+            # 离线时显式指向同一个 tmp 目录，否则探针会去查宿主的 /opt/bindcraft。
+            shipped_weights_dir=tmp_path / "root",
             python=str(stub),
             module="",
             alphafold_params_dir=tmp_path / "af",
@@ -2168,9 +2189,7 @@ from __future__ import annotations
 
 import importlib
 import time
-from pathlib import Path
 
-import pytest
 from fastapi.testclient import TestClient
 
 
@@ -2179,6 +2198,7 @@ def _client(settings, monkeypatch) -> TestClient:
     # 再 reload，避免写到 /data/bindcraft2_jobs。
     monkeypatch.setenv("BINDCRAFT2_JOBS_BASE_DIR", str(settings.jobs_base_dir))
     monkeypatch.setenv("BINDCRAFT2_ROOT", str(settings.root))
+    monkeypatch.setenv("BINDCRAFT2_SHIPPED_WEIGHTS_DIR", str(settings.shipped_weights_dir))
     monkeypatch.setenv("BINDCRAFT2_PYTHON", settings.python)
     monkeypatch.setenv("BINDCRAFT2_MODULE", "")
     monkeypatch.setenv("BINDCRAFT2_ALPHAFOLD_PARAMS_DIR", str(settings.alphafold_params_dir))
@@ -2417,6 +2437,21 @@ def test_upload_field_names_follow_convention(offline_settings, monkeypatch):
         assert "target_uri" in fields
         # 不得出现旧式裸 input_uri
         assert "input_uri" not in fields
+
+
+def test_gpu_probe_runs_out_of_process(offline_settings, monkeypatch):
+    """GPU 探针必须走子进程：HTTP 进程绝不能 import jax。
+
+    在 HTTP 进程里 import jax 会初始化 CUDA context、占掉 campaign 需要的显存；
+    无卡时还会静默回退 CPU。stub 只在 `-c` 分支打印 `gpu`，因此
+    `gpu_backend == "gpu"` 本身就证明探针是在子进程里跑的。
+    """
+    import sys
+
+    client = _client(offline_settings, monkeypatch)
+    detail = client.get("/healthz/detail").json()
+    assert detail["gpu_backend"] == "gpu"
+    assert "jax" not in sys.modules
 ```
 
 - [ ] **Step 4: 跑测试确认失败**
@@ -2765,7 +2800,7 @@ attach_mcp(app)
 cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_app.py -q 2>&1 | tail -25
 ```
 
-Expected：全部通过（约 17 项）。若 `test_health_and_detail` 报 `gpu_backend != "gpu"`，检查
+Expected：`17 passed`（含专门钉住 GPU 探针进程隔离的那一条）。若 `test_health_and_detail` 报 `gpu_backend != "gpu"`，检查
 stub 是否被 chmod +x。
 
 - [ ] **Step 7: 跑全量离线测试**
