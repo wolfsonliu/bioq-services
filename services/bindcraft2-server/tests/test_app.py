@@ -8,14 +8,14 @@ import time
 from fastapi.testclient import TestClient
 
 
-def _client(settings, monkeypatch) -> TestClient:
+def _client(settings, monkeypatch, module: str = "") -> TestClient:
     # server.app 在 import 期用自己的 settings 构造 app；把 env 指到 tmp，
     # 再 reload，避免写到 /data/bindcraft2_jobs。
     monkeypatch.setenv("BINDCRAFT2_JOBS_BASE_DIR", str(settings.jobs_base_dir))
     monkeypatch.setenv("BINDCRAFT2_ROOT", str(settings.root))
     monkeypatch.setenv("BINDCRAFT2_SHIPPED_WEIGHTS_DIR", str(settings.shipped_weights_dir))
     monkeypatch.setenv("BINDCRAFT2_PYTHON", settings.python)
-    monkeypatch.setenv("BINDCRAFT2_MODULE", "")
+    monkeypatch.setenv("BINDCRAFT2_MODULE", module)
     monkeypatch.setenv("BINDCRAFT2_ALPHAFOLD_PARAMS_DIR", str(settings.alphafold_params_dir))
     monkeypatch.setenv("BINDCRAFT2_COMPILE_CACHE_DIR", str(settings.compile_cache_dir))
     monkeypatch.setenv("BINDCRAFT2_GPU_PROBE_TTL_SECONDS", "0")
@@ -45,6 +45,14 @@ def test_health_and_detail(offline_settings, monkeypatch):
     assert detail["gpu_backend"] == "gpu"  # stub 探针
     assert detail["weights_loaded"] is False
     assert len(detail["weights_missing"]) == 7
+
+
+def test_healthz_detail_reports_job_counters(offline_settings, monkeypatch):
+    """跑批并发度是 /healthz/detail 的契约字段；缺了它们调用方无法判断容量。"""
+    client = _client(offline_settings, monkeypatch)
+    detail = client.get("/healthz/detail").json()
+    assert detail["active_jobs"] == 0
+    assert detail["max_concurrent_jobs"] == 1
 
 
 def test_detail_reports_loaded_weights(offline_settings, monkeypatch, tmp_path):
@@ -105,6 +113,49 @@ def test_design_with_upload(offline_settings, monkeypatch):
     ).read_text(encoding="utf-8")
     assert '"name": "target"' in campaign
     assert (offline_settings.jobs_base_dir / job_id / "input" / "target.pdb").is_file()
+
+
+def test_design_with_file_uri_target(offline_settings, monkeypatch, tmp_path):
+    """`target_uri=file://...` 的 happy path（此前完全没测）。"""
+    pdb = tmp_path / "bait.pdb"
+    pdb.write_text("ATOM      1  CA  ALA A   1\n", encoding="utf-8")
+
+    client = _client(offline_settings, monkeypatch)
+    r = client.post(
+        "/api/design",
+        data={"target_uri": f"file://{pdb}", "max_trajectories": "1"},
+    )
+    assert r.status_code == 200, r.text
+    job_id = r.json()["job_id"]
+    body = _wait(client, job_id)
+    assert body["status"] == "completed", body
+    assert (offline_settings.jobs_base_dir / job_id / "input" / "target.pdb").is_file()
+
+
+def test_design_rejects_unresolvable_target_uri(offline_settings, monkeypatch):
+    """客户端输入错误必须是 4xx；未包装时 FastAPI 会把它们当服务端故障报 500。"""
+    client = _client(offline_settings, monkeypatch)
+    for uri in ("oss://bucket/key", "file:///etc", "http://"):
+        r = client.post("/api/design", data={"target_uri": uri})
+        assert r.status_code == 422, f"{uri} -> {r.status_code}: {r.text}"
+
+
+def test_design_upload_keeps_cif_suffix(offline_settings, monkeypatch):
+    """落盘后缀必须跟着上传文件走：上游按后缀识别 mmCIF，改成常量就废掉这条。"""
+    client = _client(offline_settings, monkeypatch)
+    r = client.post(
+        "/api/design",
+        data={"target_chains": "A"},
+        files={"target": ("target.cif", b"data_demo\n", "chemical/x-cif")},
+    )
+    assert r.status_code == 200, r.text
+    job_id = r.json()["job_id"]
+    body = _wait(client, job_id)
+    assert body["status"] == "completed", body
+
+    saved = offline_settings.jobs_base_dir / job_id / "input" / "target.cif"
+    assert saved.is_file()
+    assert not (offline_settings.jobs_base_dir / job_id / "input" / "target.pdb").exists()
 
 
 def test_design_rejects_no_target(offline_settings, monkeypatch):
@@ -267,3 +318,28 @@ def test_gpu_probe_runs_out_of_process(offline_settings, monkeypatch):
     detail = client.get("/healthz/detail").json()
     assert detail["gpu_backend"] == "gpu"
     assert "jax" not in sys.modules
+
+
+def test_gpu_probe_ignores_upstream_module(offline_settings, monkeypatch):
+    """生产 settings 带 module="bindcraft.cli"，探针仍必须拿到 backend。
+
+    探针 argv 若拼成 `python -m bindcraft.cli -c <code>`，`-c <code>` 只会被当成
+    上游 CLI 的参数（stub 走 unknown subcommand 分支、什么都不打印），
+    gpu_backend 永远停在 "probe_failed"——这是生产里唯一能发现静默跑 CPU 的信号。
+    """
+    client = _client(offline_settings, monkeypatch, module="bindcraft.cli")
+    detail = client.get("/healthz/detail").json()
+    assert detail["gpu_backend"] == "gpu"
+    assert detail["gpu_devices"] == "cuda:0"
+
+
+def test_healthz_detail_warns_when_probe_cannot_run(offline_settings, monkeypatch):
+    """探针跑不起来（解释器不存在）也要 200 + warning，而不是 500。"""
+    broken = offline_settings.model_copy(update={"python": "/nonexistent/python-fixture"})
+    client = _client(broken, monkeypatch)
+    r = client.get("/healthz/detail")
+    assert r.status_code == 200, r.text
+    detail = r.json()
+    assert detail["gpu_backend"] == "probe_failed"
+    assert "warning" in detail
+    assert "GPU" in detail["warning"]

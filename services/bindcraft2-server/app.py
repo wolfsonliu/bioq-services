@@ -29,7 +29,7 @@ from bioq_service import (
     resolve_task_id,
 )
 from bioq_service.uris import resolve_input
-from fastapi import Depends, File, Form, Header, Request, UploadFile
+from fastapi import Depends, File, Form, Header, HTTPException, Request, UploadFile
 
 from .adapter import Bindcraft2Adapter
 from .campaigns import resolve_campaign_dir
@@ -87,16 +87,18 @@ def _gpu_probe(settings: Bindcraft2Settings) -> tuple[str, str]:
         if now - float(_probe_cache["at"]) < settings.gpu_probe_ttl_seconds:
             return cached  # type: ignore[return-value]
     backend, devices = "probe_failed", ""
-    argv = [settings.python]
-    if settings.module:
-        argv += ["-m", settings.module]
-    argv += ["-c", _GPU_PROBE_CODE]
+    # 探针只做 `import jax`，与上游 CLI 无关，绝不能拼 `-m <module>`：生产里
+    # module="bindcraft.cli"，`python -m bindcraft.cli -c <code>` 会把 `-c <code>`
+    # 当成 CLI 的普通参数，代码永不执行（CLI 报 usage 并退出 2），于是
+    # gpu_backend 永远停在 "probe_failed"——唯一能发现静默回退 CPU 的信号被毁掉。
+    argv = [settings.python, "-c", _GPU_PROBE_CODE]
     try:
         proc = subprocess.run(
             argv,
             capture_output=True,
             text=True,
-            timeout=120,
+            # 探针卡死不能拖住健康检查；30 s 足够解释器 import jax。
+            timeout=30,
             cwd=str(settings.root) if settings.root.is_dir() else None,
         )
         lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
@@ -119,6 +121,12 @@ def _strip_route(router, path: str, method: str) -> None:
         for r in router.routes
         if not (getattr(r, "path", None) == path and method in getattr(r, "methods", set()))
     ]
+    # FastAPI 的 included-router 层按 route-version 计数器缓存有效候选；直接赋值
+    # routes 不会 bump 计数器，缓存已热时这次剥离会被静默忽略（框架的通用
+    # /healthz/detail 先匹配，还不报错）。有该方法就防御性地 bump 一次。
+    mark = getattr(router, "_mark_routes_changed", None)
+    if callable(mark):
+        mark()
     for r in router.routes:
         inner = getattr(r, "original_router", None)
         if inner is not None:
@@ -200,7 +208,19 @@ def run_design(
         target_path = None
         if not params.target_name:
             dest = job_dir / "input" / f"target{_input_suffix(target_uri or getattr(target, 'filename', None))}"
-            target_path = resolve_input(target, target_uri, dest, settings, field_name="target")
+            try:
+                target_path = resolve_input(
+                    target, target_uri, dest, settings, field_name="target"
+                )
+            except HTTPException:
+                # 框架已给出合理的 4xx/502，原样透传。
+                raise
+            except Exception as exc:
+                # 其余都是客户端输入错误（目录、坏 URI、缺凭证……），映射成 422，
+                # 否则 FastAPI 会把它当服务端故障返回 500。
+                raise HTTPException(
+                    status_code=422, detail=f"Could not resolve target: {exc}"
+                ) from exc
         campaign_file = prepare_design(
             params, job_dir=job_dir, target_path=target_path, settings=settings
         )

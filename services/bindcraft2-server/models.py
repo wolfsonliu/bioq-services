@@ -118,7 +118,12 @@ class DesignRequest(BaseModel):
     max_trajectories: Optional[int] = Field(
         default=None,
         ge=1,
-        description="尝试次数硬上限；未给则用服务端 default_max_trajectories。",
+        le=100_000,
+        # 上界用来兜住共享卡上的 GPU 成本：不给上限时 10**30 这类值会被原样写进
+        # campaign，等于一次无界 GPU 运行（服务端默认 500，10 万已经很宽松）。
+        description=(
+            "尝试次数硬上限；未给则用服务端 default_max_trajectories。上限 100000。"
+        ),
     )
 
     forced_targeting: bool = False

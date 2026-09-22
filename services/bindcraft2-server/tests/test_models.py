@@ -80,6 +80,13 @@ def test_max_trajectories_must_be_positive():
         DesignRequest(max_trajectories=0)
 
 
+def test_max_trajectories_is_bounded():
+    # 上界兜住共享卡上的 GPU 成本：没有它 10**30 会被原样写进 campaign。
+    assert DesignRequest(max_trajectories=100_000).max_trajectories == 100_000
+    with pytest.raises(ValueError):
+        DesignRequest(max_trajectories=100_001)
+
+
 def test_top_must_be_positive():
     with pytest.raises(ValueError):
         RankRequest(campaign_uri="job://abc", top=0)
