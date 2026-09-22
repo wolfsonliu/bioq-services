@@ -126,6 +126,8 @@ pre-stage：
 ```bash
 # 方式 A：NAS 上已有 alphafold-server 的参数 → 软链，零下载
 ln -s /data/models/alphafold /data/models/bindcraft2/alphafold
+# 也可以不软链：alphafold-server 的 params/ 与本服务要求的布局同构，
+# 直接把 BINDCRAFT2_ALPHAFOLD_PARAMS_DIR 指到 /data/models/alphafold 即可。
 
 # 方式 B：下载（只解出这 7 个文件）
 WEIGHTS_DST=/data/models/bindcraft2/alphafold \
