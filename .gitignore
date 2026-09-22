@@ -1,6 +1,10 @@
 tmp*
 services/*-server/upstream/
 services/*-server/qvina/
+# AGENTS.md 约束 14：weights/ 是构建产物，永不入库。fetch_weights.sh 的默认
+# WEIGHTS_DST 落在服务目录下（如 bindcraft2-server/weights/alphafold，~2.5 GB），
+# 少了这条规则会把它变成一堆未跟踪文件、极易误提交。
+services/*-server/weights/
 .worktrees/
 
 # Byte-compiled / optimized / DLL files
