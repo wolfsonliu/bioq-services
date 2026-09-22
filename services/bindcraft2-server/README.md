@@ -157,6 +157,7 @@ apptainer exec --nv --bind /scratch/models:/data/models bindcraft2-server.sif \
 |---|---|---|
 | `BINDCRAFT2_JOBS_BASE_DIR` | `/data/bindcraft2_jobs` | 任务目录根 |
 | `BINDCRAFT2_ROOT` | `/opt/bindcraft` | 上游源码树（editable install 依赖它） |
+| `BINDCRAFT2_SHIPPED_WEIGHTS_DIR` | `/opt/bindcraft` | ProteinMPNN 权重根；探针查 `<它>/bindcraft/weights/proteinmpnn/weights_<变体>/v_48_020.npz` |
 | `BINDCRAFT2_PYTHON` | `/opt/venv/bin/python` | 解释器 |
 | `BINDCRAFT2_MODULE` | `bindcraft.cli` | 上游 CLI 模块；置空则只跑 `python <args>` |
 | `BINDCRAFT2_ALPHAFOLD_PARAMS_DIR` | `/data/models/bindcraft2/alphafold` | AF2 参数目录 |
