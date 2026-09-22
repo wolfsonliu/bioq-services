@@ -4223,7 +4223,8 @@ def test_task_endpoints_are_registered(client):
 
 1. `make build-bindcraft2-server && make push-bindcraft2-server`
 2. FC 控制台创建函数：custom-container、GPU 实例、`timeout=36000`、内存 32 GB、
-   磁盘 10 GB；NAS `mountDir=/data`；OSS `bioagent-inputs` → `/mnt/oss`（RW）。
+   磁盘 10 GB；NAS `mountDir=/data`；OSS `bio-gateway` → `/mnt/oss`（RW）。
+   （`bioagent-inputs` 是计划初稿的笔误：仓库里 30 个部署描述符一律用 `bio-gateway`，与本服务的 `deploy/fc.yaml` 一致。以控制台实际值为准。）
 3. **开启异步任务模式**、清空 keepalive URL、会话亲和 = HeaderField `bioagent-session-id`、
    `sessionConcurrencyPerInstance=1`。
 4. 把真实 URL / function 名 / gpuType 回填 `services.yaml` 与 `deploy/fc.yaml`。
@@ -4236,7 +4237,7 @@ RUN_FC_TESTS=1 uv run --group dev \
   python -m pytest -m fc tests/test_fc.py -v -k "healthz or manifest or bad_target_selection or unknown_campaign"
 ```
 
-Expected：4 项通过。`weights_loaded` 若为 false → 按 `weights_missing` 补 NAS（Task 9）。
+Expected：**5 项**通过（`test_healthz` 与 `test_healthz_detail_reports_weights_and_gpu` 都匹配 `healthz`；计划初稿写 4 是漏数了。已用 `--collect-only` 核对）。`weights_loaded` 若为 false → 按 `weights_missing` 补 NAS（Task 9）。
 `gpu_backend` 若不是 `"gpu"` → **停**，先解决 FC GPU 分配，否则 campaign 会跑 CPU。
 
 - [ ] **Step 5: 跑 design smoke（分钟级）**
@@ -4251,41 +4252,45 @@ Expected：PASS，`summary.csv` / `campaign_metadata.json` / `1_Trajectories/!_T
 
 - [ ] **Step 6: 跑 rank / filter（验证 P3：源目录不被污染）**
 
-```bash
-# 记录源 campaign 目录清单与 mtime
-JOB=<design_job_id>
-ls -la --time-style=full-iso /data/bindcraft2_jobs/$JOB/output/ > /tmp/before.txt
-find /data/bindcraft2_jobs/$JOB/output -type f | sort > /tmp/before_files.txt
-
-RUN_FC_TESTS=1 uv run --group dev \
-  python -m pytest -m fc tests/test_fc.py -v -k "rank or filter"
-
-find /data/bindcraft2_jobs/$JOB/output -type f | sort > /tmp/after_files.txt
-diff /tmp/before_files.txt /tmp/after_files.txt && echo "P3: 源目录未被改动（零拷贝安全）" \
-  || echo "P3: 源目录被改动 → 按设计文档处置规则改为 copy 模式"
-```
-
-Expected：`P3: 源目录未被改动（零拷贝安全）`。若被改动，在 Task 13 记录并改为 copy 模式
-（`campaigns.resolve_campaign_dir` 增加 `copy_to=<job_dir>/input/campaign` 分支）。
-
-- [ ] **Step 7: 跑 task 测试**
+**不要**用 `pytest -k "rank or filter"` 来验 P3——那是新起一个进程，模块级 `STATE` 里的
+`design_job_id` 为空，两个 rank/filter 用例会直接 `pytest.skip`，于是"前后无差异"是**假阳性**
+（已在本地实测到这个 skip 行为）。用下面的 curl 版本，它自己找回 design 的 job：
 
 ```bash
-RUN_FC_TESTS=1 uv run --group dev \
-  python -m pytest -m fc tests/test_fc_task.py -v
+cd services/bindcraft2-server
+export UV_CACHE_DIR=<可写 cache>
+
+# 1) 先单独跑 design smoke
+RUN_FC_TESTS=1 uv run --group dev python -m pytest -m fc tests/test_fc.py -v \
+  -k "design_shipped_target_smoke"
+
+# 2) 找到它刚落下的 campaign 目录
+JOB=$(ls -1dt /data/bindcraft2_jobs/*/ | head -1 | xargs basename); echo "design job = $JOB"
+
+# 3) 给源目录拍快照（文件集合 + mtime）
+find /data/bindcraft2_jobs/$JOB/output -type f | sort > /tmp/p3_before_files.txt
+ls -la --time-style=full-iso /data/bindcraft2_jobs/$JOB/output/ > /tmp/p3_before_ls.txt
+
+# 4) 用 curl 驱动 rank / filter（HTTP 上复杂字段必须是 JSON 字符串）
+URL=$(python -c "import sys; sys.path.insert(0,'../..'); \
+  from bioq_service.service_registry import fc_url; print(fc_url('bindcraft2-server'))")
+curl -s -X POST "$URL/api/rank"   -H "bioagent-session-id: p3-manual" \
+  -F "campaign_uri=job://$JOB" -F 'on=["i_pTM"]'
+curl -s -X POST "$URL/api/filter" -H "bioagent-session-id: p3-manual" \
+  -F "campaign_uri=job://$JOB" -F 'where=["i_pAE=0.45"]'
+# 各自轮询到 completed：curl -s "$URL/api/jobs/<job_id>"
+
+# 5) 比对（文件集合 **和** mtime 都要一致）
+find /data/bindcraft2_jobs/$JOB/output -type f | sort > /tmp/p3_after_files.txt
+diff /tmp/p3_before_files.txt /tmp/p3_after_files.txt \
+  && echo "P3: 源目录文件集合未变" || echo "P3: 源目录被改动 → 改 copy 模式"
+diff /tmp/p3_before_ls.txt <(ls -la --time-style=full-iso /data/bindcraft2_jobs/$JOB/output/) \
+  && echo "P3: mtime 也未变（零拷贝安全）" || echo "P3: mtime 变化 → 即使文件集合不变也不算零拷贝"
 ```
 
-Expected：4 项通过。
-
-- [ ] **Step 8: Commit**
-
-```bash
-git add services/bindcraft2-server/tests/test_fc.py services/bindcraft2-server/tests/test_fc_task.py \
-        services.yaml services/bindcraft2-server/deploy/fc.yaml
-git commit -m "test(bindcraft2-server): add FC sync and async integration tests"
-```
-
----
+Expected：两次 diff 都无差异 → `P3: 零拷贝安全`。**判定规则**：文件集合与 mtime 都一致才算通过；
+否则在 Task 13 记录偏差，并给 `campaigns.resolve_campaign_dir` 增加
+`copy_to=<job_dir>/input/campaign` 分支（rank/filter 改为拷贝后操作）。
 
 ### Task 13: 回写设计文档（三处偏差 + P1/P2/P3 实测结果）
 
