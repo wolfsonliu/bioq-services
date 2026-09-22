@@ -1,0 +1,109 @@
+# FC 部署描述（serverless-devs `s deploy` 的输入；仓库内没有任何程序读取它）。
+#
+# 结构以 services/alphafold-server/deploy/fc.yaml 为模板，逐字段对齐
+# services/promera-server/deploy/fc.yaml（同为 GPU 服务）。计划 Task 11 Step 1 给出的
+# 是"要改的字段"清单；下面是补上模板里 `s deploy` 必需、计划块未逐行列出的部分
+# （customContainerConfig / triggers / asyncInvokeConfig / logConfig 等）。
+#
+# VPC 三件套与 gpuConfig 的最终合法取值以 FC 控制台为准（计划 P2 / 设计文档 D6）。
+edition: 3.0.0
+name: fc3-bindcraft2
+access: default
+resources:
+  fcDemo:
+    component: fc3
+    props:
+      region: cn-hangzhou
+      handler: index.handler
+      diskSize: 10240
+      instanceLifecycleConfig:
+        preStop:
+          handler: 'true'
+          timeout: 3
+      runtime: custom-container
+      cpu: 8
+      instanceConcurrency: 200
+      vpcConfig:
+        securityGroupId: sg-bp16eiz6pkbsj4suejie
+        anytunnelViaENI: false
+        vpcId: vpc-bp1y6pbb5wp095bxej4np
+        vSwitchIds:
+          - vsw-bp1r8dil1l9hl72qx373t
+      role: acs:ram::1713785072839647:role/bioresearch-fc
+      disableOndemand: false
+      nasConfig:
+        groupId: 0
+        mountPoints:
+          - enableTLS: false
+            serverAddr: 0620a487b6-gum23.cn-hangzhou.nas.aliyuncs.com:/fc
+            mountDir: /data
+        userId: 0
+      description: 'BindCraft2 protein binder design campaigns (internal use only)'
+      # campaign 是小时级：对齐 alphafold / boltzgen 的 36000s。
+      timeout: 36000
+      sessionAffinityConfig:
+        affinityHeaderFieldName: bioagent-session-id
+        disableSessionIdReuse: false
+        enableAutoPause: false
+        sessionConcurrencyPerInstance: 1
+        sessionIdleTimeoutInSeconds: 1800
+        sessionTTLInSeconds: 86400
+      internetAccess: true
+      ossMountConfig:
+        mountPoints:
+          - bucketName: bio-gateway
+            endpoint: http://oss-cn-hangzhou-internal.aliyuncs.com
+            bucketPath: ''
+            mountDir: /mnt/oss
+            readOnly: false
+      resourceGroupId: rg-aek54blnrbv56ry
+      instanceIsolationMode: SHARE
+      logConfig:
+        enableRequestMetrics: true
+        enableInstanceMetrics: true
+        logBeginRule: DefaultRegex
+        project: serverless-cn-hangzhou-19ebd24e-ebe2-5da6-bf89-3c78e2ce4d70
+        logstore: default-logs
+      functionName: fc_bindcraft2
+      sessionAffinity: HEADER_FIELD
+      gpuConfig:
+        # P2 核验后确认卡型；cuda13 extra 需 compute capability >= 7.5。
+        # 注意：promera-server 用同一 gpuType 但请求 49152 MB；本值按计划保留，
+        # 部署前必须对照控制台合法档位核验。
+        gpuMemorySize: 24576
+        gpuType: fc.gpu.ada.1
+      customContainerConfig:
+        image: harbor.ruosheng.bio/aliyun_fc/bindcraft2-server:v0.0.1
+        registryConfig:
+          certConfig:
+            insecure: false
+        port: 9000
+        healthCheckConfig: {}
+      memorySize: 32768
+      environmentVariables:
+        BINDCRAFT2_SESSION_HEADER_NAME: bioagent-session-id
+      triggers:
+        - triggerConfig:
+            methods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - HEAD
+              - OPTIONS
+              - PATCH
+            authType: anonymous
+            disableURLInternet: true
+          triggerName: defaultTrigger
+          description: ''
+          qualifier: LATEST
+          triggerType: http
+      asyncInvokeConfig:
+        asyncTask: true
+        maxAsyncEventAgeInSeconds: 86400
+        destinationConfig:
+          onFailure:
+            destination: ''
+          onSuccess:
+            destination: ''
+        maxAsyncRetryAttempts: 3

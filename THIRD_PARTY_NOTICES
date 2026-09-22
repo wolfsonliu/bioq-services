@@ -19,6 +19,7 @@ legal substitute for the license text shipped inside each `upstream/` directory.
 | Service | Upstream project | Upstream repository | License |
 |---|---|---|---|
 | alphafold-server | AlphaFold | google-deepmind/alphafold | Apache-2.0 (code); CC BY 4.0 (weights) |
+| bindcraft2-server | BindCraft2 | PacesaLab/BindCraft2 | Source-Available (Hosting-Restricted) — 仅限内部使用，禁止作为 Hosted Service 对外提供 |
 | bindflow-server | BindFlow | ale94mleon/BindFlow | See upstream `LICENSE` |
 | boltzgen-server | boltzgen | HannesStark/boltzgen | See upstream `LICENSE` |
 | boltz-server | Boltz | jwohlwend/boltz | See upstream `LICENSE` |
