@@ -22,18 +22,18 @@ target-version = "py310"
 [tool.ruff.lint]
 # N999：`<svc>-server` 目录名含连字符，不是合法 Python 模块名——仓库里每个
 # 服务都是这个命名（镜像内以 `server` 导入），属对目录名的固有误报。
+# 仓库既有先例：services/seqkit-server/pyproject.toml。
 ignore = ["N999"]
+# E402 不在 ruff 0.16 的默认集合里，但 conftest 确实是"先有代码、后有 import"
+# （先注册 `server` 别名，再 import 框架与 server.*）。显式启用它，让既有的
+# `# noqa: E402` 真正起作用、并让以后新出现的违规被发现——而不是用 RUF100 去
+# 掩盖一个"未使用的 noqa"。验证：去掉 noqa 后 E402 确实报错。
+extend-select = ["E402"]
 
 [tool.ruff.lint.isort]
 # conftest 用 importlib 把服务目录按 `server` 别名挂进 sys.modules；ruff 静态
 # 分析看不到该别名，会把 `server.*` 误判成第三方包而要求重排 import。
 known-first-party = ["server"]
-
-[tool.ruff.lint.per-file-ignores]
-# conftest 里的 `# noqa: E402` 是仓库既有写法（ruff ≤0.15 默认启用 E402 组）；
-# ruff 0.16 起 E402 移出默认集合，该 noqa 被 RUF100 判为"未使用"。保留它，
-# 使服务在旧版 ruff 下语义不变。
-"tests/conftest.py" = ["RUF100"]
 
 [tool.uv.sources]
 bioq-service-framework = { path = "../../framework", editable = true }

@@ -26,14 +26,15 @@
 
 ---
 
-## 计划期修订（动手前核验仓库约定后加的两项）
+## 计划期修订（动手前核验仓库约定后加的三项）
 
-首版计划漏了两条仓库既有约定，已改入 Task 1；记在这里以免后续步骤又按旧写法写。
+首版计划漏了三条仓库既有约定，已改入 Task 1；记在这里以免后续步骤又按旧写法写。
 
 | # | 首版计划写的 | 实际做法 | 原因 |
 |---|---|---|---|
 | B1 | 只有 `settings.py`，测试命令用 `uv run --with pytest --with fastapi ...` 现搭临时环境 | 建 `pyproject.toml`（`dependencies` / `[dependency-groups] dev` / `[tool.ruff]` / `[tool.uv] package = false`），所有测试命令统一为 `uv run --group dev python -m pytest ...` | 仓库里 **39/39** 服务每个都是独立 uv 项目；AGENTS.md 的离线测试入口就是 `uv run --group dev`。`pyproject.toml` 进版本控制，`uv.lock` 被 gitignore |
 | B2 | `tests/conftest.py` 在 Task 6 才建（当时计划 Task 2–5 用 `PYTHONPATH=..` 绕） | conftest 提前到 Task 1，只含 `server` 别名 + fc marker；Task 6 改为**追加**离线 fixture。Task 2–5 跑 `uv run --group dev python -m pytest tests/test_x.py -q` | 服务目录名 `bindcraft2-server` 含连字符，不是合法 Python 标识符；`PYTHONPATH=..` 会指向 `services/`，`import server.models` 必然失败。别名只能由 conftest 提供，且必须早于第一个 `from server.x import y` |
+| B3 | `pyproject.toml` 只有 `[tool.ruff] line-length/target-version` | 补 `[tool.ruff.lint]`：`ignore = ["N999"]`（`seqkit-server` 有同样先例）、`extend-select = ["E402"]`、`known-first-party = ["server"]` | 三步实测：plan-exact 配置在 ruff 0.16.8 下报 4 个错（`N999`×2 / `RUF100` / `I001`），加了这三块才 `All checks passed!`。Task 7 Step 5 与 Task 13 Step 6 的验收条件就是它。注意 ruff 版本由全新 `uv sync` 决定（`uv.lock` 被 gitignore），所以不能依赖旧版默认规则集 |
 
 ---
 
@@ -137,12 +138,33 @@ dev = [
 line-length = 100
 target-version = "py310"
 
+[tool.ruff.lint]
+# N999：`<svc>-server` 目录名含连字符，不是合法 Python 模块名——仓库里每个
+# 服务都是这个命名（镜像内以 `server` 导入），属对目录名的固有误报。
+# 仓库既有先例：services/seqkit-server/pyproject.toml。
+ignore = ["N999"]
+# E402 不在 ruff 0.16 的默认集合里，但 conftest 确实是"先有代码、后有 import"
+# （先注册 `server` 别名，再 import 框架与 server.*）。显式启用它，让既有的
+# `# noqa: E402` 真正起作用、并让以后新出现的违规被发现——而不是用 RUF100 去
+# 掩盖一个"未使用的 noqa"。验证：去掉 noqa 后 E402 确实报错。
+extend-select = ["E402"]
+
+[tool.ruff.lint.isort]
+# conftest 用 importlib 把服务目录按 `server` 别名挂进 sys.modules；ruff 静态
+# 分析看不到该别名，会把 `server.*` 误判成第三方包而要求重排 import。
+known-first-party = ["server"]
+
 [tool.uv.sources]
 bioq-service-framework = { path = "../../framework", editable = true }
 
 [tool.uv]
 package = false
 ```
+
+`[tool.ruff.lint]` 三块不是从模板抄的——模板（`rfantibody-server`）没有这段，且在
+ruff 0.16.8 下它自己会报错。新服务要么带一段干净的 lint 配置，要么 `ruff check` 恒定
+失败；Task 7 Step 5 与 Task 13 Step 6 的验收条件都是 `All checks passed!`，所以这里
+补齐。三个子块各自消掉一个具体误报（N999×2 / E402 的 RUF100 / I001），已逐一验证。
 
 `package = false` 是关键：服务代码是扁平目录、靠 `PYTHONPATH` + `server` 别名导入，
 不作为 wheel 打包。
