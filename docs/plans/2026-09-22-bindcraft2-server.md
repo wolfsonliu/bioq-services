@@ -280,7 +280,7 @@ class Bindcraft2Settings(ServiceSettings):
     # 必须显式设置——否则上游会去下载 5.3 GB。见 fetch_weights.sh / 设计文档 P1。
     alphafold_params_dir: Path = Field(default=Path("/data/models/bindcraft2/alphafold"))
 
-    # 上游源码中的 ProteinMPNN 权重根（随包，~20 MB）。
+    # 上游源码中的 ProteinMPNN 权重根（随包，26 MB/变体）。
     shipped_weights_dir: Path = Field(default=Path("/opt/bindcraft"))
 
     # JAX 编译缓存。镜像内没有 nvidia-smi，不设它上游会把图缓存丢进 /tmp，
@@ -3246,7 +3246,7 @@ git commit -m "feat(bindcraft2-server): add CLI batch-mode entry with three subc
 # 升级 pin：改 BINDCRAFT2_SHA。
 #
 # 注意：**不要**排除 bindcraft/weights/proteinmpnn/ —— 三个变体的 .npz 是
-# 上游 pyproject 的 package-data（~20 MB），随包分发；排除它们会让 design 在
+# 上游 pyproject 的 package-data（26 MB/变体，共 ~78 MB），随包分发；排除它们会让 design 在
 # ProteinMPNN 重设计阶段才失败。
 
 set -euo pipefail
@@ -3350,8 +3350,8 @@ git commit -m "build(bindcraft2-server): add upstream vendoring script pinned to
 
 ```bash
 #!/usr/bin/env bash
-# 预取 BindCraft2 需要的 7 个 AlphaFold 检查点（~5.3 GB 压缩包），只解出这 7 个
-# 文件，其余丢弃。
+# 预取 BindCraft2 需要的 7 个 AlphaFold 检查点（上游称 ~5.3 GB，实测归档
+# 5,587,968,000 B ≈ 5.59 GB），只解出这 7 个文件，其余丢弃。
 #
 # 默认落到 services/bindcraft2-server/weights/（stage 目录）；
 # 正式部署直接下到 NAS：
@@ -3364,6 +3364,10 @@ git commit -m "build(bindcraft2-server): add upstream vendoring script pinned to
 # （上游查找顺序：<dir>/params/params_<model>.npz 或 <dir>/params_<model>.npz。）
 #
 # 本脚本**不**处理 ProteinMPNN 权重：它们随包分发（vendor.sh 已校验）。
+#
+# 归档布局（实测 alphafold_params_2022-12-06.tar）：16 个成员——15 个
+# params_model_*.npz + LICENSE，全部在归档**顶层**（没有 params/ 前缀），
+# 每个 npz 约 356 MiB，远高于上游 100 MiB 的"未完成"下限。
 
 set -euo pipefail
 
@@ -3377,6 +3381,12 @@ MODELS=(
     model_1_ptm model_2_ptm
 )
 
+# 目标已存在但不是目录：立刻失败，避免白下 5.59 GB 才在 mkdir 处报错。
+if [ -e "$DST" ] && [ ! -d "$DST" ]; then
+    echo "ERROR: WEIGHTS_DST exists but is not a directory: $DST" >&2
+    exit 1
+fi
+
 TMP="$(mktemp -d -t bc2-weights.XXXXXX)"
 trap "rm -rf '$TMP'" EXIT
 
@@ -3384,9 +3394,9 @@ echo "Downloading AlphaFold parameters -> $TMP"
 echo "  $URL"
 mkdir -p "$TMP/params"
 
-# 只解出需要的 7 个成员；tar 支持 --wildcards（GNU tar）。
+# -C - 断点续传（对齐兄弟服务的 wget -c）；归档支持 Range（accept-ranges: bytes）。
 for attempt in 1 2 3; do
-    if curl -fL --retry 3 --retry-delay 5 -o "$TMP/alphafold_params.tar" "$URL"; then
+    if curl -fL -C - --retry 3 --retry-delay 5 -o "$TMP/alphafold_params.tar" "$URL"; then
         break
     fi
     [ "$attempt" = "3" ] && { echo "ERROR: download failed after 3 attempts" >&2; exit 1; }
@@ -3394,9 +3404,12 @@ for attempt in 1 2 3; do
     sleep $((attempt * 10))
 done
 
+# 只解出需要的 7 个成员。成员名在归档顶层，故用精确名匹配；**不加** `*/` 前缀
+# 候选——GNU tar 对任一未命中的模式都会以退出码 2 失败（实测），会让下面的
+# `||` 分支在下载完全成功时也误触发。
 members=()
 for model in "${MODELS[@]}"; do
-    members+=(--wildcards "*/params_${model}.npz" "params_${model}.npz")
+    members+=(--wildcards "params_${model}.npz")
 done
 
 echo "Extracting 7 of the archive's checkpoints ..."
@@ -3464,6 +3477,12 @@ git commit -m "build(bindcraft2-server): add AlphaFold parameter staging script"
 
 ---
 
+**为什么 tar 的成员模式只写一种（`params_<model>.npz`）而不是再加一条 `*/params_<model>.npz`：**
+GNU tar 只要有**任意一个**模式匹配不到就以 2 退出（哪怕其余文件都成功解出）。实测该归档是
+**扁平**的（16 个成员全在顶层，无 `params/` 前缀），所以 `*/...` 那条永远匹配不到 → tar 退出 2
+→ 计划初稿的 `|| { echo ERROR...; exit 1; }` 会在**下载完全成功**的情况下误报失败，`$DST/params`
+根本不会被创建。因此只保留能命中的那一种模式，同时保留"布局变了就大声失败"的行为（实测把
+归档换成 `params/params_*.npz` 布局后，脚本确实以 1 退出并打印诊断）。
 ### Task 10: Dockerfile + 本地构建验证
 
 **Files:**

@@ -11,7 +11,7 @@
 # 升级 pin：改 BINDCRAFT2_SHA。
 #
 # 注意：**不要**排除 bindcraft/weights/proteinmpnn/ —— 三个变体的 .npz 是
-# 上游 pyproject 的 package-data（~20 MB），随包分发；排除它们会让 design 在
+# 上游 pyproject 的 package-data（26 MB/变体，共 ~78 MB），随包分发；排除它们会让 design 在
 # ProteinMPNN 重设计阶段才失败。
 
 set -euo pipefail

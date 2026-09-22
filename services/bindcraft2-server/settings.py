@@ -38,7 +38,7 @@ class Bindcraft2Settings(ServiceSettings):
     # 必须显式设置——否则上游会去下载 5.3 GB。见 fetch_weights.sh / 设计文档 P1。
     alphafold_params_dir: Path = Field(default=Path("/data/models/bindcraft2/alphafold"))
 
-    # 上游源码中的 ProteinMPNN 权重根（随包，~20 MB）。
+    # 上游源码中的 ProteinMPNN 权重根（随包，26 MB/变体）。
     shipped_weights_dir: Path = Field(default=Path("/opt/bindcraft"))
 
     # JAX 编译缓存。镜像内没有 nvidia-smi，不设它上游会把图缓存丢进 /tmp，
