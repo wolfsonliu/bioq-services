@@ -76,6 +76,22 @@ def test_job_uri_does_not_strip_output_lookalike(settings):
     assert exc.value.status_code == 404
 
 
+def test_job_uri_rejects_symlinked_output_dir(settings):
+    """`output/` 是指向树外的符号链接时必须 422。
+
+    这条钉住的是 root 相对 jobs_base_dir 的包含性检查——少了它，`.resolve()`
+    会跟随符号链接把 root 定到树外，`job://abc123` 就会直接返回外部目录。
+    """
+    outside = settings.jobs_base_dir.parent / "outside"
+    outside.mkdir()
+    job = settings.jobs_base_dir / "abc123"
+    job.mkdir(parents=True)
+    (job / "output").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(HTTPException) as exc:
+        resolve_campaign_dir("job://abc123", settings)
+    assert exc.value.status_code == 422
+
+
 def test_job_uri_rejects_traversal(settings):
     _make_campaign(settings, "abc123")
     with pytest.raises(HTTPException) as exc:
