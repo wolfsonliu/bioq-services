@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from .models import DesignRequest, FilterRequest, RankRequest
@@ -25,6 +26,7 @@ __all__ = [
     "missing_proteinmpnn_weights",
     "prepare_design",
     "rank_argv",
+    "rank_output_name",
     "write_campaign_file",
 ]
 
@@ -41,7 +43,6 @@ DESIGN_RANKED_CSV = "3_Ranked/!_Ranked.csv"
 DESIGN_SUMMARY_CSV = "summary.csv"
 TRAJECTORIES_CSV = "1_Trajectories/!_Trajectories.csv"
 CAMPAIGN_METADATA_JSON = "campaign_metadata.json"
-RANK_OUTPUT_TEMPLATE = "ranked_by_{metric}.csv"
 FILTER_OUTPUT = "filtered.csv"
 
 
@@ -179,14 +180,25 @@ def design_argv(
     return runner_prefix(settings) + ["design", str(campaign_file.resolve())]
 
 
+def rank_output_name(metrics: list[str]) -> str:
+    """rank 产物文件名，与上游 `rank.ranked_filename()` 同口径。
+
+    所有指标按顺序拼进去、非字母数字折成 `_`：`on=["i_pTM","i_pAE"]` →
+    `ranked_by_i_pTM_i_pAE.csv`。只用 `metrics[0]` 会让不同 tie-break 的产物撞名，
+    事后无法分辨用的是哪个排序。
+    """
+    named = re.sub(r"[^0-9A-Za-z]+", "_", "_".join(metrics)).strip("_")
+    return f"ranked_by_{named}.csv"
+
+
 def rank_argv(
     req: RankRequest,
     campaign_dir: Path,
     job_dir: Path,
     settings: Bindcraft2Settings,
 ) -> list[str]:
-    """`... rank <campaign_dir> --on M [--on M2] --table T --output <job>/output/ranked_by_<M>.csv`。"""
-    output = job_dir / "output" / RANK_OUTPUT_TEMPLATE.format(metric=req.on[0])
+    """`... rank <campaign_dir> --on M [--on M2] --table T --output <job>/output/ranked_by_<M...>.csv`。"""
+    output = job_dir / "output" / rank_output_name(req.on)
     cmd = runner_prefix(settings) + ["rank", str(campaign_dir)]
     for metric in req.on:
         cmd += ["--on", metric]

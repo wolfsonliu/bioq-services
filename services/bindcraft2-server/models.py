@@ -28,6 +28,11 @@ _BINDER_LENGTHS_MESSAGE = (
     "binder_lengths must be integers, e.g. '80,80' or '[60,100]'"
 )
 
+# 只在 target 上传 / target_uri 路径下生效的字段。shipped target preset 自带
+# chains/hotspots/coldspots（见上游 settings/target/*.json），与 target_name 同时给
+# 会被静默丢弃——必须拒绝而不是忽略。
+_UPLOAD_ONLY_TARGET_FIELDS: tuple[str, ...] = ("target_chains", "hotspots", "coldspots")
+
 # 与上游 campaign JSON 顶层 key 一一对应的 9 个可选属性。
 PROPERTY_FIELDS: tuple[str, ...] = (
     "forced_targeting",
@@ -94,19 +99,35 @@ class DesignRequest(BaseModel):
         description="上游 shipped target 名（bindcraft design --list-targets）。",
     )
     target_chains: Optional[str] = Field(
-        default=None, description="目标链，如 'A' 或 'A,B'。", examples=["A"]
+        default=None,
+        description=(
+            "目标链，如 'A' 或 'A,B'。仅在 target 上传 / target_uri 路径下生效；"
+            "与 target_name 同用时 422（shipped preset 自带链定义）。"
+        ),
+        examples=["A"],
     )
     hotspots: Optional[str] = Field(
         default=None,
-        description="结合位点残基，编号取自输入结构。",
+        description=(
+            "结合位点残基，编号取自输入结构。仅在 target 上传 / target_uri 路径下"
+            "生效；与 target_name 同用时 422。"
+        ),
         examples=["54,56,66-70"],
     )
     coldspots: Optional[str] = Field(
-        default=None, description="要求保持自由的区域。", examples=["90-95"]
+        default=None,
+        description=(
+            "要求保持自由的区域。仅在 target 上传 / target_uri 路径下生效；"
+            "与 target_name 同用时 422。"
+        ),
+        examples=["90-95"],
     )
-    modality: str = Field(
+    modality: str | list[str] = Field(
         default="binder",
-        description="上游 modality 名，允许逗号组合（binder,VHH,ARP,scFv,Fab,...）。",
+        description=(
+            "上游 modality 预设：单个名字，或逗号分隔 / 数组组合"
+            "（'VHH'、'binder,VHH' 或 ['binder','VHH']）。"
+        ),
     )
     binder_lengths: Optional[list[int]] = Field(
         default=None,
@@ -162,6 +183,63 @@ class DesignRequest(BaseModel):
                 raise ValueError(_BINDER_LENGTHS_MESSAGE)
             lengths.append(int(text))
         return lengths
+
+    @field_validator("modality", mode="before")
+    @classmethod
+    def _split_modality(cls, value: Any) -> Any:
+        """把逗号组合归一成 list（单值保持字符串）。
+
+        上游只对 CLI 参数 `--modality A,B` 拆逗号；campaign 文件里多预设必须是 JSON
+        数组——字符串 'binder,VHH' 会被当单个 preset 名，报
+        `unknown modality 'binder,VHH'`。CLI 以 `type=str` 传进来，HTTP 路径则因为
+        `str | list[str]` 里含 list 被 FastAPI 当 sequence 收集（`modality=binder`
+        也会变成 `['binder']`），所以这里统一摊平后再把单元素还原成字符串，保证
+        常见情况下落盘仍是裸字符串、逗号组合落盘成数组。
+        """
+        items = value if isinstance(value, list) else [value]
+        names: list[Any] = []
+        for item in items:
+            if not isinstance(item, str):
+                names.append(item)
+                continue
+            text = item.strip()
+            if not text:
+                continue
+            if text.startswith("["):
+                decoded = json.loads(text)
+                if not isinstance(decoded, list):
+                    raise ValueError("modality must be a name, comma list or JSON array")
+                names.extend(decoded)
+                continue
+            names.extend(part.strip() for part in text.split(",") if part.strip())
+        if len(names) == 1:
+            return names[0]
+        return names
+
+    @model_validator(mode="after")
+    def _reject_target_name_with_target_fields(self) -> "DesignRequest":
+        """`target_name` 与 target_chains/hotspots/coldspots 互斥。
+
+        shipped target preset 自带 `chains` / `hotspots` / `coldspots`（上游
+        settings/target/*.json），而 `build_campaign_json` 在 target_name 分支里根本
+        不写 `targets`——所以这三个字段会被静默丢弃，等于跑错实验。此处显式 422。
+        """
+        if not self.target_name:
+            return self
+        supplied = [
+            name
+            for name in _UPLOAD_ONLY_TARGET_FIELDS
+            if name in self.model_fields_set
+            and getattr(self, name) != type(self).model_fields[name].default
+        ]
+        if supplied:
+            names = ", ".join(f"`{name}`" for name in supplied)
+            raise ValueError(
+                f"`target_name` cannot be combined with {names}: a shipped preset "
+                "target carries its own chains/hotspots/coldspots, so those fields "
+                "apply only with `target` (upload) or `target_uri`."
+            )
+        return self
 
     @model_validator(mode="after")
     def _check_binder_lengths(self) -> "DesignRequest":

@@ -125,7 +125,7 @@ class Bindcraft2Adapter(JobAdapter):
                 "summary": DESIGN_SUMMARY_CSV,
                 "trajectories": TRAJECTORIES_CSV,
                 "metadata": CAMPAIGN_METADATA_JSON,
-                "rank": "ranked_by_<metric>.csv",
+                "rank": "ranked_by_<metric>[_<metric>...].csv",
                 "filter": FILTER_OUTPUT,
             },
             "input_uri_schemes": {
@@ -248,7 +248,10 @@ class Bindcraft2Adapter(JobAdapter):
                         "-F 'on=[\"i_pTM\",\"i_pDAE\"]' "
                         "-F table=accepted"
                     ),
-                    notes="产物写到新 job 的 output/ranked_by_i_pTM.csv，源目录只读。",
+                    notes=(
+                        "产物写到新 job 的 output/ranked_by_i_pTM_i_pDAE.csv"
+                        "（文件名按 on 里全部指标拼接），源目录只读。"
+                    ),
                 ),
             ],
             "/api/tasks/rank": [

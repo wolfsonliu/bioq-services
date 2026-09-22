@@ -143,6 +143,13 @@ def healthz_detail(request: Request) -> dict:
     权重缺失时返回 HTTP 200 + `weights_loaded=false`，不在 import 期 raise。
     `gpu_backend != "gpu"` 是唯一能暴露"静默跑 CPU"的信号——镜像内没有
     nvidia-smi，JAX 取不到卡时只警告一次然后慢两个数量级。
+
+    并发字段的范围要读准：`active_jobs` 只统计 submit/poll（框架 JobRunner 的
+    计数器）。`/api/tasks/*` 走框架 `execute_task`，在请求线程里同步阻塞、框架里
+    没有任何活动计数，task 路径的在飞任务**无法**从这里观测；它的并发只能靠 FC 的
+    `instanceConcurrency` / `sessionConcurrencyPerInstance`（deploy/fc.yaml 均为 1）
+    兜底。`active_jobs_scope` 与 `concurrency_note` 就是为了不让调用方把它误读成
+    "整实例在飞工作总量"。
     """
     params_dir = settings.alphafold_params_dir
     missing = missing_alphafold_params(params_dir)
@@ -162,7 +169,17 @@ def healthz_detail(request: Request) -> dict:
         "gpu_backend": backend,
         "gpu_devices": devices,
         "active_jobs": request.app.state.runner.active_job_count,
+        # 明确标注 active_jobs 的口径：只覆盖 submit/poll，不含 /api/tasks/*。
+        "active_jobs_scope": "submit_poll_only",
         "max_concurrent_jobs": settings.max_concurrent_jobs,
+        "concurrency_note": (
+            "active_jobs counts only submit/poll jobs "
+            "(framework JobRunner.active_job_count); /api/tasks/* jobs run "
+            "synchronously inside the request thread and are not counted by the "
+            f"framework. BINDCRAFT2_MAX_CONCURRENT_JOBS={settings.max_concurrent_jobs} "
+            "caps submit/poll jobs; task-path concurrency is capped by FC "
+            "instanceConcurrency=1 and sessionConcurrencyPerInstance=1."
+        ),
     }
     if backend != "gpu":
         body["warning"] = (

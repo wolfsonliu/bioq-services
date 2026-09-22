@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import time
 
 from fastapi.testclient import TestClient
@@ -53,6 +54,11 @@ def test_healthz_detail_reports_job_counters(offline_settings, monkeypatch):
     detail = client.get("/healthz/detail").json()
     assert detail["active_jobs"] == 0
     assert detail["max_concurrent_jobs"] == 1
+    # FIX 3：active_jobs 只覆盖 submit/poll；/api/tasks/* 走框架 execute_task，
+    # 框架里没有活动计数器，必须显式标注口径，否则会被读成"整实例在飞工作总量"。
+    assert detail["active_jobs_scope"] == "submit_poll_only"
+    assert "BINDCRAFT2_MAX_CONCURRENT_JOBS" in detail["concurrency_note"]
+    assert "/api/tasks/" in detail["concurrency_note"]
 
 
 def test_detail_reports_loaded_weights(offline_settings, monkeypatch, tmp_path):
@@ -112,6 +118,9 @@ def test_design_with_upload(offline_settings, monkeypatch):
         offline_settings.jobs_base_dir / job_id / "input" / "campaign.json"
     ).read_text(encoding="utf-8")
     assert '"name": "target"' in campaign
+    # FIX 1 只拦 target_name；上传路径上的 chains/hotspots 必须照常落进 campaign。
+    assert '"chains": "A"' in campaign
+    assert '"hotspots": "54,56"' in campaign
     assert (offline_settings.jobs_base_dir / job_id / "input" / "target.pdb").is_file()
 
 
@@ -189,6 +198,49 @@ def test_design_rejects_target_name_plus_upload(offline_settings, monkeypatch):
         files={"target": ("target.pdb", b"ATOM\n", "chemical/x-pdb")},
     )
     assert r.status_code == 422
+
+
+def test_design_rejects_target_name_plus_hotspots(offline_settings, monkeypatch):
+    """FIX 1 端到端：shipped preset 自带 hotspot，多给的会被静默丢弃，必须 422。"""
+    client = _client(offline_settings, monkeypatch)
+    r = client.post("/api/design", data={"target_name": "hPDL1", "hotspots": "54,56"})
+    assert r.status_code == 422, r.text
+    assert "cannot be combined" in r.text
+    assert "hotspots" in r.text
+
+
+def test_design_serializes_comma_modality_as_array(offline_settings, monkeypatch):
+    """FIX 2 端到端：HTTP 上 modality=binder,VHH 必须落盘成数组（上游只认数组）。"""
+    client = _client(offline_settings, monkeypatch)
+    r = client.post(
+        "/api/design",
+        data={"target_name": "hPDL1", "modality": "binder,VHH", "max_trajectories": "1"},
+    )
+    assert r.status_code == 200, r.text
+    job_id = r.json()["job_id"]
+    assert _wait(client, job_id)["status"] == "completed"
+    campaign = json.loads(
+        (offline_settings.jobs_base_dir / job_id / "input" / "campaign.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert campaign["modality"] == ["binder", "VHH"]
+
+
+def test_design_serializes_single_modality_as_bare_string(offline_settings, monkeypatch):
+    """HTTP 表单项含 list 时 FastAPI 会把单值也收成 ['binder']，必须还原成字符串。"""
+    client = _client(offline_settings, monkeypatch)
+    r = client.post(
+        "/api/design",
+        data={"target_name": "hPDL1", "modality": "binder", "max_trajectories": "1"},
+    )
+    assert r.status_code == 200, r.text
+    job_id = r.json()["job_id"]
+    assert _wait(client, job_id)["status"] == "completed"
+    raw = (offline_settings.jobs_base_dir / job_id / "input" / "campaign.json").read_text(
+        encoding="utf-8"
+    )
+    assert '"modality": "binder"' in raw
 
 
 def test_design_rejects_descending_binder_lengths(offline_settings, monkeypatch):

@@ -22,7 +22,11 @@ resources:
           timeout: 3
       runtime: custom-container
       cpu: 8
-      instanceConcurrency: 200
+      # 一实例一卡：`/api/tasks/*` 走框架 execute_task，没有 max_concurrent_jobs
+      # 容量检查（只有 submit/poll 的 JobRunner 有），两个 task 撞在同一实例上就会
+      # 同时跑两场 campaign 抢 24 GB 显存。这里钉成 1，配合下面的会话亲和，把不同
+      # session 的任务串行化到同一实例。
+      instanceConcurrency: 1
       vpcConfig:
         securityGroupId: sg-bp16eiz6pkbsj4suejie
         anytunnelViaENI: false
@@ -82,6 +86,8 @@ resources:
       memorySize: 32768
       environmentVariables:
         BINDCRAFT2_SESSION_HEADER_NAME: bioagent-session-id
+        # 覆盖框架 8000 MB 默认，避免增量请求删掉 rank/filter 要 chain 的源 campaign。
+        BINDCRAFT2_DISK_LIMIT_MB: '1048576'
       triggers:
         - triggerConfig:
             methods:

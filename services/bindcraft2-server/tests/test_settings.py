@@ -23,6 +23,14 @@ def test_defaults_match_container_layout():
     assert s.max_workers_per_gpu == 1
     assert s.default_max_trajectories == 500
     assert s.gpu_probe_ttl_seconds == 300
+    # FIX 4：框架默认 8000 MB 会在下一次 submit/execute_task 前删掉 rank/filter
+    # 要 chain 的源 campaign；这里必须显式放宽到 NAS 级容量。
+    assert s.disk_limit_mb == 1_048_576
+
+
+def test_disk_limit_is_env_overridable(monkeypatch):
+    monkeypatch.setenv("BINDCRAFT2_DISK_LIMIT_MB", "20000")
+    assert Bindcraft2Settings(_env_file=None).disk_limit_mb == 20_000
 
 
 def test_env_prefix_is_bindcraft2(monkeypatch):

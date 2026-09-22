@@ -19,6 +19,7 @@ from server.tools import (
     missing_proteinmpnn_weights,
     prepare_design,
     rank_argv,
+    rank_output_name,
     write_campaign_file,
 )
 
@@ -121,6 +122,35 @@ def test_write_campaign_file_roundtrips(job_dir):
     assert json.loads(path.read_text(encoding="utf-8")) == {"target": "hPDL1"}
 
 
+def test_campaign_serializes_comma_modality_as_array(settings, job_dir):
+    """FIX 2 的核心：落盘的 campaign 必须是数组，而不是 'binder,VHH' 字符串。
+
+    上游只在 CLI 参数里拆逗号，campaign 文件里字符串会被当成单个 preset 名
+    （`unknown modality 'binder,VHH'`），所以这里断言**序列化后的文件内容**。
+    """
+    path = prepare_design(
+        DesignRequest(target_name="hPDL1", modality="binder,VHH"),
+        job_dir=job_dir,
+        target_path=None,
+        settings=settings,
+    )
+    raw = path.read_text(encoding="utf-8")
+    campaign = json.loads(raw)
+    assert campaign["modality"] == ["binder", "VHH"]
+    assert '"modality": ["binder", "VHH"]' in json.dumps(campaign)
+    assert '"binder,VHH"' not in raw
+
+
+def test_campaign_serializes_single_modality_as_bare_string(settings, job_dir):
+    path = prepare_design(
+        DesignRequest(target_name="hPDL1", modality="binder"),
+        job_dir=job_dir,
+        target_path=None,
+        settings=settings,
+    )
+    assert '"modality": "binder"' in path.read_text(encoding="utf-8")
+
+
 def test_design_argv(settings, job_dir):
     argv = design_argv(job_dir / "input" / "campaign.json", job_dir, settings)
     assert argv == [
@@ -164,7 +194,23 @@ def test_rank_argv_maps_every_field(settings, job_dir, tmp_path):
     assert "--table accepted" in joined
     assert "--lowest-first" in joined
     assert "--top 20" in joined
-    assert argv[argv.index("--output") + 1] == str((job_dir / "output" / "ranked_by_i_pTM.csv").resolve())
+    # FIX 5：文件名按全部指标拼接，否则 ["i_pTM"] 与 ["i_pTM","i_pDAE"] 会撞名。
+    assert argv[argv.index("--output") + 1] == str(
+        (job_dir / "output" / "ranked_by_i_pTM_i_pDAE.csv").resolve()
+    )
+
+
+def test_rank_output_name_joins_every_metric():
+    assert rank_output_name(["i_pTM"]) == "ranked_by_i_pTM.csv"
+    assert rank_output_name(["i_pTM", "i_pAE"]) == "ranked_by_i_pTM_i_pAE.csv"
+    assert (
+        rank_output_name(["Interface_Residues>=7", "i_pTM"])
+        == "ranked_by_Interface_Residues_7_i_pTM.csv"
+    )
+
+
+def test_rank_output_names_do_not_collide_across_tie_breaks():
+    assert rank_output_name(["i_pTM"]) != rank_output_name(["i_pTM", "i_pAE"])
 
 
 def test_rank_argv_omits_optional_flags(settings, job_dir, tmp_path):

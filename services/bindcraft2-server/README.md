@@ -27,7 +27,7 @@ BC2 采用 **BindCraft2 Source-Available License (Hosting-Restricted)**
 |---|---|
 | `POST /api/design` | 提交一场 campaign（submit/poll） |
 | `POST /api/tasks/design` | 同上，FC 异步任务模式（**推荐**，campaign 小时级） |
-| `POST /api/rank` | 对已有 campaign 按指标重排 → `output/ranked_by_<metric>.csv` |
+| `POST /api/rank` | 对已有 campaign 按指标重排 → `output/ranked_by_<metric>[_<metric>...].csv` |
 | `POST /api/tasks/rank` | 同上，task 模式 |
 | `POST /api/filter` | 对已有 campaign 重放/覆盖阈值 → `output/filtered.csv` |
 | `POST /api/tasks/filter` | 同上，task 模式 |
@@ -156,6 +156,7 @@ apptainer exec --nv --bind /scratch/models:/data/models bindcraft2-server.sif \
 | 环境变量 | 默认 | 说明 |
 |---|---|---|
 | `BINDCRAFT2_JOBS_BASE_DIR` | `/data/bindcraft2_jobs` | 任务目录根 |
+| `BINDCRAFT2_DISK_LIMIT_MB` | `1048576` | job 目录总占用超过它时框架删除**已结束**任务；框架默认 8000 MB 会在下一请求里删掉 `rank`/`filter` 要 chain 的源 campaign，故按 NAS 容量放宽到 1 TiB |
 | `BINDCRAFT2_ROOT` | `/opt/bindcraft` | 上游源码树（editable install 依赖它） |
 | `BINDCRAFT2_SHIPPED_WEIGHTS_DIR` | `/opt/bindcraft` | ProteinMPNN 权重根；探针查 `<它>/bindcraft/weights/proteinmpnn/weights_<变体>/v_48_020.npz` |
 | `BINDCRAFT2_PYTHON` | `/opt/venv/bin/python` | 解释器 |

@@ -25,6 +25,14 @@ class Bindcraft2Settings(ServiceSettings):
     # 覆盖框架默认（/data/jobs）。
     jobs_base_dir: Path = Field(default=Path("/data/bindcraft2_jobs"))
 
+    # 框架默认 disk_limit_mb=8000（jobs.py 在每次 submit / execute_task 前，一旦
+    # jobs_base_dir 超过阈值就删掉整个 completed/failed job 目录）。一场
+    # 500-trajectory campaign 的 output/ 很容易超过 8 GB，于是下一次请求会静默删掉
+    # `rank` / `filter` 文档里承诺可 chain 的源 campaign（`/api/tasks/rank` 甚至可能
+    # 先删掉它正要读取的目录、再 404）。这里按 NAS 容量显式放宽到 1 TiB；仍可用
+    # BINDCRAFT2_DISK_LIMIT_MB 覆盖。
+    disk_limit_mb: int = Field(default=1_048_576, ge=100)
+
     # 上游源码树。editable install（pip install -e）记录了它的路径，运行时必须存在。
     root: Path = Field(default=Path("/opt/bindcraft"))
 
