@@ -716,7 +716,7 @@ class FilterRequest(BaseModel):
 cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_models.py -q
 ```
 
-Expected：`17 passed`。
+Expected：`18 passed`。
 
 - [ ] **Step 5: Commit**
 
@@ -1413,7 +1413,7 @@ def filter_argv(
 cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_tools.py -q
 ```
 
-Expected：`21 passed`。
+Expected：`18 passed`。
 
 - [ ] **Step 5: Commit**
 
@@ -1889,7 +1889,7 @@ class Bindcraft2Adapter(JobAdapter):
 cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_adapter.py -q
 ```
 
-Expected：`18 passed`。
+Expected：`16 passed`。
 
 - [ ] **Step 5: Commit**
 
@@ -2855,7 +2855,7 @@ if __name__ == "__main__":
 cd services/bindcraft2-server && uv run --group dev python -m pytest tests/test_cli.py -q 2>&1 | tail -20
 ```
 
-Expected：全部通过（约 8 项）。
+Expected：全部通过（`tests/test_cli.py` 共 10 个用例）。
 
 另外单独确认 `import` 无副作用（守卫生效）：
 
