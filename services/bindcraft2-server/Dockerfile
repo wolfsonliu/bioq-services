@@ -30,8 +30,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
 
 # --- 上游源码 ---
-# editable install：settings/ 与 scaffolds/ 在仓库根（不在包里），运行期按仓库根
-# 相对定位，所以源码树必须留在 /opt/bindcraft 并留在 import path 上。
+# editable install：上游的 settings/ scaffolds/ 权重全部锚定在 Path(__file__).parent.parent
+# （绝对路径），**不**依赖 cwd；源码树留在 /opt/bindcraft 是给 import 用的。
+# cwd 之所以也设在这里，只是因为 Popen(cwd=) 要求目录存在（见 adapter.subprocess_cwd）。
 COPY services/bindcraft2-server/upstream /opt/bindcraft
 
 # docs/ 与 containers/ 是构建期无关的大块，剪掉省体积；results/ 不该存在。

@@ -3528,8 +3528,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
 
 # --- 上游源码 ---
-# editable install：settings/ 与 scaffolds/ 在仓库根（不在包里），运行期按仓库根
-# 相对定位，所以源码树必须留在 /opt/bindcraft 并留在 import path 上。
+# editable install：上游的 settings/ scaffolds/ 权重全部锚定在 Path(__file__).parent.parent
+# （绝对路径），**不**依赖 cwd；源码树留在 /opt/bindcraft 是给 import 用的。
+# cwd 之所以也设在这里，只是因为 Popen(cwd=) 要求目录存在（见 adapter.subprocess_cwd）。
 COPY services/bindcraft2-server/upstream /opt/bindcraft
 
 # docs/ 与 containers/ 是构建期无关的大块，剪掉省体积；results/ 不该存在。
@@ -3549,7 +3550,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # （纯 ubuntu base 不会像 CUDA base 那样预置）。
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
-RUN python3 -c "import nvidia, pathlib; print('\n'.join(sorted(str(p) for root in nvidia.__path__ for p in pathlib.Path(root).glob('*/lib'))))" \
+# 必须用 venv 解释器：nvidia-* 只装在 /opt/venv，系统 python3 看不到它们。
+RUN /opt/venv/bin/python -c "import nvidia, pathlib; print('\n'.join(sorted(str(p) for root in nvidia.__path__ for p in pathlib.Path(root).glob('*/lib'))))" \
         > /etc/ld.so.conf.d/bindcraft-cuda.conf \
  && ldconfig && ldconfig -p | grep -q libcupti
 
@@ -3604,7 +3606,9 @@ RUN mkdir -p /data/bindcraft2_jobs
 WORKDIR /opt/bindcraft
 
 # ldconfig 必须在访问 GPU 之前跑过（非 root 场景下 /sbin/ldconfig 需要 setuid）。
-RUN echo $'#!/bin/bash\nldconfig\nexec "$@"' > /opt/entrypoint.sh \
+# 用 printf 而非 $'...'：Ubuntu 的 /bin/sh 是 dash，不支持 ANSI-C 引用，
+# 会把字面量写进文件导致 exec format error。
+RUN printf '#!/bin/bash\nldconfig\nexec "$@"\n' > /opt/entrypoint.sh \
  && chmod +x /opt/entrypoint.sh
 ENTRYPOINT ["/opt/entrypoint.sh"]
 
@@ -3663,6 +3667,18 @@ git commit -m "build(bindcraft2-server): add dual-mode docker image with jax cud
 
 ---
 
+**构建期实测发现并修掉的两个真实缺陷（Task 10 执行时）：**
+
+1. `RUN python3 -c "import nvidia, ..."` —— `python3` 是系统解释器，`nvidia-*` 只装在
+   `/opt/venv`，冷构建在装完 22 分钟 CUDA 依赖后以 `ModuleNotFoundError: No module named
+   'nvidia'` 失败。已改为 `/opt/venv/bin/python`。
+2. `RUN echo $'#!/bin/bash\nldconfig\nexec "$@"' > /opt/entrypoint.sh` —— `$'...'` 是 bash
+   方言，而 Ubuntu 的 `/bin/sh` 是 **dash**，于是把字面量 `$'#!...` 写进了文件。**镜像能构建
+   成功，但任何 `docker run <image> <cmd>` 都以 `exec /opt/entrypoint.sh: exec format error`
+   失败**——即"构建通过、永远跑不起来"。已改为 `printf`。用 `od -c` 前后对比确认。
+
+两者都只在真实构建/运行中才会暴露（静态检查与离线测试都看不见），所以本任务的 Step 2–4
+不能跳过。
 ### Task 11: 部署描述、注册表、第三方声明、README
 
 **Files:**
